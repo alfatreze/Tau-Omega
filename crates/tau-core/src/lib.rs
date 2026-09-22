@@ -1055,6 +1055,30 @@ fn year(tags: &BTreeMap<String, String>) -> u16 {
         })
         .unwrap_or(0)
 }
+
+/// Reads the `_tno` (track/disc ordering) tag `build_index` itself just wrote
+/// on every entry, defaulting to `0` instead of indexing-and-unwrapping. The
+/// normal path always sets a valid value here first, but `Entry::tags` is a
+/// public field: a host that constructs its own `Entry` values directly
+/// (P1-2) must get an ordering fallback, not a panic, if it happens to pass
+/// one in with that tag already missing or non-numeric.
+fn tno_of(entry: &Entry) -> u16 {
+    entry
+        .tags
+        .get("_tno")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+}
+
+/// Reads the `_title` tag the same way, for the same reason: falls back to a
+/// generic label instead of panicking on a hand-built `Entry`.
+fn title_of(entry: &Entry) -> &str {
+    entry
+        .tags
+        .get("_title")
+        .map(String::as_str)
+        .unwrap_or("Track")
+}
 fn push_u16(out: &mut Vec<u8>, n: u16) {
     out.extend_from_slice(&n.to_le_bytes());
 }
@@ -1158,11 +1182,8 @@ pub fn build_index(
     let mut albums = Vec::new();
     for (dir, mut ids) in grouped {
         ids.sort_by_key(|&i| {
-            (
-                entries[i].tags["_tno"].parse::<u16>().unwrap() >> 10,
-                entries[i].tags["_tno"].parse::<u16>().unwrap() & 1023,
-                natural(&entries[i].file),
-            )
+            let tno = tno_of(&entries[i]);
+            (tno >> 10, tno & 1023, natural(&entries[i].file))
         });
         let first = &entries[ids[0]];
         let artist = ids
@@ -1252,12 +1273,12 @@ pub fn build_index(
         for &i in &a.ids {
             let e = &entries[i];
             track_new.insert(i, tracks.len() / 16);
-            let title = e.tags["_title"].clone();
+            let title = title_of(e).to_string();
             track_titles.push(title.clone());
             push_u32(&mut tracks, pool.add(&title));
             push_u32(&mut tracks, pool.add(&e.file));
             push_u16(&mut tracks, e.secs);
-            push_u16(&mut tracks, e.tags["_tno"].parse().unwrap());
+            push_u16(&mut tracks, tno_of(e));
             push_u16(&mut tracks, ai as u16);
             tracks.push(e.fmt);
             tracks.push(0);

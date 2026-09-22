@@ -95,3 +95,24 @@ fn ascii_vectors_match_python() {
         assert_eq!(ascii_text(input, 63), expected.as_str().unwrap());
     }
 }
+
+/// P1-2: `Entry::tags` is a public field, so a host that skips `scan_dir` and
+/// hand-builds its own `Entry` values (precisely the integration being
+/// planned) can call `build_index` with none of the derived tags
+/// (`_title`/`_tno`) the normal path always sets first. This must not panic.
+#[test]
+fn build_index_does_not_panic_on_a_hand_built_entry_with_no_tags() {
+    let entry = Entry {
+        rel: "01 Track.mp3".into(),
+        dir: String::new(),
+        file: "01 Track.mp3".into(),
+        tags: BTreeMap::new(),
+        secs: 180,
+        fmt: 1,
+    };
+    let mut warnings = Vec::new();
+    let data = build_index(&[entry], &[], ROOT_PREFIX, &mut warnings).unwrap();
+    let index = parse(&data).unwrap();
+    assert_eq!(index.counts.tracks, 1);
+    assert_eq!(warnings.len(), 1); // missing title/artist tag
+}

@@ -104,10 +104,25 @@ which now return the engine's own `SyncReport` (a superset of the old result vie
 `deleted` and `index_sha256` are new, additive fields); `ui/src/lib/types.ts` gained a `SyncReport`
 type to match.
 
+### P1-2 — no panics on caller input (2026-09-22)
+
+`build_index`'s `entries[i].tags["_tno"].parse::<u16>().unwrap()` turned out to already be safe in
+practice (`build_index` sets `_tno`/`_title` on every entry itself, just before reading them back),
+but the indexing style was one refactor away from a real panic, so it's now `tno_of`/`title_of`
+helpers that fall back to a safe default (`0`/`"Track"`) rather than index-and-unwrap — safe by
+construction, not by an invariant that could quietly break. A second, genuinely live panic was
+found in the same pass: `sync::plan`'s public `sources: &[PathBuf]` reached a bare
+`.file_name().unwrap()` for a source path with no derivable file name (`/`, `.`, a bare drive
+letter) in two places; both now go through a `required_file_name` helper returning
+`ErrorCode::InvalidPathReference`. New tests:
+`build_index_does_not_panic_on_a_hand_built_entry_with_no_tags` (`tests/conformance.rs`) and
+`required_file_name_does_not_panic_on_a_nameless_path` (`sync.rs`). All byte-conformance tests
+still pass unchanged — this was a pure defensive refactor with no behaviour change on valid input.
+
 ## Validation
 
-- `cargo test` (workspace): 29 tests passing without `--features tau-core/serde` (18 `tau-core`
-  unit, 5 index conformance, 4 card inspection, 2 testkit), 35 with it (adds 6 in the
+- `cargo test` (workspace): 31 tests passing without `--features tau-core/serde` (19 `tau-core`
+  unit, 6 index conformance, 4 card inspection, 2 testkit), 37 with it (adds 6 in the
   feature-gated `serde_feature.rs`).
 - `npm run check`: zero Svelte errors on the last validation.
 - `cargo clippy --all-targets`: clean apart from six pre-existing `clone`-on-slice warnings in
@@ -126,14 +141,12 @@ type to match.
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
 - Jobs shown from a loaded journal are a concise summary, not a full journal-detail view.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
-- **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1):** the three P0 boundary defects the portability audit
-  found — duplicated root-prefix/index-status logic, English-only warnings and errors, and no
-  progress/cancellation — are all done, and so is P1-1 (optional `serde` feature; DTO layer
-  shrank from 13 to 7 structs). See "Portability boundary" and "P1-1" above. Remaining P1 items
-  (no panics on caller input, collapse `plan_with_*` into an options struct, widen the plan
-  token, a parser fuzz target) are still open — see `PORTABILITY_AUDIT.md`.
-- `build_index` is public, takes public `Entry` values, and panics on a missing `_tno` tag rather than
-  returning an error — a host feeding its own data in crashes.
+- **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2):** the three P0 boundary defects the portability
+  audit found — duplicated root-prefix/index-status logic, English-only warnings and errors, and
+  no progress/cancellation — are all done, and so are P1-1 (optional `serde` feature; DTO layer
+  shrank from 13 to 7 structs) and P1-2 (no panics on caller input). See "Portability boundary",
+  "P1-1" and "P1-2" above. Remaining P1 items (collapse `plan_with_*` into an options struct,
+  widen the plan token, a parser fuzz target) are still open — see `PORTABILITY_AUDIT.md`.
 - **Fixed 2026-09-22:** library capability detection never matched a real card (it read `data.json`'s
   `data` key as an array; the real APF layout is `data.data_slots`), so every shipped Tau core showed
   as "legacy". The fixture had invented the shape, and nothing tested `inspect_card`. See
@@ -151,10 +164,10 @@ type to match.
 
 ## Next recommended implementation order
 
-**Boundary work comes first — decision D-011.** The three P0 items and P1-1 in `PORTABILITY_AUDIT.md`
-are now done (2026-09-22; see "Portability boundary" and "P1-1" above). Next is the remaining P1
-items (no panics on caller input at public entry points; collapse the `plan_with_*` family into an
-options struct; widen the plan token and drop the `T2-` prefix; a parser fuzz target). Then:
+**Boundary work comes first — decision D-011.** The three P0 items and P1-1/P1-2 in
+`PORTABILITY_AUDIT.md` are now done (2026-09-22; see "Portability boundary", "P1-1" and "P1-2"
+above). Next is the remaining P1 items (collapse the `plan_with_*` family into an options struct;
+widen the plan token and drop the `T2-` prefix; a parser fuzz target). Then:
 
 1. Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.
 2. Expand Problems checks from duplicates to format/tag/path/cover issues.
