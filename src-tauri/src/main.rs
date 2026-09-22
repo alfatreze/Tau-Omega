@@ -1,7 +1,15 @@
 use serde::Serialize;
-use std::path::{Path, PathBuf};
 use serde_json::Value;
-use tau_core::{IndexStatus, TauError, Warning};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
+use tau_core::{IndexStatus, ProgressObserver, TauError, Warning};
+use tauri::{Emitter, State, Window};
 
 /// A boundary error: `code` is `TauError::code()`'s stable numeric identifier,
 /// so the front-end can branch on it directly instead of matching English
@@ -59,9 +67,83 @@ struct DuplicateView { files: Vec<String> }
 #[derive(Serialize)]
 struct LibrarySummaryView { tracks: usize, playlists: usize, warnings: Vec<WarningView> }
 
+/// A serialisable mirror of `tau_core::Progress`, emitted as a `"tau://progress"`
+/// window event so the front-end can show a live scan/copy indicator (P0-3).
+#[derive(Serialize, Clone)]
+struct ProgressEvent {
+    job_id: String,
+    stage: &'static str,
+    done: u64,
+    total: u64,
+    path: Option<String>,
+}
+
+/// Cancellation flags for running jobs, keyed by a caller-chosen job id. A
+/// front-end starts a job with a job id, then calls `cancel_job` with the same
+/// id to stop it; the flag is checked once per progress tick (P0-3).
+#[derive(Default)]
+struct JobRegistry(Mutex<HashMap<String, Arc<AtomicBool>>>);
+
 #[tauri::command]
-fn summarize_library(path: String) -> Result<LibrarySummaryView, ApiError> {
-    let scan = tau_core::scan_dir(Path::new(&path), true)?;
+fn cancel_job(job_id: String, jobs: State<JobRegistry>) {
+    if let Some(flag) = jobs.0.lock().unwrap().get(&job_id) {
+        flag.store(true, Ordering::SeqCst);
+    }
+}
+
+/// Builds a progress observer that emits `"tau://progress"` events on `window`
+/// and asks the running call to stop once `cancelled` is set. Registers and
+/// unregisters `job_id` in `jobs` so a matching `cancel_job` call can find it.
+struct JobObserver<'a> {
+    window: &'a Window,
+    job_id: String,
+    cancelled: Arc<AtomicBool>,
+}
+impl ProgressObserver for JobObserver<'_> {
+    fn report(&mut self, progress: tau_core::Progress) -> bool {
+        let _ = self.window.emit(
+            "tau://progress",
+            ProgressEvent {
+                job_id: self.job_id.clone(),
+                stage: match progress.stage {
+                    tau_core::Stage::Scanning => "scanning",
+                    tau_core::Stage::Hashing => "hashing",
+                    tau_core::Stage::Copying => "copying",
+                    tau_core::Stage::BuildingIndex => "building_index",
+                    tau_core::Stage::Verifying => "verifying",
+                    tau_core::Stage::Deleting => "deleting",
+                },
+                done: progress.done,
+                total: progress.total,
+                path: progress.path,
+            },
+        );
+        !self.cancelled.load(Ordering::SeqCst)
+    }
+}
+
+/// Registers a cancellable job under `job_id`, runs `body` with a progress
+/// observer wired to `window`, then unregisters the job regardless of outcome.
+fn with_job<T>(
+    window: &Window,
+    jobs: &JobRegistry,
+    job_id: String,
+    body: impl FnOnce(&mut Option<&mut dyn ProgressObserver>) -> Result<T, TauError>,
+) -> Result<T, ApiError> {
+    let cancelled = Arc::new(AtomicBool::new(false));
+    jobs.0.lock().unwrap().insert(job_id.clone(), cancelled.clone());
+    let mut observer = JobObserver { window, job_id: job_id.clone(), cancelled };
+    let mut observer: Option<&mut dyn ProgressObserver> = Some(&mut observer);
+    let result = body(&mut observer);
+    jobs.0.lock().unwrap().remove(&job_id);
+    result.map_err(ApiError::from)
+}
+
+#[tauri::command]
+fn summarize_library(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<LibrarySummaryView, ApiError> {
+    let scan = with_job(&window, &jobs, job_id, |progress| {
+        tau_core::scan_dir_with_progress(Path::new(&path), true, progress)
+    })?;
     Ok(LibrarySummaryView { tracks: scan.entries.len(), playlists: scan.playlists.len(), warnings: warning_views(scan.warnings) })
 }
 
@@ -71,8 +153,10 @@ fn read_journal(path: String) -> Result<Value, ApiError> {
 }
 
 #[tauri::command]
-fn scan_media(path: String) -> Result<MediaScanView, ApiError> {
-    let scan = tau_core::scan_dir(Path::new(&path), true)?;
+fn scan_media(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<MediaScanView, ApiError> {
+    let scan = with_job(&window, &jobs, job_id, |progress| {
+        tau_core::scan_dir_with_progress(Path::new(&path), true, progress)
+    })?;
     Ok(MediaScanView { playlists: scan.playlists.into_iter().map(|playlist| PlaylistView { name: playlist.name, tracks: playlist.rel_ids.len() }).collect(), warnings: warning_views(scan.warnings) })
 }
 
@@ -135,12 +219,12 @@ fn make_plan(sources: Vec<String>, destination: String, embed_covers: bool) -> R
     let destination = PathBuf::from(destination);
     let source_paths = sources.into_iter().filter(|source| !source.trim().is_empty()).map(PathBuf::from).collect::<Vec<_>>();
     let root_prefix = tau_core::root_prefix(&destination)?;
-    Ok(tau_core::sync::plan_with_features(&source_paths, &destination, &root_prefix, false, embed_covers)?)
+    Ok(tau_core::sync::plan_with_features(&source_paths, &destination, &root_prefix, false, embed_covers, &mut None)?)
 }
 fn make_core_copy_plan(source: String, destination: String) -> Result<tau_core::sync::SyncPlan, ApiError> {
     let destination_path = PathBuf::from(&destination);
     let root_prefix = tau_core::root_prefix(&destination_path)?;
-    Ok(tau_core::sync::plan_core_copy(Path::new(&source), &destination_path, &root_prefix)?)
+    Ok(tau_core::sync::plan_core_copy(Path::new(&source), &destination_path, &root_prefix, &mut None)?)
 }
 
 #[tauri::command]
@@ -156,31 +240,42 @@ fn plan_core_copy(source: String, destination: String) -> Result<SyncPlanView, A
 }
 
 #[tauri::command]
-fn execute_sync(sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool) -> Result<SyncResultView, ApiError> {
+fn execute_sync(sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<SyncResultView, ApiError> {
     let plan = make_plan(sources, destination, embed_covers)?;
     let manifest = PathBuf::from(manifest_path);
-    let result = tau_core::journal::execute_to_journal(&plan, &confirmation, &manifest)?;
+    let result = with_job(&window, &jobs, job_id, |progress| {
+        tau_core::journal::execute_to_journal(&plan, &confirmation, &manifest, progress)
+    })?;
     Ok(SyncResultView { copied: result.copied, unchanged: result.unchanged, bytes_written: result.bytes_written, index_path: result.index_path.display().to_string(), warnings: warning_views(result.warnings) })
 }
 
 #[tauri::command]
-fn execute_core_copy(source: String, destination: String, confirmation: String, manifest_path: String) -> Result<SyncResultView, ApiError> {
+fn execute_core_copy(source: String, destination: String, confirmation: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<SyncResultView, ApiError> {
     let plan = make_core_copy_plan(source, destination)?;
-    let result = tau_core::journal::execute_to_journal(&plan, &confirmation, Path::new(&manifest_path))?;
+    let result = with_job(&window, &jobs, job_id, |progress| {
+        tau_core::journal::execute_to_journal(&plan, &confirmation, Path::new(&manifest_path), progress)
+    })?;
     Ok(SyncResultView { copied: result.copied, unchanged: result.unchanged, bytes_written: result.bytes_written, index_path: result.index_path.display().to_string(), warnings: warning_views(result.warnings) })
 }
 
 #[tauri::command]
-fn execute_core_move(source: String, destination: String, confirmation: String, delete_confirmation: String, backup_path: String, manifest_path: String) -> Result<SyncResultView, ApiError> {
+fn execute_core_move(source: String, destination: String, confirmation: String, delete_confirmation: String, backup_path: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<SyncResultView, ApiError> {
     let plan = make_core_copy_plan(source.clone(), destination)?;
     let source_path = PathBuf::from(&source);
     let source_root_prefix = tau_core::root_prefix(&source_path)?;
-    let result = tau_core::journal::execute_core_move_to_journal(
-        &plan, &confirmation, &delete_confirmation, &source_path, &source_root_prefix, Path::new(&backup_path), Path::new(&manifest_path),
-    )?;
+    let result = with_job(&window, &jobs, job_id, |progress| {
+        tau_core::journal::execute_core_move_to_journal(
+            &plan, &confirmation, &delete_confirmation, &source_path, &source_root_prefix, Path::new(&backup_path), Path::new(&manifest_path), progress,
+        )
+    })?;
     Ok(SyncResultView { copied: result.copied, unchanged: result.unchanged, bytes_written: result.bytes_written, index_path: result.index_path.display().to_string(), warnings: warning_views(result.warnings) })
 }
 
 fn main() {
-    tauri::Builder::default().plugin(tauri_plugin_dialog::init()).invoke_handler(tauri::generate_handler![inspect_card, summarize_library, scan_media, export_playlist, find_duplicates, compare_media, read_journal, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move]).run(tauri::generate_context!()).expect("Tau Omega failed to start");
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(JobRegistry::default())
+        .invoke_handler(tauri::generate_handler![inspect_card, summarize_library, scan_media, export_playlist, find_duplicates, compare_media, read_journal, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, cancel_job])
+        .run(tauri::generate_context!())
+        .expect("Tau Omega failed to start");
 }
