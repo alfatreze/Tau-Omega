@@ -62,3 +62,35 @@ The 2026-09-22 portability audit (`PORTABILITY_AUDIT.md`) found the engine inter
 gaps all at the boundary: domain rules duplicated in both front-ends, English prose used as the API,
 and no progress or cancellation. Those three are prerequisites for any host adoption and get fixed
 before new feature work, ahead of the feature order in `STATUS_HANDOFF.md`.
+
+## D-012 — assessed candidate hosts, and why player features come to us instead
+
+Register of hosts considered, so none is re-litigated. Neither rejection was technical.
+
+| Candidate | Stack | Verdict |
+|---|---|---|
+| **Pocket Sync** | Tauri 2 + Rust + TS, AGPL-3.0 | **Target** (D-009). Same device, same users, real adoption. |
+| **Feishin** | Electron + React, GPL-3.0 | Dropped 2026-09-22: streams from Navidrome/Jellyfin/Subsonic, so no local files to index; no Rust; no plugin API; little audience overlap. |
+| **awesome-music-player** (S1avv) | Tauri 2 + Rust + React, `lofty`, MIT | Assessed 2026-09-22, **not adopted as a host** — but kept as a reference, below. |
+
+`awesome-music-player` is the **best technical fit of the three** — our own stack, offline-first local
+files (MP3/WAV/FLAC/M4A/OGG), and a tag pipeline of the same shape — yet the weakest project: 28
+stars, 22 commits, three releases in a four-day burst (6-9 June 2026) and quiet since. It has no
+plugin API and none on its roadmap, whose third-party plans are Last.fm, a remote-control protocol
+and a proprietary cloud backend. So adoption would mean an upstream PR or a fork, into a project with
+unproven maintenance and effectively no audience.
+
+**The structural reason none of these worked as a host**, worth keeping because it applies to the
+whole "plugin in a media player" idea and not to any one candidate: a Pocket SD-card sync feature is
+niche for a *general-purpose* player's users, almost none of whom own an Analogue Pocket. The benefit
+accrues to our users, not theirs, so the upstream case is weak on merit no matter how easy the
+integration is. Pocket Sync is the exception precisely because its users are Pocket owners.
+
+**The useful direction is inbound.** `awesome-music-player` is MIT, which makes it the one candidate
+we may legally borrow *from* — the reverse of the AGPL/GPL projects in D-010. Tau Omega's own SPEC
+already wants an in-app preview player (extensions list, item 16), and that is where this gets used:
+as a reference implementation for adding player features here, rather than as a host to plug into.
+
+**If code is actually copied, MIT still requires attribution** — carry the upstream copyright notice
+and licence text. D-010 says never copy *from* copyleft; this is the complement: copying from a
+permissive project is allowed *with* its notice preserved, not silently.

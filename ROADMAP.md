@@ -46,6 +46,10 @@ Pocket Sync is Rust and reads local cards, so none of those are needed (D-009).
 14. **Send diagnostics (decided 2026-09-21, priority):** one click gathers the Tau cores' persisted-settings files, screenshots newer than the last test run, core/index/cold-image versions, card free space and filesystem and file hashes into one zip for support; decodes the on-screen report code (`tools/decode_tau_suite.py --code` logic ported to Rust) and shows the verdict before anything is sent; nothing is uploaded automatically. Earlier idea text follows. **Remote diagnostics:** export a zip with `interact_persist.json`, screenshots and the app's manifest for the developer ("send diagnostics"), matching the README's diagnostics section.
 15. **CLI and scripting:** every feature available as `tau <verb> --json`, so the project's own scripts and CI can drive it (the existing `sync_media.py` workflow keeps working through a compatibility shim).
 16. **In-app preview player:** play a track from the source or the copy to check tags and covers (optional, last).
+    Reference available: `awesome-music-player` (S1avv) is MIT, Tauri 2 + Rust + React, offline-first
+    local playback with `lofty` tags — the same stack as ours, so it is borrowable for this and for
+    wider player features. Assessed as a host and rejected; kept as a reference (D-012). Copying from
+    it is permitted **with its copyright notice carried**.
 17. **Localised UI, dark/light theme, Pocket-edition themed accent.**
 18. **Plugin API** for third-party openFPGA cores that also read media (registry files plus a media-processor interface).
 
