@@ -187,7 +187,13 @@ fn make_plan(sources: Vec<String>, destination: String, embed_covers: bool) -> R
     let destination = PathBuf::from(destination);
     let source_paths = sources.into_iter().filter(|source| !source.trim().is_empty()).map(PathBuf::from).collect::<Vec<_>>();
     let root_prefix = tau_core::root_prefix(&destination)?;
-    tau_core::sync::plan_with_features(&source_paths, &destination, &root_prefix, false, embed_covers, &mut None)
+    tau_core::sync::plan(
+        &source_paths,
+        &destination,
+        &root_prefix,
+        tau_core::sync::PlanOptions { mirror: false, embed_covers },
+        &mut None,
+    )
 }
 fn make_core_copy_plan(source: String, destination: String) -> Result<tau_core::sync::SyncPlan, TauError> {
     let destination_path = PathBuf::from(&destination);

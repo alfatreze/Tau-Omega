@@ -119,18 +119,29 @@ letter) in two places; both now go through a `required_file_name` helper returni
 `required_file_name_does_not_panic_on_a_nameless_path` (`sync.rs`). All byte-conformance tests
 still pass unchanged — this was a pure defensive refactor with no behaviour change on valid input.
 
+### P1-3 — collapsed telescoping constructors (2026-09-22)
+
+`plan` -> `plan_with_options` -> `plan_with_features` -> `plan_with_layout` (four deep) is now one
+public `plan(sources, common, root_prefix, options: PlanOptions, progress)`, where `PlanOptions {
+mirror, embed_covers }` derives `Default`. `plan_with_options` and `plan_with_features` are gone.
+`plan_core_copy` stays separate (a distinct whole-library-copy operation, not "plan with more
+options") and now forwards `PlanOptions::default()` into the same private impl. Every call site
+(tau-cli, the Tauri adapter, this crate's own tests) was updated to match; verified end to end
+against a scratch copy of the real `../tau-alpha/dist` card that plain and `--mirror` plans still
+produce distinct tokens as before.
+
 ## Validation
 
 - `cargo test` (workspace): 31 tests passing without `--features tau-core/serde` (19 `tau-core`
   unit, 6 index conformance, 4 card inspection, 2 testkit), 37 with it (adds 6 in the
-  feature-gated `serde_feature.rs`).
+  feature-gated `serde_feature.rs`) — unchanged by P1-3, which touched call sites, not test count.
 - `npm run check`: zero Svelte errors on the last validation.
 - `cargo clippy --all-targets`: clean apart from six pre-existing `clone`-on-slice warnings in
   `sync.rs` test code (one more than before P0-3, added by the new cancellation test following
   the same pre-existing idiom) and one `#[allow(clippy::too_many_arguments)]` on
   `journal::execute_core_move_to_journal`, explained in a doc comment (mirrors
-  `sync::execute_core_move`'s own pre-existing parameter count; P1-3 will collapse the whole
-  family into an options struct in one pass, not piecemeal per wrapper).
+  `sync::execute_core_move`'s own pre-existing parameter count, itself unaffected by the P1-3
+  collapse since it isn't part of the `plan_with_*` family).
 - `cargo-tauri build`: builds clean with `tau-core`'s `serde` feature enabled (`src-tauri/Cargo.toml`).
 
 ## Known issues and incomplete wiring
@@ -141,12 +152,13 @@ still pass unchanged — this was a pure defensive refactor with no behaviour ch
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
 - Jobs shown from a loaded journal are a concise summary, not a full journal-detail view.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
-- **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2):** the three P0 boundary defects the portability
-  audit found — duplicated root-prefix/index-status logic, English-only warnings and errors, and
-  no progress/cancellation — are all done, and so are P1-1 (optional `serde` feature; DTO layer
-  shrank from 13 to 7 structs) and P1-2 (no panics on caller input). See "Portability boundary",
-  "P1-1" and "P1-2" above. Remaining P1 items (collapse `plan_with_*` into an options struct,
-  widen the plan token, a parser fuzz target) are still open — see `PORTABILITY_AUDIT.md`.
+- **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2/P1-3):** the three P0 boundary defects the
+  portability audit found — duplicated root-prefix/index-status logic, English-only warnings and
+  errors, and no progress/cancellation — are all done, and so are P1-1 (optional `serde` feature;
+  DTO layer shrank from 13 to 7 structs), P1-2 (no panics on caller input) and P1-3 (collapsed
+  `plan_with_*` into one `plan(..., PlanOptions, ...)`). See "Portability boundary", "P1-1",
+  "P1-2" and "P1-3" above. Remaining: P2 (widen the plan token, drop the `T2-` prefix, a parser
+  fuzz target) — see `PORTABILITY_AUDIT.md`.
 - **Fixed 2026-09-22:** library capability detection never matched a real card (it read `data.json`'s
   `data` key as an array; the real APF layout is `data.data_slots`), so every shipped Tau core showed
   as "legacy". The fixture had invented the shape, and nothing tested `inspect_card`. See
@@ -164,10 +176,10 @@ still pass unchanged — this was a pure defensive refactor with no behaviour ch
 
 ## Next recommended implementation order
 
-**Boundary work comes first — decision D-011.** The three P0 items and P1-1/P1-2 in
-`PORTABILITY_AUDIT.md` are now done (2026-09-22; see "Portability boundary", "P1-1" and "P1-2"
-above). Next is the remaining P1 items (collapse the `plan_with_*` family into an options struct;
-widen the plan token and drop the `T2-` prefix; a parser fuzz target). Then:
+**Boundary work comes first — decision D-011.** The three P0 items and all of P1 in
+`PORTABILITY_AUDIT.md` are now done (2026-09-22; see "Portability boundary", "P1-1", "P1-2" and
+"P1-3" above). Next is P2 (widen the plan token and drop the `T2-` prefix; a parser fuzz target).
+Then:
 
 1. Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.
 2. Expand Problems checks from duplicates to format/tag/path/cover issues.
