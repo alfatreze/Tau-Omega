@@ -5,8 +5,8 @@ use std::{
 };
 use tau_core::sync::{self, CopyState, SyncPlan};
 use tau_core::{
-    build_index, compare, inspect_card, parse, scan_dir, synth, verify, TauError, Warning,
-    ROOT_PREFIX,
+    build_index, compare, inspect_card, parse, root_prefix, scan_dir, synth, verify, TauError,
+    Warning, ROOT_PREFIX,
 };
 
 /// A CLI-boundary error: either an argument-parsing mistake (no engine code)
@@ -153,7 +153,7 @@ fn core_move_execute(a: &[String], j: bool) -> Result<(), CliError> {
         confirmation,
         delete_confirmation,
         &source,
-        &prefix(&source)?,
+        &root_prefix(&source)?,
         &backup,
         &journal,
     )?;
@@ -240,7 +240,7 @@ fn index(a: &[String], j: bool) -> Result<(), CliError> {
     let out = PathBuf::from(value(a, "--out").ok_or("index needs --out FILE")?);
     let scan = scan_dir(&common, a.iter().any(|x| x == "--playlists"))?;
     let mut warns = scan.warnings;
-    let data = build_index(&scan.entries, &scan.playlists, &prefix(&common)?, &mut warns)?;
+    let data = build_index(&scan.entries, &scan.playlists, &root_prefix(&common)?, &mut warns)?;
     parse(&data)?;
     fs::write(&out, &data).map_err(TauError::from)?;
     if j {
@@ -375,7 +375,7 @@ fn make_plan(a: &[String]) -> Result<SyncPlan, CliError> {
     Ok(sync::plan_with_features(
         &sources(a),
         &dest,
-        &prefix(&dest)?,
+        &root_prefix(&dest)?,
         a.iter().any(|arg| arg == "--mirror"),
         a.iter().any(|arg| arg == "--embed-cover"),
     )?)
@@ -384,7 +384,7 @@ fn make_core_copy_plan(a: &[String]) -> Result<SyncPlan, CliError> {
     let source = PathBuf::from(a.first().ok_or("core-copy needs a source media root")?);
     let destination =
         PathBuf::from(value(a, "--dest").ok_or("core-copy needs --dest Assets/<platform>/common")?);
-    Ok(sync::plan_core_copy(&source, &destination, &prefix(&destination)?)?)
+    Ok(sync::plan_core_copy(&source, &destination, &root_prefix(&destination)?)?)
 }
 fn show_plan(p: &SyncPlan, j: bool) {
     let count = |state| p.items.iter().filter(|item| item.state == state).count();
@@ -413,14 +413,6 @@ fn show_plan(p: &SyncPlan, j: bool) {
             p.id
         );
     }
-}
-fn prefix(common: &Path) -> Result<String, CliError> {
-    let platform = common
-        .parent()
-        .and_then(Path::file_name)
-        .and_then(|n| n.to_str())
-        .ok_or("destination must be Assets/<platform>/common")?;
-    Ok(format!("/Assets/{platform}/common/"))
 }
 fn value<'a>(a: &'a [String], key: &str) -> Option<&'a str> {
     a.iter()

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use serde_json::Value;
-use tau_core::{TauError, Warning};
+use tau_core::{IndexStatus, TauError, Warning};
 
 /// A boundary error: `code` is `TauError::code()`'s stable numeric identifier,
 /// so the front-end can branch on it directly instead of matching English
@@ -97,22 +97,14 @@ fn read_persisted_settings(path: String) -> Result<Vec<SettingView>, ApiError> {
 
 #[tauri::command]
 fn inspect_card(path: String) -> Result<Vec<CoreView>, ApiError> {
-    tau_core::inspect_card(path).map(|card| {
-        let card_root = card.root;
-        card.cores.into_iter().map(|core| {
-        let media_root = card_root.join("Assets").join(&core.platform).join("common");
-        let index = media_root.join("tau-library.tdb");
-        let (index_status, tracks) = if !index.is_file() {
-            ("No index".into(), None)
-        } else {
-            match std::fs::read(&index).ok().and_then(|bytes| tau_core::parse(bytes).ok()) {
-                Some(parsed) => ("Index ready".into(), Some(parsed.counts.tracks as usize)),
-                None => ("Index needs repair".into(), None),
-            }
+    Ok(tau_core::inspect_card(path)?.cores.into_iter().map(|core| {
+        let (index_status, tracks) = match core.index_status {
+            IndexStatus::NoIndex => ("No index".to_string(), None),
+            IndexStatus::Ready { tracks } => ("Index ready".to_string(), Some(tracks as usize)),
+            IndexStatus::NeedsRepair => ("Index needs repair".to_string(), None),
         };
         CoreView { id: core.id, author: core.author, version: core.version, platform: core.platform, library_capable: core.library_capable, index_status, tracks }
-    }).collect()
-    }).map_err(ApiError::from)
+    }).collect())
 }
 
 #[tauri::command]
@@ -139,19 +131,16 @@ fn compare_media(left: String, right: String) -> Result<ComparisonView, ApiError
     })
 }
 
-fn root_prefix(common: &Path) -> Result<String, ApiError> {
-    let platform = common.parent().and_then(Path::file_name).and_then(|name| name.to_str()).ok_or(ApiError { code: 0, message: "Destination must be Assets/<platform>/common".into() })?;
-    Ok(format!("/Assets/{platform}/common/"))
-}
-
 fn make_plan(sources: Vec<String>, destination: String, embed_covers: bool) -> Result<tau_core::sync::SyncPlan, ApiError> {
     let destination = PathBuf::from(destination);
     let source_paths = sources.into_iter().filter(|source| !source.trim().is_empty()).map(PathBuf::from).collect::<Vec<_>>();
-    Ok(tau_core::sync::plan_with_features(&source_paths, &destination, &root_prefix(&destination)?, false, embed_covers)?)
+    let root_prefix = tau_core::root_prefix(&destination)?;
+    Ok(tau_core::sync::plan_with_features(&source_paths, &destination, &root_prefix, false, embed_covers)?)
 }
 fn make_core_copy_plan(source: String, destination: String) -> Result<tau_core::sync::SyncPlan, ApiError> {
     let destination_path = PathBuf::from(&destination);
-    Ok(tau_core::sync::plan_core_copy(Path::new(&source), &destination_path, &root_prefix(&destination_path)?)?)
+    let root_prefix = tau_core::root_prefix(&destination_path)?;
+    Ok(tau_core::sync::plan_core_copy(Path::new(&source), &destination_path, &root_prefix)?)
 }
 
 #[tauri::command]
@@ -185,8 +174,9 @@ fn execute_core_copy(source: String, destination: String, confirmation: String, 
 fn execute_core_move(source: String, destination: String, confirmation: String, delete_confirmation: String, backup_path: String, manifest_path: String) -> Result<SyncResultView, ApiError> {
     let plan = make_core_copy_plan(source.clone(), destination)?;
     let source_path = PathBuf::from(&source);
+    let source_root_prefix = tau_core::root_prefix(&source_path)?;
     let result = tau_core::journal::execute_core_move_to_journal(
-        &plan, &confirmation, &delete_confirmation, &source_path, &root_prefix(&source_path)?, Path::new(&backup_path), Path::new(&manifest_path),
+        &plan, &confirmation, &delete_confirmation, &source_path, &source_root_prefix, Path::new(&backup_path), Path::new(&manifest_path),
     )?;
     Ok(SyncResultView { copied: result.copied, unchanged: result.unchanged, bytes_written: result.bytes_written, index_path: result.index_path.display().to_string(), warnings: warning_views(result.warnings) })
 }
