@@ -13,3 +13,5 @@ export type LibrarySummary = { tracks: number; playlists: number; warnings: Warn
  * a stable numeric `code` (see `tau_core::ErrorCode`) across the boundary
  * instead of a flattened English string. */
 export type ApiError = { code: number; message: string };
+/** Mirrors `tau_core::Progress`, delivered as a `"tau://progress"` window event. */
+export type ProgressEvent = { job_id: string; stage: string; done: number; total: number; path: string | null };

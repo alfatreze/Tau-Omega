@@ -1,7 +1,10 @@
 //! T2's intentionally narrow write boundary: make a pure plan first, then
 //! execute that exact plan after an explicit token confirmation.
 
-use crate::{ascii_name, build_index, cover, parse, scan_dir, verify, ErrorCode, TauError, Warning, WarningCode};
+use crate::{
+    ascii_name, build_index, cover, parse, scan_dir_with_progress, tick, verify, ErrorCode,
+    Progress, ProgressObserver, Stage, TauError, Warning, WarningCode,
+};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -61,8 +64,13 @@ pub struct SyncReport {
 
 /// Produces a read-only sync plan. Sources are copied below `common` using
 /// ASCII-safe names and never modified. `common` must be a Tau media root.
-pub fn plan(sources: &[PathBuf], common: &Path, root_prefix: &str) -> Result<SyncPlan, TauError> {
-    plan_with_options(sources, common, root_prefix, false)
+pub fn plan(
+    sources: &[PathBuf],
+    common: &Path,
+    root_prefix: &str,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<SyncPlan, TauError> {
+    plan_with_options(sources, common, root_prefix, false, progress)
 }
 
 pub fn plan_with_options(
@@ -70,8 +78,9 @@ pub fn plan_with_options(
     common: &Path,
     root_prefix: &str,
     mirror: bool,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncPlan, TauError> {
-    plan_with_features(sources, common, root_prefix, mirror, false)
+    plan_with_features(sources, common, root_prefix, mirror, false, progress)
 }
 
 /// Adds optional copy-only artwork embedding to a pure, reviewable plan. A
@@ -82,8 +91,9 @@ pub fn plan_with_features(
     root_prefix: &str,
     mirror: bool,
     embed_covers: bool,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncPlan, TauError> {
-    plan_with_layout(sources, common, root_prefix, mirror, embed_covers, true)
+    plan_with_layout(sources, common, root_prefix, mirror, embed_covers, true, progress)
 }
 
 /// Plans a whole-library copy from one explicit Tau media root to another.
@@ -93,6 +103,7 @@ pub fn plan_core_copy(
     source_common: &Path,
     destination_common: &Path,
     root_prefix: &str,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncPlan, TauError> {
     validate_media_root(source_common)?;
     if source_common.canonicalize()? == destination_common.canonicalize()? {
@@ -108,6 +119,7 @@ pub fn plan_core_copy(
         false,
         false,
         false,
+        progress,
     )
 }
 
@@ -118,6 +130,7 @@ fn plan_with_layout(
     mirror: bool,
     embed_covers: bool,
     include_source_root: bool,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncPlan, TauError> {
     validate_media_root(common)?;
     if sources.is_empty() {
@@ -150,7 +163,17 @@ fn plan_with_layout(
     let mut items = Vec::new();
     let mut warnings = Vec::new();
     let mut bytes_to_write = 0;
-    for (source, relative) in candidates {
+    let total = candidates.len() as u64;
+    for (done, (source, relative)) in candidates.into_iter().enumerate() {
+        tick(
+            progress,
+            Progress {
+                stage: Stage::Hashing,
+                done: done as u64,
+                total,
+                path: Some(relative.to_string_lossy().into_owned()),
+            },
+        )?;
         if !seen.insert(relative.clone()) {
             return Err(TauError::e(
                 ErrorCode::NameCollision,
@@ -253,8 +276,12 @@ fn plan_with_layout(
 
 /// Executes a freshly reviewed plan. Every copied file is SHA-256 verified;
 /// the index is written last via a temporary file and parsed before rename.
-pub fn execute(plan: &SyncPlan, confirmation: &str) -> Result<SyncReport, TauError> {
-    execute_with_mirror(plan, confirmation, None, None)
+pub fn execute(
+    plan: &SyncPlan,
+    confirmation: &str,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<SyncReport, TauError> {
+    execute_with_mirror(plan, confirmation, None, None, progress)
 }
 
 /// Mirror deletion is deliberately a separate confirmation and requires an
@@ -264,6 +291,7 @@ pub fn execute_with_mirror(
     confirmation: &str,
     delete_confirmation: Option<&str>,
     backup_root: Option<&Path>,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncReport, TauError> {
     if confirmation != plan.id {
         return Err(TauError::e(
@@ -275,13 +303,25 @@ pub fn execute_with_mirror(
     let mut copied = 0;
     let mut unchanged = 0;
     let mut bytes_written = 0;
+    let copy_total = plan.bytes_to_write;
+    let mut copy_done = 0;
     for item in &plan.items {
         match item.state {
             CopyState::Same => unchanged += 1,
             CopyState::New | CopyState::Update => {
+                tick(
+                    progress,
+                    Progress {
+                        stage: Stage::Copying,
+                        done: copy_done,
+                        total: copy_total,
+                        path: Some(item.destination.to_string_lossy().into_owned()),
+                    },
+                )?;
                 copy_verified(item)?;
                 copied += 1;
                 bytes_written += item.bytes;
+                copy_done += item.bytes;
             }
         }
     }
@@ -305,7 +345,17 @@ pub fn execute_with_mirror(
                 "backup folder must be outside the card media root",
             ));
         }
-        for item in &plan.deletions {
+        let delete_total = plan.deletions.len() as u64;
+        for (done, item) in plan.deletions.iter().enumerate() {
+            tick(
+                progress,
+                Progress {
+                    stage: Stage::Deleting,
+                    done: done as u64,
+                    total: delete_total,
+                    path: Some(item.relative.to_string_lossy().into_owned()),
+                },
+            )?;
             backup_then_delete(item, backup_root, &plan.id)?;
             deleted += 1;
         }
@@ -326,7 +376,7 @@ pub fn execute_with_mirror(
             });
         }
     }
-    let scan = scan_dir(&plan.destination, true)?;
+    let scan = scan_dir_with_progress(&plan.destination, true, progress)?;
     let mut warnings = plan.warnings.clone();
     warnings.extend(scan.warnings);
     let index = build_index(
@@ -369,6 +419,7 @@ pub fn execute_core_move(
     source_common: &Path,
     source_root_prefix: &str,
     backup_root: &Path,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncReport, TauError> {
     if confirmation != plan.id || delete_confirmation != plan.id {
         return Err(TauError::e(
@@ -404,9 +455,19 @@ pub fn execute_core_move(
             "move plan contains a source outside the chosen source media root",
         ));
     }
-    let mut report = execute(plan, confirmation)?;
+    let mut report = execute(plan, confirmation, progress)?;
     let mut deleted = 0;
-    for item in &plan.items {
+    let total = plan.items.len() as u64;
+    for (done, item) in plan.items.iter().enumerate() {
+        tick(
+            progress,
+            Progress {
+                stage: Stage::Deleting,
+                done: done as u64,
+                total,
+                path: Some(item.source.to_string_lossy().into_owned()),
+            },
+        )?;
         let canonical_source = item.source.canonicalize()?;
         let relative = canonical_source.strip_prefix(&source_common).map_err(|_| {
             TauError::e(ErrorCode::InvalidPathReference, "move plan contains an invalid source path")
@@ -429,6 +490,7 @@ pub fn execute_core_move(
         source_root_prefix,
         &plan.id,
         &mut report.warnings,
+        progress,
     )?;
     report.deleted = deleted;
     Ok(report)
@@ -475,8 +537,9 @@ fn rebuild_index(
     root_prefix: &str,
     plan_id: &str,
     warnings: &mut Vec<Warning>,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<(), TauError> {
-    let scan = scan_dir(media_root, true)?;
+    let scan = scan_dir_with_progress(media_root, true, progress)?;
     warnings.extend(scan.warnings);
     let index = build_index(&scan.entries, &scan.playlists, root_prefix, warnings)?;
     parse(&index)?;
@@ -712,10 +775,10 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         fs::write(source.join("01 Nausicaä.mp3"), b"music").unwrap();
         let original = sha256_file(&source.join("01 Nausicaä.mp3")).unwrap();
-        let sync_plan = plan(&[source.clone()], &common, "/Assets/tau/common/").unwrap();
+        let sync_plan = plan(&[source.clone()], &common, "/Assets/tau/common/", &mut None).unwrap();
         assert!(common.read_dir().unwrap().next().is_none());
-        assert!(execute(&sync_plan, "wrong").is_err());
-        let report = execute(&sync_plan, &sync_plan.id).unwrap();
+        assert!(execute(&sync_plan, "wrong", &mut None).is_err());
+        let report = execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
         assert_eq!(report.copied, 1);
         assert_eq!(
             sha256_file(&source.join("01 Nausicaä.mp3")).unwrap(),
@@ -728,9 +791,9 @@ mod tests {
                 .join("01 Nausicaa.mp3")
                 .is_file()
         );
-        let retry = plan(&[source.clone()], &common, "/Assets/tau/common/").unwrap();
+        let retry = plan(&[source.clone()], &common, "/Assets/tau/common/", &mut None).unwrap();
         assert_eq!(retry.items[0].state, CopyState::Same);
-        let no_op = execute(&retry, &retry.id).unwrap();
+        let no_op = execute(&retry, &retry.id, &mut None).unwrap();
         assert_eq!(no_op.copied, 0);
         fs::remove_dir_all(source).unwrap();
         fs::remove_dir_all(common.ancestors().nth(2).unwrap()).unwrap();
@@ -744,11 +807,11 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         let media = source.join("01 Track.mp3");
         fs::write(&media, b"before").unwrap();
-        let plan = plan(&[source.clone()], &common, "/Assets/tau/common/").unwrap();
+        let plan = plan(&[source.clone()], &common, "/Assets/tau/common/", &mut None).unwrap();
         let index = common.join("tau-library.tdb");
         fs::write(&index, b"previous index bytes").unwrap();
         fs::write(&media, b"after!").unwrap();
-        assert!(execute(&plan, &plan.id).is_err());
+        assert!(execute(&plan, &plan.id, &mut None).is_err());
         assert_eq!(fs::read(index).unwrap(), b"previous index bytes");
         fs::remove_dir_all(source).unwrap();
         fs::remove_dir_all(common.ancestors().nth(2).unwrap()).unwrap();
@@ -765,11 +828,14 @@ mod tests {
         fs::write(source.join("01 Keep.mp3"), b"keep").unwrap();
         fs::write(common.join("old.mp3"), b"old").unwrap();
         let plan =
-            plan_with_options(&[source.clone()], &common, "/Assets/tau/common/", true).unwrap();
+            plan_with_options(&[source.clone()], &common, "/Assets/tau/common/", true, &mut None)
+                .unwrap();
         assert_eq!(plan.deletions.len(), 1);
-        assert!(execute_with_mirror(&plan, &plan.id, None, Some(&backup)).is_err());
+        assert!(execute_with_mirror(&plan, &plan.id, None, Some(&backup), &mut None).is_err());
         assert!(common.join("old.mp3").exists());
-        let report = execute_with_mirror(&plan, &plan.id, Some(&plan.id), Some(&backup)).unwrap();
+        let report =
+            execute_with_mirror(&plan, &plan.id, Some(&plan.id), Some(&backup), &mut None)
+                .unwrap();
         assert_eq!(report.deleted, 1);
         assert!(!common.join("old.mp3").exists());
         assert_eq!(
@@ -797,10 +863,11 @@ mod tests {
             "/Assets/tau/common/",
             false,
             true,
+            &mut None,
         )
         .unwrap();
         assert!(sync_plan.items[0].cover.is_some());
-        execute(&sync_plan, &sync_plan.id).unwrap();
+        execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
         assert_eq!(fs::read(&track).unwrap(), b"audio");
         let copy = fs::read(
             common
@@ -822,12 +889,13 @@ mod tests {
         fs::create_dir_all(&destination).unwrap();
         let track = source.join("album/01 Track.mp3");
         fs::write(&track, b"music").unwrap();
-        let plan = plan_core_copy(&source, &destination, "/Assets/tau-test/common/").unwrap();
+        let plan =
+            plan_core_copy(&source, &destination, "/Assets/tau-test/common/", &mut None).unwrap();
         assert_eq!(
             plan.items[0].destination,
             plan.destination.join("album/01 Track.mp3")
         );
-        execute(&plan, &plan.id).unwrap();
+        execute(&plan, &plan.id, &mut None).unwrap();
         assert_eq!(fs::read(&track).unwrap(), b"music");
         assert_eq!(
             fs::read(destination.join("album/01 Track.mp3")).unwrap(),
@@ -847,7 +915,8 @@ mod tests {
         fs::create_dir_all(&destination).unwrap();
         let track = source.join("album/01 Track.mp3");
         fs::write(&track, b"music").unwrap();
-        let plan = plan_core_copy(&source, &destination, "/Assets/tau-test/common/").unwrap();
+        let plan =
+            plan_core_copy(&source, &destination, "/Assets/tau-test/common/", &mut None).unwrap();
         assert!(
             execute_core_move(
                 &plan,
@@ -856,6 +925,7 @@ mod tests {
                 &source,
                 "/Assets/tau/common/",
                 &backup,
+                &mut None,
             )
             .is_err()
         );
@@ -867,6 +937,7 @@ mod tests {
             &source,
             "/Assets/tau/common/",
             &backup,
+            &mut None,
         )
         .unwrap();
         assert_eq!(report.deleted, 1);
@@ -879,5 +950,27 @@ mod tests {
         assert!(destination.join("tau-library.tdb").is_file());
         fs::remove_dir_all(card).unwrap();
         fs::remove_dir_all(backup).unwrap();
+    }
+
+    #[test]
+    fn cancelling_partway_through_a_plan_stops_hashing() {
+        let source = root("cancel-source");
+        let common = root("cancel-card").join("Assets/tau/common");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&common).unwrap();
+        fs::write(source.join("01.mp3"), b"one").unwrap();
+        fs::write(source.join("02.mp3"), b"two").unwrap();
+        let mut seen = 0;
+        let mut observer = |_progress: Progress| {
+            seen += 1;
+            false
+        };
+        let mut observer: Option<&mut dyn ProgressObserver> = Some(&mut observer);
+        let error = plan(&[source.clone()], &common, "/Assets/tau/common/", &mut observer)
+            .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::Cancelled);
+        assert_eq!(seen, 1);
+        fs::remove_dir_all(source).unwrap();
+        fs::remove_dir_all(common.ancestors().nth(2).unwrap()).unwrap();
     }
 }

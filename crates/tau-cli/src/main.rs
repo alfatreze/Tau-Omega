@@ -6,7 +6,7 @@ use std::{
 use tau_core::sync::{self, CopyState, SyncPlan};
 use tau_core::{
     build_index, compare, inspect_card, parse, root_prefix, scan_dir, synth, verify, TauError,
-    Warning, ROOT_PREFIX,
+    Warning,
 };
 
 /// A CLI-boundary error: either an argument-parsing mistake (no engine code)
@@ -118,7 +118,8 @@ fn core_copy_execute(a: &[String], j: bool) -> Result<(), CliError> {
     let confirmation = value(a, "--confirm").ok_or("core-copy needs --confirm PLAN-ID")?;
     let journal =
         PathBuf::from(value(a, "--manifest").ok_or("core-copy needs --manifest HOST_REPORT.json")?);
-    let report = tau_core::journal::execute_to_journal(&plan, confirmation, &journal)?;
+    let report =
+        tau_core::journal::execute_to_journal(&plan, confirmation, &journal, &mut None)?;
     if j {
         println!(
             r#"{{"plan_id":{},"copied":{},"unchanged":{},"index":{}}}"#,
@@ -156,6 +157,7 @@ fn core_move_execute(a: &[String], j: bool) -> Result<(), CliError> {
         &root_prefix(&source)?,
         &backup,
         &journal,
+        &mut None,
     )?;
     if j {
         println!(
@@ -312,7 +314,7 @@ fn synthetic(a: &[String], j: bool) -> Result<(), CliError> {
     let artists = num(a, "--artists")?;
     let out = PathBuf::from(value(a, "--out").ok_or("synth needs --out FILE")?);
     let mut warns = Vec::new();
-    let data = build_index(&synth(tracks, albums, artists), &[], ROOT_PREFIX, &mut warns)?;
+    let data = build_index(&synth(tracks, albums, artists), &[], tau_core::ROOT_PREFIX, &mut warns)?;
     parse(&data)?;
     fs::write(&out, &data).map_err(TauError::from)?;
     if j {
@@ -338,7 +340,7 @@ fn sync_execute(a: &[String], j: bool) -> Result<(), CliError> {
     let path =
         PathBuf::from(value(a, "--manifest").ok_or("sync needs --manifest HOST_REPORT.json")?);
     let report = if plan.deletions.is_empty() {
-        tau_core::journal::execute_to_journal(&plan, confirmation, &path)
+        tau_core::journal::execute_to_journal(&plan, confirmation, &path, &mut None)
     } else {
         tau_core::journal::execute_mirror_to_journal(
             &plan,
@@ -346,6 +348,7 @@ fn sync_execute(a: &[String], j: bool) -> Result<(), CliError> {
             value(a, "--confirm-delete"),
             value(a, "--backup-dir").map(Path::new),
             &path,
+            &mut None,
         )
     }?;
     if j {
@@ -378,13 +381,14 @@ fn make_plan(a: &[String]) -> Result<SyncPlan, CliError> {
         &root_prefix(&dest)?,
         a.iter().any(|arg| arg == "--mirror"),
         a.iter().any(|arg| arg == "--embed-cover"),
+        &mut None,
     )?)
 }
 fn make_core_copy_plan(a: &[String]) -> Result<SyncPlan, CliError> {
     let source = PathBuf::from(a.first().ok_or("core-copy needs a source media root")?);
     let destination =
         PathBuf::from(value(a, "--dest").ok_or("core-copy needs --dest Assets/<platform>/common")?);
-    Ok(sync::plan_core_copy(&source, &destination, &root_prefix(&destination)?)?)
+    Ok(sync::plan_core_copy(&source, &destination, &root_prefix(&destination)?, &mut None)?)
 }
 fn show_plan(p: &SyncPlan, j: bool) {
     let count = |state| p.items.iter().filter(|item| item.state == state).count();

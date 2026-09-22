@@ -169,6 +169,55 @@ impl std::fmt::Display for Warning {
     }
 }
 
+/// Which phase of a long-running call a `Progress` report belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Scanning,
+    Hashing,
+    Copying,
+    BuildingIndex,
+    Verifying,
+    Deleting,
+}
+
+/// One progress report from a long-running scan/plan/execute call. `done` and
+/// `total` share a unit within one stage (files, except bytes for `Copying`).
+/// `total` is `0` when it is not known in advance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Progress {
+    pub stage: Stage,
+    pub done: u64,
+    pub total: u64,
+    pub path: Option<String>,
+}
+
+/// A caller-supplied progress/cancellation observer for scan/plan/execute.
+/// Returning `false` from `report` cancels the running call, which then
+/// returns `Err` with `ErrorCode::Cancelled`. Any `FnMut(Progress) -> bool`
+/// implements this automatically, so a plain closure is enough; there is no
+/// runtime or executor dependency.
+pub trait ProgressObserver {
+    fn report(&mut self, progress: Progress) -> bool;
+}
+impl<F: FnMut(Progress) -> bool> ProgressObserver for F {
+    fn report(&mut self, progress: Progress) -> bool {
+        self(progress)
+    }
+}
+
+/// Reports one unit of progress through an optional observer. Returns
+/// `Err(Cancelled)` if the observer declines to continue; every long-running
+/// loop in this crate calls this once per unit of work so a host can cancel
+/// promptly rather than only at the next stage boundary.
+fn tick(observer: &mut Option<&mut dyn ProgressObserver>, progress: Progress) -> Result<(), TauError> {
+    if let Some(observer) = observer
+        && !observer.report(progress)
+    {
+        return Err(TauError::e(ErrorCode::Cancelled, "cancelled by caller"));
+    }
+    Ok(())
+}
+
 /// Derives the on-card path prefix baked into every entry of a media root's
 /// index: `Assets/<platform>/common` becomes `/Assets/<platform>/common/`.
 /// This is the single implementation of that rule; front-ends call it rather
@@ -476,11 +525,22 @@ fn natural(input: &str) -> Vec<Token> {
 
 /// Scans a destination media root. Source paths remain read-only; this operation only reads tags.
 pub fn scan_dir(common: &Path, playlists: bool) -> Result<Scan, TauError> {
+    scan_dir_with_progress(common, playlists, &mut None)
+}
+
+/// Same as [`scan_dir`], reporting per-file progress through an optional
+/// observer that can also cancel the scan (see [`ProgressObserver`]).
+pub fn scan_dir_with_progress(
+    common: &Path,
+    playlists: bool,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<Scan, TauError> {
     let mut files = Vec::new();
     collect_files(common, common, &mut files)?;
     files.sort();
+    let total = files.len() as u64;
     let mut output = Scan::default();
-    for path in files {
+    for (done, path) in files.into_iter().enumerate() {
         let extension = path
             .extension()
             .and_then(|x| x.to_str())
@@ -498,6 +558,15 @@ pub fn scan_dir(common: &Path, playlists: bool) -> Result<Scan, TauError> {
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
+        tick(
+            progress,
+            Progress {
+                stage: Stage::Scanning,
+                done: done as u64,
+                total,
+                path: Some(rel.clone()),
+            },
+        )?;
         let (tags, secs, fmt) = match read_tags(&path) {
             Ok(result) => result,
             Err(e) => {

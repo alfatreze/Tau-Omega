@@ -1,7 +1,7 @@
 //! Host-side, durable job reports. A journal is always outside a card's media
 //! root, so recovery information remains available if a card is removed.
 
-use crate::{sync, ErrorCode, TauError, Warning};
+use crate::{sync, ErrorCode, ProgressObserver, TauError, Warning};
 use serde_json::json;
 use std::{
     fs,
@@ -16,6 +16,7 @@ pub fn execute_to_journal(
     plan: &sync::SyncPlan,
     confirmation: &str,
     journal_path: &Path,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<sync::SyncReport, TauError> {
     if confirmation != plan.id {
         return Err(TauError::e(
@@ -25,7 +26,7 @@ pub fn execute_to_journal(
     }
     validate_location(journal_path, &plan.destination)?;
     write_state(plan, journal_path, "running", None, None)?;
-    match sync::execute(plan, confirmation) {
+    match sync::execute(plan, confirmation, progress) {
         Ok(report) => {
             write_state(plan, journal_path, "completed", Some(&report), None)?;
             Ok(report)
@@ -47,6 +48,7 @@ pub fn execute_mirror_to_journal(
     delete_confirmation: Option<&str>,
     backup_root: Option<&Path>,
     journal_path: &Path,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<sync::SyncReport, TauError> {
     if confirmation != plan.id {
         return Err(TauError::e(
@@ -56,7 +58,7 @@ pub fn execute_mirror_to_journal(
     }
     validate_location(journal_path, &plan.destination)?;
     write_state(plan, journal_path, "running", None, None)?;
-    match sync::execute_with_mirror(plan, confirmation, delete_confirmation, backup_root) {
+    match sync::execute_with_mirror(plan, confirmation, delete_confirmation, backup_root, progress) {
         Ok(report) => {
             write_state(plan, journal_path, "completed", Some(&report), None)?;
             Ok(report)
@@ -70,6 +72,12 @@ pub fn execute_mirror_to_journal(
 
 /// Records the copy-and-delete lifecycle of a core move in the same host-side
 /// journal used by sync and mirror jobs.
+///
+/// This mirrors `sync::execute_core_move`'s own parameter list (itself
+/// pre-existing before P0-3 added `progress`), rather than collapsing it into
+/// an options struct here; that collapse is P1-3's job, done once across the
+/// whole `plan`/`execute` family, not piecemeal per wrapper.
+#[allow(clippy::too_many_arguments)]
 pub fn execute_core_move_to_journal(
     plan: &sync::SyncPlan,
     confirmation: &str,
@@ -78,6 +86,7 @@ pub fn execute_core_move_to_journal(
     source_root_prefix: &str,
     backup_root: &Path,
     journal_path: &Path,
+    progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<sync::SyncReport, TauError> {
     if confirmation != plan.id || delete_confirmation != plan.id {
         return Err(TauError::e(
@@ -95,6 +104,7 @@ pub fn execute_core_move_to_journal(
         source_common,
         source_root_prefix,
         backup_root,
+        progress,
     ) {
         Ok(report) => {
             write_state(plan, journal_path, "completed", Some(&report), None)?;
@@ -208,8 +218,8 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         fs::create_dir_all(report.parent().unwrap()).unwrap();
         fs::write(source.join("track.mp3"), b"music").unwrap();
-        let plan = sync::plan(&[source], &common, "/Assets/tau/common/").unwrap();
-        let result = execute_to_journal(&plan, &plan.id, &report).unwrap();
+        let plan = sync::plan(&[source], &common, "/Assets/tau/common/", &mut None).unwrap();
+        let result = execute_to_journal(&plan, &plan.id, &report, &mut None).unwrap();
         assert_eq!(result.copied, 1);
         let journal: serde_json::Value =
             serde_json::from_slice(&fs::read(&report).unwrap()).unwrap();
@@ -227,8 +237,8 @@ mod tests {
         fs::create_dir_all(&source).unwrap();
         fs::create_dir_all(&common).unwrap();
         fs::write(source.join("track.mp3"), b"music").unwrap();
-        let plan = sync::plan(&[source], &common, "/Assets/tau/common/").unwrap();
-        assert!(execute_to_journal(&plan, "wrong", &report).is_err());
+        let plan = sync::plan(&[source], &common, "/Assets/tau/common/", &mut None).unwrap();
+        assert!(execute_to_journal(&plan, "wrong", &report, &mut None).is_err());
         assert!(!report.exists());
         fs::remove_dir_all(root).unwrap();
     }
@@ -242,7 +252,9 @@ mod tests {
         fs::create_dir_all(&source).unwrap();
         fs::create_dir_all(&destination).unwrap();
         fs::write(source.join("track.mp3"), b"music").unwrap();
-        let plan = sync::plan_core_copy(&source, &destination, "/Assets/tau-test/common/").unwrap();
+        let plan =
+            sync::plan_core_copy(&source, &destination, "/Assets/tau-test/common/", &mut None)
+                .unwrap();
         let report = source.join("move.json");
         assert!(
             execute_core_move_to_journal(
@@ -253,6 +265,7 @@ mod tests {
                 "/Assets/tau/common/",
                 &backup,
                 &report,
+                &mut None,
             )
             .is_err()
         );
