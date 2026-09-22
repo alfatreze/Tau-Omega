@@ -26,6 +26,18 @@ codes, the Tauri adapter's former `ApiError`) already used, and the fieldless en
 strings (`"only_left"`, `"new"`, …) that predate this feature, rather than the derive's own PascalCase
 default. Checked by `crates/tau-core/tests/serde_feature.rs` (only compiled with `--features serde`).
 
+## `fuzz/` (not part of the portable engine, not built by default)
+
+A standalone `cargo-fuzz` workspace (its own `[workspace]`, so the main build's dependency graph is
+untouched — verified `cargo metadata` from the repo root lists only `tau-core`/`tau-cli`/
+`tau-testkit`) targeting `tau_core::parse` (`PORTABILITY_AUDIT.md` P2-2). `libfuzzer-sys` is its
+only dependency, scoped entirely to `fuzz/`. Needs the separate `cargo-fuzz` tool and, at the time
+of writing, a nightly toolchain for coverage instrumentation — neither is assumed to be available
+in every environment this repository is built in, so it was written and reviewed but not run here.
+The always-runnable complement, `crates/tau-core/tests/fuzz_lite.rs`, is part of the normal
+dependency-free `cargo test` run and found no panics across 9,000 CRC-valid-but-corrupted trials
+against three real fixtures.
+
 ## Front-ends (not part of the portable engine)
 
 | Dependency | Purpose | Licence / review |

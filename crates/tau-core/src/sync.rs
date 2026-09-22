@@ -258,10 +258,13 @@ fn plan_with_layout(
     hasher.update([mirror as u8]);
     hasher.update([embed_covers as u8]);
     hasher.update(root_prefix.as_bytes());
-    let id = format!(
-        "T2-{:08x}",
-        u32::from_le_bytes(hasher.finalize()[..4].try_into().unwrap())
-    );
+    // The full SHA-256 hex digest (P2-1): a 32-bit truncation is thin for a
+    // token that may be persisted or handed across a process boundary, and
+    // the old `T2-` prefix leaked an internal roadmap phase label into a
+    // durable identifier. Confirmation is a plain string comparison
+    // (`execute*` checks `confirmation == plan.id`), so widening it and
+    // dropping the prefix changes nothing about how a caller uses it.
+    let id = format!("{:x}", hasher.finalize());
     Ok(SyncPlan {
         id,
         destination,
@@ -796,6 +799,32 @@ mod tests {
                 .as_nanos()
         ))
     }
+    /// P2-1: the token used to be a 32-bit-truncated hash formatted `T2-xxxxxxxx`,
+    /// thin for something that may be persisted or handed across a process
+    /// boundary, and the `T2-` leaked an internal roadmap phase label into a
+    /// durable identifier. It's now the full SHA-256 hex digest, unprefixed.
+    #[test]
+    fn plan_id_is_a_full_sha256_hex_digest_with_no_phase_prefix() {
+        let source = root("token-source");
+        let common = root("token-card").join("Assets/tau/common");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&common).unwrap();
+        fs::write(source.join("01.mp3"), b"music").unwrap();
+        let sync_plan = plan(
+            &[source.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
+        assert_eq!(sync_plan.id.len(), 64);
+        assert!(sync_plan.id.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(!sync_plan.id.starts_with("T2-"));
+        fs::remove_dir_all(source).unwrap();
+        fs::remove_dir_all(common.ancestors().nth(2).unwrap()).unwrap();
+    }
+
     #[test]
     fn sync_is_plan_first_and_leaves_sources_untouched() {
         let source = root("source");
