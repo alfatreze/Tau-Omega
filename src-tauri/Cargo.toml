@@ -6,7 +6,7 @@ edition = "2024"
 [workspace]
 
 [dependencies]
-tau-core = { path = "../crates/tau-core" }
+tau-core = { path = "../crates/tau-core", features = ["serde"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }

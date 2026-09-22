@@ -68,11 +68,27 @@ Trait-object or `FnMut` — no runtime dependency, works for every host shape.
 
 ### P1-1 — core types are not serialisable
 
-No `serde` derives on any public type. The Tauri adapter therefore hand-writes **13 `*View` DTO
-structs** to get data to its UI, and every future host repeats that work.
+**Done (2026-09-22).** No `serde` derives on any public type. The Tauri adapter therefore
+hand-wrote **13 `*View` DTO structs** to get data to its UI, and every future host repeated that
+work.
 
 **Fix:** `serde` behind an optional cargo feature. Zero cost when disabled; deletes the DTO layer
 when enabled.
+
+Every public type in `tau-core` now derives `Serialize`/`Deserialize` behind the `serde` cargo
+feature (off by default; verified the default `cargo build -p tau-core` does not compile `serde` at
+all). `ErrorCode` keeps its established plain-`u16` wire shape via a hand-written impl rather than
+the derive's PascalCase default, and the fieldless enums (`WarningCode`, `CopyState`,
+`DifferenceState`, `IndexStatus`, `Stage`) use `#[serde(rename_all = "snake_case")]` to match the
+wire strings hand-written boundaries already used (see `docs/DEPENDENCIES.md`, checked by
+`crates/tau-core/tests/serde_feature.rs`). With the feature enabled in `src-tauri`, the DTO layer
+shrank from 13 structs to 7: `ApiError`, `WarningView`, `SettingView` and `DifferenceView` are
+gone entirely (commands now return `TauError`, `Warning`, `PersistedSetting` and
+`MediaDifference`/`MediaComparison` — via `#[serde(flatten)]` for the latter — directly).
+`CoreView`, `SyncPlanView`, `PlaylistView`, `MediaScanView`, `LibrarySummaryView`,
+`ComparisonView` and `DuplicateView` remain: each does real presentation or aggregation work (an
+English status sentence, or counts that are not fields stored on the engine type), not routing
+around a missing `Serialize` impl.
 
 ### P1-2 — a public function panics on caller-supplied input
 
@@ -148,7 +164,8 @@ work.
    `scan_dir_with_progress` and the whole `plan`/`execute` family; returning `false` cancels with
    `ErrorCode::Cancelled`. Tauri wires a `job_id` + `"tau://progress"` window event + a
    `cancel_job` command; the sync screen shows live progress and a Cancel button.
-4. **P1-1** optional `serde` feature; retire the `*View` layer.
+4. **P1-1** — **Done (2026-09-22).** Optional `serde` feature; the DTO layer shrank from 13 to 7
+   structs (the rest do real presentation/aggregation, not serialisation workaround).
 5. **P1-2** no panics on caller input at public entry points.
 6. **P1-3** collapse `plan_with_*` into an options struct.
 7. **P2** widen the plan token, drop the `T2-` prefix, add a parser fuzz target.

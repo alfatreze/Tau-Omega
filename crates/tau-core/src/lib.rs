@@ -72,6 +72,7 @@ pub enum ErrorCode {
     Io = 42,
     Json = 43,
     Cancelled = 44,
+    NotFound = 45,
 }
 
 impl ErrorCode {
@@ -88,9 +89,60 @@ impl std::fmt::Display for ErrorCode {
     }
 }
 
+impl TryFrom<u16> for ErrorCode {
+    type Error = ();
+    fn try_from(value: u16) -> Result<Self, ()> {
+        Ok(match value {
+            11 => Self::IndexHeader,
+            12 => Self::IndexSize,
+            13 => Self::IndexBodyCrc,
+            14 => Self::IndexCapExceeded,
+            15 => Self::IndexSectionRange,
+            17 => Self::IndexRecordRange,
+            30 => Self::InvalidMediaRoot,
+            31 => Self::SourceMissing,
+            32 => Self::SamePath,
+            33 => Self::NameCollision,
+            34 => Self::NoSources,
+            35 => Self::ConfirmationMismatch,
+            36 => Self::UnsafeBackupLocation,
+            37 => Self::InvalidJournalLocation,
+            38 => Self::VerificationFailed,
+            39 => Self::SourceChangedSincePlan,
+            40 => Self::UnsupportedCover,
+            41 => Self::InvalidPathReference,
+            42 => Self::Io,
+            43 => Self::Json,
+            44 => Self::Cancelled,
+            45 => Self::NotFound,
+            _ => return Err(()),
+        })
+    }
+}
+
+// `ErrorCode` is serialised as its stable `u16` (matching `.as_u16()`, the
+// convention every hand-written boundary already used before this feature
+// existed) rather than the derived default of a PascalCase variant name, so
+// enabling `serde` does not change the wire shape a host already depends on.
+#[cfg(feature = "serde")]
+impl serde::Serialize for ErrorCode {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u16(self.as_u16())
+    }
+}
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for ErrorCode {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = u16::deserialize(deserializer)?;
+        ErrorCode::try_from(value)
+            .map_err(|()| serde::de::Error::custom(format!("unknown error code {value}")))
+    }
+}
+
 /// A structured engine error: `code` is stable and meant for a host to branch
 /// on; `message` is an English sentence for display only.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TauError {
     pub code: ErrorCode,
     pub message: String,
@@ -123,6 +175,8 @@ impl From<io::Error> for TauError {
 /// A stable identifier for a non-fatal warning. Unlike `ErrorCode` these never
 /// mirror a firmware code; they are entirely this engine's own vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum WarningCode {
     NotAPocketCard,
     MissingCoreJson,
@@ -151,6 +205,7 @@ impl WarningCode {
 /// A structured warning: `code` is stable and meant for a host to branch on;
 /// `message` is an English sentence for display only.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Warning {
     pub code: WarningCode,
     pub message: String,
@@ -171,6 +226,8 @@ impl std::fmt::Display for Warning {
 
 /// Which phase of a long-running call a `Progress` report belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum Stage {
     Scanning,
     Hashing,
@@ -184,6 +241,7 @@ pub enum Stage {
 /// `total` share a unit within one stage (files, except bytes for `Copying`).
 /// `total` is `0` when it is not known in advance.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Progress {
     pub stage: Stage,
     pub done: u64,
@@ -241,6 +299,8 @@ pub fn root_prefix(common: &Path) -> Result<String, TauError> {
 /// Computed once here so no front-end re-derives the media-root path or
 /// re-reads the index file itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum IndexStatus {
     NoIndex,
     Ready { tracks: u16 },
@@ -248,6 +308,7 @@ pub enum IndexStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Core {
     pub id: String,
     pub author: String,
@@ -259,6 +320,7 @@ pub struct Core {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Card {
     pub root: PathBuf,
     pub is_pocket_card: bool,
@@ -384,6 +446,7 @@ fn slots_have_library(json: &Value) -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Entry {
     pub rel: String,
     pub dir: String,
@@ -394,11 +457,13 @@ pub struct Entry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Playlist {
     pub name: String,
     pub rel_ids: Vec<usize>,
 }
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Scan {
     pub entries: Vec<Entry>,
     pub playlists: Vec<Playlist>,
@@ -1311,6 +1376,7 @@ pub struct Index {
     pub root: u32,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Counts {
     pub artists: u16,
     pub albums: u16,

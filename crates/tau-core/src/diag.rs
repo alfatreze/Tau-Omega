@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::{fs, path::Path};
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PersistedSetting {
     pub id: u64,
     pub kind: String,

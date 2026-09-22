@@ -13,6 +13,7 @@ use std::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CopyItem {
     pub source: PathBuf,
     pub destination: PathBuf,
@@ -22,17 +23,21 @@ pub struct CopyItem {
     pub state: CopyState,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CoverItem {
     pub source: PathBuf,
     pub sha256: String,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum CopyState {
     New,
     Update,
     Same,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeleteItem {
     pub destination: PathBuf,
     pub relative: PathBuf,
@@ -40,6 +45,7 @@ pub struct DeleteItem {
     pub sha256: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SyncPlan {
     pub id: String,
     pub destination: PathBuf,
@@ -51,6 +57,7 @@ pub struct SyncPlan {
     pub bytes_to_write: u64,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SyncReport {
     pub plan_id: String,
     pub copied: usize,

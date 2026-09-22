@@ -16,9 +16,15 @@ better outcome — do not "restore" that list to match the survey.
 | `crc32fast` | Index CRC32 header and body fields | MIT OR Apache-2.0; small, widely used. |
 | `sha2` | SHA-256 for sync verification, duplicate grouping, plan tokens and backup checks | MIT OR Apache-2.0; RustCrypto, widely used. |
 | `serde_json` | Read-only `core.json` / `data.json` / `interact_persist.json` parsing | MIT OR Apache-2.0; small, widely used. |
+| `serde` (optional, feature `serde`) | `Serialize`/`Deserialize` on every public data type (`PORTABILITY_AUDIT.md` P1-1, done 2026-09-22) | MIT OR Apache-2.0; already an implied dependency of `serde_json`, which every consumer of this crate already builds. Not in the default feature set: verified the default `cargo build -p tau-core` does not compile `serde`/`serde_derive`/`syn` at all, vs. `cargo build -p tau-core --features serde`, which does. |
 
-Expected next: `serde` (derive) behind an **optional cargo feature**, so hosts get serialisation for
-free while the default build stays as lean as it is now (`PORTABILITY_AUDIT.md` P1-1).
+`ErrorCode` and the fieldless enums (`WarningCode`, `CopyState`, `DifferenceState`, `IndexStatus`,
+`Stage`) do not use the derive's default wire shape: `ErrorCode` has a hand-written
+`Serialize`/`Deserialize` pair so it stays the plain `u16` every hand-written boundary (CLI exit
+codes, the Tauri adapter's former `ApiError`) already used, and the fieldless enums use
+`#[serde(rename_all = "snake_case")]` so they match `WarningCode::as_str()` and the hand-written wire
+strings (`"only_left"`, `"new"`, …) that predate this feature, rather than the derive's own PascalCase
+default. Checked by `crates/tau-core/tests/serde_feature.rs` (only compiled with `--features serde`).
 
 ## Front-ends (not part of the portable engine)
 
