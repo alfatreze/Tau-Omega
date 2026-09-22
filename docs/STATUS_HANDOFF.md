@@ -53,13 +53,48 @@ The bundle uses the `assets/appicon.png` icon and embedded Space Grotesk font.
 - Typed feature commands are in `ui/src/lib/tau-api.ts`.
 - Settings, Jobs, Playlists, Problems, and Library views are extracted Svelte components.
 
+### Portability boundary (P0-1..P0-3, 2026-09-22 — see `PORTABILITY_AUDIT.md`)
+
+All three P0 items are done, each its own commit:
+
+- **P0-1** (`root_prefix` / index status): `tau_core::root_prefix(&Path)` is the single
+  implementation of the `/Assets/<platform>/common/` rule; the CLI's `prefix()` and the Tauri
+  adapter's `root_prefix()` are gone, both call the engine now. `Core::index_status:
+  IndexStatus` (`NoIndex`/`Ready { tracks }`/`NeedsRepair`) is computed by `inspect_card` itself;
+  the Tauri adapter no longer re-derives the media-root path or re-reads/re-parses the index —
+  it only maps the enum to a display string.
+- **P0-2** (structured warnings/errors): `TauError` is `{ code: ErrorCode, message: String }`.
+  `ErrorCode` 11-17 mirror the firmware index loader's own E-codes; 30+ are engine/domain codes
+  (`InvalidMediaRoot`, `ConfirmationMismatch`, `SourceChangedSincePlan`, `Cancelled`, ...). Every
+  `Vec<String>` warnings field (`Card`, `Scan`, `SyncPlan`, `SyncReport`) is now `Vec<Warning>`
+  (`{ code: WarningCode, message: String }`). The CLI's process exit code is the error's numeric
+  code (clamped to a byte) for engine failures, `2` for usage mistakes — verified end to end
+  against a scratch copy of the real `../tau-alpha/dist` card: a bad destination path exits `30`
+  (`InvalidMediaRoot`). Tauri commands return a serialisable `ApiError { code, message }` instead
+  of a flattened string; the UI's `errorMessage()` picks `.message` for display.
+- **P0-3** (progress/cancellation): `ProgressObserver` (blanket-implemented for
+  `FnMut(Progress) -> bool`, no runtime dependency) threads through `scan_dir_with_progress` and
+  the whole `plan`/`execute` family; returning `false` cancels with `ErrorCode::Cancelled`,
+  checked between units of work. Tauri wires this to a `job_id` + `"tau://progress"` window
+  event + a `cancel_job` command; the sync screen shows a live stage/done/total line and a
+  Cancel button.
+
+Each commit builds and passes its own tests standalone (verified by reconstructing the three as
+separate, individually buildable layers rather than one combined diff): `3046b28` (P0-2),
+`4eaa432` (P0-1), `0c7fe6c` (P0-3).
+
 ## Validation
 
-- `cargo test` (workspace): 28 tests passing — 17 `tau-core` unit, 5 index conformance, 4 card
-  inspection (`tests/card.rs`), 2 testkit.
+- `cargo test` (workspace): 28 tests passing — 18 `tau-core` unit (17 plus the new
+  `cancelling_partway_through_a_plan_stops_hashing`), 5 index conformance, 4 card inspection
+  (`tests/card.rs`), 2 testkit.
 - `npm run check`: zero Svelte errors on the last validation.
-- `cargo clippy --all-targets`: clean apart from five pre-existing `clone`-on-slice warnings in
-  `sync.rs` test code.
+- `cargo clippy --all-targets`: clean apart from six pre-existing `clone`-on-slice warnings in
+  `sync.rs` test code (one more than before P0-3, added by the new cancellation test following
+  the same pre-existing idiom) and one `#[allow(clippy::too_many_arguments)]` on
+  `journal::execute_core_move_to_journal`, explained in a doc comment (mirrors
+  `sync::execute_core_move`'s own pre-existing parameter count; P1-3 will collapse the whole
+  family into an options struct in one pass, not piecemeal per wrapper).
 - `cargo-tauri build`: last successful app bundle includes Playlists, Problems, journal loading, and prior completed UI work.
 
 ## Known issues and incomplete wiring
@@ -70,11 +105,11 @@ The bundle uses the `assets/appicon.png` icon and embedded Space Grotesk font.
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
 - Jobs shown from a loaded journal are a concise summary, not a full journal-detail view.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
-- **Boundary defects found by the 2026-09-22 portability audit** (`PORTABILITY_AUDIT.md`), all
-  blocking adoption of `tau-core` by Pocket Sync: the `/Assets/<platform>/common/` prefix rule is
-  implemented separately in the CLI and the Tauri adapter (which also owns index-status presentation);
-  warnings and errors cross every boundary as English strings, with `TauError::code()` used only by
-  the conformance test; and the engine has no progress or cancellation hooks at all.
+- **Fixed 2026-09-22 (P0-1/P0-2/P0-3):** the three boundary defects the portability audit found —
+  duplicated root-prefix/index-status logic, English-only warnings and errors, and no
+  progress/cancellation — are all done. See "Portability boundary" above. Remaining P1 items
+  (optional `serde` feature, no panics on caller input, collapse `plan_with_*` into an options
+  struct, widen the plan token, a parser fuzz target) are still open — see `PORTABILITY_AUDIT.md`.
 - `build_index` is public, takes public `Entry` values, and panics on a missing `_tno` tag rather than
   returning an error — a host feeding its own data in crashes.
 - **Fixed 2026-09-22:** library capability detection never matched a real card (it read `data.json`'s
@@ -94,11 +129,10 @@ The bundle uses the `assets/appicon.png` icon and embedded Space Grotesk font.
 
 ## Next recommended implementation order
 
-**Boundary work comes first — decision D-011.** The three P0 items in `PORTABILITY_AUDIT.md` (move
-duplicated domain rules into `tau-core`; machine-readable warnings and errors; progress and
-cancellation) get more expensive with every feature stacked on top, and each is a prerequisite for
-Pocket Sync adoption. Then the P1 items (optional `serde` feature; no panics on caller input;
-collapse the `plan_with_*` family into an options struct). Then:
+**Boundary work comes first — decision D-011.** The three P0 items in `PORTABILITY_AUDIT.md` are
+now done (2026-09-22; see "Portability boundary" above). Next is the P1 items (optional `serde`
+feature; no panics on caller input; collapse the `plan_with_*` family into an options struct; widen
+the plan token and drop the `T2-` prefix; a parser fuzz target). Then:
 
 1. Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.
 2. Expand Problems checks from duplicates to format/tag/path/cover issues.
