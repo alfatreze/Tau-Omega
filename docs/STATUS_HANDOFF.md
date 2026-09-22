@@ -2,6 +2,17 @@
 
 Updated 2026-09-22. All implementation work is contained in `Tau Omega/`.
 
+## Read these first
+
+1. This file — state, known issues, what to do next.
+2. `DECISIONS.md` — D-001..D-012, including the integration target and the licence boundary.
+3. `PORTABILITY_AUDIT.md` — the ranked P0/P1 work that comes before new features.
+4. `FIRMWARE_SYNC.md` — what we assume about tau-alpha, last verified 2026-09-22 against v0.4.0.
+
+This folder is a Git repository (initialised 2026-09-22, branch `main`). It has **no remote**, so the
+history is local-only — worth fixing before it matters. The firmware project is the sibling
+`../tau-alpha`, which is read-only from here (D-010).
+
 ## Current deliverable
 
 The macOS app bundle is produced at:
@@ -44,9 +55,11 @@ The bundle uses the `assets/appicon.png` icon and embedded Space Grotesk font.
 
 ## Validation
 
-- `cargo test -p tau-core`: 17 tests passing.
-- Index conformance suite: 5 tests passing.
+- `cargo test` (workspace): 28 tests passing — 17 `tau-core` unit, 5 index conformance, 4 card
+  inspection (`tests/card.rs`), 2 testkit.
 - `npm run check`: zero Svelte errors on the last validation.
+- `cargo clippy --all-targets`: clean apart from five pre-existing `clone`-on-slice warnings in
+  `sync.rs` test code.
 - `cargo-tauri build`: last successful app bundle includes Playlists, Problems, journal loading, and prior completed UI work.
 
 ## Known issues and incomplete wiring
