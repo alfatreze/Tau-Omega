@@ -64,6 +64,12 @@ The bundle uses the `assets/appicon.png` icon and embedded Space Grotesk font.
   the conformance test; and the engine has no progress or cancellation hooks at all.
 - `build_index` is public, takes public `Entry` values, and panics on a missing `_tno` tag rather than
   returning an error — a host feeding its own data in crashes.
+- **Fixed 2026-09-22:** library capability detection never matched a real card (it read `data.json`'s
+  `data` key as an array; the real APF layout is `data.data_slots`), so every shipped Tau core showed
+  as "legacy". The fixture had invented the shape, and nothing tested `inspect_card`. See
+  `FIRMWARE_SYNC.md`. Two firmware-side questions remain open there: the art file's data slot is
+  double-booked with the Phase G cold image, and its pixel format is unconfirmed — both due before
+  thumbnails can be built.
 
 ## Deferred because validation/fixtures are required
 

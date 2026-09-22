@@ -161,15 +161,21 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
     })
 }
 
+/// A core supports the media library if any data slot serves `tau-library.tdb`.
+///
+/// Matched by filename, never by slot id: the id is the core author's choice and
+/// the shipped Tau core has already moved its other slots around. The real APF
+/// layout is `{"data": {"data_slots": [...]}}`; the flatter shapes are accepted
+/// because older hand-written cores use them.
 fn slots_have_library(json: &Value) -> bool {
-    let walk = |items: Option<&Vec<Value>>| {
+    let serves_library = |items: Option<&Vec<Value>>| {
         items
             .into_iter()
             .flatten()
             .any(|v| v.get("filename").and_then(Value::as_str) == Some("tau-library.tdb"))
     };
-    walk(json.get("data").and_then(Value::as_array))
-        || walk(json.pointer("/core/data").and_then(Value::as_array))
+    let slots = |pointer: &str| serves_library(json.pointer(pointer).and_then(Value::as_array));
+    slots("/data/data_slots") || slots("/core/data/data_slots") || slots("/data") || slots("/core/data")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
