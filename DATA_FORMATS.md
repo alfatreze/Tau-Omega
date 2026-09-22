@@ -97,17 +97,38 @@ Deferred until the blit engine exists. Design kept in `tau-alpha/docs/MEDIA_LIBR
 counts, `art_id` = CRC32 of the header), section A of 32x32 RGB565 list thumbnails, section B of 92x92 RGB565 detail thumbnails, fixed stride per album.
 Tau Omega should already own the thumbnail pipeline (extract, square, scale, cache by cover hash) so this becomes a switch, not a project.
 
+> **Two questions must be answered by tau-alpha before this is built (raised 2026-09-22).** The blit
+> engine is now that project's *active* work item, so these are live, not hypothetical:
+> 1. **The slot number is taken.** `MEDIA_LIBRARY_0.4_SPEC.md` section 3 reserves **data slot 6** for
+>    this file, but Phase G shipped the cold image `tau-cold.bin` in slot 6 and it is in the released
+>    v0.4.0 core today. The art file needs a different slot; nobody has picked one.
+> 2. **RGB565 is an assumption, not a fact.** The firmware spec itself says "RGB565 assumed; *verify
+>    against `fw/art.inc` before freezing*". Do not encode thumbnails against it until confirmed.
+>
+> The reserved fields are safe either way: the index header keeps `art_id` at offset 44 and the album
+> record keeps `art` u16 = 0xFFFF, so the index format does not change when art arrives.
+
 ## 4. Persisted settings (read-only display)
 `Settings/<core>/Interact/_core/interact_persist.json` holds `variables[]` `{id, type, val}`. Tau library builds use (id -> word):
 10 volume, 11 colour index (0..18, Pocket edition colours), 12 repeat, 13 shuffle, 15 meter, 16 EQ, 18 saved position, 19 resume on,
 20-23 legacy playlist name/hash, **24 library history**, 25 index build id (31 bits), 26 Shuffle All seed, 27 library off (1 = disabled).
+
+> **Ids 20-23 are overloaded — verified on hardware files 2026-09-22.** Every core (release and
+> Diagnostic Build alike) declares them as `(internal) list 1..4`, the legacy playlist state above.
+> The **Check report reuses those same four variables** — `tau-alpha/tools/decode_tau_suite.py`
+> defaults to `--ids 20,21,22,23`. Nothing in the JSON says which meaning is present, so a reader
+> must **try the TAUD1 decode and fall back to playlist state when its CRC32 fails**; the CRC is the
+> only discriminator. Decoding blind produces a plausible-looking but fictitious Check report.
+> Note also that tau-alpha's own logs call these "persist words 8-11": that is the *declaration
+> position* in `interact.json` (ids 10,11,12,13,15,16,19,18 occupy positions 0-7), not the id. Two
+> numbering schemes for the same four values — always key on the id, which is what the file carries.
 History word (id 24): bits 0-2 kind (1 album, 2 artist, 3 playlist, 4 all tracks A-Z, 5 Shuffle All), bits 3-13 id, bits 14-27 queue position.
 Tau Omega can show "last played" by resolving kind and id against the index whose build id matches word 25.
 
 ## 5. Manifest written by every sync (JSON, kept on the host; nothing extra is written to the card)
 ```json
-{ "tool": "tau-omega", "version": "x.y.z", "time": "2026-09-21T12:00:00Z", "card": "<volume id>", "core": "alfatreze.TAU_PSRAM_12",
-  "platform": "tau_psram_12", "sources": ["/Users/me/Music"], "index": {"sha256": "...", "tracks": 7180, "albums": 800, "artists": 300, "playlists": 3, "build_id": "1BD19340"},
+{ "tool": "tau-omega", "version": "x.y.z", "time": "2026-09-21T12:00:00Z", "card": "<volume id>", "core": "alfatreze.TAU",
+  "platform": "tau", "sources": ["/Users/me/Music"], "index": {"sha256": "...", "tracks": 7180, "albums": 800, "artists": 300, "playlists": 3, "build_id": "1BD19340"},
   "files": [{"dest": "Artist/Album/01 Title.mp3", "sha256": "...", "bytes": 1234, "state": "new|update|same", "converted": false, "note": ""}],
   "warnings": [], "errors": [], "skipped": [{"src": "...", "why": "..."}] }
 ```

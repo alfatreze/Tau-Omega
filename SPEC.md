@@ -33,7 +33,7 @@ Out (for now): streaming services, transcoding, editing tags in the user's files
 ### 5.2 Cores screen (multi-core)
 * List every core on the card: author, name, version, date, platform id, description, size on disk, media size, whether library-capable, whether an index is present and its
   counts and age, whether the index matches the media (see 5.5 Health).
-* Identify **Tau family** cores (author `alfatreze`, shortname starts `TAU`), numbered test builds `TAU_PSRAM_NN`, and the base release. Show other openFPGA cores as read-only rows with their media roots.
+* Identify **Tau family** cores (author `alfatreze`, shortname starts `TAU`), numbered test builds `TAU_DEV_NN` (retired ones are named `TAU_PSRAM_NN`), and the base release. Show other openFPGA cores as read-only rows with their media roots.
 * Per core actions: open in Library view, sync media, rebuild index, verify, copy media to another core, move media, clear media, remove core (with backup), view persisted settings, view screenshots and logs.
 * **Copy / move between cores:** choose source core and destination core (same card, or another card/staging). Pick everything or a selection (folders, albums, playlists).
   The engine copies files (verified), rewrites playlist lines, rebuilds the destination index (the root prefix changes with the platform folder), and for a *move* deletes the source only after a second confirmation.

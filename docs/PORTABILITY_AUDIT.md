@@ -105,6 +105,18 @@ label into a durable identifier.
 crafted-but-CRC-valid file driving offsets is not covered, and the `u16_at`/`u32_at` helpers panic
 rather than return.
 
+### Addendum 2026-09-22 — fixture fidelity
+
+A follow-up check against the firmware repo (`FIRMWARE_SYNC.md`) found and fixed a live bug that this
+audit's method would not have caught: library capability detection never matched a real card, because
+the test fixture invented a `data.json` shape instead of copying a real one. The engine's *portability*
+was fine; its *fidelity to the platform* was not.
+
+Worth recording next to the findings above, because the two failure modes look alike and are not:
+the index path is byte-exact against a Python oracle and was flawless, while the card path was
+verified against a fiction. **Any fixture standing in for something the firmware or APF produces must
+be derived from a real artefact.**
+
 ## Documentation drift
 
 | Doc claim | Reality |

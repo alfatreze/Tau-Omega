@@ -23,9 +23,20 @@ pub fn fake_card(root: &Path) -> io::Result<()> {
         root.join("Cores/alfatreze.TAU/core.json"),
         r#"{"core":{"metadata":{"author":"alfatreze","shortname":"TAU","version":"0.4.0","platform_ids":["tau"]}}}"#,
     )?;
+    // Shaped exactly like a real APF data.json (`data.data_slots`), copied from the
+    // slot table the shipped v0.4.0 core declares. An earlier fixture invented a
+    // flat `{"data":[...]}` array, which no real core uses, and that hid a bug where
+    // library detection never matched a genuine card.
     fs::write(
         root.join("Cores/alfatreze.TAU/data.json"),
-        r#"{"data":[{"id":5,"filename":"tau-library.tdb"}]}"#,
+        r#"{"data":{"magic":"APF_VER_1","data_slots":[
+            {"name":"Firmware","id":1,"required":true,"parameters":"0x5","filename":"tau.rom"},
+            {"name":"Music file","id":2,"required":false,"parameters":"0x2"},
+            {"name":"Playlist","id":3,"required":false,"parameters":"0x2","filename":"playlist.m3u"},
+            {"name":"Loading image","id":4,"required":false,"deferload":true,"parameters":"0x1","filename":"tau-loading.bin"},
+            {"name":"Media library index","id":5,"required":false,"deferload":true,"parameters":"0x1","filename":"tau-library.tdb"},
+            {"name":"Cold image","id":6,"required":false,"deferload":true,"parameters":"0x1","filename":"tau-cold.bin"}
+        ]}}"#,
     )?;
     fs::write(
         root.join("Cores/example.legacy/core.json"),
@@ -33,7 +44,9 @@ pub fn fake_card(root: &Path) -> io::Result<()> {
     )?;
     fs::write(
         root.join("Cores/example.legacy/data.json"),
-        r#"{"data":[{"id":2,"filename":"track.mp3"}]}"#,
+        r#"{"data":{"magic":"APF_VER_1","data_slots":[
+            {"name":"Music file","id":2,"required":false,"parameters":"0x2","filename":"track.mp3"}
+        ]}}"#,
     )?;
     Ok(())
 }
