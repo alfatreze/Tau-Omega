@@ -9,6 +9,10 @@ export type Playlist = { name: string; tracks: number };
 export type MediaScan = { playlists: Playlist[]; warnings: Warning[] };
 export type DuplicateGroup = { files: string[] };
 export type LibrarySummary = { tracks: number; playlists: number; warnings: Warning[] };
+/** The engine's own `tau_core::sync::SyncReport`, returned directly from
+ * execute_sync/execute_core_copy/execute_core_move now that it implements
+ * `Serialize` (P1-1) -- no hand-written result DTO duplicates it. */
+export type SyncReport = { plan_id: string; copied: number; unchanged: number; bytes_written: number; deleted: number; index_path: string; index_sha256: string; warnings: Warning[] };
 /** What a rejected `invoke()` resolves to now that the engine's errors carry
  * a stable numeric `code` (see `tau_core::ErrorCode`) across the boundary
  * instead of a flattened English string. */

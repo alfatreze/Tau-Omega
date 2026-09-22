@@ -83,11 +83,32 @@ Each commit builds and passes its own tests standalone (verified by reconstructi
 separate, individually buildable layers rather than one combined diff): `3046b28` (P0-2),
 `4eaa432` (P0-1), `0c7fe6c` (P0-3).
 
+### P1-1 — optional `serde` feature (2026-09-22)
+
+Every public `tau-core` type now derives `Serialize`/`Deserialize` behind a `serde` cargo feature,
+off by default (verified: the default `cargo build -p tau-core` does not compile `serde` at all).
+`ErrorCode` keeps a hand-written impl so it stays the plain `u16` wire shape every boundary already
+used (not the derive's PascalCase default); the fieldless enums (`WarningCode`, `CopyState`,
+`DifferenceState`, `IndexStatus`, `Stage`) use `#[serde(rename_all = "snake_case")]` to match the
+hand-written wire strings. Checked by `crates/tau-core/tests/serde_feature.rs` (compiled only with
+the feature) and by `docs/DEPENDENCIES.md`.
+
+`src-tauri` now enables the feature and its DTO layer shrank from 13 structs to 7: `ApiError`,
+`WarningView`, `SettingView` and `DifferenceView` are gone — commands return `TauError`, `Warning`,
+`PersistedSetting` and `MediaComparison`/`MediaDifference` (via `#[serde(flatten)]`) directly.
+`CoreView`, `SyncPlanView`, `PlaylistView`, `MediaScanView`, `LibrarySummaryView`, `ComparisonView`
+and `DuplicateView` stay: each does presentation (an English status sentence) or aggregation
+(counts not stored on the engine type), not routing around a missing `Serialize` impl. The UI's
+wire-visible shapes are unchanged except `execute_sync`/`execute_core_copy`/`execute_core_move`,
+which now return the engine's own `SyncReport` (a superset of the old result view — `plan_id`,
+`deleted` and `index_sha256` are new, additive fields); `ui/src/lib/types.ts` gained a `SyncReport`
+type to match.
+
 ## Validation
 
-- `cargo test` (workspace): 28 tests passing — 18 `tau-core` unit (17 plus the new
-  `cancelling_partway_through_a_plan_stops_hashing`), 5 index conformance, 4 card inspection
-  (`tests/card.rs`), 2 testkit.
+- `cargo test` (workspace): 29 tests passing without `--features tau-core/serde` (18 `tau-core`
+  unit, 5 index conformance, 4 card inspection, 2 testkit), 35 with it (adds 6 in the
+  feature-gated `serde_feature.rs`).
 - `npm run check`: zero Svelte errors on the last validation.
 - `cargo clippy --all-targets`: clean apart from six pre-existing `clone`-on-slice warnings in
   `sync.rs` test code (one more than before P0-3, added by the new cancellation test following
@@ -95,7 +116,7 @@ separate, individually buildable layers rather than one combined diff): `3046b28
   `journal::execute_core_move_to_journal`, explained in a doc comment (mirrors
   `sync::execute_core_move`'s own pre-existing parameter count; P1-3 will collapse the whole
   family into an options struct in one pass, not piecemeal per wrapper).
-- `cargo-tauri build`: last successful app bundle includes Playlists, Problems, journal loading, and prior completed UI work.
+- `cargo-tauri build`: builds clean with `tau-core`'s `serde` feature enabled (`src-tauri/Cargo.toml`).
 
 ## Known issues and incomplete wiring
 
@@ -105,11 +126,12 @@ separate, individually buildable layers rather than one combined diff): `3046b28
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
 - Jobs shown from a loaded journal are a concise summary, not a full journal-detail view.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
-- **Fixed 2026-09-22 (P0-1/P0-2/P0-3):** the three boundary defects the portability audit found —
-  duplicated root-prefix/index-status logic, English-only warnings and errors, and no
-  progress/cancellation — are all done. See "Portability boundary" above. Remaining P1 items
-  (optional `serde` feature, no panics on caller input, collapse `plan_with_*` into an options
-  struct, widen the plan token, a parser fuzz target) are still open — see `PORTABILITY_AUDIT.md`.
+- **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1):** the three P0 boundary defects the portability audit
+  found — duplicated root-prefix/index-status logic, English-only warnings and errors, and no
+  progress/cancellation — are all done, and so is P1-1 (optional `serde` feature; DTO layer
+  shrank from 13 to 7 structs). See "Portability boundary" and "P1-1" above. Remaining P1 items
+  (no panics on caller input, collapse `plan_with_*` into an options struct, widen the plan
+  token, a parser fuzz target) are still open — see `PORTABILITY_AUDIT.md`.
 - `build_index` is public, takes public `Entry` values, and panics on a missing `_tno` tag rather than
   returning an error — a host feeding its own data in crashes.
 - **Fixed 2026-09-22:** library capability detection never matched a real card (it read `data.json`'s
@@ -129,10 +151,10 @@ separate, individually buildable layers rather than one combined diff): `3046b28
 
 ## Next recommended implementation order
 
-**Boundary work comes first — decision D-011.** The three P0 items in `PORTABILITY_AUDIT.md` are
-now done (2026-09-22; see "Portability boundary" above). Next is the P1 items (optional `serde`
-feature; no panics on caller input; collapse the `plan_with_*` family into an options struct; widen
-the plan token and drop the `T2-` prefix; a parser fuzz target). Then:
+**Boundary work comes first — decision D-011.** The three P0 items and P1-1 in `PORTABILITY_AUDIT.md`
+are now done (2026-09-22; see "Portability boundary" and "P1-1" above). Next is the remaining P1
+items (no panics on caller input at public entry points; collapse the `plan_with_*` family into an
+options struct; widen the plan token and drop the `T2-` prefix; a parser fuzz target). Then:
 
 1. Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.
 2. Expand Problems checks from duplicates to format/tag/path/cover issues.

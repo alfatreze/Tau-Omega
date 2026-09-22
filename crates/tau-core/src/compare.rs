@@ -10,6 +10,8 @@ use std::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum DifferenceState {
     OnlyLeft,
     OnlyRight,
@@ -18,6 +20,7 @@ pub enum DifferenceState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MediaDifference {
     pub relative: PathBuf,
     pub state: DifferenceState,
@@ -26,6 +29,7 @@ pub struct MediaDifference {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MediaComparison {
     pub left: PathBuf,
     pub right: PathBuf,

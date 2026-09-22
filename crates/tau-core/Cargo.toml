@@ -6,8 +6,17 @@ license.workspace = true
 
 [dependencies]
 crc32fast = "1.5"
+serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = "1.0"
 sha2 = "0.10"
+
+[features]
+# Adds `Serialize`/`Deserialize` to every public data type (see
+# docs/DEPENDENCIES.md). Zero cost when disabled: no `serde` dependency is
+# even compiled in. This exists so a host (a Tauri adapter, or Pocket Sync
+# itself) can hand these types straight across a serialisation boundary
+# instead of hand-writing a DTO that mirrors every field.
+serde = ["dep:serde"]
 
 [lints]
 workspace = true
