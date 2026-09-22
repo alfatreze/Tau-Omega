@@ -159,9 +159,7 @@ fn plan_with_layout(
         } else {
             candidates.push((
                 source.clone(),
-                PathBuf::from(ascii_file_name(
-                    source.file_name().unwrap().to_string_lossy().as_ref(),
-                )),
+                PathBuf::from(ascii_file_name(&required_file_name(source)?)),
             ));
         }
     }
@@ -637,9 +635,7 @@ fn collect_source(
             let rel = path.strip_prefix(root).unwrap();
             let mut converted = PathBuf::new();
             if include_root {
-                converted.push(ascii_name(
-                    root.file_name().unwrap().to_string_lossy().as_ref(),
-                ));
+                converted.push(ascii_name(&required_file_name(root)?));
             }
             for part in rel.components() {
                 converted.push(ascii_file_name(part.as_os_str().to_string_lossy().as_ref()));
@@ -669,6 +665,22 @@ fn audio_file(path: &Path) -> bool {
 }
 fn is_junk(name: &str) -> bool {
     name.starts_with("._") || matches!(name, ".DS_Store" | "Thumbs.db")
+}
+/// A source's file name, used to derive an ASCII-safe destination name.
+/// `Path::file_name()` returns `None` for a handful of paths (`/`, `.`,
+/// `..`, a bare prefix like `C:\`) that can still pass `.exists()`; a plain
+/// `.unwrap()` here would let a caller-supplied source path panic the whole
+/// plan instead of failing it cleanly (P1-2).
+fn required_file_name(path: &Path) -> Result<String, TauError> {
+    path.file_name().map(|name| name.to_string_lossy().into_owned()).ok_or_else(|| {
+        TauError::e(
+            ErrorCode::InvalidPathReference,
+            format!(
+                "source has no file name to derive a destination name from: {}",
+                path.display()
+            ),
+        )
+    })
 }
 fn ascii_file_name(name: &str) -> String {
     let name = ascii_name(name);
@@ -765,6 +777,21 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// P1-2: `sources: &[PathBuf]` is a public parameter to `plan`/
+    /// `plan_with_features`; a path with no derivable file name (`/`, `.`)
+    /// used to reach a bare `.file_name().unwrap()` here and panic the whole
+    /// plan instead of failing it cleanly.
+    #[test]
+    fn required_file_name_does_not_panic_on_a_nameless_path() {
+        assert!(required_file_name(Path::new("/")).is_err());
+        assert!(required_file_name(Path::new(".")).is_err());
+        assert_eq!(
+            required_file_name(Path::new("/tmp/foo.mp3")).unwrap(),
+            "foo.mp3"
+        );
+    }
+
     fn root(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
             "tau-sync-{name}-{}",

@@ -92,14 +92,29 @@ around a missing `Serialize` impl.
 
 ### P1-2 — a public function panics on caller-supplied input
 
-`build_index` is public and consumes `Entry` values whose fields are all public. It then does
-`entries[i].tags["_tno"].parse::<u16>().unwrap()` — a map index plus an unwrap on an internal
-invariant that only the engine's own scanner establishes.
+**Done (2026-09-22).** `build_index` is public and consumes `Entry` values whose fields are all
+public. It then does `entries[i].tags["_tno"].parse::<u16>().unwrap()` — a map index plus an
+unwrap on an internal invariant that only the engine's own scanner establishes.
 
 Why it matters: a host feeding its own library in — precisely the integration being planned — panics
 instead of getting an error.
 
 **Fix:** validate and return `Err`; no public entry point may panic on caller data.
+
+On inspection `_tno`/`_title` turned out to always be set by `build_index` itself just before
+each read (so the described panic could not actually be triggered today), but the indexing style
+(`tags["_tno"]` + `.unwrap()`) was still one refactor away from a real one, so it was replaced with
+`tno_of`/`title_of` helpers that fall back to a safe default instead of indexing-and-unwrapping —
+defensive by construction, not by an invariant a future change could quietly break. A second,
+genuinely live panic was found and fixed in the same pass: `sync::plan`/`plan_with_features`'s
+`sources: &[PathBuf]` is public caller input, and a source path with no derivable file name (`/`,
+`.`, a bare drive letter) reached a bare `.file_name().unwrap()` in two places (the direct-file
+case and `collect_source`'s use of the top-level root for `include_root` naming) — both now go
+through a `required_file_name` helper returning `ErrorCode::InvalidPathReference` instead of
+panicking. New tests: `build_index_does_not_panic_on_a_hand_built_entry_with_no_tags`
+(`tests/conformance.rs`) and `required_file_name_does_not_panic_on_a_nameless_path`
+(`sync.rs`). All byte-conformance tests still pass unchanged, confirming this was a pure
+defensive refactor with no behaviour change on valid input.
 
 ### P1-3 — telescoping constructors
 
@@ -166,7 +181,8 @@ work.
    `cancel_job` command; the sync screen shows live progress and a Cancel button.
 4. **P1-1** — **Done (2026-09-22).** Optional `serde` feature; the DTO layer shrank from 13 to 7
    structs (the rest do real presentation/aggregation, not serialisation workaround).
-5. **P1-2** no panics on caller input at public entry points.
+5. **P1-2** — **Done (2026-09-22).** `build_index`'s tag lookups and `sync::plan`'s source-path
+   handling no longer index-and-unwrap; both fall back or return `Err` instead of panicking.
 6. **P1-3** collapse `plan_with_*` into an options struct.
 7. **P2** widen the plan token, drop the `T2-` prefix, add a parser fuzz target.
 
