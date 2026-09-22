@@ -69,38 +69,34 @@ pub struct SyncReport {
     pub warnings: Vec<Warning>,
 }
 
+/// Options for [`plan`]. `Default` gives the plain behaviour: add sources
+/// under the destination, no mirror deletion, no cover embedding.
+///
+/// Replaces the four-deep `plan` -> `plan_with_options` -> `plan_with_features`
+/// -> `plan_with_layout` telescoping-constructor chain (P1-3): one public
+/// entry point, one options struct, so a new capability adds a field here
+/// instead of another wrapper function.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PlanOptions {
+    /// Delete destination files that no longer correspond to a source.
+    pub mirror: bool,
+    /// Embed a discovered folder cover into destination MP3/FLAC copies. A
+    /// cover hash is part of the plan token, preventing an unreviewed
+    /// replacement.
+    pub embed_covers: bool,
+}
+
 /// Produces a read-only sync plan. Sources are copied below `common` using
 /// ASCII-safe names and never modified. `common` must be a Tau media root.
 pub fn plan(
     sources: &[PathBuf],
     common: &Path,
     root_prefix: &str,
+    options: PlanOptions,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncPlan, TauError> {
-    plan_with_options(sources, common, root_prefix, false, progress)
-}
-
-pub fn plan_with_options(
-    sources: &[PathBuf],
-    common: &Path,
-    root_prefix: &str,
-    mirror: bool,
-    progress: &mut Option<&mut dyn ProgressObserver>,
-) -> Result<SyncPlan, TauError> {
-    plan_with_features(sources, common, root_prefix, mirror, false, progress)
-}
-
-/// Adds optional copy-only artwork embedding to a pure, reviewable plan. A
-/// cover hash is part of the plan token, preventing an unreviewed replacement.
-pub fn plan_with_features(
-    sources: &[PathBuf],
-    common: &Path,
-    root_prefix: &str,
-    mirror: bool,
-    embed_covers: bool,
-    progress: &mut Option<&mut dyn ProgressObserver>,
-) -> Result<SyncPlan, TauError> {
-    plan_with_layout(sources, common, root_prefix, mirror, embed_covers, true, progress)
+    plan_with_layout(sources, common, root_prefix, options, true, progress)
 }
 
 /// Plans a whole-library copy from one explicit Tau media root to another.
@@ -123,8 +119,7 @@ pub fn plan_core_copy(
         &[source_common.to_path_buf()],
         destination_common,
         root_prefix,
-        false,
-        false,
+        PlanOptions::default(),
         false,
         progress,
     )
@@ -134,11 +129,11 @@ fn plan_with_layout(
     sources: &[PathBuf],
     common: &Path,
     root_prefix: &str,
-    mirror: bool,
-    embed_covers: bool,
+    options: PlanOptions,
     include_source_root: bool,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncPlan, TauError> {
+    let PlanOptions { mirror, embed_covers } = options;
     validate_media_root(common)?;
     if sources.is_empty() {
         return Err(TauError::e(ErrorCode::NoSources, "at least one source is required"));
@@ -809,7 +804,7 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         fs::write(source.join("01 Nausicaä.mp3"), b"music").unwrap();
         let original = sha256_file(&source.join("01 Nausicaä.mp3")).unwrap();
-        let sync_plan = plan(&[source.clone()], &common, "/Assets/tau/common/", &mut None).unwrap();
+        let sync_plan = plan(&[source.clone()], &common, "/Assets/tau/common/", PlanOptions::default(), &mut None).unwrap();
         assert!(common.read_dir().unwrap().next().is_none());
         assert!(execute(&sync_plan, "wrong", &mut None).is_err());
         let report = execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
@@ -825,7 +820,7 @@ mod tests {
                 .join("01 Nausicaa.mp3")
                 .is_file()
         );
-        let retry = plan(&[source.clone()], &common, "/Assets/tau/common/", &mut None).unwrap();
+        let retry = plan(&[source.clone()], &common, "/Assets/tau/common/", PlanOptions::default(), &mut None).unwrap();
         assert_eq!(retry.items[0].state, CopyState::Same);
         let no_op = execute(&retry, &retry.id, &mut None).unwrap();
         assert_eq!(no_op.copied, 0);
@@ -841,7 +836,7 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         let media = source.join("01 Track.mp3");
         fs::write(&media, b"before").unwrap();
-        let plan = plan(&[source.clone()], &common, "/Assets/tau/common/", &mut None).unwrap();
+        let plan = plan(&[source.clone()], &common, "/Assets/tau/common/", PlanOptions::default(), &mut None).unwrap();
         let index = common.join("tau-library.tdb");
         fs::write(&index, b"previous index bytes").unwrap();
         fs::write(&media, b"after!").unwrap();
@@ -861,9 +856,14 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         fs::write(source.join("01 Keep.mp3"), b"keep").unwrap();
         fs::write(common.join("old.mp3"), b"old").unwrap();
-        let plan =
-            plan_with_options(&[source.clone()], &common, "/Assets/tau/common/", true, &mut None)
-                .unwrap();
+        let plan = plan(
+            &[source.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions { mirror: true, embed_covers: false },
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(plan.deletions.len(), 1);
         assert!(execute_with_mirror(&plan, &plan.id, None, Some(&backup), &mut None).is_err());
         assert!(common.join("old.mp3").exists());
@@ -891,12 +891,11 @@ mod tests {
         let track = source.join("01 Track.mp3");
         fs::write(&track, b"audio").unwrap();
         fs::write(source.join("cover.jpg"), [0xff, 0xd8, 0xff, 0xd9]).unwrap();
-        let sync_plan = plan_with_features(
+        let sync_plan = plan(
             &[source.clone()],
             &common,
             "/Assets/tau/common/",
-            false,
-            true,
+            PlanOptions { mirror: false, embed_covers: true },
             &mut None,
         )
         .unwrap();
@@ -1000,8 +999,14 @@ mod tests {
             false
         };
         let mut observer: Option<&mut dyn ProgressObserver> = Some(&mut observer);
-        let error = plan(&[source.clone()], &common, "/Assets/tau/common/", &mut observer)
-            .unwrap_err();
+        let error = plan(
+            &[source.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions::default(),
+            &mut observer,
+        )
+        .unwrap_err();
         assert_eq!(error.code(), ErrorCode::Cancelled);
         assert_eq!(seen, 1);
         fs::remove_dir_all(source).unwrap();

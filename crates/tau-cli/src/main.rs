@@ -375,12 +375,14 @@ fn sync_execute(a: &[String], j: bool) -> Result<(), CliError> {
 fn make_plan(a: &[String]) -> Result<SyncPlan, CliError> {
     let dest =
         PathBuf::from(value(a, "--dest").ok_or("sync needs --dest Assets/<platform>/common")?);
-    Ok(sync::plan_with_features(
+    Ok(sync::plan(
         &sources(a),
         &dest,
         &root_prefix(&dest)?,
-        a.iter().any(|arg| arg == "--mirror"),
-        a.iter().any(|arg| arg == "--embed-cover"),
+        sync::PlanOptions {
+            mirror: a.iter().any(|arg| arg == "--mirror"),
+            embed_covers: a.iter().any(|arg| arg == "--embed-cover"),
+        },
         &mut None,
     )?)
 }

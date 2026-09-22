@@ -218,7 +218,7 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         fs::create_dir_all(report.parent().unwrap()).unwrap();
         fs::write(source.join("track.mp3"), b"music").unwrap();
-        let plan = sync::plan(&[source], &common, "/Assets/tau/common/", &mut None).unwrap();
+        let plan = sync::plan(&[source], &common, "/Assets/tau/common/", sync::PlanOptions::default(), &mut None).unwrap();
         let result = execute_to_journal(&plan, &plan.id, &report, &mut None).unwrap();
         assert_eq!(result.copied, 1);
         let journal: serde_json::Value =
@@ -237,7 +237,7 @@ mod tests {
         fs::create_dir_all(&source).unwrap();
         fs::create_dir_all(&common).unwrap();
         fs::write(source.join("track.mp3"), b"music").unwrap();
-        let plan = sync::plan(&[source], &common, "/Assets/tau/common/", &mut None).unwrap();
+        let plan = sync::plan(&[source], &common, "/Assets/tau/common/", sync::PlanOptions::default(), &mut None).unwrap();
         assert!(execute_to_journal(&plan, "wrong", &report, &mut None).is_err());
         assert!(!report.exists());
         fs::remove_dir_all(root).unwrap();

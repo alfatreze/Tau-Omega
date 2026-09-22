@@ -118,10 +118,19 @@ defensive refactor with no behaviour change on valid input.
 
 ### P1-3 — telescoping constructors
 
-`plan` → `plan_with_options` → `plan_with_features` → `plan_with_layout`, four deep at T2/T3, before
-any API is public. Each new capability adds another.
+**Done (2026-09-22).** `plan` → `plan_with_options` → `plan_with_features` → `plan_with_layout`,
+four deep at T2/T3, before any API is public. Each new capability adds another.
 
 **Fix:** one entry point taking an options struct with `Default`, before the surface is frozen.
+
+`plan_with_options` and `plan_with_features` are gone; the single public `plan(sources, common,
+root_prefix, options: PlanOptions, progress)` takes a `#[derive(Default)]` `PlanOptions { mirror,
+embed_covers }` instead. `plan_core_copy` stays a separate named function (it is a distinct
+operation — whole-library layout, no wrapping source folder — not "plan with more options"), and
+now calls the same private `plan_with_layout` impl with `PlanOptions::default()`. Every call site
+(tau-cli, the Tauri adapter, this crate's own tests) was updated; behaviour is unchanged
+(`--mirror`/`--embed-cover` verified end to end against a scratch copy of the real
+`../tau-alpha/dist` card, producing distinct plan ids as before).
 
 ### P2-1 — plan token is thin and leaks a phase label
 
@@ -183,7 +192,8 @@ work.
    structs (the rest do real presentation/aggregation, not serialisation workaround).
 5. **P1-2** — **Done (2026-09-22).** `build_index`'s tag lookups and `sync::plan`'s source-path
    handling no longer index-and-unwrap; both fall back or return `Err` instead of panicking.
-6. **P1-3** collapse `plan_with_*` into an options struct.
+6. **P1-3** — **Done (2026-09-22).** `plan_with_options`/`plan_with_features` collapsed into one
+   `plan(..., PlanOptions, ...)` entry point.
 7. **P2** widen the plan token, drop the `T2-` prefix, add a parser fuzz target.
 
 ## Explicitly not doing
