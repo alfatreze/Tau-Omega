@@ -1,7 +1,7 @@
 //! Host-side, durable job reports. A journal is always outside a card's media
 //! root, so recovery information remains available if a card is removed.
 
-use crate::{sync, ErrorCode, ProgressObserver, TauError, Warning};
+use crate::{ErrorCode, ProgressObserver, TauError, Warning, sync};
 use serde_json::json;
 use std::{
     fs,
@@ -58,7 +58,13 @@ pub fn execute_mirror_to_journal(
     }
     validate_location(journal_path, &plan.destination)?;
     write_state(plan, journal_path, "running", None, None)?;
-    match sync::execute_with_mirror(plan, confirmation, delete_confirmation, backup_root, progress) {
+    match sync::execute_with_mirror(
+        plan,
+        confirmation,
+        delete_confirmation,
+        backup_root,
+        progress,
+    ) {
         Ok(report) => {
             write_state(plan, journal_path, "completed", Some(&report), None)?;
             Ok(report)
@@ -175,8 +181,9 @@ fn write_state(
         })),
         "error": error,
     });
-    let encoded = serde_json::to_vec_pretty(&state)
-        .map_err(|error| TauError::e(ErrorCode::Json, format!("journal encoding failed: {error}")))?;
+    let encoded = serde_json::to_vec_pretty(&state).map_err(|error| {
+        TauError::e(ErrorCode::Json, format!("journal encoding failed: {error}"))
+    })?;
     let temp = path.with_extension(format!("tau-journal-{}.tmp", std::process::id()));
     {
         use std::io::Write;
@@ -218,7 +225,14 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         fs::create_dir_all(report.parent().unwrap()).unwrap();
         fs::write(source.join("track.mp3"), b"music").unwrap();
-        let plan = sync::plan(&[source], &common, "/Assets/tau/common/", sync::PlanOptions::default(), &mut None).unwrap();
+        let plan = sync::plan(
+            &[source],
+            &common,
+            "/Assets/tau/common/",
+            sync::PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
         let result = execute_to_journal(&plan, &plan.id, &report, &mut None).unwrap();
         assert_eq!(result.copied, 1);
         let journal: serde_json::Value =
@@ -237,7 +251,14 @@ mod tests {
         fs::create_dir_all(&source).unwrap();
         fs::create_dir_all(&common).unwrap();
         fs::write(source.join("track.mp3"), b"music").unwrap();
-        let plan = sync::plan(&[source], &common, "/Assets/tau/common/", sync::PlanOptions::default(), &mut None).unwrap();
+        let plan = sync::plan(
+            &[source],
+            &common,
+            "/Assets/tau/common/",
+            sync::PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
         assert!(execute_to_journal(&plan, "wrong", &report, &mut None).is_err());
         assert!(!report.exists());
         fs::remove_dir_all(root).unwrap();

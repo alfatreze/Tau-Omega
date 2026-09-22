@@ -15,8 +15,12 @@ pub struct PersistedSetting {
 /// Reads an Interact persisted-settings file without mutating its source.
 pub fn read_persisted_settings(path: impl AsRef<Path>) -> Result<Vec<PersistedSetting>, TauError> {
     let bytes = fs::read(path)?;
-    let json: Value = serde_json::from_slice(&bytes)
-        .map_err(|error| TauError::e(ErrorCode::Json, format!("invalid persisted settings: {error}")))?;
+    let json: Value = serde_json::from_slice(&bytes).map_err(|error| {
+        TauError::e(
+            ErrorCode::Json,
+            format!("invalid persisted settings: {error}"),
+        )
+    })?;
     Ok(json
         .get("variables")
         .and_then(Value::as_array)
