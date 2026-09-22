@@ -5,8 +5,8 @@ use std::{
 };
 use tau_core::sync::{self, CopyState, SyncPlan};
 use tau_core::{
-    build_index, compare, inspect_card, parse, root_prefix, scan_dir, synth, verify, TauError,
-    Warning,
+    TauError, Warning, build_index, compare, inspect_card, parse, root_prefix, scan_dir, synth,
+    verify,
 };
 
 /// A CLI-boundary error: either an argument-parsing mistake (no engine code)
@@ -118,8 +118,7 @@ fn core_copy_execute(a: &[String], j: bool) -> Result<(), CliError> {
     let confirmation = value(a, "--confirm").ok_or("core-copy needs --confirm PLAN-ID")?;
     let journal =
         PathBuf::from(value(a, "--manifest").ok_or("core-copy needs --manifest HOST_REPORT.json")?);
-    let report =
-        tau_core::journal::execute_to_journal(&plan, confirmation, &journal, &mut None)?;
+    let report = tau_core::journal::execute_to_journal(&plan, confirmation, &journal, &mut None)?;
     if j {
         println!(
             r#"{{"plan_id":{},"copied":{},"unchanged":{},"index":{}}}"#,
@@ -242,7 +241,12 @@ fn index(a: &[String], j: bool) -> Result<(), CliError> {
     let out = PathBuf::from(value(a, "--out").ok_or("index needs --out FILE")?);
     let scan = scan_dir(&common, a.iter().any(|x| x == "--playlists"))?;
     let mut warns = scan.warnings;
-    let data = build_index(&scan.entries, &scan.playlists, &root_prefix(&common)?, &mut warns)?;
+    let data = build_index(
+        &scan.entries,
+        &scan.playlists,
+        &root_prefix(&common)?,
+        &mut warns,
+    )?;
     parse(&data)?;
     fs::write(&out, &data).map_err(TauError::from)?;
     if j {
@@ -281,11 +285,15 @@ fn check(a: &[String], j: bool) -> Result<(), CliError> {
     if issues.is_empty() {
         Ok(())
     } else {
-        Err(CliError::Usage(format!("{} verification issue(s)", issues.len())))
+        Err(CliError::Usage(format!(
+            "{} verification issue(s)",
+            issues.len()
+        )))
     }
 }
 fn report(a: &[String], j: bool) -> Result<(), CliError> {
-    let index = parse(fs::read(a.first().ok_or("report needs an index file")?).map_err(TauError::from)?)?;
+    let index =
+        parse(fs::read(a.first().ok_or("report needs an index file")?).map_err(TauError::from)?)?;
     if j {
         println!(
             r#"{{"artists":{},"albums":{},"tracks":{},"playlists":{},"build_id":"{:08X}"}}"#,
@@ -314,7 +322,12 @@ fn synthetic(a: &[String], j: bool) -> Result<(), CliError> {
     let artists = num(a, "--artists")?;
     let out = PathBuf::from(value(a, "--out").ok_or("synth needs --out FILE")?);
     let mut warns = Vec::new();
-    let data = build_index(&synth(tracks, albums, artists), &[], tau_core::ROOT_PREFIX, &mut warns)?;
+    let data = build_index(
+        &synth(tracks, albums, artists),
+        &[],
+        tau_core::ROOT_PREFIX,
+        &mut warns,
+    )?;
     parse(&data)?;
     fs::write(&out, &data).map_err(TauError::from)?;
     if j {
@@ -390,7 +403,12 @@ fn make_core_copy_plan(a: &[String]) -> Result<SyncPlan, CliError> {
     let source = PathBuf::from(a.first().ok_or("core-copy needs a source media root")?);
     let destination =
         PathBuf::from(value(a, "--dest").ok_or("core-copy needs --dest Assets/<platform>/common")?);
-    Ok(sync::plan_core_copy(&source, &destination, &root_prefix(&destination)?, &mut None)?)
+    Ok(sync::plan_core_copy(
+        &source,
+        &destination,
+        &root_prefix(&destination)?,
+        &mut None,
+    )?)
 }
 fn show_plan(p: &SyncPlan, j: bool) {
     let count = |state| p.items.iter().filter(|item| item.state == state).count();
@@ -481,7 +499,11 @@ fn warnings_array(warnings: &[Warning]) -> String {
         "[{}]",
         warnings
             .iter()
-            .map(|w| format!(r#"{{"code":{},"message":{}}}"#, q(w.code.as_str()), q(&w.message)))
+            .map(|w| format!(
+                r#"{{"code":{},"message":{}}}"#,
+                q(w.code.as_str()),
+                q(&w.message)
+            ))
             .collect::<Vec<_>>()
             .join(",")
     )

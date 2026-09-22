@@ -80,7 +80,10 @@ fn corruption_codes_match_oracle() {
     for (name, case) in matrix["corruption"].as_object().unwrap() {
         let blob = fs::read(testdata(case["file"].as_str().unwrap())).unwrap();
         assert_eq!(
-            parse(blob).err().map(|error| error.code().as_u16()).unwrap_or(0),
+            parse(blob)
+                .err()
+                .map(|error| error.code().as_u16())
+                .unwrap_or(0),
             case["code"].as_u64().unwrap() as u16,
             "{name}"
         );

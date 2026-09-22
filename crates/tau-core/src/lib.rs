@@ -267,7 +267,10 @@ impl<F: FnMut(Progress) -> bool> ProgressObserver for F {
 /// `Err(Cancelled)` if the observer declines to continue; every long-running
 /// loop in this crate calls this once per unit of work so a host can cancel
 /// promptly rather than only at the next stage boundary.
-fn tick(observer: &mut Option<&mut dyn ProgressObserver>, progress: Progress) -> Result<(), TauError> {
+fn tick(
+    observer: &mut Option<&mut dyn ProgressObserver>,
+    progress: Progress,
+) -> Result<(), TauError> {
     if let Some(observer) = observer
         && !observer.report(progress)
     {
@@ -442,7 +445,10 @@ fn slots_have_library(json: &Value) -> bool {
             .any(|v| v.get("filename").and_then(Value::as_str) == Some("tau-library.tdb"))
     };
     let slots = |pointer: &str| serves_library(json.pointer(pointer).and_then(Value::as_array));
-    slots("/data/data_slots") || slots("/core/data/data_slots") || slots("/data") || slots("/core/data")
+    slots("/data/data_slots")
+        || slots("/core/data/data_slots")
+        || slots("/data")
+        || slots("/core/data")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1326,7 +1332,10 @@ pub fn build_index(
         push_u16(&mut playlists_b, playlist.rel_ids.len() as u16);
         for old in &playlist.rel_ids {
             let new = track_new.get(old).ok_or_else(|| {
-                TauError::e(ErrorCode::IndexRecordRange, "playlist references a missing track")
+                TauError::e(
+                    ErrorCode::IndexRecordRange,
+                    "playlist references a missing track",
+                )
             })?;
             push_u16(&mut items, *new as u16);
         }
@@ -1425,7 +1434,10 @@ pub fn parse(data: impl AsRef<[u8]>) -> Result<Index, TauError> {
         return Err(TauError::e(ErrorCode::IndexHeader, "bad header"));
     }
     if u32_at(data, 20) as usize != data.len() {
-        return Err(TauError::e(ErrorCode::IndexSize, "size differs from header"));
+        return Err(TauError::e(
+            ErrorCode::IndexSize,
+            "size differs from header",
+        ));
     }
     if crc32(&data[HEADER..]) != u32_at(data, 24) {
         return Err(TauError::e(ErrorCode::IndexBodyCrc, "body CRC"));
