@@ -1,7 +1,7 @@
 //! T2's intentionally narrow write boundary: make a pure plan first, then
 //! execute that exact plan after an explicit token confirmation.
 
-use crate::{TauError, ascii_name, build_index, cover, parse, scan_dir, verify};
+use crate::{ascii_name, build_index, cover, parse, scan_dir, verify, ErrorCode, TauError, Warning, WarningCode};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -44,7 +44,7 @@ pub struct SyncPlan {
     pub items: Vec<CopyItem>,
     pub deletions: Vec<DeleteItem>,
     pub embed_covers: bool,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Warning>,
     pub bytes_to_write: u64,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,7 +56,7 @@ pub struct SyncReport {
     pub deleted: usize,
     pub index_path: PathBuf,
     pub index_sha256: String,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Warning>,
 }
 
 /// Produces a read-only sync plan. Sources are copied below `common` using
@@ -96,8 +96,9 @@ pub fn plan_core_copy(
 ) -> Result<SyncPlan, TauError> {
     validate_media_root(source_common)?;
     if source_common.canonicalize()? == destination_common.canonicalize()? {
-        return Err(TauError::Io(
-            "source and destination core media roots must differ".into(),
+        return Err(TauError::e(
+            ErrorCode::SamePath,
+            "source and destination core media roots must differ",
         ));
     }
     plan_with_layout(
@@ -120,7 +121,7 @@ fn plan_with_layout(
 ) -> Result<SyncPlan, TauError> {
     validate_media_root(common)?;
     if sources.is_empty() {
-        return Err(TauError::Io("at least one source is required".into()));
+        return Err(TauError::e(ErrorCode::NoSources, "at least one source is required"));
     }
     let destination = common
         .canonicalize()
@@ -128,10 +129,10 @@ fn plan_with_layout(
     let mut candidates = Vec::new();
     for source in sources {
         if !source.exists() {
-            return Err(TauError::Io(format!(
-                "source does not exist: {}",
-                source.display()
-            )));
+            return Err(TauError::e(
+                ErrorCode::SourceMissing,
+                format!("source does not exist: {}", source.display()),
+            ));
         }
         if source.is_dir() {
             collect_source(source, source, include_source_root, &mut candidates)?;
@@ -151,17 +152,17 @@ fn plan_with_layout(
     let mut bytes_to_write = 0;
     for (source, relative) in candidates {
         if !seen.insert(relative.clone()) {
-            return Err(TauError::Io(format!(
-                "ASCII name collision: {}",
-                relative.display()
-            )));
+            return Err(TauError::e(
+                ErrorCode::NameCollision,
+                format!("ASCII name collision: {}", relative.display()),
+            ));
         }
         let target = destination.join(&relative);
         if source == target {
-            return Err(TauError::Io(format!(
-                "source and destination are the same file: {}",
-                source.display()
-            )));
+            return Err(TauError::e(
+                ErrorCode::SamePath,
+                format!("source and destination are the same file: {}", source.display()),
+            ));
         }
         let bytes = fs::metadata(&source)?.len();
         let sha256 = sha256_file(&source)?;
@@ -207,9 +208,10 @@ fn plan_with_layout(
         });
     }
     if items.is_empty() {
-        warnings.push(
-            "No supported audio or playlist files were found in the selected sources.".into(),
-        );
+        warnings.push(Warning::new(
+            WarningCode::NoMediaFound,
+            "No supported audio or playlist files were found in the selected sources.",
+        ));
     }
     let deletions = if mirror {
         mirror_deletions(&destination, &items)?
@@ -264,8 +266,9 @@ pub fn execute_with_mirror(
     backup_root: Option<&Path>,
 ) -> Result<SyncReport, TauError> {
     if confirmation != plan.id {
-        return Err(TauError::Io(
-            "confirmation token does not match the current plan".into(),
+        return Err(TauError::e(
+            ErrorCode::ConfirmationMismatch,
+            "confirmation token does not match the current plan",
         ));
     }
     validate_media_root(&plan.destination)?;
@@ -285,15 +288,21 @@ pub fn execute_with_mirror(
     let mut deleted = 0;
     if !plan.deletions.is_empty() {
         if delete_confirmation != Some(plan.id.as_str()) {
-            return Err(TauError::Io(
-                "mirror deletions need a second matching confirmation token".into(),
+            return Err(TauError::e(
+                ErrorCode::ConfirmationMismatch,
+                "mirror deletions need a second matching confirmation token",
             ));
         }
-        let backup_root = backup_root
-            .ok_or_else(|| TauError::Io("mirror deletions need a visible backup folder".into()))?;
+        let backup_root = backup_root.ok_or_else(|| {
+            TauError::e(
+                ErrorCode::UnsafeBackupLocation,
+                "mirror deletions need a visible backup folder",
+            )
+        })?;
         if backup_root.starts_with(&plan.destination) {
-            return Err(TauError::Io(
-                "backup folder must be outside the card media root".into(),
+            return Err(TauError::e(
+                ErrorCode::UnsafeBackupLocation,
+                "backup folder must be outside the card media root",
             ));
         }
         for item in &plan.deletions {
@@ -334,7 +343,7 @@ pub fn execute_with_mirror(
     let reparse = fs::read(&temp)?;
     parse(&reparse)?;
     if reparse != index {
-        return Err(TauError::Io("index write verification failed".into()));
+        return Err(TauError::e(ErrorCode::VerificationFailed, "index write verification failed"));
     }
     fs::rename(&temp, &index_path)?;
     Ok(SyncReport {
@@ -362,14 +371,16 @@ pub fn execute_core_move(
     backup_root: &Path,
 ) -> Result<SyncReport, TauError> {
     if confirmation != plan.id || delete_confirmation != plan.id {
-        return Err(TauError::Io(
-            "a core move needs both matching copy and delete confirmation tokens".into(),
+        return Err(TauError::e(
+            ErrorCode::ConfirmationMismatch,
+            "a core move needs both matching copy and delete confirmation tokens",
         ));
     }
     validate_media_root(source_common)?;
     if backup_root.as_os_str().is_empty() {
-        return Err(TauError::Io(
-            "move backup folder must be an explicit host path".into(),
+        return Err(TauError::e(
+            ErrorCode::UnsafeBackupLocation,
+            "move backup folder must be an explicit host path",
         ));
     }
     let source_common = source_common.canonicalize()?;
@@ -377,8 +388,9 @@ pub fn execute_core_move(
         .canonicalize()
         .unwrap_or_else(|_| backup_root.to_path_buf());
     if backup_root.starts_with(&source_common) || backup_root.starts_with(&plan.destination) {
-        return Err(TauError::Io(
-            "move backup folder must be outside both core media roots".into(),
+        return Err(TauError::e(
+            ErrorCode::UnsafeBackupLocation,
+            "move backup folder must be outside both core media roots",
         ));
     }
     if plan.items.iter().any(|item| {
@@ -387,17 +399,18 @@ pub fn execute_core_move(
             .map(|source| !source.starts_with(&source_common))
             .unwrap_or(true)
     }) {
-        return Err(TauError::Io(
-            "move plan contains a source outside the chosen source media root".into(),
+        return Err(TauError::e(
+            ErrorCode::InvalidPathReference,
+            "move plan contains a source outside the chosen source media root",
         ));
     }
     let mut report = execute(plan, confirmation)?;
     let mut deleted = 0;
     for item in &plan.items {
         let canonical_source = item.source.canonicalize()?;
-        let relative = canonical_source
-            .strip_prefix(&source_common)
-            .map_err(|_| TauError::Io("move plan contains an invalid source path".into()))?;
+        let relative = canonical_source.strip_prefix(&source_common).map_err(|_| {
+            TauError::e(ErrorCode::InvalidPathReference, "move plan contains an invalid source path")
+        })?;
         let backup = backup_root.join(&plan.id).join(relative);
         let backup_item = CopyItem {
             source: item.source.clone(),
@@ -461,7 +474,7 @@ fn rebuild_index(
     media_root: &Path,
     root_prefix: &str,
     plan_id: &str,
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<Warning>,
 ) -> Result<(), TauError> {
     let scan = scan_dir(media_root, true)?;
     warnings.extend(scan.warnings);
@@ -470,8 +483,9 @@ fn rebuild_index(
     let temp = media_root.join(format!(".tau-library-source-{plan_id}.tmp"));
     write_durable(&temp, &index)?;
     if fs::read(&temp)? != index {
-        return Err(TauError::Io(
-            "source index write verification failed".into(),
+        return Err(TauError::e(
+            ErrorCode::VerificationFailed,
+            "source index write verification failed",
         ));
     }
     parse(&fs::read(&temp)?)?;
@@ -508,10 +522,10 @@ fn backup_then_delete(
     };
     copy_verified(&copy)?;
     if sha256_file(&backup)? != item.sha256 {
-        return Err(TauError::Io(format!(
-            "backup verification failed: {}",
-            item.relative.display()
-        )));
+        return Err(TauError::e(
+            ErrorCode::VerificationFailed,
+            format!("backup verification failed: {}", item.relative.display()),
+        ));
     }
     fs::remove_file(&item.destination)?;
     Ok(())
@@ -523,12 +537,13 @@ fn validate_media_root(common: &Path) -> Result<(), TauError> {
         .iter()
         .any(|c| matches!(c,Component::Normal(n) if *n == "Assets"));
     if !has_assets || common.file_name().is_none_or(|n| n != "common") {
-        return Err(TauError::Io(
-            "destination must be an explicit Assets/<platform>/common media root".into(),
+        return Err(TauError::e(
+            ErrorCode::InvalidMediaRoot,
+            "destination must be an explicit Assets/<platform>/common media root",
         ));
     }
     if !common.is_dir() {
-        return Err(TauError::Io("destination media root does not exist".into()));
+        return Err(TauError::e(ErrorCode::InvalidMediaRoot, "destination media root does not exist"));
     }
     Ok(())
 }
@@ -623,17 +638,17 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
         .destination
         .with_extension(format!("tau-omega-{}.tmp", std::process::id()));
     if sha256_file(&item.source)? != item.sha256 {
-        return Err(TauError::Io(format!(
-            "source changed since the plan was reviewed: {}",
-            item.source.display()
-        )));
+        return Err(TauError::e(
+            ErrorCode::SourceChangedSincePlan,
+            format!("source changed since the plan was reviewed: {}", item.source.display()),
+        ));
     }
     if let Some(cover) = &item.cover {
         if sha256_file(&cover.source)? != cover.sha256 {
-            return Err(TauError::Io(format!(
-                "cover changed since the plan was reviewed: {}",
-                cover.source.display()
-            )));
+            return Err(TauError::e(
+                ErrorCode::SourceChangedSincePlan,
+                format!("cover changed since the plan was reviewed: {}", cover.source.display()),
+            ));
         }
         let embed_result = match item
             .source
@@ -654,7 +669,7 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
         // Read a content hash after the durable write before the atomic rename.
         // Unlike ordinary copies its bytes intentionally differ from the source.
         if sha256_file(&temp)?.is_empty() {
-            return Err(TauError::Io("cover copy verification failed".into()));
+            return Err(TauError::e(ErrorCode::VerificationFailed, "cover copy verification failed"));
         }
     } else {
         {
@@ -666,10 +681,10 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
         let actual = sha256_file(&temp)?;
         if actual != item.sha256 {
             let _ = fs::remove_file(&temp);
-            return Err(TauError::Io(format!(
-                "verification failed: {}",
-                item.source.display()
-            )));
+            return Err(TauError::e(
+                ErrorCode::VerificationFailed,
+                format!("verification failed: {}", item.source.display()),
+            ));
         }
     }
     fs::rename(temp, &item.destination)?;

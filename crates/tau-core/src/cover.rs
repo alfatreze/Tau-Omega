@@ -1,6 +1,6 @@
 //! Copy-only cover-art helpers.  These functions never open a source file for writing.
 
-use crate::TauError;
+use crate::{ErrorCode, TauError};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -53,19 +53,15 @@ pub fn embed_mp3_copy(source: &Path, cover: &Path, output: &Path) -> Result<(), 
     let data = fs::read(source)?;
     let (major, frames, audio) = if data.starts_with(b"ID3") {
         if data.len() < 10 || !matches!(data[3], 3 | 4) {
-            return Err(TauError::Io(
-                "unsupported ID3 version for cover embedding".into(),
-            ));
+            return Err(TauError::e(ErrorCode::UnsupportedCover, "unsupported ID3 version for cover embedding"));
         }
         if data[5] & 0xd0 != 0 {
-            return Err(TauError::Io(
-                "ID3 unsynchronisation, extended header, or footer is not safe to rewrite".into(),
-            ));
+            return Err(TauError::e(ErrorCode::UnsupportedCover, "ID3 unsynchronisation, extended header, or footer is not safe to rewrite"));
         }
         let major = data[3];
         let size = syncsafe(&data[6..10]) as usize;
         if 10 + size > data.len() {
-            return Err(TauError::Io("malformed ID3 tag".into()));
+            return Err(TauError::e(ErrorCode::UnsupportedCover, "malformed ID3 tag"));
         }
         let mut kept = Vec::new();
         let mut position = 10;
@@ -81,7 +77,7 @@ pub fn embed_mp3_copy(source: &Path, cover: &Path, output: &Path) -> Result<(), 
                 u32::from_be_bytes(header[4..8].try_into().unwrap()) as usize
             };
             if length == 0 || position + 10 + length > end {
-                return Err(TauError::Io("malformed ID3 frame".into()));
+                return Err(TauError::e(ErrorCode::UnsupportedCover, "malformed ID3 frame"));
             }
             if &header[..4] != b"APIC" {
                 kept.extend_from_slice(&data[position..position + 10 + length]);
@@ -120,16 +116,16 @@ pub fn embed_flac_copy(source: &Path, cover: &Path, output: &Path) -> Result<(),
     let image = fs::read(cover)?;
     validate_jpeg(&image)?;
     let (width, height) = jpeg_dimensions(&image)
-        .ok_or_else(|| TauError::Io("could not read JPEG dimensions".into()))?;
+        .ok_or_else(|| TauError::e(ErrorCode::UnsupportedCover, "could not read JPEG dimensions"))?;
     let data = fs::read(source)?;
     if !data.starts_with(b"fLaC") {
-        return Err(TauError::Io("not a FLAC file".into()));
+        return Err(TauError::e(ErrorCode::UnsupportedCover, "not a FLAC file"));
     }
     let mut position = 4;
     let mut blocks = Vec::new();
     loop {
         if position + 4 > data.len() {
-            return Err(TauError::Io("malformed FLAC metadata".into()));
+            return Err(TauError::e(ErrorCode::UnsupportedCover, "malformed FLAC metadata"));
         }
         let header = data[position];
         let kind = header & 0x7f;
@@ -138,7 +134,7 @@ pub fn embed_flac_copy(source: &Path, cover: &Path, output: &Path) -> Result<(),
             | data[position + 3] as usize;
         position += 4;
         if position + length > data.len() {
-            return Err(TauError::Io("malformed FLAC metadata block".into()));
+            return Err(TauError::e(ErrorCode::UnsupportedCover, "malformed FLAC metadata block"));
         }
         if kind != 1 && kind != 6 {
             blocks.push((kind, data[position..position + length].to_vec()));
@@ -173,20 +169,16 @@ pub fn embed_flac_copy(source: &Path, cover: &Path, output: &Path) -> Result<(),
 }
 fn validate_jpeg(data: &[u8]) -> Result<(), TauError> {
     if data.len() > MAX_COVER_BYTES {
-        return Err(TauError::Io(
-            "cover exceeds the 2 MiB firmware limit".into(),
-        ));
+        return Err(TauError::e(ErrorCode::UnsupportedCover, "cover exceeds the 2 MiB firmware limit"));
     }
     if !data.starts_with(&[0xff, 0xd8]) {
-        return Err(TauError::Io(
-            "cover embedding currently accepts JPEG only; optimise PNG or progressive JPEG first"
-                .into(),
+        return Err(TauError::e(
+            ErrorCode::UnsupportedCover,
+            "cover embedding currently accepts JPEG only; optimise PNG or progressive JPEG first",
         ));
     }
     if is_progressive_jpeg(data) {
-        return Err(TauError::Io(
-            "progressive JPEG covers are not supported; export a baseline JPEG first".into(),
-        ));
+        return Err(TauError::e(ErrorCode::UnsupportedCover, "progressive JPEG covers are not supported; export a baseline JPEG first"));
     }
     Ok(())
 }

@@ -42,38 +42,130 @@ const MAX_FILE: usize = 4 << 20;
 const MAX_STRINGS: usize = 3 << 20;
 const MAX_PATH: usize = 200;
 
+/// Stable, front-end-branchable error codes.
+///
+/// `11..=17` mirror the firmware index loader's own E-codes exactly (see
+/// `tau-alpha/docs/MEDIA_LIBRARY_0.4_SPEC.md`), so a front-end that already
+/// knows the firmware's vocabulary reuses it here for index problems. Codes
+/// from `30` up are engine/domain errors with no firmware equivalent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u16)]
+pub enum ErrorCode {
+    IndexHeader = 11,
+    IndexSize = 12,
+    IndexBodyCrc = 13,
+    IndexCapExceeded = 14,
+    IndexSectionRange = 15,
+    IndexRecordRange = 17,
+    InvalidMediaRoot = 30,
+    SourceMissing = 31,
+    SamePath = 32,
+    NameCollision = 33,
+    NoSources = 34,
+    ConfirmationMismatch = 35,
+    UnsafeBackupLocation = 36,
+    InvalidJournalLocation = 37,
+    VerificationFailed = 38,
+    SourceChangedSincePlan = 39,
+    UnsupportedCover = 40,
+    InvalidPathReference = 41,
+    Io = 42,
+    Json = 43,
+    Cancelled = 44,
+}
+
+impl ErrorCode {
+    /// The stable numeric identifier a front-end can branch on without
+    /// parsing English text.
+    pub const fn as_u16(self) -> u16 {
+        self as u16
+    }
+}
+
+impl std::fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "E{}", self.as_u16())
+    }
+}
+
+/// A structured engine error: `code` is stable and meant for a host to branch
+/// on; `message` is an English sentence for display only.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TauError {
-    Code(u8, String),
-    Io(String),
-    Json(String),
+pub struct TauError {
+    pub code: ErrorCode,
+    pub message: String,
 }
 
 impl TauError {
-    pub fn code(&self) -> Option<u8> {
-        if let Self::Code(code, _) = self {
-            Some(*code)
-        } else {
-            None
-        }
+    pub fn code(&self) -> ErrorCode {
+        self.code
     }
-    fn e(code: u8, message: impl Into<String>) -> Self {
-        Self::Code(code, message.into())
+    fn e(code: ErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 }
 
 impl std::fmt::Display for TauError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Code(c, s) => write!(f, "E{c}: {s}"),
-            Self::Io(s) | Self::Json(s) => f.write_str(s),
-        }
+        write!(f, "{}: {}", self.code, self.message)
     }
 }
 impl std::error::Error for TauError {}
 impl From<io::Error> for TauError {
     fn from(e: io::Error) -> Self {
-        Self::Io(e.to_string())
+        Self::e(ErrorCode::Io, e.to_string())
+    }
+}
+
+/// A stable identifier for a non-fatal warning. Unlike `ErrorCode` these never
+/// mirror a firmware code; they are entirely this engine's own vocabulary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WarningCode {
+    NotAPocketCard,
+    MissingCoreJson,
+    TagsUnreadable,
+    MissingTag,
+    PlaylistEntriesDropped,
+    PlaylistTruncated,
+    NoMediaFound,
+}
+
+impl WarningCode {
+    /// A short, stable, machine-readable identifier (never renders English).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NotAPocketCard => "not_a_pocket_card",
+            Self::MissingCoreJson => "missing_core_json",
+            Self::TagsUnreadable => "tags_unreadable",
+            Self::MissingTag => "missing_tag",
+            Self::PlaylistEntriesDropped => "playlist_entries_dropped",
+            Self::PlaylistTruncated => "playlist_truncated",
+            Self::NoMediaFound => "no_media_found",
+        }
+    }
+}
+
+/// A structured warning: `code` is stable and meant for a host to branch on;
+/// `message` is an English sentence for display only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Warning {
+    pub code: WarningCode,
+    pub message: String,
+}
+impl Warning {
+    fn new(code: WarningCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+}
+impl std::fmt::Display for Warning {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
     }
 }
 
@@ -92,7 +184,7 @@ pub struct Card {
     pub root: PathBuf,
     pub is_pocket_card: bool,
     pub cores: Vec<Core>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Warning>,
 }
 
 /// Reads card metadata only; no filesystem mutation is performed.
@@ -101,7 +193,10 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
     let is_pocket_card = root.join("Cores").is_dir() && root.join("Assets").is_dir();
     let mut warnings = Vec::new();
     if !is_pocket_card {
-        warnings.push("This folder does not contain both Cores and Assets.".into());
+        warnings.push(Warning::new(
+            WarningCode::NotAPocketCard,
+            "This folder does not contain both Cores and Assets.",
+        ));
     }
     let mut cores = Vec::new();
     let core_root = root.join("Cores");
@@ -115,14 +210,20 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
             let id = folder.file_name().to_string_lossy().to_string();
             let core_json = folder.path().join("core.json");
             if !core_json.is_file() {
-                warnings.push(format!("{id}: missing core.json"));
+                warnings.push(Warning::new(
+                    WarningCode::MissingCoreJson,
+                    format!("{id}: missing core.json"),
+                ));
                 continue;
             }
             let json: Value = serde_json::from_slice(&fs::read(&core_json)?)
-                .map_err(|e| TauError::Json(format!("{id}/core.json: {e}")))?;
-            let metadata = json
-                .pointer("/core/metadata")
-                .ok_or_else(|| TauError::Json(format!("{id}/core.json: missing core.metadata")))?;
+                .map_err(|e| TauError::e(ErrorCode::Json, format!("{id}/core.json: {e}")))?;
+            let metadata = json.pointer("/core/metadata").ok_or_else(|| {
+                TauError::e(
+                    ErrorCode::Json,
+                    format!("{id}/core.json: missing core.metadata"),
+                )
+            })?;
             let string = |key: &str| {
                 metadata
                     .get(key)
@@ -197,7 +298,7 @@ pub struct Playlist {
 pub struct Scan {
     pub entries: Vec<Entry>,
     pub playlists: Vec<Playlist>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Warning>,
 }
 
 /// Returns printable device ASCII. Latin characters needed by common music tags
@@ -345,9 +446,10 @@ pub fn scan_dir(common: &Path, playlists: bool) -> Result<Scan, TauError> {
         let (tags, secs, fmt) = match read_tags(&path) {
             Ok(result) => result,
             Err(e) => {
-                output
-                    .warnings
-                    .push(format!("{rel}: tags unreadable ({e})"));
+                output.warnings.push(Warning::new(
+                    WarningCode::TagsUnreadable,
+                    format!("{rel}: tags unreadable ({e})"),
+                ));
                 (BTreeMap::new(), 0, if extension == "flac" { 2 } else { 1 })
             }
         };
@@ -391,7 +493,7 @@ fn collect_files(root: &Path, at: &Path, out: &mut Vec<PathBuf>) -> io::Result<(
 fn scan_playlists(
     common: &Path,
     entries: &[Entry],
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<Warning>,
 ) -> Result<Vec<Playlist>, TauError> {
     let mut found = Vec::new();
     collect_files(common, common, &mut found)?;
@@ -437,9 +539,12 @@ fn scan_playlists(
             }
         }
         if dropped > 0 {
-            warnings.push(format!(
-                "{}: {dropped} line(s) not in the library, dropped",
-                file.file_name().unwrap().to_string_lossy()
+            warnings.push(Warning::new(
+                WarningCode::PlaylistEntriesDropped,
+                format!(
+                    "{}: {dropped} line(s) not in the library, dropped",
+                    file.file_name().unwrap().to_string_lossy()
+                ),
             ));
         }
         let mut own: Vec<_> = entries
@@ -460,10 +565,13 @@ fn scan_playlists(
             continue;
         }
         if ids.len() > MAX_TRACKS {
-            warnings.push(format!(
-                "{}: {} entries, truncated to {MAX_TRACKS}",
-                file.file_name().unwrap().to_string_lossy(),
-                ids.len()
+            warnings.push(Warning::new(
+                WarningCode::PlaylistTruncated,
+                format!(
+                    "{}: {} entries, truncated to {MAX_TRACKS}",
+                    file.file_name().unwrap().to_string_lossy(),
+                    ids.len()
+                ),
             ));
             ids.truncate(MAX_TRACKS);
         }
@@ -813,7 +921,7 @@ pub fn build_index(
     entries: &[Entry],
     playlists: &[Playlist],
     root_prefix: &str,
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<Warning>,
 ) -> Result<Vec<u8>, TauError> {
     let mut entries = entries.to_vec();
     let mut grouped: BTreeMap<String, Vec<usize>> = BTreeMap::new();
@@ -844,14 +952,17 @@ pub fn build_index(
         e.tags.insert("_tno".into(), tno.to_string());
         if (root_prefix.len() + e.rel.len()) > MAX_PATH {
             return Err(TauError::e(
-                14,
+                ErrorCode::IndexCapExceeded,
                 format!("path over {MAX_PATH} bytes: {}", e.rel),
             ));
         }
         if !(e.tags.contains_key("TIT2")
             && (e.tags.contains_key("TPE1") || e.tags.contains_key("TPE2")))
         {
-            warnings.push(format!("{}: missing title/artist tag, using names", e.rel));
+            warnings.push(Warning::new(
+                WarningCode::MissingTag,
+                format!("{}: missing title/artist tag, using names", e.rel),
+            ));
         }
         grouped.entry(e.dir.clone()).or_default().push(i);
     }
@@ -925,7 +1036,10 @@ pub fn build_index(
         || artist_names.len() > MAX_ARTISTS
         || playlists.len() > MAX_PLAYLISTS
     {
-        return Err(TauError::e(14, "library exceeds a hard cap"));
+        return Err(TauError::e(
+            ErrorCode::IndexCapExceeded,
+            "library exceeds a hard cap",
+        ));
     }
     let mut pool = Pool::new();
     let root = pool.add(root_prefix);
@@ -1001,9 +1115,9 @@ pub fn build_index(
         push_u16(&mut playlists_b, (items.len() / 2) as u16);
         push_u16(&mut playlists_b, playlist.rel_ids.len() as u16);
         for old in &playlist.rel_ids {
-            let new = track_new
-                .get(old)
-                .ok_or_else(|| TauError::e(17, "playlist references a missing track"))?;
+            let new = track_new.get(old).ok_or_else(|| {
+                TauError::e(ErrorCode::IndexRecordRange, "playlist references a missing track")
+            })?;
             push_u16(&mut items, *new as u16);
         }
     }
@@ -1032,7 +1146,10 @@ pub fn build_index(
     }
     align(&mut out);
     if out.len() > MAX_FILE || pool.buffer.len() > MAX_STRINGS {
-        return Err(TauError::e(14, "index exceeds a size cap"));
+        return Err(TauError::e(
+            ErrorCode::IndexCapExceeded,
+            "index exceeds a size cap",
+        ));
     }
     let body_crc = crc32(&out[HEADER..]);
     let file_size = out.len() as u32;
@@ -1087,20 +1204,20 @@ fn u32_at(data: &[u8], off: usize) -> u32 {
 pub fn parse(data: impl AsRef<[u8]>) -> Result<Index, TauError> {
     let data = data.as_ref();
     if data.len() < HEADER {
-        return Err(TauError::e(11, "shorter than header"));
+        return Err(TauError::e(ErrorCode::IndexHeader, "shorter than header"));
     }
     if u32_at(data, 0) != MAGIC
         || u16_at(data, 6) > 1
         || u32_at(data, 8) != HEADER as u32
         || crc32(&data[..124]) != u32_at(data, 124)
     {
-        return Err(TauError::e(11, "bad header"));
+        return Err(TauError::e(ErrorCode::IndexHeader, "bad header"));
     }
     if u32_at(data, 20) as usize != data.len() {
-        return Err(TauError::e(12, "size differs from header"));
+        return Err(TauError::e(ErrorCode::IndexSize, "size differs from header"));
     }
     if crc32(&data[HEADER..]) != u32_at(data, 24) {
-        return Err(TauError::e(13, "body CRC"));
+        return Err(TauError::e(ErrorCode::IndexBodyCrc, "body CRC"));
     }
     let counts = Counts {
         artists: u16_at(data, 32),
@@ -1114,7 +1231,7 @@ pub fn parse(data: impl AsRef<[u8]>) -> Result<Index, TauError> {
         || counts.playlists as usize > MAX_PLAYLISTS
         || data.len() > MAX_FILE
     {
-        return Err(TauError::e(14, "count above cap"));
+        return Err(TauError::e(ErrorCode::IndexCapExceeded, "count above cap"));
     }
     let mut sections = BTreeMap::new();
     for (i, name) in SECTIONS.iter().enumerate() {
@@ -1124,7 +1241,10 @@ pub fn parse(data: impl AsRef<[u8]>) -> Result<Index, TauError> {
         );
         if off % 16 != 0 || off < HEADER || off.checked_add(len).is_none_or(|end| end > data.len())
         {
-            return Err(TauError::e(15, format!("section {name} out of range")));
+            return Err(TauError::e(
+                ErrorCode::IndexSectionRange,
+                format!("section {name} out of range"),
+            ));
         }
         sections.insert((*name).to_string(), (off, len));
     }
@@ -1137,11 +1257,14 @@ pub fn parse(data: impl AsRef<[u8]>) -> Result<Index, TauError> {
         ("letters", 162),
     ] {
         if sections[name].1 != want {
-            return Err(TauError::e(15, format!("section {name} length")));
+            return Err(TauError::e(
+                ErrorCode::IndexSectionRange,
+                format!("section {name} length"),
+            ));
         }
     }
     if sections["strings"].1 > MAX_STRINGS {
-        return Err(TauError::e(14, "string cap"));
+        return Err(TauError::e(ErrorCode::IndexCapExceeded, "string cap"));
     }
     let ix = Index {
         data: data.to_vec(),
@@ -1158,16 +1281,17 @@ fn string_at(ix: &Index, offset: u32) -> Result<&str, TauError> {
     let (off, len) = ix.sections["strings"];
     let start = off + offset as usize;
     if offset as usize >= len {
-        return Err(TauError::e(17, "string offset"));
+        return Err(TauError::e(ErrorCode::IndexRecordRange, "string offset"));
     }
     let bytes = &ix.data[start..off + len];
     let end = bytes.iter().position(|x| *x == 0).unwrap_or(bytes.len());
-    std::str::from_utf8(&bytes[..end]).map_err(|_| TauError::e(17, "non-ASCII string"))
+    std::str::from_utf8(&bytes[..end])
+        .map_err(|_| TauError::e(ErrorCode::IndexRecordRange, "non-ASCII string"))
 }
 fn walk(ix: &Index) -> Result<(), TauError> {
     let strings = ix.sections["strings"].1;
     if ix.root as usize >= strings {
-        return Err(TauError::e(17, "root string"));
+        return Err(TauError::e(ErrorCode::IndexRecordRange, "root string"));
     }
     let (tracks, _) = ix.sections["tracks"];
     for i in 0..ix.counts.tracks as usize {
@@ -1179,7 +1303,7 @@ fn walk(ix: &Index) -> Result<(), TauError> {
             || u32_at(&ix.data, r + 4) as usize >= strings
             || u16_at(&ix.data, r + 12) >= ix.counts.albums
         {
-            return Err(TauError::e(17, "track record"));
+            return Err(TauError::e(ErrorCode::IndexRecordRange, "track record"));
         }
     }
     let (albums, _) = ix.sections["albums"];
@@ -1191,14 +1315,14 @@ fn walk(ix: &Index) -> Result<(), TauError> {
             || usize::from(u16_at(&ix.data, r + 12)) + usize::from(u16_at(&ix.data, r + 14))
                 > ix.counts.tracks as usize
         {
-            return Err(TauError::e(17, "album record"));
+            return Err(TauError::e(ErrorCode::IndexRecordRange, "album record"));
         }
     }
     let (lists, len) = ix.sections["playlists"];
     if len < 8 * ix.counts.playlists as usize
         || !(len - 8 * ix.counts.playlists as usize).is_multiple_of(2)
     {
-        return Err(TauError::e(15, "playlist range"));
+        return Err(TauError::e(ErrorCode::IndexSectionRange, "playlist range"));
     }
     let items = (len - 8 * ix.counts.playlists as usize) / 2;
     for i in 0..ix.counts.playlists as usize {
@@ -1207,7 +1331,7 @@ fn walk(ix: &Index) -> Result<(), TauError> {
             || usize::from(u16_at(&ix.data, r + 4)) + usize::from(u16_at(&ix.data, r + 6)) > items
             || u16_at(&ix.data, r + 6) as usize > MAX_TRACKS
         {
-            return Err(TauError::e(17, "playlist record"));
+            return Err(TauError::e(ErrorCode::IndexRecordRange, "playlist record"));
         }
     }
     for i in 0..items {
@@ -1215,14 +1339,14 @@ fn walk(ix: &Index) -> Result<(), TauError> {
             continue;
         }
         if u16_at(&ix.data, lists + 8 * ix.counts.playlists as usize + i * 2) >= ix.counts.tracks {
-            return Err(TauError::e(17, "playlist item"));
+            return Err(TauError::e(ErrorCode::IndexRecordRange, "playlist item"));
         }
     }
     Ok(())
 }
 pub fn track_path(ix: &Index, id: u16) -> Result<String, TauError> {
     if id >= ix.counts.tracks {
-        return Err(TauError::e(17, "track id"));
+        return Err(TauError::e(ErrorCode::IndexRecordRange, "track id"));
     }
     let (t, _) = ix.sections["tracks"];
     let (a, _) = ix.sections["albums"];

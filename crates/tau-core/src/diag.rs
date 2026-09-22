@@ -1,5 +1,6 @@
 //! Read-only firmware diagnostics and persisted settings.
 
+use crate::{ErrorCode, TauError};
 use serde_json::Value;
 use std::{fs, path::Path};
 
@@ -11,10 +12,10 @@ pub struct PersistedSetting {
 }
 
 /// Reads an Interact persisted-settings file without mutating its source.
-pub fn read_persisted_settings(path: impl AsRef<Path>) -> Result<Vec<PersistedSetting>, String> {
-    let bytes = fs::read(path).map_err(|error| error.to_string())?;
+pub fn read_persisted_settings(path: impl AsRef<Path>) -> Result<Vec<PersistedSetting>, TauError> {
+    let bytes = fs::read(path)?;
     let json: Value = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("invalid persisted settings: {error}"))?;
+        .map_err(|error| TauError::e(ErrorCode::Json, format!("invalid persisted settings: {error}")))?;
     Ok(json
         .get("variables")
         .and_then(Value::as_array)

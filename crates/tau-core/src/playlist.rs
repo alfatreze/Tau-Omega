@@ -1,6 +1,6 @@
 //! Portable playlist import/export helpers.
 
-use crate::{Entry, Playlist, TauError};
+use crate::{Entry, ErrorCode, Playlist, TauError};
 use std::{fs, path::Path};
 
 /// Exports a playlist as a conventional UTF-8 `.m3u` using media-relative paths.
@@ -11,9 +11,10 @@ pub fn export_m3u(
 ) -> Result<(), TauError> {
     let mut output = String::new();
     for &id in &playlist.rel_ids {
-        let entry = entries
-            .get(id)
-            .ok_or_else(|| TauError::Code(17, "playlist item".into()))?;
+        let entry = entries.get(id).ok_or_else(|| TauError {
+            code: ErrorCode::IndexRecordRange,
+            message: "playlist item".into(),
+        })?;
         output.push_str(&entry.rel);
         output.push('\n');
     }
