@@ -134,16 +134,40 @@ now calls the same private `plan_with_layout` impl with `PlanOptions::default()`
 
 ### P2-1 — plan token is thin and leaks a phase label
 
-The plan id is a SHA-256 truncated to **32 bits**, formatted `T2-xxxxxxxx`. The hash covers the right
-inputs (sources, hashes, cover hashes, deletions, flags, prefix), but truncation is thin for a token
-that may be persisted or handed across a process boundary, and `T2-` embeds an internal roadmap phase
-label into a durable identifier.
+**Done (2026-09-22).** The plan id was a SHA-256 truncated to **32 bits**, formatted `T2-xxxxxxxx`.
+The hash covers the right inputs (sources, hashes, cover hashes, deletions, flags, prefix), but
+truncation is thin for a token that may be persisted or handed across a process boundary, and `T2-`
+embedded an internal roadmap phase label into a durable identifier.
+
+The id is now the full SHA-256 hex digest (64 hex characters), unprefixed — `format!("{:x}", ...)`
+on the whole `finalize()` output instead of truncating to the first 4 bytes. Confirmation everywhere
+(`execute*`, the CLI, the Tauri adapter) is a plain string comparison, so nothing needed updating
+beyond the construction site itself and this crate's own tests. New test:
+`plan_id_is_a_full_sha256_hex_digest_with_no_phase_prefix` (`sync.rs`).
 
 ### P2-2 — no fuzz target for the index parser
 
-`parse()` is well-ordered and CRC-gated, and the corruption suite covers realistic damage. A
-crafted-but-CRC-valid file driving offsets is not covered, and the `u16_at`/`u32_at` helpers panic
-rather than return.
+**Done (2026-09-22).** `parse()` is well-ordered and CRC-gated, and the corruption suite covers
+realistic damage. A crafted-but-CRC-valid file driving offsets was not covered, and the
+`u16_at`/`u32_at` helpers panic rather than return.
+
+Manual re-derivation of every offset used by `walk`/`string_at`/`track_path` showed each one is
+already bounds-checked by `parse()`'s own section-table validation before use (every section's
+`(offset, length)` is checked against the buffer length and the 16-byte alignment/header-start
+rule before any record inside it is read), so a panic was not expected — but that needed proof,
+not just re-reading the code again. Two additions:
+- `crates/tau-core/tests/fuzz_lite.rs`: a dependency-free, deterministic (xorshift64, no `rand`)
+  test that takes real fixtures, corrupts a section's offset/length, the root string offset and
+  all four record counts to boundary-heavy values (`0`, `u32::MAX`, the buffer length, one past
+  it), **recomputes both CRCs** so the mutation reaches `parse()`'s offset-driven logic instead of
+  being rejected at the CRC gate (the exact gap the audit named), and asserts `parse`/`track_path`/
+  `verify` never panic. Runs as part of ordinary `cargo test`; found no panics across 9,000 trials
+  (3 seed fixtures × 3,000 mutations each).
+- `fuzz/`: a standalone `cargo-fuzz` scaffold (`fuzz_targets/parse_index.rs`) for real
+  coverage-guided fuzzing with `cargo +nightly fuzz run parse_index`, for a maintainer with that
+  tooling available. Its own `[workspace]` keeps it fully isolated from the main build (verified:
+  `cargo metadata` from the repo root still lists only the three real crates). Not run in this
+  session — no `cargo-fuzz` install or nightly toolchain available here; see `docs/DEPENDENCIES.md`.
 
 ### Addendum 2026-09-22 — fixture fidelity
 
@@ -194,7 +218,9 @@ work.
    handling no longer index-and-unwrap; both fall back or return `Err` instead of panicking.
 6. **P1-3** — **Done (2026-09-22).** `plan_with_options`/`plan_with_features` collapsed into one
    `plan(..., PlanOptions, ...)` entry point.
-7. **P2** widen the plan token, drop the `T2-` prefix, add a parser fuzz target.
+7. **P2** — **Done (2026-09-22).** Plan id is the full SHA-256 hex digest, unprefixed; a
+   dependency-free fuzz-lite regression test runs in `cargo test`, and a `cargo-fuzz` scaffold
+   exists under `fuzz/` for coverage-guided fuzzing when that tooling is available.
 
 ## Explicitly not doing
 

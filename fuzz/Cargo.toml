@@ -1,0 +1,33 @@
+# cargo-fuzz scaffold for `tau_core::parse` (P2-2). Standalone workspace (the
+# usual cargo-fuzz convention) so it never affects the main build or its
+# dependency graph -- see docs/DEPENDENCIES.md. Requires the separate
+# `cargo-fuzz` tool and (at the time of writing) a nightly toolchain for
+# coverage instrumentation; neither is available in every environment this
+# repository is built in, so this is not run as part of `cargo test`. The
+# always-runnable complement is `crates/tau-core/tests/fuzz_lite.rs`.
+#
+# Usage (once `cargo install cargo-fuzz` and a nightly toolchain are
+# available): `cargo +nightly fuzz run parse_index`.
+[package]
+name = "tau-core-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.tau-core]
+path = "../crates/tau-core"
+
+[[bin]]
+name = "parse_index"
+path = "fuzz_targets/parse_index.rs"
+test = false
+doc = false
+bench = false

@@ -130,19 +130,39 @@ options") and now forwards `PlanOptions::default()` into the same private impl. 
 against a scratch copy of the real `../tau-alpha/dist` card that plain and `--mirror` plans still
 produce distinct tokens as before.
 
+### P2 — plan token and a parser fuzz target (2026-09-22)
+
+**P2-1:** the plan id was a SHA-256 truncated to 32 bits, formatted `T2-xxxxxxxx` (thin for a token
+that may be persisted or handed across a process boundary, and the prefix leaked an internal
+roadmap phase label). It's now the full 64-character SHA-256 hex digest, unprefixed. Confirmation
+everywhere is a plain string comparison, so nothing else needed to change. New test:
+`plan_id_is_a_full_sha256_hex_digest_with_no_phase_prefix`.
+
+**P2-2:** re-derived every offset `walk`/`string_at`/`track_path` use and confirmed each is
+bounds-checked by `parse()`'s own section-table validation before use — but that needed proof, not
+just re-reading the code. New `crates/tau-core/tests/fuzz_lite.rs`: a dependency-free, deterministic
+test that corrupts real fixtures' section offsets/lengths, root string offset and record counts to
+boundary-heavy values, **recomputes both CRCs** so the mutation reaches the offset-driven logic
+instead of failing at the CRC gate (the audit's exact gap: "a crafted-but-CRC-valid file driving
+offsets is not covered"), and asserts no panic. Runs in ordinary `cargo test`; found none across
+9,000 trials. Also added a standalone `cargo-fuzz` scaffold under `fuzz/` (its own `[workspace]`,
+zero effect on the main build) for real coverage-guided fuzzing — not run in this session (no
+`cargo-fuzz`/nightly toolchain available here); see `docs/DEPENDENCIES.md`.
+
 ## Validation
 
-- `cargo test` (workspace): 31 tests passing without `--features tau-core/serde` (19 `tau-core`
-  unit, 6 index conformance, 4 card inspection, 2 testkit), 37 with it (adds 6 in the
-  feature-gated `serde_feature.rs`) — unchanged by P1-3, which touched call sites, not test count.
+- `cargo test` (workspace): 33 tests passing without `--features tau-core/serde` (20 `tau-core`
+  unit, 6 index conformance, 4 card inspection, 1 fuzz-lite, 2 testkit), 39 with it (adds 6 in the
+  feature-gated `serde_feature.rs`).
 - `npm run check`: zero Svelte errors on the last validation.
-- `cargo clippy --all-targets`: clean apart from six pre-existing `clone`-on-slice warnings in
-  `sync.rs` test code (one more than before P0-3, added by the new cancellation test following
-  the same pre-existing idiom) and one `#[allow(clippy::too_many_arguments)]` on
+- `cargo clippy --all-targets`: clean apart from seven pre-existing `clone`-on-slice warnings in
+  `sync.rs` test code (one more than after P0-3, added by the new plan-id test following the same
+  pre-existing idiom) and one `#[allow(clippy::too_many_arguments)]` on
   `journal::execute_core_move_to_journal`, explained in a doc comment (mirrors
-  `sync::execute_core_move`'s own pre-existing parameter count, itself unaffected by the P1-3
-  collapse since it isn't part of the `plan_with_*` family).
+  `sync::execute_core_move`'s own pre-existing parameter count).
 - `cargo-tauri build`: builds clean with `tau-core`'s `serde` feature enabled (`src-tauri/Cargo.toml`).
+- `cargo metadata` from the repo root still lists only `tau-core`/`tau-cli`/`tau-testkit` —
+  `fuzz/`'s own `[workspace]` keeps it fully isolated from the main build.
 
 ## Known issues and incomplete wiring
 
@@ -152,13 +172,13 @@ produce distinct tokens as before.
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
 - Jobs shown from a loaded journal are a concise summary, not a full journal-detail view.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
-- **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2/P1-3):** the three P0 boundary defects the
-  portability audit found — duplicated root-prefix/index-status logic, English-only warnings and
-  errors, and no progress/cancellation — are all done, and so are P1-1 (optional `serde` feature;
-  DTO layer shrank from 13 to 7 structs), P1-2 (no panics on caller input) and P1-3 (collapsed
-  `plan_with_*` into one `plan(..., PlanOptions, ...)`). See "Portability boundary", "P1-1",
-  "P1-2" and "P1-3" above. Remaining: P2 (widen the plan token, drop the `T2-` prefix, a parser
-  fuzz target) — see `PORTABILITY_AUDIT.md`.
+- **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2/P1-3/P2):** every item in `PORTABILITY_AUDIT.md` is
+  now done — the three P0 boundary defects (duplicated root-prefix/index-status logic,
+  English-only warnings and errors, no progress/cancellation), P1-1 (optional `serde` feature; DTO
+  layer shrank from 13 to 7 structs), P1-2 (no panics on caller input), P1-3 (collapsed
+  `plan_with_*` into one `plan(..., PlanOptions, ...)`), and P2 (full-width unprefixed plan token;
+  a fuzz-lite regression test plus a `cargo-fuzz` scaffold for the index parser). See "Portability
+  boundary", "P1-1", "P1-2", "P1-3" and "P2" above.
 - **Fixed 2026-09-22:** library capability detection never matched a real card (it read `data.json`'s
   `data` key as an array; the real APF layout is `data.data_slots`), so every shipped Tau core showed
   as "legacy". The fixture had invented the shape, and nothing tested `inspect_card`. See
@@ -176,10 +196,10 @@ produce distinct tokens as before.
 
 ## Next recommended implementation order
 
-**Boundary work comes first — decision D-011.** The three P0 items and all of P1 in
-`PORTABILITY_AUDIT.md` are now done (2026-09-22; see "Portability boundary", "P1-1", "P1-2" and
-"P1-3" above). Next is P2 (widen the plan token and drop the `T2-` prefix; a parser fuzz target).
-Then:
+**Boundary work is done — decision D-011.** Every P0/P1/P2 item in `PORTABILITY_AUDIT.md` is now
+done (2026-09-22; see "Portability boundary", "P1-1", "P1-2", "P1-3" and "P2" above). `tau-core` is
+ready for Pocket Sync to adopt as a crate dependency on the boundary-correctness front; nothing
+below is blocked on it. Next:
 
 1. Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.
 2. Expand Problems checks from duplicates to format/tag/path/cover issues.
