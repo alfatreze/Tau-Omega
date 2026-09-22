@@ -1,0 +1,25 @@
+# Send diagnostics (Tau Omega feature, spec for Codex)
+
+Status: specification (2026-09-21, tau-alpha audit B-063). Reference implementation of the record format and decoders: `tau-alpha/tools/decode_tau_suite.py` (Python, byte-exact reference), format definition `tau-alpha/fw/suite_core.h` and `tau-alpha/docs/TEST_SUITE_SPEC.md` sections 7-8. Tests: `tau-alpha/sim/test_suite.py`.
+
+## Goal
+A listener runs **Settings > Check** on the Pocket (about 30 s; STANDARD/FULL profiles in the Diagnostic Build) and gets a verdict, a QR code and a persisted summary. One click in Tau Omega must turn that into a single zip that can be attached to a bug report, plus a readable summary on screen. **Nothing is uploaded**; the zip stays local. No SD writes except the zip destination the user picks (never on the card).
+
+## What the Check leaves on the card
+1. **Screenshots** (`Memories/Screenshots/*.png`, taken by the user with Menu+Start): the result page and the QR page. The QR page is a white square on the framebuffer; pixel exact, never resized.
+2. **Persisted summary**: `Settings/<author.core>/Interact/_core/interact_persist.json`, variables with ids 20-23 (four 31-bit words). Decoded like `decode_tau_suite.py unpack_words` (format nibble 1, profile, run counter, verdict, pass/fail masks over test ids 0-14, worst SDRAM access, late underruns, draw stall, last load time, library and cold error codes).
+3. Core identity: `Cores/<author.core>/core.json` (version, date), `bitstream.rbf_r`, `Assets/<platform>/common/{tau.rom,tau-cold.bin,tau-library.tdb}` (hashes and sizes only).
+
+## Report record (TAUD1)
+`TD` + format (1) + profile + TLV entries `{tag u8, len u8, value}` + CRC32 (LE) of everything before. QR text = `TAUD1:` + base64url (no padding). Tags: 1 build (fw, bitstream, flags, heap gap; four u32), 3 test (id u8, result u8, value u32; repeated), 4 SDRAM and 5 PSRAM cycles per access (six u16: read min/avg/max, write min/avg/max; older records carry four: read avg/max, write avg/max), 6 cold (error, ms), 7 timings (four u32: head, size probe, art, total load ms), 8 audio (four u16: under, 0, stall ms, seconds), 9 library (four u32: tracks, ms, error|state<<8, disabled), 11 errors (bytes). Unknown tags are skipped. Test ids: 0 SDRAM window, 1 SDRAM speed, 2 PSRAM window, 3 cold code, 4 library, 5 playback, 6 startup, 7-9 stress R1-R3, 10 soak. Result 0 pass, 1 fail, 2 skipped, 3 not applicable. Profiles: 1 USER CHECK, 3 STANDARD, 4 FULL. The CRC must be verified; a bad CRC is reported as damaged, never repaired.
+Short code (fallback when only a photo of the page exists): 36 Crockford base32 characters = four persisted words + bitstream revision + CRC16; decode with `decode_tau_suite.py --code`.
+
+## Behaviour
+* **Find:** scan the selected card for every `alfatreze.TAU*` core with a persist file and for screenshots newer than the newest persist file (default) or all.
+* **Decode:** QR from each screenshot (Rust `rqrr` or `rxing`; the dense codes use 2 px modules, so try the image as is, then nearest-neighbour x2, x3, x4; **never** smoothing). If no QR is found say so and offer the short code text shown on the result page. Decode the persist words. Show per core: profile, run counter, verdict, one line per test with the result and value, timing tables (SDRAM/PSRAM best/avg/worst), build flags, heap gap, error codes. Highlight failures. Cross-check: the QR record and the persisted summary of the same run must agree (pass/fail masks); if not, say which is newer (run counter).
+* **Package:** one zip, `tau-diagnostics-<core>-<version>-<UTC date>.zip`, containing: `report.json` (decoded, from all sources), `report.md` (human summary), the screenshots used, the persist json of every Tau core, `card.json` (free space, filesystem, core list with versions and file hashes, library index header: version, counts, build id, size), and `README.txt` (what this is and that nothing was uploaded). Screenshots and files are copied unchanged. Personal data: no file names outside the Tau folders, no other cores' settings; the media folder is listed only as counts and total size, no track names unless the user ticks "include file names".
+* **UI:** a Diagnostics tab: card picker, "Read card" (shows the decoded run), "Create zip" (choose the folder), "Copy summary" (the markdown to the clipboard). CLI: `tau-omega diag <card> [--zip out.zip] [--json]`.
+* **Failure modes:** no Check run yet (say how to run it), persist file older than the screenshots, unsupported format version (show the raw hex and the version), damaged record (show which part failed), card read-only.
+
+## Tests (golden)
+Use `tau-alpha/sim/test_suite.py` vectors and the real samples in `tau-alpha/work/diagnostics/` screenshots listed in tau-alpha audit B-058, B-060, B-062 (QR decodes to seven results; persist file decodes to the same verdict). Required: Rust decoders equal `decode_tau_suite.py --json` on every sample; corrupt one byte of a TAUD1 text and it must be rejected; a v1 four-value SDRAM entry and a six-value entry both decode; the 2 px version-38 QR sample decodes.

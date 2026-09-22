@@ -1,0 +1,43 @@
+{
+  "ascii": {
+    "Nausica\u00e4 \u2013 M\u00f6nch": "Nausicaa Monch",
+    "  A\tName  ": "A Name",
+    "\u6771\u4eac": ""
+  },
+  "sort": [
+    "The Beta",
+    "A 10",
+    "A 2",
+    "9 Lives",
+    "Zed"
+  ],
+  "fixture_warnings": [
+    "playlist.m3u: 1 line(s) not in the library, dropped"
+  ],
+  "corruption": {
+    "bad_magic": {
+      "file": "corruption/bad_magic.tdb",
+      "code": 11
+    },
+    "truncated": {
+      "file": "corruption/truncated.tdb",
+      "code": 12
+    },
+    "appended": {
+      "file": "corruption/appended.tdb",
+      "code": 12
+    },
+    "body_flip": {
+      "file": "corruption/body_flip.tdb",
+      "code": 13
+    },
+    "string_flip": {
+      "file": "corruption/string_flip.tdb",
+      "code": 13
+    },
+    "track_string_offset": {
+      "file": "corruption/track_string_offset.tdb",
+      "code": 17
+    }
+  }
+}

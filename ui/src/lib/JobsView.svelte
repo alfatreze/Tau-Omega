@@ -1,0 +1,6 @@
+<script lang="ts">
+  import type { Job } from './types';
+  export let jobs: Job[] = []; export let journalPath = ''; export let notice = ''; export let chooseJournal: () => void; export let loadJournal: () => void;
+  export let startSync: () => void;
+</script>
+<section class="jobs-panel page" aria-labelledby="jobs-title"><header><div><p class="eyebrow">ACTIVITY</p><h1 id="jobs-title">Recent jobs</h1><p class="lede">Operations completed during this session or loaded from a journal.</p></div><button class="primary" on:click={startSync}>Start a sync</button></header><section class="settings-card"><div class="picker-row"><input bind:value={journalPath} placeholder="/Users/me/Documents/tau-sync-report.json"/><button class="picker" on:click={chooseJournal}>Choose</button><button class="primary" on:click={loadJournal}>Load</button></div><p class="notice" role="status">{notice}</p></section>{#if jobs.length}<section class="core-list">{#each jobs as job}<article><div class="core-icon">{job.status === 'Completed' ? '✓' : '!'}</div><div><h3>{job.kind}</h3><p>{job.detail}</p></div><span class="chip" class:capable={job.status === 'Completed'}>{job.status}</span></article>{/each}</section>{:else}<section class="empty"><div class="empty-art">◷</div><h2>No jobs yet</h2><p>Reviewed syncs will appear here after they complete.</p></section>{/if}</section>
