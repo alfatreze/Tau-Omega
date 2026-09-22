@@ -134,12 +134,20 @@ a code-generating assistant from these documents.
 Do P0 before adding features; it is cheapest now and all three are prerequisites for any Pocket Sync
 work.
 
-1. **P0-1** move leaked domain rules into `tau-core`; both front-ends call it. *Done when* no path
-   prefix or index-status logic exists outside the engine.
-2. **P0-2** structured warnings and code-preserving errors. *Done when* a front-end can branch on a
-   failure without string matching, and `code()` is used in the product, not only in tests.
-3. **P0-3** progress and cancellation on scan/plan/execute. *Done when* a long scan reports progress
-   and can be cancelled from a front-end.
+1. **P0-1** — **Done (2026-09-22, commit `4eaa432`).** `tau_core::root_prefix` is the single
+   implementation of the prefix rule; `Core::index_status` is computed by `inspect_card` itself.
+   No path-prefix or index-status logic remains outside the engine (checked by grep and by
+   running against the real `../tau-alpha/dist` v0.4.0 card).
+2. **P0-2** — **Done (2026-09-22, commit `3046b28`).** `TauError { code: ErrorCode, message }`
+   and `Warning { code: WarningCode, message }` replace every `Vec<String>`/English-only error.
+   The CLI's process exit code is the error's numeric code (not only asserted in a test); Tauri
+   returns a serialisable `ApiError`; the UI's `errorMessage()` renders `.message`. Verified: a
+   bad destination path now exits `30` (`InvalidMediaRoot`).
+3. **P0-3** — **Done (2026-09-22, commit `0c7fe6c`).** `ProgressObserver` (blanket-implemented
+   for `FnMut(Progress) -> bool`, no runtime dependency) threads through
+   `scan_dir_with_progress` and the whole `plan`/`execute` family; returning `false` cancels with
+   `ErrorCode::Cancelled`. Tauri wires a `job_id` + `"tau://progress"` window event + a
+   `cancel_job` command; the sync screen shows live progress and a Cancel button.
 4. **P1-1** optional `serde` feature; retire the `*View` layer.
 5. **P1-2** no panics on caller input at public entry points.
 6. **P1-3** collapse `plan_with_*` into an options struct.
