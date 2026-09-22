@@ -2,8 +2,8 @@
 //! execute that exact plan after an explicit token confirmation.
 
 use crate::{
-    ascii_name, build_index, cover, parse, scan_dir_with_progress, tick, verify, ErrorCode,
-    Progress, ProgressObserver, Stage, TauError, Warning, WarningCode,
+    ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, WarningCode, ascii_name,
+    build_index, cover, parse, scan_dir_with_progress, tick, verify,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -133,10 +133,16 @@ fn plan_with_layout(
     include_source_root: bool,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncPlan, TauError> {
-    let PlanOptions { mirror, embed_covers } = options;
+    let PlanOptions {
+        mirror,
+        embed_covers,
+    } = options;
     validate_media_root(common)?;
     if sources.is_empty() {
-        return Err(TauError::e(ErrorCode::NoSources, "at least one source is required"));
+        return Err(TauError::e(
+            ErrorCode::NoSources,
+            "at least one source is required",
+        ));
     }
     let destination = common
         .canonicalize()
@@ -184,7 +190,10 @@ fn plan_with_layout(
         if source == target {
             return Err(TauError::e(
                 ErrorCode::SamePath,
-                format!("source and destination are the same file: {}", source.display()),
+                format!(
+                    "source and destination are the same file: {}",
+                    source.display()
+                ),
             ));
         }
         let bytes = fs::metadata(&source)?.len();
@@ -396,7 +405,10 @@ pub fn execute_with_mirror(
     let reparse = fs::read(&temp)?;
     parse(&reparse)?;
     if reparse != index {
-        return Err(TauError::e(ErrorCode::VerificationFailed, "index write verification failed"));
+        return Err(TauError::e(
+            ErrorCode::VerificationFailed,
+            "index write verification failed",
+        ));
     }
     fs::rename(&temp, &index_path)?;
     Ok(SyncReport {
@@ -473,7 +485,10 @@ pub fn execute_core_move(
         )?;
         let canonical_source = item.source.canonicalize()?;
         let relative = canonical_source.strip_prefix(&source_common).map_err(|_| {
-            TauError::e(ErrorCode::InvalidPathReference, "move plan contains an invalid source path")
+            TauError::e(
+                ErrorCode::InvalidPathReference,
+                "move plan contains an invalid source path",
+            )
         })?;
         let backup = backup_root.join(&plan.id).join(relative);
         let backup_item = CopyItem {
@@ -609,7 +624,10 @@ fn validate_media_root(common: &Path) -> Result<(), TauError> {
         ));
     }
     if !common.is_dir() {
-        return Err(TauError::e(ErrorCode::InvalidMediaRoot, "destination media root does not exist"));
+        return Err(TauError::e(
+            ErrorCode::InvalidMediaRoot,
+            "destination media root does not exist",
+        ));
     }
     Ok(())
 }
@@ -670,15 +688,17 @@ fn is_junk(name: &str) -> bool {
 /// `.unwrap()` here would let a caller-supplied source path panic the whole
 /// plan instead of failing it cleanly (P1-2).
 fn required_file_name(path: &Path) -> Result<String, TauError> {
-    path.file_name().map(|name| name.to_string_lossy().into_owned()).ok_or_else(|| {
-        TauError::e(
-            ErrorCode::InvalidPathReference,
-            format!(
-                "source has no file name to derive a destination name from: {}",
-                path.display()
-            ),
-        )
-    })
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .ok_or_else(|| {
+            TauError::e(
+                ErrorCode::InvalidPathReference,
+                format!(
+                    "source has no file name to derive a destination name from: {}",
+                    path.display()
+                ),
+            )
+        })
 }
 fn ascii_file_name(name: &str) -> String {
     let name = ascii_name(name);
@@ -720,14 +740,20 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
     if sha256_file(&item.source)? != item.sha256 {
         return Err(TauError::e(
             ErrorCode::SourceChangedSincePlan,
-            format!("source changed since the plan was reviewed: {}", item.source.display()),
+            format!(
+                "source changed since the plan was reviewed: {}",
+                item.source.display()
+            ),
         ));
     }
     if let Some(cover) = &item.cover {
         if sha256_file(&cover.source)? != cover.sha256 {
             return Err(TauError::e(
                 ErrorCode::SourceChangedSincePlan,
-                format!("cover changed since the plan was reviewed: {}", cover.source.display()),
+                format!(
+                    "cover changed since the plan was reviewed: {}",
+                    cover.source.display()
+                ),
             ));
         }
         let embed_result = match item
@@ -749,7 +775,10 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
         // Read a content hash after the durable write before the atomic rename.
         // Unlike ordinary copies its bytes intentionally differ from the source.
         if sha256_file(&temp)?.is_empty() {
-            return Err(TauError::e(ErrorCode::VerificationFailed, "cover copy verification failed"));
+            return Err(TauError::e(
+                ErrorCode::VerificationFailed,
+                "cover copy verification failed",
+            ));
         }
     } else {
         {
@@ -833,7 +862,14 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         fs::write(source.join("01 Nausicaä.mp3"), b"music").unwrap();
         let original = sha256_file(&source.join("01 Nausicaä.mp3")).unwrap();
-        let sync_plan = plan(&[source.clone()], &common, "/Assets/tau/common/", PlanOptions::default(), &mut None).unwrap();
+        let sync_plan = plan(
+            &[source.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
         assert!(common.read_dir().unwrap().next().is_none());
         assert!(execute(&sync_plan, "wrong", &mut None).is_err());
         let report = execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
@@ -849,7 +885,14 @@ mod tests {
                 .join("01 Nausicaa.mp3")
                 .is_file()
         );
-        let retry = plan(&[source.clone()], &common, "/Assets/tau/common/", PlanOptions::default(), &mut None).unwrap();
+        let retry = plan(
+            &[source.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(retry.items[0].state, CopyState::Same);
         let no_op = execute(&retry, &retry.id, &mut None).unwrap();
         assert_eq!(no_op.copied, 0);
@@ -865,7 +908,14 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         let media = source.join("01 Track.mp3");
         fs::write(&media, b"before").unwrap();
-        let plan = plan(&[source.clone()], &common, "/Assets/tau/common/", PlanOptions::default(), &mut None).unwrap();
+        let plan = plan(
+            &[source.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
         let index = common.join("tau-library.tdb");
         fs::write(&index, b"previous index bytes").unwrap();
         fs::write(&media, b"after!").unwrap();
@@ -889,7 +939,10 @@ mod tests {
             &[source.clone()],
             &common,
             "/Assets/tau/common/",
-            PlanOptions { mirror: true, embed_covers: false },
+            PlanOptions {
+                mirror: true,
+                embed_covers: false,
+            },
             &mut None,
         )
         .unwrap();
@@ -897,8 +950,7 @@ mod tests {
         assert!(execute_with_mirror(&plan, &plan.id, None, Some(&backup), &mut None).is_err());
         assert!(common.join("old.mp3").exists());
         let report =
-            execute_with_mirror(&plan, &plan.id, Some(&plan.id), Some(&backup), &mut None)
-                .unwrap();
+            execute_with_mirror(&plan, &plan.id, Some(&plan.id), Some(&backup), &mut None).unwrap();
         assert_eq!(report.deleted, 1);
         assert!(!common.join("old.mp3").exists());
         assert_eq!(
@@ -924,7 +976,10 @@ mod tests {
             &[source.clone()],
             &common,
             "/Assets/tau/common/",
-            PlanOptions { mirror: false, embed_covers: true },
+            PlanOptions {
+                mirror: false,
+                embed_covers: true,
+            },
             &mut None,
         )
         .unwrap();

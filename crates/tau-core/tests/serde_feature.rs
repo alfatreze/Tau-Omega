@@ -51,10 +51,7 @@ fn difference_state_and_copy_state_are_snake_case() {
         serde_json::to_string(&DifferenceState::OnlyLeft).unwrap(),
         r#""only_left""#
     );
-    assert_eq!(
-        serde_json::to_string(&CopyState::New).unwrap(),
-        r#""new""#
-    );
+    assert_eq!(serde_json::to_string(&CopyState::New).unwrap(), r#""new""#);
 }
 
 #[test]
@@ -73,5 +70,8 @@ fn index_status_round_trips_through_json() {
 fn pathbuf_serialises_as_a_plain_string_like_display() {
     let path = std::path::PathBuf::from("/Users/me/Music/Al bum/01.mp3");
     let json = serde_json::to_string(&path).unwrap();
-    assert_eq!(json, serde_json::to_string(&path.display().to_string()).unwrap());
+    assert_eq!(
+        json,
+        serde_json::to_string(&path.display().to_string()).unwrap()
+    );
 }
