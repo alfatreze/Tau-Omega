@@ -15,6 +15,13 @@ It signs and notarises like any native app (macOS Developer ID + notarytool; Win
 **Fallback plan:** the Rust core is a library crate with a CLI, so if the shell ever changes (Tauri to something else) nothing of value is lost.
 
 ## Layout (Cargo workspace + UI)
+
+> **Status 2026-09-22:** the tree below is the *intended* layout. What exists today is flat:
+> `tau-core/src/{lib,sync,cover,journal,compare,duplicates,playlist,diag}.rs`, where `lib.rs` is a
+> 1,276-line module holding card inspection, ASCII rules, scanning, tag parsing and the index
+> writer/reader together. Splitting it along the lines below is planned work, not done work.
+> See `docs/PORTABILITY_AUDIT.md`.
+
 ```
 tau-omega/
   crates/
@@ -37,7 +44,17 @@ tau-omega/
   docs/              copy of this folder's documents
 ```
 
-## Suggested crates (verify licences and maintenance)
+## Dependencies
+
+> **Status 2026-09-22 — the list below was not followed, and that was the right call.** `tau-core`
+> depends on exactly three crates: `crc32fast`, `serde_json`, `sha2`. No tokio, no async runtime, no
+> SQLite, no tag or image library. Tag parsing (ID3v1/v2.3/v2.4, FLAC Vorbis), cover handling and the
+> index codec are hand-written, which is what keeps the engine embeddable and byte-exact against the
+> Python reference. **Do not "restore" the list below to match the code.** Anything added here is a
+> constraint on every future host, so each new dependency needs a reason that survives that test.
+> `serde` is expected next, behind an optional feature (audit P1-1).
+
+The original survey, kept for when a capability is actually needed:
 `lofty` (tags and properties) with a small hand-written ID3/FLAC reader for the fields that must match the reference exactly;
 `walkdir`, `ignore`; `sha2`, `crc32fast`; `unicode-normalization`; `serde`, `serde_json`; `zip`; `image` + `fast_image_resize` (thumbnails);
 `rusqlite` (scan cache, journal) ; `tokio`; `tracing`; `thiserror`; `notify` (card and folder watch); `sysinfo` plus small OS shims for volumes
@@ -45,6 +62,12 @@ tau-omega/
 Prefer hand-written code for the index writer and reader: they must be byte-exact with the Python reference, and they are short.
 
 ## Concurrency and safety model
+
+> **Status 2026-09-22:** the plan/execute/token/journal model below is **built and honoured**. The
+> job runner's *cancellation and progress events are not* — there are no such hooks in the engine at
+> all, so every long operation is one blocking call. This is the main blocker for embedding in
+> another application's UI (audit P0-3).
+
 * One **job runner**: a job is scan, plan, sync, verify, copy, move, install. Jobs are cancellable, emit progress events (files, bytes, current path), and write a journal.
 * **Plan then execute:** planning is pure (no writes) and returns a serialisable plan; executing takes a plan id and a user confirmation token.
   The UI cannot execute without a fresh plan; the CLI needs `--yes` and defaults to dry-run.
@@ -68,7 +91,28 @@ GitHub Actions: `cargo fmt/clippy/test` on macOS, Windows and Linux; a conforman
 UI unit tests; Tauri build matrix producing `.dmg` (universal) and `.msi`/`.exe`; signing and notarisation on tagged releases only; checksums published.
 Versioning: SemVer, independent of firmware versions, with a compatibility table (Tau Omega version -> supported index format versions -> firmware versions).
 
+## Integration: Pocket Sync
+
+The engine is kept reusable for one named host: **Pocket Sync** (Tauri + Rust + TypeScript, AGPL-3.0).
+Decision and rationale in `docs/DECISIONS.md` D-009/D-010.
+
+* **Boundary:** an ordinary Rust **crate dependency** on `tau-core`. No plugin ABI, no C ABI, no WASM,
+  no sidecar — the host is Rust, so none of that is needed, and none of it should be built
+  speculatively. Pocket Sync has no plugin system, so adoption means an upstream contribution or a
+  fork; the goal is therefore to be **easy to vendor**, which is an API-quality problem.
+* **What that requires of us:** no host assumptions (no process ownership, no stdout, no globals, no
+  forced runtime — all currently true), no panics on caller-supplied input, machine-readable errors
+  and warnings, and progress/cancellation the host's own UI can drive. The open items are tracked in
+  `docs/PORTABILITY_AUDIT.md`.
+* **What we must not do:** copy code from Pocket Sync (AGPL) into this repository. Ours may flow to
+  them; theirs may not flow here.
+* **Non-Rust hosts** are out of scope. If one is ever adopted, the `tau` CLI's JSON output is the
+  intended surface, not a new ABI.
+
 ## Extension points (so later phases do not need rewrites)
+
+> **Status 2026-09-22:** none of the five below exist as interfaces yet. They are the seams that make
+> the engine reusable, so they are either scheduled work or they should be struck from this document.
 1. **Core registry** (`cores.d/*.json`): describes a core family (how to find media roots, which extensions, whether it reads `tau-library.tdb`, which data slots). Tau ships built in; others are data.
 2. **Index writers** are versioned modules (`v1` now); a new firmware format adds `v2` beside it and the UI picks by the target core's declared support.
 3. **Media processors** (pipeline steps: ascii-names, embed-cover, optimise-cover, loudness-tag (later), transcode (later)) share one interface and are listed in the plan.
