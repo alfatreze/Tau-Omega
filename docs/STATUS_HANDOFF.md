@@ -57,7 +57,13 @@ The bundle uses the `assets/appicon.png` icon and embedded Space Grotesk font.
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
 - Jobs shown from a loaded journal are a concise summary, not a full journal-detail view.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
-- `Tau Omega/` is not itself a Git repository, so repository-local change status is unavailable there.
+- **Boundary defects found by the 2026-09-22 portability audit** (`PORTABILITY_AUDIT.md`), all
+  blocking adoption of `tau-core` by Pocket Sync: the `/Assets/<platform>/common/` prefix rule is
+  implemented separately in the CLI and the Tauri adapter (which also owns index-status presentation);
+  warnings and errors cross every boundary as English strings, with `TauError::code()` used only by
+  the conformance test; and the engine has no progress or cancellation hooks at all.
+- `build_index` is public, takes public `Entry` values, and panics on a missing `_tno` tag rather than
+  returning an error — a host feeding its own data in crashes.
 
 ## Deferred because validation/fixtures are required
 
@@ -68,6 +74,12 @@ The bundle uses the `assets/appicon.png` icon and embedded Space Grotesk font.
 - Real device-specific capability verification.
 
 ## Next recommended implementation order
+
+**Boundary work comes first — decision D-011.** The three P0 items in `PORTABILITY_AUDIT.md` (move
+duplicated domain rules into `tau-core`; machine-readable warnings and errors; progress and
+cancellation) get more expensive with every feature stacked on top, and each is a prerequisite for
+Pocket Sync adoption. Then the P1 items (optional `serde` feature; no panics on caller input;
+collapse the `plan_with_*` family into an options struct). Then:
 
 1. Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.
 2. Expand Problems checks from duplicates to format/tag/path/cover issues.

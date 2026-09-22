@@ -15,6 +15,20 @@ Phases are ordered so each one is usable on its own and each later firmware phas
 | **T7 Polish and release** | Installers, signing/notarisation, updater (opt-in), accessibility pass, documentation, sample data, crash reports (local only). | Release checklist in `TEST_PLAN.md` passes on both OSes. |
 | **T8 Art (when firmware has the blit engine)** | Thumbnail pipeline, `tau-library-art.bin` writer (spec in `DATA_FORMATS.md` section 3), art id in the index header, preview of what the Pocket will show. | Firmware reads the file; index and art ids match; stale-art detection works. |
 
+## TP Portability and Pocket Sync integration (added 2026-09-22)
+
+TP0 sits **before T4**, because those defects get more expensive with every feature built on top.
+Decisions D-009/D-010/D-011; findings and acceptance criteria in `docs/PORTABILITY_AUDIT.md`.
+
+| Step | Deliverable | Exit test |
+|---|---|---|
+| **TP0 Boundary fixes** | Domain rules (card path prefix, index status) live only in `tau-core`; warnings and errors machine-readable, preserving E-codes; progress and cancellation hooks on scan/plan/execute. | A front-end branches on a failure without matching strings; a long scan reports progress and can be cancelled; no path or status logic remains outside the engine. |
+| **TP1 API shape** | Optional `serde` feature on public types; no public entry point panics on caller-supplied input; `plan_with_*` collapsed into one options struct. | The Tauri `*View` DTO layer is gone; `build_index` returns `Err` on malformed caller data instead of panicking. |
+| **TP2 Adoption** | `tau-core` consumed by Pocket Sync as a crate dependency (upstream contribution or fork). | Pocket Sync indexes a card using our engine, with its own UI driving plan → confirm → execute. |
+
+Not doing: plugin ABI, C ABI, WASM, sidecar hosting, or a remote/streaming media-source abstraction.
+Pocket Sync is Rust and reads local cards, so none of those are needed (D-009).
+
 ## Extensions worth building (pick by value)
 1. **Card profiles / presets:** save a sync recipe (sources, options, target core) and rerun it in one click; per-card defaults.
 2. **Watch mode:** watch a source folder and offer a sync when the card is next inserted ("3 new albums since last sync").

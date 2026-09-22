@@ -20,6 +20,12 @@ with a UI, plus the multi-core and card management the scripts do not have.
 | `TEST_PLAN.md` | Conformance against the Python reference, fixtures, fake cards, UI tests, release checks. |
 | `REFERENCE_CODE.md` | Map from every function Tau Omega must reproduce to the existing Python and firmware source. |
 
+## Portability goal
+`tau-core` is a UI-independent engine, kept reusable so it can also be adopted by **Pocket Sync**
+(the established third-party Analogue Pocket manager) as an ordinary Rust crate dependency. That goal
+and its licence boundary are recorded in `docs/DECISIONS.md` (D-009, D-010); the current gaps and the
+work to close them are in `docs/PORTABILITY_AUDIT.md`.
+
 ## The existing project (read-only reference)
 `../tau-alpha/` is the firmware, RTL, tools and docs repository. Do not modify it from Tau Omega work. The documents that matter:
 `tau-alpha/docs/MEDIA_LIBRARY_0.4_SPEC.md` (index design and decisions), `tau-alpha/docs/MEDIA_LIBRARY_0.4_BRIEF.md`,
