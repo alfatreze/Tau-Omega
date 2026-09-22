@@ -169,6 +169,35 @@ impl std::fmt::Display for Warning {
     }
 }
 
+/// Derives the on-card path prefix baked into every entry of a media root's
+/// index: `Assets/<platform>/common` becomes `/Assets/<platform>/common/`.
+/// This is the single implementation of that rule; front-ends call it rather
+/// than re-deriving the prefix themselves (it determines paths written into
+/// the index, and any divergence between hosts corrupts a real card).
+pub fn root_prefix(common: &Path) -> Result<String, TauError> {
+    let platform = common
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            TauError::e(
+                ErrorCode::InvalidMediaRoot,
+                "destination must be Assets/<platform>/common",
+            )
+        })?;
+    Ok(format!("/Assets/{platform}/common/"))
+}
+
+/// Whether a core's on-card media root has a valid, absent, or broken index.
+/// Computed once here so no front-end re-derives the media-root path or
+/// re-reads the index file itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexStatus {
+    NoIndex,
+    Ready { tracks: u16 },
+    NeedsRepair,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Core {
     pub id: String,
@@ -177,6 +206,7 @@ pub struct Core {
     pub version: String,
     pub platform: String,
     pub library_capable: bool,
+    pub index_status: IndexStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -244,6 +274,7 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
                 .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
                 .map(|value| slots_have_library(&value))
                 .unwrap_or(false);
+            let index_status = index_status_for(&root, &platform);
             cores.push(Core {
                 id,
                 author: string("author"),
@@ -251,6 +282,7 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
                 version: string("version"),
                 platform,
                 library_capable,
+                index_status,
             });
         }
     }
@@ -260,6 +292,29 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
         cores,
         warnings,
     })
+}
+
+/// The media root a core's index lives under, and its current status. Moved
+/// out of the Tauri adapter, which used to derive this path and status itself
+/// (D-001): a front-end reads `Core::index_status`, it never recomputes it.
+fn index_status_for(card_root: &Path, platform: &str) -> IndexStatus {
+    if platform.is_empty() {
+        return IndexStatus::NoIndex;
+    }
+    let index_path = card_root
+        .join("Assets")
+        .join(platform)
+        .join("common")
+        .join("tau-library.tdb");
+    match fs::read(&index_path) {
+        Err(_) => IndexStatus::NoIndex,
+        Ok(bytes) => match parse(&bytes) {
+            Ok(parsed) => IndexStatus::Ready {
+                tracks: parsed.counts.tracks,
+            },
+            Err(_) => IndexStatus::NeedsRepair,
+        },
+    }
 }
 
 /// A core supports the media library if any data slot serves `tau-library.tdb`.
