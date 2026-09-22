@@ -1,7 +1,7 @@
 //! Host-side, durable job reports. A journal is always outside a card's media
 //! root, so recovery information remains available if a card is removed.
 
-use crate::{TauError, sync};
+use crate::{sync, ErrorCode, TauError, Warning};
 use serde_json::json;
 use std::{
     fs,
@@ -18,8 +18,9 @@ pub fn execute_to_journal(
     journal_path: &Path,
 ) -> Result<sync::SyncReport, TauError> {
     if confirmation != plan.id {
-        return Err(TauError::Io(
-            "confirmation token does not match the current plan".into(),
+        return Err(TauError::e(
+            ErrorCode::ConfirmationMismatch,
+            "confirmation token does not match the current plan",
         ));
     }
     validate_location(journal_path, &plan.destination)?;
@@ -48,8 +49,9 @@ pub fn execute_mirror_to_journal(
     journal_path: &Path,
 ) -> Result<sync::SyncReport, TauError> {
     if confirmation != plan.id {
-        return Err(TauError::Io(
-            "confirmation token does not match the current plan".into(),
+        return Err(TauError::e(
+            ErrorCode::ConfirmationMismatch,
+            "confirmation token does not match the current plan",
         ));
     }
     validate_location(journal_path, &plan.destination)?;
@@ -78,8 +80,9 @@ pub fn execute_core_move_to_journal(
     journal_path: &Path,
 ) -> Result<sync::SyncReport, TauError> {
     if confirmation != plan.id || delete_confirmation != plan.id {
-        return Err(TauError::Io(
-            "a core move needs both matching copy and delete confirmation tokens".into(),
+        return Err(TauError::e(
+            ErrorCode::ConfirmationMismatch,
+            "a core move needs both matching copy and delete confirmation tokens",
         ));
     }
     validate_location(journal_path, &plan.destination)?;
@@ -106,14 +109,29 @@ pub fn execute_core_move_to_journal(
 
 fn validate_location(path: &Path, media_root: &Path) -> Result<(), TauError> {
     if path.as_os_str().is_empty() || path.is_dir() {
-        return Err(TauError::Io("journal must name a host report file".into()));
+        return Err(TauError::e(
+            ErrorCode::InvalidJournalLocation,
+            "journal must name a host report file",
+        ));
     }
     if path.starts_with(media_root) {
-        return Err(TauError::Io(
-            "journal must be outside the card media root".into(),
+        return Err(TauError::e(
+            ErrorCode::InvalidJournalLocation,
+            "journal must be outside the card media root",
         ));
     }
     Ok(())
+}
+
+/// Renders structured warnings as `{"code": "...", "message": "..."}` pairs so
+/// the journal stays machine-readable rather than a flat list of sentences.
+fn warnings_json(warnings: &[Warning]) -> serde_json::Value {
+    json!(
+        warnings
+            .iter()
+            .map(|warning| json!({ "code": warning.code.as_str(), "message": warning.message }))
+            .collect::<Vec<_>>()
+    )
 }
 
 fn write_state(
@@ -143,12 +161,12 @@ fn write_state(
             "bytes_written": result.bytes_written,
             "index_path": result.index_path,
             "index_sha256": result.index_sha256,
-            "warnings": result.warnings,
+            "warnings": warnings_json(&result.warnings),
         })),
         "error": error,
     });
     let encoded = serde_json::to_vec_pretty(&state)
-        .map_err(|error| TauError::Json(format!("journal encoding failed: {error}")))?;
+        .map_err(|error| TauError::e(ErrorCode::Json, format!("journal encoding failed: {error}")))?;
     let temp = path.with_extension(format!("tau-journal-{}.tmp", std::process::id()));
     {
         use std::io::Write;
@@ -172,7 +190,7 @@ fn timestamp() -> u64 {
 pub fn read_journal(path: impl AsRef<Path>) -> Result<serde_json::Value, TauError> {
     let bytes = fs::read(path)?;
     serde_json::from_slice(&bytes)
-        .map_err(|error| TauError::Json(format!("invalid journal: {error}")))
+        .map_err(|error| TauError::e(ErrorCode::Json, format!("invalid journal: {error}")))
 }
 
 #[cfg(test)]

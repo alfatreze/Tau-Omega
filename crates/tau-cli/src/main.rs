@@ -1,10 +1,45 @@
 use std::{
-    env, fs,
+    env, fmt, fs,
     path::{Path, PathBuf},
     process::ExitCode,
 };
 use tau_core::sync::{self, CopyState, SyncPlan};
-use tau_core::{ROOT_PREFIX, build_index, compare, inspect_card, parse, scan_dir, synth, verify};
+use tau_core::{
+    build_index, compare, inspect_card, parse, scan_dir, synth, verify, TauError, Warning,
+    ROOT_PREFIX,
+};
+
+/// A CLI-boundary error: either an argument-parsing mistake (no engine code)
+/// or an engine `TauError`, which keeps its stable code. `main` uses the
+/// distinction to pick the process exit code, so a script driving this CLI
+/// can branch on failure without parsing English text.
+enum CliError {
+    Usage(String),
+    Engine(TauError),
+}
+impl From<TauError> for CliError {
+    fn from(error: TauError) -> Self {
+        Self::Engine(error)
+    }
+}
+impl From<String> for CliError {
+    fn from(message: String) -> Self {
+        Self::Usage(message)
+    }
+}
+impl From<&str> for CliError {
+    fn from(message: &str) -> Self {
+        Self::Usage(message.into())
+    }
+}
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Usage(message) => f.write_str(message),
+            Self::Engine(error) => write!(f, "{error}"),
+        }
+    }
+}
 
 fn usage() {
     eprintln!(
@@ -32,19 +67,24 @@ fn main() -> ExitCode {
         "synth" => synthetic(&args, json),
         "plan" => sync_plan(&args, json),
         "sync" => sync_execute(&args, json),
-        _ => Err(format!("unknown command: {command}")),
+        _ => Err(CliError::Usage(format!("unknown command: {command}"))),
     };
-    if let Err(error) = result {
-        eprintln!("error: {error}");
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(CliError::Usage(message)) => {
+            eprintln!("error: {message}");
+            ExitCode::from(2)
+        }
+        Err(CliError::Engine(error)) => {
+            eprintln!("error {}: {}", error.code(), error.message);
+            ExitCode::from(u8::try_from(error.code().as_u16()).unwrap_or(255))
+        }
     }
 }
-fn compare_media(a: &[String], j: bool) -> Result<(), String> {
+fn compare_media(a: &[String], j: bool) -> Result<(), CliError> {
     let left = Path::new(a.first().ok_or("compare needs a left media root")?);
     let right = Path::new(value(a, "--with").ok_or("compare needs --with MEDIA_ROOT")?);
-    let comparison = compare::media_roots(left, right).map_err(|error| error.to_string())?;
+    let comparison = compare::media_roots(left, right)?;
     let count = |state| comparison.count(state);
     if j {
         println!(
@@ -67,19 +107,18 @@ fn compare_media(a: &[String], j: bool) -> Result<(), String> {
     }
     Ok(())
 }
-fn core_copy_plan(a: &[String], j: bool) -> Result<(), String> {
+fn core_copy_plan(a: &[String], j: bool) -> Result<(), CliError> {
     let plan = make_core_copy_plan(a)?;
     show_plan(&plan, j);
     Ok(())
 }
-fn core_copy_execute(a: &[String], j: bool) -> Result<(), String> {
+fn core_copy_execute(a: &[String], j: bool) -> Result<(), CliError> {
     yes(a)?;
     let plan = make_core_copy_plan(a)?;
     let confirmation = value(a, "--confirm").ok_or("core-copy needs --confirm PLAN-ID")?;
     let journal =
         PathBuf::from(value(a, "--manifest").ok_or("core-copy needs --manifest HOST_REPORT.json")?);
-    let report = tau_core::journal::execute_to_journal(&plan, confirmation, &journal)
-        .map_err(|error| error.to_string())?;
+    let report = tau_core::journal::execute_to_journal(&plan, confirmation, &journal)?;
     if j {
         println!(
             r#"{{"plan_id":{},"copied":{},"unchanged":{},"index":{}}}"#,
@@ -98,7 +137,7 @@ fn core_copy_execute(a: &[String], j: bool) -> Result<(), String> {
     }
     Ok(())
 }
-fn core_move_execute(a: &[String], j: bool) -> Result<(), String> {
+fn core_move_execute(a: &[String], j: bool) -> Result<(), CliError> {
     yes(a)?;
     let plan = make_core_copy_plan(a)?;
     let source = PathBuf::from(a.first().ok_or("core-move needs a source media root")?);
@@ -117,8 +156,7 @@ fn core_move_execute(a: &[String], j: bool) -> Result<(), String> {
         &prefix(&source)?,
         &backup,
         &journal,
-    )
-    .map_err(|error| error.to_string())?;
+    )?;
     if j {
         println!(
             r#"{{"plan_id":{},"copied":{},"deleted":{},"index":{}}}"#,
@@ -137,8 +175,8 @@ fn core_move_execute(a: &[String], j: bool) -> Result<(), String> {
     }
     Ok(())
 }
-fn cards(a: &[String], j: bool) -> Result<(), String> {
-    let card = inspect_card(a.first().ok_or("cards needs a folder")?).map_err(|e| e.to_string())?;
+fn cards(a: &[String], j: bool) -> Result<(), CliError> {
+    let card = inspect_card(a.first().ok_or("cards needs a folder")?)?;
     if j {
         println!(
             r#"{{"root":{},"pocket_card":{},"cores":[{}]}}"#,
@@ -172,18 +210,17 @@ fn cards(a: &[String], j: bool) -> Result<(), String> {
     }
     Ok(())
 }
-fn scan(a: &[String], j: bool) -> Result<(), String> {
+fn scan(a: &[String], j: bool) -> Result<(), CliError> {
     let scan = scan_dir(
         Path::new(a.first().ok_or("scan needs a media root")?),
         a.iter().any(|x| x == "--playlists"),
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     if j {
         println!(
             r#"{{"tracks":{},"playlists":{},"warnings":{}}}"#,
             scan.entries.len(),
             scan.playlists.len(),
-            array(&scan.warnings)
+            warnings_array(&scan.warnings)
         );
     } else {
         println!(
@@ -191,34 +228,27 @@ fn scan(a: &[String], j: bool) -> Result<(), String> {
             scan.entries.len(),
             scan.playlists.len()
         );
-        for w in scan.warnings {
+        for w in &scan.warnings {
             eprintln!("warning: {w}");
         }
     }
     Ok(())
 }
-fn index(a: &[String], j: bool) -> Result<(), String> {
+fn index(a: &[String], j: bool) -> Result<(), CliError> {
     yes(a)?;
     let common = PathBuf::from(a.first().ok_or("index needs a media root")?);
     let out = PathBuf::from(value(a, "--out").ok_or("index needs --out FILE")?);
-    let scan =
-        scan_dir(&common, a.iter().any(|x| x == "--playlists")).map_err(|e| e.to_string())?;
+    let scan = scan_dir(&common, a.iter().any(|x| x == "--playlists"))?;
     let mut warns = scan.warnings;
-    let data = build_index(
-        &scan.entries,
-        &scan.playlists,
-        &prefix(&common)?,
-        &mut warns,
-    )
-    .map_err(|e| e.to_string())?;
-    parse(&data).map_err(|e| e.to_string())?;
-    fs::write(&out, &data).map_err(|e| e.to_string())?;
+    let data = build_index(&scan.entries, &scan.playlists, &prefix(&common)?, &mut warns)?;
+    parse(&data)?;
+    fs::write(&out, &data).map_err(TauError::from)?;
     if j {
         println!(
             r#"{{"written":{},"bytes":{},"warnings":{}}}"#,
             q(&out.to_string_lossy()),
             data.len(),
-            array(&warns)
+            warnings_array(&warns)
         );
     } else {
         println!(
@@ -229,11 +259,10 @@ fn index(a: &[String], j: bool) -> Result<(), String> {
     }
     Ok(())
 }
-fn check(a: &[String], j: bool) -> Result<(), String> {
-    let data =
-        fs::read(a.first().ok_or("verify needs an index file")?).map_err(|e| e.to_string())?;
+fn check(a: &[String], j: bool) -> Result<(), CliError> {
+    let data = fs::read(a.first().ok_or("verify needs an index file")?).map_err(TauError::from)?;
     let root = value(a, "--root").map(PathBuf::from);
-    let issues = verify(&data, root.as_deref()).map_err(|e| e.to_string())?;
+    let issues = verify(&data, root.as_deref())?;
     if j {
         println!(
             r#"{{"ok":{},"issues":{}}}"#,
@@ -250,13 +279,11 @@ fn check(a: &[String], j: bool) -> Result<(), String> {
     if issues.is_empty() {
         Ok(())
     } else {
-        Err(format!("{} verification issue(s)", issues.len()))
+        Err(CliError::Usage(format!("{} verification issue(s)", issues.len())))
     }
 }
-fn report(a: &[String], j: bool) -> Result<(), String> {
-    let index =
-        parse(fs::read(a.first().ok_or("report needs an index file")?).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
+fn report(a: &[String], j: bool) -> Result<(), CliError> {
+    let index = parse(fs::read(a.first().ok_or("report needs an index file")?).map_err(TauError::from)?)?;
     if j {
         println!(
             r#"{{"artists":{},"albums":{},"tracks":{},"playlists":{},"build_id":"{:08X}"}}"#,
@@ -278,22 +305,16 @@ fn report(a: &[String], j: bool) -> Result<(), String> {
     }
     Ok(())
 }
-fn synthetic(a: &[String], j: bool) -> Result<(), String> {
+fn synthetic(a: &[String], j: bool) -> Result<(), CliError> {
     yes(a)?;
     let tracks = num(a, "--tracks")?;
     let albums = num(a, "--albums")?;
     let artists = num(a, "--artists")?;
     let out = PathBuf::from(value(a, "--out").ok_or("synth needs --out FILE")?);
     let mut warns = Vec::new();
-    let data = build_index(
-        &synth(tracks, albums, artists),
-        &[],
-        ROOT_PREFIX,
-        &mut warns,
-    )
-    .map_err(|e| e.to_string())?;
-    parse(&data).map_err(|e| e.to_string())?;
-    fs::write(&out, &data).map_err(|e| e.to_string())?;
+    let data = build_index(&synth(tracks, albums, artists), &[], ROOT_PREFIX, &mut warns)?;
+    parse(&data)?;
+    fs::write(&out, &data).map_err(TauError::from)?;
     if j {
         println!(r#"{{"tracks":{tracks},"bytes":{}}}"#, data.len());
     } else {
@@ -305,12 +326,12 @@ fn synthetic(a: &[String], j: bool) -> Result<(), String> {
     }
     Ok(())
 }
-fn sync_plan(a: &[String], j: bool) -> Result<(), String> {
+fn sync_plan(a: &[String], j: bool) -> Result<(), CliError> {
     let plan = make_plan(a)?;
     show_plan(&plan, j);
     Ok(())
 }
-fn sync_execute(a: &[String], j: bool) -> Result<(), String> {
+fn sync_execute(a: &[String], j: bool) -> Result<(), CliError> {
     yes(a)?;
     let plan = make_plan(a)?;
     let confirmation = value(a, "--confirm").ok_or("sync needs --confirm PLAN-ID")?;
@@ -326,8 +347,7 @@ fn sync_execute(a: &[String], j: bool) -> Result<(), String> {
             value(a, "--backup-dir").map(Path::new),
             &path,
         )
-    }
-    .map_err(|e| e.to_string())?;
+    }?;
     if j {
         println!(
             r#"{{"plan_id":{},"copied":{},"unchanged":{},"bytes_written":{},"index":{},"warnings":{}}}"#,
@@ -336,7 +356,7 @@ fn sync_execute(a: &[String], j: bool) -> Result<(), String> {
             report.unchanged,
             report.bytes_written,
             q(&report.index_path.to_string_lossy()),
-            array(&report.warnings)
+            warnings_array(&report.warnings)
         );
     } else {
         println!(
@@ -349,24 +369,22 @@ fn sync_execute(a: &[String], j: bool) -> Result<(), String> {
     }
     Ok(())
 }
-fn make_plan(a: &[String]) -> Result<SyncPlan, String> {
+fn make_plan(a: &[String]) -> Result<SyncPlan, CliError> {
     let dest =
         PathBuf::from(value(a, "--dest").ok_or("sync needs --dest Assets/<platform>/common")?);
-    sync::plan_with_features(
+    Ok(sync::plan_with_features(
         &sources(a),
         &dest,
         &prefix(&dest)?,
         a.iter().any(|arg| arg == "--mirror"),
         a.iter().any(|arg| arg == "--embed-cover"),
-    )
-    .map_err(|e| e.to_string())
+    )?)
 }
-fn make_core_copy_plan(a: &[String]) -> Result<SyncPlan, String> {
+fn make_core_copy_plan(a: &[String]) -> Result<SyncPlan, CliError> {
     let source = PathBuf::from(a.first().ok_or("core-copy needs a source media root")?);
     let destination =
         PathBuf::from(value(a, "--dest").ok_or("core-copy needs --dest Assets/<platform>/common")?);
-    sync::plan_core_copy(&source, &destination, &prefix(&destination)?)
-        .map_err(|error| error.to_string())
+    Ok(sync::plan_core_copy(&source, &destination, &prefix(&destination)?)?)
 }
 fn show_plan(p: &SyncPlan, j: bool) {
     let count = |state| p.items.iter().filter(|item| item.state == state).count();
@@ -380,7 +398,7 @@ fn show_plan(p: &SyncPlan, j: bool) {
             count(CopyState::Same),
             p.deletions.len(),
             p.bytes_to_write,
-            array(&p.warnings)
+            warnings_array(&p.warnings)
         );
     } else {
         println!(
@@ -396,7 +414,7 @@ fn show_plan(p: &SyncPlan, j: bool) {
         );
     }
 }
-fn prefix(common: &Path) -> Result<String, String> {
+fn prefix(common: &Path) -> Result<String, CliError> {
     let platform = common
         .parent()
         .and_then(Path::file_name)
@@ -431,13 +449,13 @@ fn sources(a: &[String]) -> Vec<PathBuf> {
     }
     out
 }
-fn num(a: &[String], key: &str) -> Result<usize, String> {
+fn num(a: &[String], key: &str) -> Result<usize, CliError> {
     value(a, key)
         .ok_or_else(|| format!("synth needs {key}"))?
         .parse()
-        .map_err(|_| format!("invalid {key}"))
+        .map_err(|_| CliError::Usage(format!("invalid {key}")))
 }
-fn yes(a: &[String]) -> Result<(), String> {
+fn yes(a: &[String]) -> Result<(), CliError> {
     if a.iter().any(|x| x == "--yes") {
         Ok(())
     } else {
@@ -457,4 +475,16 @@ fn q(s: &str) -> String {
 }
 fn array(v: &[String]) -> String {
     format!("[{}]", v.iter().map(|s| q(s)).collect::<Vec<_>>().join(","))
+}
+/// Renders structured warnings as `{"code": "...", "message": "..."}` objects
+/// in `--json` mode, so a script can branch on `code` without parsing English.
+fn warnings_array(warnings: &[Warning]) -> String {
+    format!(
+        "[{}]",
+        warnings
+            .iter()
+            .map(|w| format!(r#"{{"code":{},"message":{}}}"#, q(w.code.as_str()), q(&w.message)))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
 }

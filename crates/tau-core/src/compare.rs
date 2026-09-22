@@ -1,6 +1,6 @@
 //! Read-only media-root comparison for the multi-core workflow.
 
-use crate::TauError;
+use crate::{ErrorCode, TauError};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -149,8 +149,9 @@ fn validate_media_root(root: &Path) -> Result<(), TauError> {
         |component| matches!(component, std::path::Component::Normal(name) if *name == "Assets"),
     );
     if !has_assets || root.file_name().is_none_or(|name| name != "common") || !root.is_dir() {
-        return Err(TauError::Io(
-            "both locations must be explicit Assets/<platform>/common media roots".into(),
+        return Err(TauError::e(
+            ErrorCode::InvalidMediaRoot,
+            "both locations must be explicit Assets/<platform>/common media roots",
         ));
     }
     Ok(())
