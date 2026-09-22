@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tau Omega",
+  "version": "0.1.0",
+  "identifier": "dev.tau.omega",
+  "build": { "beforeDevCommand": "npm run dev", "beforeBuildCommand": "npm run build", "devUrl": "http://localhost:5173", "frontendDist": "../ui/dist" },
+  "app": { "windows": [{ "title": "Tau Omega", "width": 1120, "height": 760, "minWidth": 900, "minHeight": 620 }] },
+  "bundle": { "active": true, "targets": ["app"], "icon": ["../assets/appicon.png"] }
+}

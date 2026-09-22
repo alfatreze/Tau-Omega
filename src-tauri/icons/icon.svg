@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Tau Omega">
+  <rect width="512" height="512" rx="116" fill="#111617"/>
+  <path d="M116 130h280v66h-96v186c0 40-18 61-48 61-24 0-45-13-60-38l52-40c4 9 9 13 15 13 8 0 12-7 12-19V196h-155z" fill="#c1f0ad"/>
+  <circle cx="377" cy="369" r="26" fill="#669c83"/>
+</svg>
