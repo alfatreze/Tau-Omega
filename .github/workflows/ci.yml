@@ -11,12 +11,11 @@ jobs:
       - uses: actions/checkout@v4
       # testdata/gen_golden.py imports the Python reference oracle from the
       # sibling tau-alpha checkout (`ROOT.parent / "tau-alpha"`), exactly how
-      # it's laid out for local development; `path: ../tau-alpha` recreates
-      # that sibling layout under the runner's workspace.
-      - uses: actions/checkout@v4
-        with:
-          repository: alfatreze/Tau-Alpha
-          path: ../tau-alpha
+      # it's laid out for local development. actions/checkout's own `path:`
+      # refuses to place a repo outside the current workspace, so this clones
+      # it directly instead, landing at the same sibling path either way.
+      - name: Check out tau-alpha (sibling, for testdata/gen_golden.py)
+        run: git clone --depth 1 https://github.com/alfatreze/Tau-Alpha ../tau-alpha
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
