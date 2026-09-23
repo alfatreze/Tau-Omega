@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import type { Comparison, Core, Difference, Job, LibraryScan, MediaScan, Plan, Problem, Setting } from './lib/types';
+  import type { Comparison, Core, Difference, Job, JournalSummary, LibraryScan, MediaScan, Plan, Problem, Setting } from './lib/types';
   import { invoke } from './lib/backend';
-  import { cancelJob, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executeSync, exportPlaylist, findProblems, inspectCard, newJobId, onProgress, planCoreCopy, planSync, readJournal, readPersistedSettings, scanLibrary, scanMedia } from './lib/tau-api';
+  import { cancelJob, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executeSync, exportPlaylist, findProblems, getReportsDir, inspectCard, listJournals, newJobId, onProgress, planCoreCopy, planSync, readJournal, readPersistedSettings, scanLibrary, scanMedia, setReportsDir } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import JobsView from './lib/JobsView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
@@ -11,6 +12,27 @@
   let page: 'cards' | 'compare' | 'sync' | 'jobs' | 'settings' | 'playlists' | 'problems' | 'library' = 'cards'; let cores: Core[] = []; let path = ''; let jobs: Job[] = []; let journalPath = ''; let journalNotice = 'Choose a host-side Tau Omega journal to load it.'; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let libraryPath = ''; let libraryScan: LibraryScan | null = null; let libraryNotice = 'Choose a media root to inspect it.'; let libraryLoading = false; let libraryJobId = ''; let libraryProgress = ''; let librarySearch = ''; let libraryFormat: 'all' | 'mp3' | 'flac' = 'all';
   let syncJobId = ''; let syncProgress = '';
+  let reportsDir = ''; let historyNotice = 'Choose a folder to keep durable job history across restarts.'; let history: JournalSummary[] = []; let journalDetail: unknown = null; let journalDetailNotice = '';
+  onMount(async () => {
+    try {
+      const dir = await getReportsDir();
+      if (dir) { reportsDir = dir; await refreshHistory(); }
+    } catch (error) { historyNotice = `Could not read the saved reports directory: ${errorMessage(error)}`; }
+  });
+  async function chooseReportsDir() {
+    const selected = await open({ directory: true });
+    if (!selected || Array.isArray(selected)) return;
+    reportsDir = selected;
+    try { await setReportsDir(reportsDir); await refreshHistory(); } catch (error) { historyNotice = `Could not save this directory: ${errorMessage(error)}`; }
+  }
+  async function refreshHistory() {
+    if (!reportsDir) { history = []; return; }
+    try { history = await listJournals(reportsDir); historyNotice = `${history.length} job${history.length === 1 ? '' : 's'} found. Nothing was changed.`; }
+    catch (error) { history = []; historyNotice = `Could not list this directory: ${errorMessage(error)}`; }
+  }
+  async function openJournalDetail(path: string) { journalDetailNotice = ''; try { journalDetail = await readJournal(path); } catch (error) { journalDetail = null; journalDetailNotice = `Could not read this journal: ${errorMessage(error)}`; } }
+  function closeJournalDetail() { journalDetail = null; journalDetailNotice = ''; }
+  const autoJournalPath = (kind: string) => `${reportsDir}/${Date.now()}-${kind}.json`;
   onProgress((event) => { if (event.job_id === syncJobId) syncProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; if (event.job_id === libraryJobId) libraryProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; });
   let notice = 'Open a card folder to inspect it. Tau Omega will not write anything at this stage.';
   let sources = ''; let destination = ''; let manifestPath = ''; let embedCovers = false; let plan: Plan | null = null; let syncNotice = '';
@@ -34,11 +56,11 @@
   const settingValue = (setting: Setting) => { if (setting.id !== 24 || typeof setting.value !== 'number') return JSON.stringify(setting.value); const word = setting.value >>> 0; const kinds: Record<number, string> = { 1: 'album', 2: 'artist', 3: 'playlist', 4: 'all tracks A–Z', 5: 'Shuffle All' }; return `${kinds[word & 7] ?? 'unknown'} · item ${word >>> 3 & 0x7ff} · queue ${word >>> 14 & 0x3fff}`; };
   async function openFolder() { if (!path.trim()) { notice = 'Enter a staging-card folder path first.'; return; } try { cores = await inspectCard(path); notice = `${cores.length} core${cores.length === 1 ? '' : 's'} found. This is a read-only inspection.`; } catch (error) { notice = `Could not inspect this folder: ${errorMessage(error)}`; cores = []; } }
   async function makePlan() { plan = null; syncNotice = ''; try { plan = await planSync(sources.split('\n'), destination, embedCovers); syncNotice = `Plan ${plan.id} is ready for review. Nothing has been written.`; } catch (error) { syncNotice = `Could not make a plan: ${errorMessage(error)}`; } }
-  async function runSync() { if (!plan) return; syncJobId = newJobId(); syncProgress = 'starting…'; try { const result = await executeSync(sources.split('\n'), destination, plan.id, manifestPath, embedCovers, syncJobId); syncNotice = `Verified: ${result.copied} copied, ${result.unchanged} unchanged. Index: ${result.index_path}`; jobs = [{ kind: 'Library sync', status: 'Completed', detail: `${result.copied} copied · ${result.unchanged} unchanged` }, ...jobs]; plan = null; } catch (error) { syncNotice = `Nothing was reported as complete: ${errorMessage(error)}`; jobs = [{ kind: 'Library sync', status: 'Failed', detail: errorMessage(error) }, ...jobs]; } finally { syncProgress = ''; } }
+  async function runSync() { if (!plan) return; syncJobId = newJobId(); syncProgress = 'starting…'; const manifest = reportsDir ? autoJournalPath('sync') : manifestPath; try { const result = await executeSync(sources.split('\n'), destination, plan.id, manifest, embedCovers, syncJobId); syncNotice = `Verified: ${result.copied} copied, ${result.unchanged} unchanged. Index: ${result.index_path}`; jobs = [{ kind: 'Library sync', status: 'Completed', detail: `${result.copied} copied · ${result.unchanged} unchanged` }, ...jobs]; plan = null; if (reportsDir) await refreshHistory(); } catch (error) { syncNotice = `Nothing was reported as complete: ${errorMessage(error)}`; jobs = [{ kind: 'Library sync', status: 'Failed', detail: errorMessage(error) }, ...jobs]; if (reportsDir) await refreshHistory(); } finally { syncProgress = ''; } }
   async function cancelSync() { if (syncJobId) await cancelJob(syncJobId); }
   async function compareCores() { comparison = null; compareNotice = ''; try { comparison = await compareMedia(leftCore, rightCore); compareNotice = `${comparison.differences.length} supported files compared. Nothing was changed.`; } catch (error) { compareNotice = `Could not compare these media roots: ${errorMessage(error)}`; } }
   async function reviewCoreCopy() { coreCopyPlan = null; moveSource = false; approveDeletion = false; try { coreCopyPlan = await planCoreCopy(leftCore, rightCore); compareNotice = `Copy plan ${coreCopyPlan.id} is ready for review. The first core remains untouched.`; } catch (error) { compareNotice = `Could not make a copy plan: ${errorMessage(error)}`; } }
-  async function runCoreCopy() { if (!coreCopyPlan) return; if (moveSource && !approveDeletion) { compareNotice = 'Confirm that the source will be backed up and deleted before moving.'; return; } if (moveSource && !moveBackupPath.trim()) { compareNotice = 'Choose a visible external backup folder before moving.'; return; } const jobId = newJobId(); try { const result = moveSource ? await executeCoreMove(leftCore, rightCore, coreCopyPlan.id, moveBackupPath, copyReportPath, jobId) : await executeCoreCopy(leftCore, rightCore, coreCopyPlan.id, copyReportPath, jobId); compareNotice = `Verified ${moveSource ? 'move' : 'copy'}: ${result.copied} copied, ${result.unchanged} unchanged. Index: ${result.index_path}`; coreCopyPlan = null; } catch (error) { compareNotice = `Nothing was reported as complete: ${errorMessage(error)}`; } }
+  async function runCoreCopy() { if (!coreCopyPlan) return; if (moveSource && !approveDeletion) { compareNotice = 'Confirm that the source will be backed up and deleted before moving.'; return; } if (moveSource && !moveBackupPath.trim()) { compareNotice = 'Choose a visible external backup folder before moving.'; return; } const jobId = newJobId(); const manifest = reportsDir ? autoJournalPath(moveSource ? 'core_move' : 'core_copy') : copyReportPath; try { const result = moveSource ? await executeCoreMove(leftCore, rightCore, coreCopyPlan.id, moveBackupPath, manifest, jobId) : await executeCoreCopy(leftCore, rightCore, coreCopyPlan.id, manifest, jobId); compareNotice = `Verified ${moveSource ? 'move' : 'copy'}: ${result.copied} copied, ${result.unchanged} unchanged. Index: ${result.index_path}`; coreCopyPlan = null; if (reportsDir) await refreshHistory(); } catch (error) { compareNotice = `Nothing was reported as complete: ${errorMessage(error)}`; if (reportsDir) await refreshHistory(); } }
   const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 </script>
 
@@ -52,7 +74,7 @@
 </main>
 
 {#if page === 'jobs'}
-  <JobsView {jobs} bind:journalPath notice={journalNotice} chooseJournal={() => chooseFolder('journal')} {loadJournal} startSync={() => page = 'sync'} />
+  <JobsView {jobs} bind:journalPath notice={journalNotice} chooseJournal={() => chooseFolder('journal')} {loadJournal} startSync={() => page = 'sync'} {reportsDir} {historyNotice} {history} {chooseReportsDir} {refreshHistory} detail={journalDetail} detailNotice={journalDetailNotice} openDetail={openJournalDetail} closeDetail={closeJournalDetail} />
 {/if}
 {#if page === 'playlists'}
   <PlaylistsView bind:path={playlistPath} result={playlistResult} notice={playlistNotice} bind:output={playlistOutput} bind:selected={selectedPlaylist} choose={() => chooseFolder('playlists')} scan={scanPlaylists} exportList={exportSelectedPlaylist} />

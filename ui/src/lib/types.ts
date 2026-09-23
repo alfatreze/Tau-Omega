@@ -3,6 +3,9 @@ export type Core = { id: string; author: string; version: string; platform: stri
 export type Plan = { id: string; new_files: number; updates: number; unchanged: number; bytes_to_write: number; warnings: Warning[] };
 export type Setting = { id: number; kind: string; value: unknown };
 export type Job = { kind: string; status: string; detail: string };
+/** Mirrors `tau_core::journal::JournalSummary`: one row for the Jobs history
+ * list, built from a journal file in the configured reports directory. */
+export type JournalSummary = { path: string; kind: string; state: string; recorded_at_unix: number; plan_id: string; destination: string; files: number; copied: number | null; deleted: number | null; error: string | null };
 export type Difference = { relative: string; state: 'only_left' | 'only_right' | 'different' | 'identical'; left_bytes: number | null; right_bytes: number | null };
 export type Comparison = { left: string; right: string; only_left: number; only_right: number; different: number; identical: number; differences: Difference[] };
 export type Playlist = { name: string; tracks: number };

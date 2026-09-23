@@ -118,7 +118,13 @@ fn core_copy_execute(a: &[String], j: bool) -> Result<(), CliError> {
     let confirmation = value(a, "--confirm").ok_or("core-copy needs --confirm PLAN-ID")?;
     let journal =
         PathBuf::from(value(a, "--manifest").ok_or("core-copy needs --manifest HOST_REPORT.json")?);
-    let report = tau_core::journal::execute_to_journal(&plan, confirmation, &journal, &mut None)?;
+    let report = tau_core::journal::execute_to_journal(
+        &plan,
+        confirmation,
+        "core_copy",
+        &journal,
+        &mut None,
+    )?;
     if j {
         println!(
             r#"{{"plan_id":{},"copied":{},"unchanged":{},"index":{}}}"#,
@@ -353,7 +359,7 @@ fn sync_execute(a: &[String], j: bool) -> Result<(), CliError> {
     let path =
         PathBuf::from(value(a, "--manifest").ok_or("sync needs --manifest HOST_REPORT.json")?);
     let report = if plan.deletions.is_empty() {
-        tau_core::journal::execute_to_journal(&plan, confirmation, &path, &mut None)
+        tau_core::journal::execute_to_journal(&plan, confirmation, "sync", &path, &mut None)
     } else {
         tau_core::journal::execute_mirror_to_journal(
             &plan,
