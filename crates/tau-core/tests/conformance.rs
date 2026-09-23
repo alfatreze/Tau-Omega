@@ -65,6 +65,7 @@ fn playlist_index_matches_oracle() {
     let playlist = Playlist {
         name: "Golden list".into(),
         rel_ids: (0..16).collect(),
+        file: "Golden list.m3u".into(),
     };
     let mut warnings = Vec::new();
     assert_eq!(

@@ -171,6 +171,8 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
+- Playlist create/import destination filenames are typed by hand rather than picked from a directory
+  listing of existing `.m3u` files, same limitation as playlist export above.
 - **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2/P1-3/P2):** every item in `PORTABILITY_AUDIT.md` is
   now done — the three P0 boundary defects (duplicated root-prefix/index-status logic,
   English-only warnings and errors, no progress/cancellation), P1-1 (optional `serde` feature; DTO
@@ -217,6 +219,25 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   entry opening the full journal JSON — replacing the old one-line summary. The manual single-file
   loader stays, for a journal outside the configured directory. Verified against synthetic journal
   data in a browser (list, kind labels, state, and the detail panel).
+- **Fixed 2026-09-23:** Playlists now support create, rename, reorder, and import, not just read and
+  export. New `tau_core::playlist::{PlaylistPlan, plan_write, plan_rename, plan_import, execute}`
+  follow the same plan -> review -> confirm -> execute shape as `sync::plan`/`sync::execute`: a
+  content-hash `id` gates `execute`, so a stale confirmation refuses. `plan_write` handles both
+  create and reorder (writing an ordered track list to a file); `plan_rename` moves the `.m3u` file
+  while normalising any bare (folder-relative) lines to root-rooted form first, so the playlist keeps
+  resolving correctly from its new location; `plan_import` matches each line of an external `.m3u`
+  against the media root's tracks (first by root-relative path, then by unique bare filename),
+  listing anything unmatched in `PlaylistPlan::dropped` rather than silently keeping or dropping it
+  unreported. `Playlist` gained a `file` field (which `.m3u` it was read from) so a front-end can
+  target these without re-deriving the scan's own naming/folder-collapsing rules. New Tauri commands
+  `plan_playlist_write`/`execute_playlist_write` (create+reorder), `plan_playlist_rename`/
+  `execute_playlist_rename`, `plan_playlist_import`/`execute_playlist_import`; `scan_media`'s
+  `MediaScanView` now resolves each playlist's tracks to relative-path strings (`PlaylistDetailView`)
+  instead of a bare count, since the Playlists page needs them to reorder in place. `PlaylistsView.svelte`
+  gained reorder (up/down per track), rename, create (paste-in track paths), and import (with a
+  dropped-lines list) sections, each with its own plan/review/confirm flow. 7 new engine tests;
+  verified end to end in a browser against synthetic scan/plan data (reorder swap+save, import with
+  2 matched/2 dropped lines).
 
 ## Deferred because validation/fixtures are required
 
@@ -239,7 +260,8 @@ below is blocked on it. Next:
    see "Known issues and incomplete wiring" above.
 3. ~~Persist Job history through a configured reports directory and detail view.~~ **Done
    2026-09-23** — see "Known issues and incomplete wiring" above.
-4. Add playlist create/rename/reorder/import plan flows.
+4. ~~Add playlist create/rename/reorder/import plan flows.~~ **Done 2026-09-23** — see "Known
+   issues and incomplete wiring" above.
 5. Add storage planning and backup/package dry-run views.
 6. Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source fixtures are provided.
 7. Validate write operations on a designated test card only after review.

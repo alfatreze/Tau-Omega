@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { Comparison, Core, JournalSummary, LibraryScan, MediaScan, Plan, Problem, Setting, SyncReport } from './types';
+import type { Comparison, Core, JournalSummary, LibraryScan, MediaScan, Plan, PlaylistPlan, Problem, Setting, SyncReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -11,6 +11,12 @@ export const executeCoreCopy = (source: string, destination: string, confirmatio
 export const executeCoreMove = (source: string, destination: string, confirmation: string, backupPath: string, manifestPath: string, jobId: string) => invoke<SyncReport>('execute_core_move', { source, destination, confirmation, deleteConfirmation: confirmation, backupPath, manifestPath, jobId });
 export const scanMedia = (path: string, jobId: string) => invoke<MediaScan>('scan_media', { path, jobId });
 export const exportPlaylist = (mediaRoot: string, playlistName: string, output: string) => invoke<void>('export_playlist', { mediaRoot, playlistName, output });
+export const planPlaylistWrite = (path: string, file: string, tracks: string[]) => invoke<PlaylistPlan>('plan_playlist_write', { path, file, tracks });
+export const executePlaylistWrite = (path: string, file: string, tracks: string[], confirmation: string) => invoke<void>('execute_playlist_write', { path, file, tracks, confirmation });
+export const planPlaylistRename = (path: string, oldFile: string, newFile: string) => invoke<PlaylistPlan>('plan_playlist_rename', { path, oldFile, newFile });
+export const executePlaylistRename = (path: string, oldFile: string, newFile: string, confirmation: string) => invoke<void>('execute_playlist_rename', { path, oldFile, newFile, confirmation });
+export const planPlaylistImport = (path: string, source: string, destFile: string) => invoke<PlaylistPlan>('plan_playlist_import', { path, source, destFile });
+export const executePlaylistImport = (path: string, source: string, destFile: string, confirmation: string) => invoke<void>('execute_playlist_import', { path, source, destFile, confirmation });
 export const findProblems = (path: string) => invoke<Problem[]>('find_problems', { path });
 export const readJournal = (path: string) => invoke<unknown>('read_journal', { path });
 export const listJournals = (dir: string) => invoke<JournalSummary[]>('list_journals', { dir });
