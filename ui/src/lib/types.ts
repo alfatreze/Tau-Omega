@@ -76,3 +76,6 @@ export type TaudUnknownEntry = { tag: number; hex: string };
  * a `TAUD1:` QR code (or its text payload directly), as opposed to
  * `CheckSummary`'s tiny 4-word persisted pass/fail summary. */
 export type TaudReport = { format: number; profile: string; tests: TaudTest[]; entries: TaudEntries; unknown: TaudUnknownEntry[]; verdict: string };
+/** Mirrors `tau_core::screenshots::ScreenshotEntry`: one screenshot found
+ * under a card's `Memories/Screenshots/` folder. */
+export type ScreenshotEntry = { path: string; filename: string; bytes: number; captured_at: string | null };

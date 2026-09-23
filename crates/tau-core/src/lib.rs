@@ -13,6 +13,7 @@ pub mod package;
 pub mod playlist;
 pub mod problems;
 pub mod remove;
+pub mod screenshots;
 pub mod storage;
 pub mod sync;
 pub mod taud;

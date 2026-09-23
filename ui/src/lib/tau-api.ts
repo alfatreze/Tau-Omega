@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, Setting, SyncReport, TaudReport } from './types';
+import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -32,4 +32,5 @@ export const executePackageInstall = (path: string, card: string, confirmation: 
 export const planRemoveCore = (card: string, coreId: string) => invoke<RemovePlan>('plan_remove_core', { card, coreId });
 export const executeRemoveCore = (card: string, coreId: string, confirmation: string) => invoke<RemoveReport>('execute_remove_core', { card, coreId, confirmation });
 export const readQrReport = (path: string) => invoke<TaudReport | null>('read_qr_report', { path });
+export const listScreenshots = (card: string) => invoke<ScreenshotEntry[]>('list_screenshots', { card });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';
