@@ -1,8 +1,9 @@
 import { invoke } from './backend';
-import type { BackupPlan, CapacityCheck, Comparison, Core, JournalSummary, LibraryScan, MediaScan, Plan, PlaylistPlan, Problem, Setting, SyncReport } from './types';
+import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, Plan, PlaylistPlan, Problem, Setting, SyncReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
+export const readCheckSummary = (path: string) => invoke<CheckSummary | null>('read_check_summary', { path });
 export const planSync = (sources: string[], destination: string, embedCovers: boolean) => invoke<Plan>('plan_sync', { sources, destination, embedCovers });
 export const executeSync = (sources: string[], destination: string, confirmation: string, manifestPath: string, embedCovers: boolean, jobId: string) => invoke<SyncReport>('execute_sync', { sources, destination, confirmation, manifestPath, embedCovers, jobId });
 export const compareMedia = (left: string, right: string) => invoke<Comparison>('compare_media', { left, right });

@@ -40,3 +40,7 @@ export type CapacityCheck = { space: VolumeSpace; bytes_needed: number; margin_b
  * command yet -- see STATUS_HANDOFF.md item 5. */
 export type BackupItem = { relative: string; state: 'only_left' | 'only_right' | 'different' | 'identical'; bytes: number };
 export type BackupPlan = { source: string; destination: string; items: BackupItem[]; new_files: number; updated_files: number; unchanged_files: number; destination_only_files: number; bytes_to_write: number };
+/** Mirrors `tau_core::diag::CheckSummary`: a decoded firmware Check-report
+ * summary from persist ids 20-23. `null` (not this type) means those ids
+ * don't currently hold one -- the normal case, not an error. */
+export type CheckSummary = { profile: string; run: number; verdict: string; passed: string[]; failed: string[]; worst_access_cycles: number; cold_cycles_per_word: number; late_underruns: number; draw_stall_ms: number; last_load_s: number; library_error: number; cold_error: number; firmware_minor: number };

@@ -259,13 +259,34 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   Compare-cores plan reviews also gained an inline capacity-check line (fits/doesn't fit + free
   space) next to their existing plan summaries. 7 new engine tests; verified in a browser against
   synthetic data (a plan that doesn't fit on Backup, one that fits on Sync).
+- **Fixed 2026-09-23:** `read_persisted_settings` never actually read a real card. It looked for
+  `variables` at the JSON root, but the real APF layout nests it under `interact_persist`
+  (`{"interact_persist": {"magic": "...", "variables": [...]}}`) — found only because real
+  hardware-captured `interact_persist.json` files were copied in as fixtures instead of trusting the
+  existing hand-written one, the same class of bug `slots_have_library` had (`FIRMWARE_SYNC.md`'s own
+  closing lesson, now proven twice). The Settings screen has silently shown nothing from a real card
+  since it was written. Fixed by checking `/interact_persist/variables` first, falling back to a bare
+  top-level `variables` for older hand-written fixtures/tools. Also added
+  `tau_core::diag::{decode_check_summary, read_check_summary}` (see "Deferred" below) and wired a
+  "Diagnostic Check summary" card into `SettingsView.svelte`, shown only when persist ids 20-23
+  actually decode as one. Verified against the real fixtures in the browser.
 
 ## Deferred because validation/fixtures are required
 
 - Real SD-card write/eject validation.
-- Core install/update/remove against real package zips and staging-card fixtures.
-- Firmware diagnostic-record decoding: docs point to an external Python decoder/firmware source, but its byte format was not copied into `Tau Omega`.
-- Screenshot/log discovery and decoding: fixture layouts are not yet supplied.
+- Core install/update/remove against real package zips and staging-card fixtures. Real package zips
+  now exist in the sibling `tau-alpha` repo's `release/` (e.g. `alfatreze.TAU_0.4.0_2026-09-22.zip`,
+  15 files, the exact `Cores/Assets/Platforms` shape `inspect_card` already understands) — not yet
+  pulled in as a Tau Omega fixture or built against.
+- **Done 2026-09-23:** the persisted Check-report summary (persist ids 20-23) is decoded —
+  `tau_core::diag::{decode_check_summary, read_check_summary}`, a byte-exact port of
+  `tau-alpha/tools/decode_tau_suite.py`'s `unpack_words`, tested against three real hardware-captured
+  `interact_persist.json` fixtures in `testdata/interact_persist/` (all passed, some failed, and the
+  legacy-overload rejection case). See "Known issues and incomplete wiring" below. The full TAUD1
+  QR/text record format (base64 + CRC32 TLV, `parse_record`) is not ported — no real QR screenshot
+  fixture exists yet to test it against, and it needs a `base64` dependency decision first.
+- Screenshot/log discovery and decoding: no real hardware screenshot fixtures found yet (only doc
+  illustrations); needed both for QR-based Check decoding and for any screenshot-driven diagnostics.
 - Real device-specific capability verification.
 
 ## Next recommended implementation order

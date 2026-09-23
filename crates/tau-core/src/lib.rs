@@ -76,6 +76,7 @@ pub enum ErrorCode {
     Json = 43,
     Cancelled = 44,
     NotFound = 45,
+    NotACheckSummary = 46,
 }
 
 impl ErrorCode {
@@ -118,6 +119,7 @@ impl TryFrom<u16> for ErrorCode {
             43 => Self::Json,
             44 => Self::Cancelled,
             45 => Self::NotFound,
+            46 => Self::NotACheckSummary,
             _ => return Err(()),
         })
     }
