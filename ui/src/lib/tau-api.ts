@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { Comparison, Core, JournalSummary, LibraryScan, MediaScan, Plan, PlaylistPlan, Problem, Setting, SyncReport } from './types';
+import type { BackupPlan, CapacityCheck, Comparison, Core, JournalSummary, LibraryScan, MediaScan, Plan, PlaylistPlan, Problem, Setting, SyncReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -23,4 +23,6 @@ export const listJournals = (dir: string) => invoke<JournalSummary[]>('list_jour
 export const getReportsDir = () => invoke<string | null>('get_reports_dir');
 export const setReportsDir = (path: string) => invoke<void>('set_reports_dir', { path });
 export const scanLibrary = (path: string, jobId: string) => invoke<LibraryScan>('scan_library', { path, jobId });
+export const checkStorageCapacity = (path: string, bytesNeeded: number) => invoke<CapacityCheck>('check_storage_capacity', { path, bytesNeeded });
+export const planBackup = (source: string, destination: string) => invoke<BackupPlan>('plan_backup', { source, destination });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';

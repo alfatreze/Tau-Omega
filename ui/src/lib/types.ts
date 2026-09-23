@@ -32,3 +32,11 @@ export type SyncReport = { plan_id: string; copied: number; unchanged: number; b
 export type ApiError = { code: number; message: string };
 /** Mirrors `tau_core::Progress`, delivered as a `"tau://progress"` window event. */
 export type ProgressEvent = { job_id: string; stage: string; done: number; total: number; path: string | null };
+/** Mirrors `tau_core::storage::{VolumeSpace, CapacityCheck}`. */
+export type VolumeSpace = { total_bytes: number; available_bytes: number };
+export type CapacityCheck = { space: VolumeSpace; bytes_needed: number; margin_bytes: number; fits: boolean };
+/** Mirrors `tau_core::backup::{BackupItem, BackupPlan}`: a read-only dry-run
+ * preview of backing up one folder onto another. There is no execute
+ * command yet -- see STATUS_HANDOFF.md item 5. */
+export type BackupItem = { relative: string; state: 'only_left' | 'only_right' | 'different' | 'identical'; bytes: number };
+export type BackupPlan = { source: string; destination: string; items: BackupItem[]; new_files: number; updated_files: number; unchanged_files: number; destination_only_files: number; bytes_to_write: number };

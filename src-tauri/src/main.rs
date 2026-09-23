@@ -403,6 +403,22 @@ fn plan_core_copy(source: String, destination: String) -> Result<SyncPlanView, T
     Ok(SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, warnings: plan.warnings })
 }
 
+/// Whether a plan's `bytes_needed` fits at `path`'s volume, with the
+/// engine's own default safety margin. Read-only: this never reserves
+/// space, so an executing plan still handles a full-disk failure itself.
+#[tauri::command]
+fn check_storage_capacity(path: String, bytes_needed: u64) -> Result<tau_core::storage::CapacityCheck, TauError> {
+    tau_core::storage::check_capacity(Path::new(&path), bytes_needed, tau_core::storage::DEFAULT_MARGIN_BYTES)
+}
+
+/// Plans backing up an arbitrary folder onto another -- a dry-run preview
+/// only (`STATUS_HANDOFF.md` item 5); there is deliberately no
+/// `execute_backup` yet.
+#[tauri::command]
+fn plan_backup(source: String, destination: String) -> Result<tau_core::backup::BackupPlan, TauError> {
+    tau_core::backup::plan(Path::new(&source), Path::new(&destination))
+}
+
 #[tauri::command]
 fn execute_sync(sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
     let plan = make_plan(sources, destination, embed_covers)?;
@@ -436,7 +452,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

@@ -238,6 +238,27 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   dropped-lines list) sections, each with its own plan/review/confirm flow. 7 new engine tests;
   verified end to end in a browser against synthetic scan/plan data (reorder swap+save, import with
   2 matched/2 dropped lines).
+- **Fixed 2026-09-23:** Storage planning and a generic backup dry-run, both read-only (per
+  `IMPLEMENTATION_PLAN.md`'s phase-2 "safe dry-run now; validation later" — an execute path for
+  backup is deliberately not built; that's real-card-write territory, item 7). New
+  `tau_core::storage::{VolumeSpace, CapacityCheck, check_capacity}` reports free/total space on a
+  path's volume (walking up to the nearest existing ancestor for a destination that doesn't exist
+  yet) and whether a plan's `bytes_to_write` fits after a 16 MiB safety margin. This needed the
+  `fs4` crate (owner decision, since std has no cross-platform statvfs equivalent and this crate's
+  audited "no `process::Command`" property rules out shelling out to `df`) — a real jump from
+  `tau-core`'s usual 3 dependencies to 4 direct (+7 transitive via `rustix`/`windows-sys`), scoped
+  to `--no-default-features --features sync` and written up in `DEPENDENCIES.md`. New
+  `tau_core::backup::{BackupItem, BackupPlan, plan}`: unlike `compare::media_roots`, `source`/
+  `destination` are not required to be `Assets/<platform>/common` media roots (a backup target is
+  commonly just a folder on an external drive), and a destination that doesn't exist yet is treated
+  as "nothing to compare against" rather than an error; reuses `compare::files_by_relative_path`
+  (now `pub(crate)`) rather than re-implementing the walk-and-hash logic. New Tauri commands
+  `check_storage_capacity`, `plan_backup`. New "Backup" nav page (`BackupView.svelte`): plan a
+  folder-to-folder backup, see new/updated/unchanged/destination-only counts, bytes to write, the
+  capacity check, and the full item list — framed explicitly as preview-only. The existing Sync and
+  Compare-cores plan reviews also gained an inline capacity-check line (fits/doesn't fit + free
+  space) next to their existing plan summaries. 7 new engine tests; verified in a browser against
+  synthetic data (a plan that doesn't fit on Backup, one that fits on Sync).
 
 ## Deferred because validation/fixtures are required
 
@@ -262,7 +283,10 @@ below is blocked on it. Next:
    2026-09-23** — see "Known issues and incomplete wiring" above.
 4. ~~Add playlist create/rename/reorder/import plan flows.~~ **Done 2026-09-23** — see "Known
    issues and incomplete wiring" above.
-5. Add storage planning and backup/package dry-run views.
+5. ~~Add storage planning and backup/package dry-run views.~~ **Storage planning and backup dry-run
+   done 2026-09-23** — see "Known issues and incomplete wiring" above. Package dry-run stays out of
+   scope until item 6's fixtures arrive (it needs the same zip-reading groundwork as real package
+   install, so it isn't worth building twice).
 6. Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source fixtures are provided.
 7. Validate write operations on a designated test card only after review.
 
