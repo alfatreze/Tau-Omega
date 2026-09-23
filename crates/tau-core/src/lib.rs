@@ -9,6 +9,7 @@ pub mod diag;
 pub mod duplicates;
 pub mod journal;
 pub mod playlist;
+pub mod problems;
 pub mod sync;
 
 use crc32fast::hash as crc32;

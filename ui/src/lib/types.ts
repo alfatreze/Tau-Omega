@@ -7,7 +7,8 @@ export type Difference = { relative: string; state: 'only_left' | 'only_right' |
 export type Comparison = { left: string; right: string; only_left: number; only_right: number; different: number; identical: number; differences: Difference[] };
 export type Playlist = { name: string; tracks: number };
 export type MediaScan = { playlists: Playlist[]; warnings: Warning[] };
-export type DuplicateGroup = { files: string[] };
+export type ProblemKind = 'duplicate' | 'missing_tag' | 'unsupported_format' | 'path_issue' | 'missing_cover';
+export type Problem = { kind: ProblemKind; files: string[]; message: string };
 export type TrackRow = { rel: string; title: string; artist: string; album: string; secs: number; format: string };
 export type LibraryScan = { tracks: TrackRow[]; playlists: Playlist[]; warnings: Warning[] };
 /** The engine's own `tau_core::sync::SyncReport`, returned directly from

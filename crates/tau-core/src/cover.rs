@@ -45,6 +45,94 @@ pub fn validate_jpeg_cover(cover: &Path) -> Result<(), TauError> {
     validate_jpeg(&fs::read(cover)?)
 }
 
+/// Whether a media file already carries embedded cover art: an MP3 APIC
+/// frame (any ID3v2 major version) or a FLAC PICTURE block. Read-only, used
+/// by the Problems screen to tell apart tracks that already have art from
+/// ones that would need a folder cover. Returns `Ok(false)` rather than an
+/// error for anything unreadable or malformed, since a broken tag is a
+/// separate, already-reported problem.
+pub fn has_embedded_cover(path: &Path) -> Result<bool, TauError> {
+    let data = fs::read(path)?;
+    if data.starts_with(b"ID3") {
+        return Ok(id3_has_apic(&data).unwrap_or(false));
+    }
+    if data.starts_with(b"fLaC") {
+        return Ok(flac_has_picture(&data).unwrap_or(false));
+    }
+    Ok(false)
+}
+
+fn id3_has_apic(data: &[u8]) -> Option<bool> {
+    let major = *data.get(3)?;
+    if !matches!(major, 2..=4) {
+        return Some(false);
+    }
+    let size = syncsafe(data.get(6..10)?) as usize;
+    let end = 10 + size;
+    if end > data.len() {
+        return Some(false);
+    }
+    let mut position = 10;
+    if major == 2 {
+        // ID3v2.2 frames: 3-char id, 3-byte size, no flags.
+        while position + 6 <= end {
+            let id = data.get(position..position + 3)?;
+            if id == b"\0\0\0" {
+                break;
+            }
+            let length = ((data[position + 3] as usize) << 16)
+                | ((data[position + 4] as usize) << 8)
+                | data[position + 5] as usize;
+            if id == b"PIC" {
+                return Some(true);
+            }
+            position += 6 + length;
+        }
+        return Some(false);
+    }
+    while position + 10 <= end {
+        let header = data.get(position..position + 10)?;
+        if header[0] == 0 {
+            break;
+        }
+        let length = if major == 4 {
+            syncsafe(&header[4..8]) as usize
+        } else {
+            u32::from_be_bytes(header[4..8].try_into().ok()?) as usize
+        };
+        if length == 0 || position + 10 + length > end {
+            break;
+        }
+        if &header[..4] == b"APIC" {
+            return Some(true);
+        }
+        position += 10 + length;
+    }
+    Some(false)
+}
+
+fn flac_has_picture(data: &[u8]) -> Option<bool> {
+    let mut position = 4;
+    loop {
+        let header = *data.get(position)?;
+        let kind = header & 0x7f;
+        let length = ((*data.get(position + 1)? as usize) << 16)
+            | ((*data.get(position + 2)? as usize) << 8)
+            | *data.get(position + 3)? as usize;
+        position += 4;
+        if position + length > data.len() {
+            return Some(false);
+        }
+        if kind == 6 {
+            return Some(true);
+        }
+        position += length;
+        if header & 0x80 != 0 {
+            return Some(false);
+        }
+    }
+}
+
 /// Embeds a baseline JPEG as the only MP3 APIC frame in a copied file.
 /// Existing non-art ID3 frames and audio bytes are retained verbatim.
 pub fn embed_mp3_copy(source: &Path, cover: &Path, output: &Path) -> Result<(), TauError> {
