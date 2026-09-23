@@ -5,24 +5,36 @@ Updated 2026-09-23. All implementation work is contained in `Tau Omega/`.
 ## Read these first
 
 1. This file — state, known issues, what to do next.
-2. `DECISIONS.md` — D-001..D-012, including the integration target and the licence boundary.
+2. `DECISIONS.md` — D-001..D-013, including the integration target, the licence boundary, and the
+   release artifact versioning/layout rule.
 3. `PORTABILITY_AUDIT.md` — every P0/P1/P2 item, all done as of 2026-09-22.
 4. `FIRMWARE_SYNC.md` — what we assume about tau-alpha, last verified 2026-09-22 against v0.4.0.
 
 This folder is a Git repository, pushed to **github.com/alfatreze/Tau-Omega** (public), branch
 `main`, with branch protection (PRs required, admin can bypass) and a GitHub Actions CI workflow
 (`cargo fmt`/`clippy`/`test` — default and `serde`-feature builds — across macOS/Windows/Linux, plus
-`npm run check`). Tagged releases: `v0.1.0`, `v0.2.0` (version bump only). Current version across
-`Cargo.toml`/`src-tauri/Cargo.toml`/`src-tauri/tauri.conf.json`/`ui/package.json` is `0.2.0`. The
+`npm run check`). **Standing instruction (session, 2026-09-23): push plain commits straight to
+`main` going forward, no PRs, no waiting on CI** — that superseded the PR workflow CI was originally
+set up for. Tagged releases: `v0.1.0`, `v0.2.0`, `v0.3.0`. Current version across
+`Cargo.toml`/`src-tauri/Cargo.toml`/`src-tauri/tauri.conf.json`/`ui/package.json` is `0.3.0`. The
 firmware project is the sibling `../tau-alpha`, which is read-only from here (D-010).
+
+Release artifacts live under `releases/v{version}/` (`DECISIONS.md` D-013) — show a directory
+preview and get approval before committing a new one.
 
 ## Current deliverable
 
-The macOS app bundle is produced at:
-
-`src-tauri/target/release/bundle/macos/Tau Omega.app`
-
-The bundle uses the `assets/appicon.png` icon and embedded Space Grotesk font.
+**v0.3.0** (tagged, committed): `releases/v0.3.0/` — a macOS aarch64 `.app`, zipped
+(`Tau Omega_0.3.0_aarch64.app.zip`), `SHA256SUMS.txt`, `RELEASE_NOTES.md`. No `.dmg` this release —
+the bundler's `bundle_dmg.sh` hit a local Finder/AppleScript automation permission error on this
+machine (macOS 26.6.2, "Can't set statusbar visible... (-10006)"), unrelated to the app; unresolved,
+not investigated further this session. To rebuild: `cd ui && npm run build`, then from `src-tauri`,
+`cargo tauri build --bundles app --config '{"build":{"beforeBuildCommand":""}}'` (the default
+`beforeBuildCommand` — `npm run build` — fails because it runs from the repo root, which has no
+`package.json`; build the frontend manually first instead). If `cargo build`/`cargo tauri build`
+fails referencing a `.../Tau Browser/...` path that no longer exists, that's a stale build-script
+cache from the pre-rename repo (`rm -rf src-tauri/target/release/build/tauri-* src-tauri/target/release/build/tau-omega-*`, or the debug-profile equivalent under `target/debug/build/`, then rebuild) —
+seen and worked around twice now (clippy, and this release build), never fixed at the root.
 
 ## Implemented
 
@@ -154,9 +166,12 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Validation
 
-- `cargo test` (workspace): 33 tests passing without `--features tau-core/serde` (20 `tau-core`
-  unit, 6 index conformance, 4 card inspection, 1 fuzz-lite, 2 testkit), 39 with it (adds 6 in the
-  feature-gated `serde_feature.rs`).
+- `cargo test` (workspace): 46 `tau-core` unit tests passing as of 2026-09-23 (grown from 20 across
+  this session's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag —
+  each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
+  inspection, 1 fuzz-lite, 2 testkit; +6 more in the feature-gated `serde_feature.rs` (only compiled
+  with `--features tau-core/serde`). Re-run `cargo test --workspace` for the current exact count
+  rather than trusting this number as it ages.
 - `npm run check`: zero Svelte errors on the last validation.
 - `cargo clippy --all-targets`: clean apart from seven pre-existing `clone`-on-slice warnings in
   `sync.rs` test code (one more than after P0-3, added by the new plan-id test following the same
