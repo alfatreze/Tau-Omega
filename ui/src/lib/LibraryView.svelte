@@ -35,7 +35,7 @@
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 </script>
-<section class="jobs-panel page" aria-labelledby="library-title">
+<section class="page" aria-labelledby="library-title">
   <header><div><p class="eyebrow">LIBRARY</p><h1 id="library-title">Library overview</h1><p class="lede">A read-only, searchable view of the media Tau Omega can index. Nothing here is written to a card.</p></div></header>
   <section class="settings-card"><div class="picker-row"><input bind:value={path} placeholder="/Users/me/Music"/><button class="picker" on:click={choose}>Choose</button><button class="primary" disabled={loading} on:click={inspect}>{loading ? 'Scanning…' : 'Inspect'}</button></div>{#if loading}<p class="notice" role="status">{progress || 'starting…'} <button class="quiet" on:click={cancel}>Cancel</button></p>{:else}<p class="notice" role="status">{notice}</p>{/if}</section>
   {#if scan}

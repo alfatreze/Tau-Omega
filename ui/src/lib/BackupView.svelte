@@ -9,7 +9,7 @@
   const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   const STATE_LABEL: Record<string, string> = { only_left: 'New', different: 'Would update', identical: 'Unchanged', only_right: 'Destination only' };
 </script>
-<section class="jobs-panel page" aria-labelledby="backup-title">
+<section class="page" aria-labelledby="backup-title">
   <header><div><p class="eyebrow">STORAGE</p><h1 id="backup-title">Backup</h1><p class="lede">Preview what backing up a folder onto another would do, and whether it fits. This is a dry run: nothing is copied yet.</p></div></header>
 
   <section class="settings-card">

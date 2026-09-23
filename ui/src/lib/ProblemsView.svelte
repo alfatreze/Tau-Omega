@@ -14,7 +14,7 @@
 
   $: byKind = ORDER.map((kind) => ({ kind, items: (problems ?? []).filter((p) => p.kind === kind) })).filter((g) => g.items.length);
 </script>
-<section class="jobs-panel page" aria-labelledby="problems-title">
+<section class="page" aria-labelledby="problems-title">
   <header><div><p class="eyebrow">LIBRARY HEALTH</p><h1 id="problems-title">Problems</h1><p class="lede">Duplicate content, missing tags, path issues a card sync would rewrite or collide on, and folders with no cover art. Nothing is changed or deleted.</p></div></header>
   <section class="settings-card"><div class="picker-row"><input bind:value={path} placeholder="/Users/me/Music"/><button class="picker" on:click={choose}>Choose</button><button class="primary" disabled={loading} on:click={scan}>{loading ? 'Scanning…' : 'Find problems'}</button></div><p class="notice" role="status">{notice}</p></section>
   {#if problems?.length}

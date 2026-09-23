@@ -13,7 +13,7 @@
   const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   const STATE_LABEL: Record<string, string> = { only_left: 'New', different: 'Update', identical: 'Unchanged', only_right: 'Card only' };
 </script>
-<section class="jobs-panel page" aria-labelledby="package-title">
+<section class="page" aria-labelledby="package-title">
   <header><div><p class="eyebrow">CORE PACKAGES</p><h1 id="package-title">Install a core package</h1><p class="lede">Inspect a release zip, plan what installing or updating it would change, then confirm. Every write is verified against the zip immediately before and after.</p></div></header>
 
   <section class="settings-card">

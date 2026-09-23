@@ -12,7 +12,7 @@
   const date = (unix: number) => unix ? new Date(unix * 1000).toLocaleString() : '—';
   const KIND_LABELS: Record<string, string> = { sync: 'Library sync', mirror: 'Mirror sync', core_copy: 'Core copy', core_move: 'Core move' };
 </script>
-<section class="jobs-panel page" aria-labelledby="jobs-title">
+<section class="page" aria-labelledby="jobs-title">
   <header><div><p class="eyebrow">ACTIVITY</p><h1 id="jobs-title">Recent jobs</h1><p class="lede">Operations completed during this session, plus the durable history in your reports directory.</p></div><button class="primary" on:click={startSync}>Start a sync</button></header>
 
   <section class="settings-card">
