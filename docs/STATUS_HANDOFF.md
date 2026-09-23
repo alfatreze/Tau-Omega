@@ -169,9 +169,7 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Known issues and incomplete wiring
 
-- Recent Jobs can load a selected journal but does not yet discover journals automatically or persist a configurable report directory.
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
-- Jobs shown from a loaded journal are a concise summary, not a full journal-detail view.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
 - **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2/P1-3/P2):** every item in `PORTABILITY_AUDIT.md` is
   now done — the three P0 boundary defects (duplicated root-prefix/index-status logic,
@@ -206,6 +204,19 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   with counts; verified in a browser against synthetic data covering all five kinds. FAT32-specific
   checks are not covered — nothing in this engine writes to a card yet, so there is no FAT32 path to
   validate against.
+- **Fixed 2026-09-23:** Job history now persists across restarts through a configured reports
+  directory instead of one-file-at-a-time manual loading. `journal::execute_to_journal` and
+  `execute_core_move_to_journal` now record a `kind` (`sync`/`mirror`/`core_copy`/`core_move`) in
+  every journal, and new `journal::list_journals` lists every journal in a directory, newest first,
+  skipping anything unreadable rather than failing the whole listing. The Tauri adapter persists the
+  user's chosen directory as one small file in this app's own config directory (`get_reports_dir`/
+  `set_reports_dir`, via `tauri::Manager::path().app_config_dir()`) and adds `list_journals`. In
+  `App.svelte`, once a reports directory is set, `runSync`/`runCoreCopy`/`runCoreMove` write their
+  journal there automatically (a generated `{dir}/{timestamp}-{kind}.json` path) instead of the
+  manual manifest field, and the Jobs page auto-lists history from it with a "Details" button per
+  entry opening the full journal JSON — replacing the old one-line summary. The manual single-file
+  loader stays, for a journal outside the configured directory. Verified against synthetic journal
+  data in a browser (list, kind labels, state, and the detail panel).
 
 ## Deferred because validation/fixtures are required
 
@@ -226,7 +237,8 @@ below is blocked on it. Next:
    2026-09-23** — see "Known issues and incomplete wiring" above.
 2. ~~Expand Problems checks from duplicates to format/tag/path/cover issues.~~ **Done 2026-09-23** —
    see "Known issues and incomplete wiring" above.
-3. Persist Job history through a configured reports directory and detail view.
+3. ~~Persist Job history through a configured reports directory and detail view.~~ **Done
+   2026-09-23** — see "Known issues and incomplete wiring" above.
 4. Add playlist create/rename/reorder/import plan flows.
 5. Add storage planning and backup/package dry-run views.
 6. Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source fixtures are provided.

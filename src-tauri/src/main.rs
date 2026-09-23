@@ -9,7 +9,7 @@ use std::{
     },
 };
 use tau_core::{compare::MediaComparison, ErrorCode, IndexStatus, ProgressObserver, TauError};
-use tauri::{Emitter, State, Window};
+use tauri::{Emitter, Manager, State, Window};
 
 // P1-1: with tau-core's optional `serde` feature enabled, most of this
 // adapter's former hand-written DTOs are gone -- `TauError`, `Warning`,
@@ -183,6 +183,42 @@ fn read_journal(path: String) -> Result<Value, TauError> {
 }
 
 #[tauri::command]
+fn list_journals(dir: String) -> Result<Vec<tau_core::journal::JournalSummary>, TauError> {
+    tau_core::journal::list_journals(dir)
+}
+
+const REPORTS_DIR_FILE: &str = "reports_dir.txt";
+
+/// Where Tau Omega remembers the user's chosen reports directory: one small
+/// text file in this app's own config directory (Tauri's per-OS location),
+/// not a card or media root. Reading a config dir that does not exist yet
+/// (a first run) is `Some(None)`, not an error.
+#[tauri::command]
+fn get_reports_dir(app: tauri::AppHandle) -> Result<Option<String>, TauError> {
+    let path = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?
+        .join(REPORTS_DIR_FILE);
+    match std::fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents.trim().to_string())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(TauError::from(error)),
+    }
+}
+
+#[tauri::command]
+fn set_reports_dir(app: tauri::AppHandle, path: String) -> Result<(), TauError> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?;
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(REPORTS_DIR_FILE), path.trim())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn scan_media(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<MediaScanView, TauError> {
     let scan = with_job(&window, &jobs, job_id, |progress| {
         tau_core::scan_dir_with_progress(Path::new(&path), true, progress)
@@ -269,7 +305,7 @@ fn execute_sync(sources: Vec<String>, destination: String, confirmation: String,
     let plan = make_plan(sources, destination, embed_covers)?;
     let manifest = PathBuf::from(manifest_path);
     with_job(&window, &jobs, job_id, |progress| {
-        tau_core::journal::execute_to_journal(&plan, &confirmation, &manifest, progress)
+        tau_core::journal::execute_to_journal(&plan, &confirmation, "sync", &manifest, progress)
     })
 }
 
@@ -277,7 +313,7 @@ fn execute_sync(sources: Vec<String>, destination: String, confirmation: String,
 fn execute_core_copy(source: String, destination: String, confirmation: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
     let plan = make_core_copy_plan(source, destination)?;
     with_job(&window, &jobs, job_id, |progress| {
-        tau_core::journal::execute_to_journal(&plan, &confirmation, Path::new(&manifest_path), progress)
+        tau_core::journal::execute_to_journal(&plan, &confirmation, "core_copy", Path::new(&manifest_path), progress)
     })
 }
 
@@ -297,7 +333,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
