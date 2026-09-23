@@ -327,10 +327,17 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   `tau-alpha/tools/decode_tau_suite.py`'s `unpack_words`, tested against three real hardware-captured
   `interact_persist.json` fixtures in `testdata/interact_persist/` (all passed, some failed, and the
   legacy-overload rejection case). See "Known issues and incomplete wiring" below. The full TAUD1
-  QR/text record format (base64 + CRC32 TLV, `parse_record`) is not ported — no real QR screenshot
-  fixture exists yet to test it against, and it needs a `base64` dependency decision first.
-- Screenshot/log discovery and decoding: no real hardware screenshot fixtures found yet (only doc
-  illustrations); needed both for QR-based Check decoding and for any screenshot-driven diagnostics.
+  QR/text record format (base64 + CRC32 TLV, `parse_record`) is not ported yet — it needs an
+  image-decoding + QR-reading crate, a real dependency-cost decision to make explicitly with the
+  owner first (per `DECISIONS.md`'s `fs4`/`zip` precedent). **A real QR screenshot fixture now
+  exists** (see below) so the decoder can be tested the moment that dependency call is made.
+- **Corrected 2026-09-23:** "no real hardware screenshot fixtures found yet" (this line, and
+  `FIRMWARE_SYNC.md`) was wrong — nobody had checked the Pocket's own `Memories/Screenshots` save
+  folder on the card itself. 13 real Check/QR screenshots (progress, result, and QR pages across
+  four different runs, two genuine failures included) were recovered from there and are now in
+  `testdata/screenshots/` (see that folder's README; full provenance and decode cross-check in the
+  sibling `tau-alpha` repo's `docs/AUDIT_TRAIL.md` B-133). Screenshot/log *discovery* (finding these
+  automatically from a mounted card, as opposed to testing against a fixed set) is still unbuilt.
 - Real device-specific capability verification.
 
 ## Next recommended implementation order
@@ -354,8 +361,10 @@ below is blocked on it. Next:
    install, so it isn't worth building twice).
 6. Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source
    fixtures are provided. **Diagnostics (Check summary), core package install/update, and core
-   removal done 2026-09-23** — see "Known issues and incomplete wiring" above. Still open: the full
-   TAUD1 QR/text record format, and screenshot/log discovery (no real fixtures found yet for either).
+   removal done 2026-09-23** — see "Known issues and incomplete wiring" above. **Real QR/screenshot
+   fixtures now exist (2026-09-23, `testdata/screenshots/`)** — still open: the full TAUD1 QR/text
+   record format itself (needs the image/QR dependency decision above) and screenshot/log
+   *discovery* (finding screenshots on a card automatically, not just testing against a fixed set).
 7. Validate write operations on a designated test card only after review.
 
 ## Safety and UX baseline
