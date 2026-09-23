@@ -17,7 +17,7 @@
   export let importSource = ''; export let importDestFile = ''; export let importPlan: PlaylistPlan | null = null; export let importNotice = '';
   export let chooseImportSource: () => void; export let reviewImport: () => void; export let confirmImport: () => void;
 </script>
-<section class="jobs-panel page" aria-labelledby="playlists-title">
+<section class="page" aria-labelledby="playlists-title">
   <header><div><p class="eyebrow">PLAYLISTS</p><h1 id="playlists-title">Playlists</h1><p class="lede">Read, create, rename, reorder, and import ordinary `.m3u` files. Every change is planned and reviewed before anything is written.</p></div></header>
   <section class="settings-card"><div class="picker-row"><input bind:value={path} placeholder="/Users/me/Music"/><button class="picker" on:click={choose}>Choose</button><button class="primary" on:click={scan}>Scan</button></div><p class="notice" role="status">{notice}</p></section>
 
