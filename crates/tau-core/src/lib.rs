@@ -468,6 +468,10 @@ pub struct Entry {
 pub struct Playlist {
     pub name: String,
     pub rel_ids: Vec<usize>,
+    /// The `.m3u` file this playlist was read from, relative to the media
+    /// root -- lets a front-end target rename/reorder/import operations at a
+    /// specific file without re-deriving the scan's own naming rules.
+    pub file: String,
 }
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -799,7 +803,16 @@ fn scan_playlists(
             n += 1;
         }
         used.insert(name.to_lowercase());
-        output.push(Playlist { name, rel_ids: ids });
+        let rel_file = file
+            .strip_prefix(common)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        output.push(Playlist {
+            name,
+            rel_ids: ids,
+            file: rel_file,
+        });
     }
     Ok(output)
 }

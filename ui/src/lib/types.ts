@@ -9,7 +9,15 @@ export type JournalSummary = { path: string; kind: string; state: string; record
 export type Difference = { relative: string; state: 'only_left' | 'only_right' | 'different' | 'identical'; left_bytes: number | null; right_bytes: number | null };
 export type Comparison = { left: string; right: string; only_left: number; only_right: number; different: number; identical: number; differences: Difference[] };
 export type Playlist = { name: string; tracks: number };
-export type MediaScan = { playlists: Playlist[]; warnings: Warning[] };
+/** The Playlists page's own scan shape: unlike the count-only `Playlist`
+ * above, it needs each track's resolved relative path (to reorder in place
+ * and to target rename/reorder/import at a specific file). */
+export type PlaylistDetail = { name: string; file: string; tracks: string[] };
+export type MediaScan = { playlists: PlaylistDetail[]; warnings: Warning[] };
+/** Mirrors `tau_core::playlist::PlaylistPlan`: a reviewed, not-yet-written
+ * playlist change, following the same plan -> confirm -> execute shape as
+ * `Plan`/`SyncReport`. */
+export type PlaylistPlan = { id: string; file: string; previous_file: string | null; tracks: string[]; dropped: string[]; overwrites_existing: boolean };
 export type ProblemKind = 'duplicate' | 'missing_tag' | 'unsupported_format' | 'path_issue' | 'missing_cover';
 export type Problem = { kind: ProblemKind; files: string[]; message: string };
 export type TrackRow = { rel: string; title: string; artist: string; album: string; secs: number; format: string };

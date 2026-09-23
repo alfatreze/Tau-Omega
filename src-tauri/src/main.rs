@@ -41,8 +41,15 @@ struct ComparisonView {
 }
 #[derive(Serialize)]
 struct PlaylistView { name: String, tracks: usize }
+/// The Playlists page's own scan view: unlike `PlaylistView`, it needs each
+/// playlist's tracks (as media-relative paths, to target rename/reorder/
+/// import at a specific entry and to reorder in place) and `file` -- real
+/// work `tau_core::Playlist` can't do itself, since it only stores `rel_ids`
+/// (indices into a scan's own `entries`, meaningless once that scan is gone).
 #[derive(Serialize)]
-struct MediaScanView { playlists: Vec<PlaylistView>, warnings: Vec<tau_core::Warning> }
+struct PlaylistDetailView { name: String, file: String, tracks: Vec<String> }
+#[derive(Serialize)]
+struct MediaScanView { playlists: Vec<PlaylistDetailView>, warnings: Vec<tau_core::Warning> }
 /// One row for the Library screen's track table: friendly display fields
 /// derived from `Entry::tags` (untouched original tag text, not the
 /// ASCII-folded index encoding `build_index` produces) -- this is
@@ -223,7 +230,103 @@ fn scan_media(path: String, job_id: String, window: Window, jobs: State<JobRegis
     let scan = with_job(&window, &jobs, job_id, |progress| {
         tau_core::scan_dir_with_progress(Path::new(&path), true, progress)
     })?;
-    Ok(MediaScanView { playlists: scan.playlists.into_iter().map(|playlist| PlaylistView { name: playlist.name, tracks: playlist.rel_ids.len() }).collect(), warnings: scan.warnings })
+    let playlists = scan
+        .playlists
+        .into_iter()
+        .map(|playlist| PlaylistDetailView {
+            name: playlist.name,
+            file: playlist.file,
+            tracks: playlist
+                .rel_ids
+                .iter()
+                .filter_map(|&id| scan.entries.get(id).map(|entry| entry.rel.clone()))
+                .collect(),
+        })
+        .collect();
+    Ok(MediaScanView { playlists, warnings: scan.warnings })
+}
+
+fn make_playlist_write_plan(
+    path: &str,
+    file: &str,
+    tracks: &[String],
+) -> Result<tau_core::playlist::PlaylistPlan, TauError> {
+    let common = Path::new(path);
+    let scan = tau_core::scan_dir(common, false)?;
+    tau_core::playlist::plan_write(common, file, tracks, &scan.entries)
+}
+
+/// Plans creating or reordering a playlist -- writing `tracks`, in order, to
+/// `file`. Reordering an existing playlist is the same call with a permuted
+/// `tracks`, so there is no separate "reorder" command.
+#[tauri::command]
+fn plan_playlist_write(
+    path: String,
+    file: String,
+    tracks: Vec<String>,
+) -> Result<tau_core::playlist::PlaylistPlan, TauError> {
+    make_playlist_write_plan(&path, &file, &tracks)
+}
+
+#[tauri::command]
+fn execute_playlist_write(
+    path: String,
+    file: String,
+    tracks: Vec<String>,
+    confirmation: String,
+) -> Result<(), TauError> {
+    let plan = make_playlist_write_plan(&path, &file, &tracks)?;
+    tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
+}
+
+#[tauri::command]
+fn plan_playlist_rename(
+    path: String,
+    old_file: String,
+    new_file: String,
+) -> Result<tau_core::playlist::PlaylistPlan, TauError> {
+    tau_core::playlist::plan_rename(Path::new(&path), &old_file, &new_file)
+}
+
+#[tauri::command]
+fn execute_playlist_rename(
+    path: String,
+    old_file: String,
+    new_file: String,
+    confirmation: String,
+) -> Result<(), TauError> {
+    let plan = tau_core::playlist::plan_rename(Path::new(&path), &old_file, &new_file)?;
+    tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
+}
+
+fn make_playlist_import_plan(
+    path: &str,
+    source: &str,
+    dest_file: &str,
+) -> Result<tau_core::playlist::PlaylistPlan, TauError> {
+    let common = Path::new(path);
+    let scan = tau_core::scan_dir(common, false)?;
+    tau_core::playlist::plan_import(common, Path::new(source), dest_file, &scan.entries)
+}
+
+#[tauri::command]
+fn plan_playlist_import(
+    path: String,
+    source: String,
+    dest_file: String,
+) -> Result<tau_core::playlist::PlaylistPlan, TauError> {
+    make_playlist_import_plan(&path, &source, &dest_file)
+}
+
+#[tauri::command]
+fn execute_playlist_import(
+    path: String,
+    source: String,
+    dest_file: String,
+    confirmation: String,
+) -> Result<(), TauError> {
+    let plan = make_playlist_import_plan(&path, &source, &dest_file)?;
+    tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
 }
 
 #[tauri::command]
@@ -333,7 +436,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
