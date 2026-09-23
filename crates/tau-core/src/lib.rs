@@ -9,6 +9,7 @@ pub mod cover;
 pub mod diag;
 pub mod duplicates;
 pub mod journal;
+pub mod package;
 pub mod playlist;
 pub mod problems;
 pub mod storage;

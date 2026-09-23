@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, Plan, PlaylistPlan, Problem, Setting, SyncReport } from './types';
+import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, Setting, SyncReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -26,4 +26,7 @@ export const setReportsDir = (path: string) => invoke<void>('set_reports_dir', {
 export const scanLibrary = (path: string, jobId: string) => invoke<LibraryScan>('scan_library', { path, jobId });
 export const checkStorageCapacity = (path: string, bytesNeeded: number) => invoke<CapacityCheck>('check_storage_capacity', { path, bytesNeeded });
 export const planBackup = (source: string, destination: string) => invoke<BackupPlan>('plan_backup', { source, destination });
+export const inspectPackage = (path: string) => invoke<PackageManifest>('inspect_package', { path });
+export const planPackageInstall = (path: string, card: string) => invoke<PackagePlan>('plan_package_install', { path, card });
+export const executePackageInstall = (path: string, card: string, confirmation: string) => invoke<PackageReport>('execute_package_install', { path, card, confirmation });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';

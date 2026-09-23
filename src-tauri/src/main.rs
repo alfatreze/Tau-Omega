@@ -433,6 +433,28 @@ fn plan_backup(source: String, destination: String) -> Result<tau_core::backup::
 }
 
 #[tauri::command]
+fn inspect_package(path: String) -> Result<tau_core::package::PackageManifest, TauError> {
+    tau_core::package::inspect(Path::new(&path))
+}
+
+#[tauri::command]
+fn plan_package_install(path: String, card: String) -> Result<tau_core::package::PackagePlan, TauError> {
+    tau_core::package::plan_install(Path::new(&path), Path::new(&card))
+}
+
+#[tauri::command]
+fn execute_package_install(
+    path: String,
+    card: String,
+    confirmation: String,
+) -> Result<tau_core::package::PackageReport, TauError> {
+    let zip_path = Path::new(&path);
+    let card_root = Path::new(&card);
+    let plan = tau_core::package::plan_install(zip_path, card_root)?;
+    tau_core::package::execute_install(zip_path, card_root, &plan, &confirmation)
+}
+
+#[tauri::command]
 fn execute_sync(sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
     let plan = make_plan(sources, destination, embed_covers)?;
     let manifest = PathBuf::from(manifest_path);
@@ -465,7 +487,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
