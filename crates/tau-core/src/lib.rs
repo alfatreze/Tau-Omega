@@ -15,6 +15,7 @@ pub mod problems;
 pub mod remove;
 pub mod storage;
 pub mod sync;
+pub mod taud;
 
 use crc32fast::hash as crc32;
 use serde_json::Value;
@@ -79,6 +80,8 @@ pub enum ErrorCode {
     Cancelled = 44,
     NotFound = 45,
     NotACheckSummary = 46,
+    InvalidTaudRecord = 47,
+    NoQrCodeFound = 48,
 }
 
 impl ErrorCode {
@@ -122,6 +125,8 @@ impl TryFrom<u16> for ErrorCode {
             44 => Self::Cancelled,
             45 => Self::NotFound,
             46 => Self::NotACheckSummary,
+            47 => Self::InvalidTaudRecord,
+            48 => Self::NoQrCodeFound,
             _ => return Err(()),
         })
     }

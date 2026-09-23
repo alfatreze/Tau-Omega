@@ -1,6 +1,7 @@
 # Tau Omega — status handoff
 
-Updated 2026-09-23 (core removal added). All implementation work is contained in `Tau Omega/`.
+Updated 2026-09-23 (core removal, then the full TAUD1 QR decoder, added). All implementation work
+is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -166,9 +167,9 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Validation
 
-- `cargo test` (workspace): 51 `tau-core` unit tests passing as of 2026-09-23 (grown from 20 across
-  this session's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag/Remove
-  — each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
+- `cargo test` (workspace): 58 `tau-core` unit tests passing as of 2026-09-23 (grown from 20 across
+  this session's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag/
+  Remove/taud — each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
   inspection, 1 fuzz-lite, 2 testkit; +6 more in the feature-gated `serde_feature.rs` (only compiled
   with `--features tau-core/serde`). Re-run `cargo test --workspace` for the current exact count
   rather than trusting this number as it ages.
@@ -316,28 +317,37 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   `alfatreze.TAU_0.4.0_2026-09-22.zip` fixture, including one that installs it twice under two core
   ids sharing `Assets/tau` (the same two-Tau-cores-on-one-card shape tau-alpha's own audit trail
   records on real hardware) to verify the shared files survive removing one of them.
+- **Fixed 2026-09-23:** the full TAUD1 QR report is now decoded. New `tau_core::taud` (byte-exact
+  port of `tau-alpha/tools/decode_tau_suite.py`'s `parse_record`/`from_text`): `parse_text`/
+  `parse_record` decode the `{tag u8, length u8, value}` TLV body (build identity, SDRAM/PSRAM cycle
+  histograms, the `CT_AUD` playback window, Decode Profile Sweep entries, and the per-test PASS/FAIL/
+  SKIPPED/N/A list with the CT_BLT busy-permille special case) and validate the CRC32 trailer;
+  `read_qr_text`/`read_qr_report` decode a screenshot PNG (`png` crate) to greyscale, locate the QR
+  grid (`rqrr`, `default-features = false` so it never pulls in a second image crate on top of `png`)
+  and parse its text. Added three dependencies (`base64`, `png`, `rqrr`) after measuring the real
+  transitive cost (~19 new crates, no C/FFI) in a scratch crate and confirming with the owner via
+  `AskUserQuestion`, per `DECISIONS.md`'s `fs4`/`zip` precedent — see `DEPENDENCIES.md`. New
+  `read_qr_report` Tauri command (returns `None`, not an error, when an image simply has no QR code)
+  and a "Full Check report (QR screenshot)" card on the Settings page: choose a screenshot, decode,
+  see every test plus build/SDRAM/PSRAM info — not just the 4-word persisted summary
+  `CheckSummary` already showed. 7 new engine tests against the real screenshots in
+  `testdata/screenshots/`: a FULL-profile pass (13 tests, all decoded fields cross-checked), a real
+  SDRAM-speed FAILURE (verdict, value 506, matching B-060), a USER CHECK short run, a STANDARD run
+  with stress tests, and the non-Check now-playing screenshot correctly reported as "no QR found"
+  rather than a false decode.
 
 ## Deferred because validation/fixtures are required
 
 - Real SD-card write/eject validation.
-- Removing an installed core (`Cores/<id>` plus, only when safe, its `Assets/<platform>` folder) —
-  see "Known issues and incomplete wiring" above for why this is separate from install/update.
+- **Done 2026-09-23:** removing an installed core — see "Known issues and incomplete wiring" above.
 - **Done 2026-09-23:** the persisted Check-report summary (persist ids 20-23) is decoded —
   `tau_core::diag::{decode_check_summary, read_check_summary}`, a byte-exact port of
   `tau-alpha/tools/decode_tau_suite.py`'s `unpack_words`, tested against three real hardware-captured
   `interact_persist.json` fixtures in `testdata/interact_persist/` (all passed, some failed, and the
-  legacy-overload rejection case). See "Known issues and incomplete wiring" below. The full TAUD1
-  QR/text record format (base64 + CRC32 TLV, `parse_record`) is not ported yet — it needs an
-  image-decoding + QR-reading crate, a real dependency-cost decision to make explicitly with the
-  owner first (per `DECISIONS.md`'s `fs4`/`zip` precedent). **A real QR screenshot fixture now
-  exists** (see below) so the decoder can be tested the moment that dependency call is made.
-- **Corrected 2026-09-23:** "no real hardware screenshot fixtures found yet" (this line, and
-  `FIRMWARE_SYNC.md`) was wrong — nobody had checked the Pocket's own `Memories/Screenshots` save
-  folder on the card itself. 13 real Check/QR screenshots (progress, result, and QR pages across
-  four different runs, two genuine failures included) were recovered from there and are now in
-  `testdata/screenshots/` (see that folder's README; full provenance and decode cross-check in the
-  sibling `tau-alpha` repo's `docs/AUDIT_TRAIL.md` B-133). Screenshot/log *discovery* (finding these
-  automatically from a mounted card, as opposed to testing against a fixed set) is still unbuilt.
+  legacy-overload rejection case). See "Known issues and incomplete wiring" below.
+- **Done 2026-09-23:** the full TAUD1 QR report is decoded — `tau_core::taud`, see "Known issues and
+  incomplete wiring" above. Screenshot/log *discovery* (finding screenshots on a card automatically,
+  as opposed to decoding one the user picked) is still unbuilt.
 - Real device-specific capability verification.
 
 ## Next recommended implementation order
@@ -359,12 +369,11 @@ below is blocked on it. Next:
    done 2026-09-23** — see "Known issues and incomplete wiring" above. Package dry-run stays out of
    scope until item 6's fixtures arrive (it needs the same zip-reading groundwork as real package
    install, so it isn't worth building twice).
-6. Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source
-   fixtures are provided. **Diagnostics (Check summary), core package install/update, and core
-   removal done 2026-09-23** — see "Known issues and incomplete wiring" above. **Real QR/screenshot
-   fixtures now exist (2026-09-23, `testdata/screenshots/`)** — still open: the full TAUD1 QR/text
-   record format itself (needs the image/QR dependency decision above) and screenshot/log
-   *discovery* (finding screenshots on a card automatically, not just testing against a fixed set).
+6. ~~Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source
+   fixtures are provided.~~ **Done 2026-09-23** — see "Known issues and incomplete wiring" above.
+   Diagnostics (Check summary and now the full TAUD1 QR report), core package install/update, core
+   removal, and real QR/screenshot fixtures are all in place. Still open: screenshot/log *discovery*
+   (finding screenshots on a card automatically, rather than the user picking one file).
 7. Validate write operations on a designated test card only after review.
 
 ## Safety and UX baseline

@@ -364,6 +364,20 @@ fn read_check_summary(path: String) -> Result<Option<tau_core::diag::CheckSummar
     }
 }
 
+/// Decodes a screenshot's Check QR page into the full TAUD1 report. Unlike
+/// `read_check_summary` (the tiny 4-word persisted summary), this needs a
+/// real screenshot PNG, not a card path -- `None` when the image simply has
+/// no QR code in it (a normal screenshot of something else), an error for
+/// anything that looks like a QR but fails to decode as a valid report.
+#[tauri::command]
+fn read_qr_report(path: String) -> Result<Option<tau_core::taud::TaudReport>, TauError> {
+    match tau_core::taud::read_qr_report(Path::new(&path)) {
+        Ok(report) => Ok(Some(report)),
+        Err(error) if error.code() == ErrorCode::NoQrCodeFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 #[tauri::command]
 fn inspect_card(path: String) -> Result<Vec<CoreView>, TauError> {
     Ok(tau_core::inspect_card(path)?.cores.into_iter().map(|core| {
@@ -508,7 +522,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

@@ -62,3 +62,17 @@ export type PackageReport = { written: number; unchanged: number; bytes_written:
 export type RemovePlan = { id: string; card_root: string; core_id: string; platform: string; platform_shared: boolean; paths: string[]; files_to_remove: number; bytes_to_remove: number };
 /** Mirrors `tau_core::remove::RemoveReport`, the result of `execute_remove_core`. */
 export type RemoveReport = { removed_files: number; bytes_removed: number };
+/** Mirrors `tau_core::taud::TaudTest`: one Check test's id, name, result and
+ * raw value from a fully decoded TAUD1 QR report. */
+export type TaudTest = { id: number; name: string; result: string; value: number; busy_permille: number | null; audio_full: boolean | null };
+export type TaudBuild = { firmware: string; bitstream: string; flags: number; heap_gap: number };
+export type TaudCycles = { read_min: number | null; read_avg: number; read_max: number; write_min: number | null; write_avg: number; write_max: number };
+export type TaudAudio = { late_underruns: number; audio_full: boolean; stall_ms: number; window_s: number };
+export type TaudDecodeProfile = { h_pct: number; i_pct: number; s_pct: number; r_pct: number };
+export type TaudDecodeSweepEntry = { track: number; speed_pct: number; h_pct: number; i_pct: number; s_pct: number; r_pct: number; title: string };
+export type TaudEntries = { build: TaudBuild | null; memory: number[]; sdram: TaudCycles | null; sdram_raw: number[]; psram: TaudCycles | null; psram_raw: number[]; cold: number[]; time: number[]; audio: TaudAudio | null; audio_raw: number[]; library: number[]; settings: number[]; errors: number[]; notes: number[]; decode_profile: TaudDecodeProfile | null; decode_profile_raw: number[]; decode_sweep: TaudDecodeSweepEntry[] };
+export type TaudUnknownEntry = { tag: number; hex: string };
+/** Mirrors `tau_core::taud::TaudReport`: the full Check report decoded from
+ * a `TAUD1:` QR code (or its text payload directly), as opposed to
+ * `CheckSummary`'s tiny 4-word persisted pass/fail summary. */
+export type TaudReport = { format: number; profile: string; tests: TaudTest[]; entries: TaudEntries; unknown: TaudUnknownEntry[]; verdict: string };

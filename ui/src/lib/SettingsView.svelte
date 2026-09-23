@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CheckSummary, Setting } from './types';
+  import type { CheckSummary, Setting, TaudReport } from './types';
   export let settingsPath = '';
   export let settings: Setting[] = [];
   export let checkSummary: CheckSummary | null = null;
@@ -9,6 +9,13 @@
   export let done: () => void;
   export let label: (id: number) => string;
   export let value: (setting: Setting) => string;
+
+  export let qrPath = '';
+  export let chooseQr: () => void;
+  export let decodeQr: () => void;
+  export let qrReport: TaudReport | null = null;
+  export let qrNotFound = false;
+  export let qrNotice = '';
 </script>
 
 <section class="settings-view page" aria-labelledby="settings-title">
@@ -28,7 +35,49 @@
       </div>
     </div></section>
   {/if}
+  <section class="settings-card">
+    <div style="width:100%">
+      <h2>Full Check report (QR screenshot)</h2>
+      <p>Choose a screenshot of the Pocket's Check QR page to decode the complete report — every
+        test's value, build info, and memory-timing histograms — not just the tiny summary above.
+        This never writes to the card; it only reads the image file.</p>
+      <div class="picker-row">
+        <input bind:value={qrPath} placeholder="/path/to/screenshot.png"/>
+        <button class="picker" on:click={chooseQr}>Choose</button>
+        <button class="primary" on:click={decodeQr}>Decode</button>
+      </div>
+      <p class="notice" role="status">{qrNotice}</p>
+      {#if qrNotFound}
+        <p class="safety">No QR code found in this image — a Check QR screenshot is a plain,
+          unresized PNG showing the black-and-white QR square, not a result-page or now-playing
+          screenshot.</p>
+      {/if}
+      {#if qrReport}
+        <div class="settings-values">
+          <div><span>Profile</span><strong>{qrReport.profile} · <em>{qrReport.verdict}</em></strong></div>
+          {#if qrReport.entries.build}
+            <div><span>Build</span><strong>firmware {qrReport.entries.build.firmware} · bitstream {qrReport.entries.build.bitstream}</strong></div>
+          {/if}
+        </div>
+        <ul class="qr-test-list">
+          {#each qrReport.tests as test}
+            <li><span class={`qr-result ${test.result.toLowerCase().replace('/', '')}`}>{test.result}</span><span>{test.name}</span><span>{test.value}</span></li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  </section>
   <section class="settings-card"><div><h2>Safety defaults</h2><p>Card writes are disabled until you review and confirm an explicit plan. Move operations require a verified external backup and a second confirmation.</p></div><span class="chip capable">Enabled</span></section>
   <section class="settings-card"><div><h2>Data handling</h2><p>Paths, reports, and job journals stay on this computer. Tau Omega does not upload your media or metadata.</p></div><span class="chip capable">Local only</span></section>
   <button class="primary" on:click={done}>Done</button>
 </section>
+<style>
+  .qr-test-list { list-style: none; padding: 0; margin: 12px 0 0; border: 1px solid #344244; border-radius: 9px; overflow: auto; max-height: 320px; }
+  .qr-test-list li { display: grid; grid-template-columns: 70px 1fr 70px; gap: 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #2c393a; font-size: 12px; color: #c7d1d0; }
+  .qr-test-list li:last-child { border-bottom: 0; }
+  .qr-test-list li > span:last-child { color: #8f9e9d; text-align: right; }
+  .qr-result { font-size: 11px; font-weight: 700; }
+  .qr-result.pass { color: #b9e9a5; }
+  .qr-result.fail { color: #f29b83; }
+  .qr-result.skipped, .qr-result.na { color: #8f9e9d; }
+</style>
