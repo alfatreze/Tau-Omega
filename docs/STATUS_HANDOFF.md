@@ -374,7 +374,42 @@ below is blocked on it. Next:
    Diagnostics (Check summary and now the full TAUD1 QR report), core package install/update, core
    removal, and real QR/screenshot fixtures are all in place. Still open: screenshot/log *discovery*
    (finding screenshots on a card automatically, rather than the user picking one file).
-7. Validate write operations on a designated test card only after review.
+7. ~~Validate write operations on a designated test card only after review.~~ **Done 2026-09-23** —
+   see "Real hardware write validation" below.
+
+## Real hardware write validation (2026-09-23)
+
+Ran all three write paths against the actual mounted Pocket card (`/Volumes/Pock`, the owner's real
+card — every other Analogue core and their real Tau install were present throughout), staged
+low-risk to high-risk, each stopped for review before the next:
+
+1. **Sync** (`tau-cli plan`/`sync`): copied 3 real MP3s (from `tau-alpha/work/test-music/`) into a
+   brand-new `Assets/tauomegasync/common`. Verified: 3 new/0 unchanged, index built, `tau-cli scan`
+   read back 3 tracks.
+2. **Package install** (`tau_core::package`): repackaged the real `testdata/packages/
+   alfatreze.TAU_0.4.0_2026-09-22.zip` under an entirely separate platform/core namespace
+   (`tauomegapkg`/`alfatreze.TAU_OMEGA_PKG` — zero overlap with the real `tau` platform or the
+   card's real `alfatreze.TAU`/`TAU_DIAGNOSTIC` cores) via a throwaway scratch binary linking
+   `tau-core` directly (no CLI subcommand exists for package/remove yet). `inspect`/`plan_install`
+   confirmed all 15 entries `OnlyLeft` before installing; installed; re-`plan_install` showed all 15
+   `Identical`.
+3. **Core remove** (`tau_core::remove`): removed the just-installed `alfatreze.TAU_OMEGA_PKG`
+   (solo-core, non-shared-platform case). Plan correctly listed only the 5 `tauomegapkg`-namespaced
+   paths; execute reported 28 files / 2,315,518 bytes removed; verified gone.
+
+**A real, harmless edge case found only by testing on an actual mounted volume:** Finder's
+`._*` AppleDouble junk files under `Assets/tauomegapkg/` meant `plan_remove`'s whole-folder-collapse
+optimization (removing all of `Assets/<platform>` in one path when it holds only the core's own
+folder plus `common`) didn't trigger — the junk files aren't recognized entries, so it correctly fell
+back to the two safe per-subfolder deletes instead, leaving those two dotfiles behind rather than
+guessing. Not a bug: the fallback is exactly the "only remove what's recognized" safety property
+working as designed; cleaned up by hand this time since it was scratch data anyway.
+
+Before and after every stage, the real `alfatreze.TAU`/`alfatreze.TAU_DIAGNOSTIC` core files, the
+shared `Assets/tau/common/tau.rom`, and `Platforms/tau.json`/`_images/tau.bin` were SHA-256-verified
+unchanged. All scratch namespaces (`tauomegasync`, `tauomegapkg`) were removed after validation and
+the card ejected cleanly (`diskutil eject`). See the sibling `tau-alpha` repo's `docs/AUDIT_TRAIL.md`
+for the paired log entry.
 
 ## Safety and UX baseline
 
