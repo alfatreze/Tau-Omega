@@ -1,31 +1,33 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog';
-  import type { Comparison, Core, Difference, DuplicateGroup, Job, LibrarySummary, MediaScan, Plan, Setting } from './lib/types';
+  import type { Comparison, Core, Difference, DuplicateGroup, Job, LibraryScan, MediaScan, Plan, Setting } from './lib/types';
   import { invoke } from './lib/backend';
-  import { cancelJob, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executeSync, exportPlaylist, findDuplicates, inspectCard, newJobId, onProgress, planCoreCopy, planSync, readJournal, readPersistedSettings, scanMedia, summarizeLibrary } from './lib/tau-api';
+  import { cancelJob, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executeSync, exportPlaylist, findDuplicates, inspectCard, newJobId, onProgress, planCoreCopy, planSync, readJournal, readPersistedSettings, scanLibrary, scanMedia } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import JobsView from './lib/JobsView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
   import ProblemsView from './lib/ProblemsView.svelte';
   import LibraryView from './lib/LibraryView.svelte';
   let page: 'cards' | 'compare' | 'sync' | 'jobs' | 'settings' | 'playlists' | 'problems' | 'library' = 'cards'; let cores: Core[] = []; let path = ''; let jobs: Job[] = []; let journalPath = ''; let journalNotice = 'Choose a host-side Tau Omega journal to load it.'; let problemsPath = ''; let duplicateGroups: DuplicateGroup[] | null = null; let problemsNotice = 'Choose a media root to inspect duplicate files.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
-  let libraryPath = ''; let librarySummary: LibrarySummary | null = null; let libraryNotice = 'Choose a media root to inspect it.';
+  let libraryPath = ''; let libraryScan: LibraryScan | null = null; let libraryNotice = 'Choose a media root to inspect it.'; let libraryLoading = false; let libraryJobId = ''; let libraryProgress = ''; let librarySearch = ''; let libraryFormat: 'all' | 'mp3' | 'flac' = 'all';
   let syncJobId = ''; let syncProgress = '';
-  onProgress((event) => { if (event.job_id === syncJobId) syncProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; });
+  onProgress((event) => { if (event.job_id === syncJobId) syncProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; if (event.job_id === libraryJobId) libraryProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; });
   let notice = 'Open a card folder to inspect it. Tau Omega will not write anything at this stage.';
   let sources = ''; let destination = ''; let manifestPath = ''; let embedCovers = false; let plan: Plan | null = null; let syncNotice = '';
   let leftCore = ''; let rightCore = ''; let comparison: Comparison | null = null; let compareNotice = ''; let copyReportPath = ''; let coreCopyPlan: Plan | null = null; let moveSource = false; let moveBackupPath = ''; let approveDeletion = false;
-  async function chooseFolder(target: 'card' | 'source' | 'destination' | 'left' | 'right' | 'manifest' | 'copyReport' | 'backup' | 'settings' | 'playlists' | 'problems' | 'journal') {
+  async function chooseFolder(target: 'card' | 'source' | 'destination' | 'left' | 'right' | 'manifest' | 'copyReport' | 'backup' | 'settings' | 'playlists' | 'problems' | 'journal' | 'library') {
     const selected = await open({ directory: !['manifest', 'copyReport', 'settings', 'journal'].includes(target), multiple: target === 'source' });
     if (!selected) return;
     const value = Array.isArray(selected) ? selected.join('\n') : selected;
     if (target === 'card') path = value; if (target === 'source') sources = value; if (target === 'destination') destination = value;
-    if (target === 'left') leftCore = value; if (target === 'right') rightCore = value; if (target === 'manifest') manifestPath = value; if (target === 'copyReport') copyReportPath = value; if (target === 'backup') moveBackupPath = value; if (target === 'settings') settingsPath = value; if (target === 'playlists') playlistPath = value; if (target === 'problems') problemsPath = value; if (target === 'journal') journalPath = value;
+    if (target === 'left') leftCore = value; if (target === 'right') rightCore = value; if (target === 'manifest') manifestPath = value; if (target === 'copyReport') copyReportPath = value; if (target === 'backup') moveBackupPath = value; if (target === 'settings') settingsPath = value; if (target === 'playlists') playlistPath = value; if (target === 'problems') problemsPath = value; if (target === 'journal') journalPath = value; if (target === 'library') libraryPath = value;
   }
   async function loadSettings() { try { settings = await readPersistedSettings(settingsPath); settingsNotice = `${settings.length} persisted values loaded. Nothing was changed.`; } catch (error) { settings = []; settingsNotice = `Could not read settings: ${errorMessage(error)}`; } }
   async function scanPlaylists() { try { playlistResult = await scanMedia(playlistPath, newJobId()); playlistNotice = `${playlistResult.playlists.length} playlists found. Nothing was changed.`; } catch (error) { playlistResult = null; playlistNotice = `Could not scan this folder: ${errorMessage(error)}`; } }
   async function scanDuplicates() { problemsLoading = true; try { duplicateGroups = await findDuplicates(problemsPath); problemsNotice = `${duplicateGroups.length} duplicate groups found. Nothing was changed.`; } catch (error) { duplicateGroups = null; problemsNotice = `Could not scan this folder: ${errorMessage(error)}`; } finally { problemsLoading = false; } }
-  async function inspectLibrary() { try { librarySummary = await summarizeLibrary(libraryPath, newJobId()); libraryNotice = 'Library inspected. Nothing was changed.'; } catch (error) { librarySummary = null; libraryNotice = `Could not inspect this folder: ${errorMessage(error)}`; } }
+  async function inspectLibrary() { libraryLoading = true; libraryJobId = newJobId(); libraryProgress = 'starting…'; librarySearch = ''; libraryFormat = 'all'; try { libraryScan = await scanLibrary(libraryPath, libraryJobId); libraryNotice = `${libraryScan.tracks.length} tracks found. Nothing was changed.`; } catch (error) { libraryScan = null; libraryNotice = `Could not inspect this folder: ${errorMessage(error)}`; } finally { libraryLoading = false; libraryProgress = ''; } }
+  async function cancelLibraryScan() { if (libraryJobId) await cancelJob(libraryJobId); }
+  $: libraryRows = (libraryScan?.tracks ?? []).filter((row) => (libraryFormat === 'all' || row.format.toLowerCase() === libraryFormat) && (!librarySearch.trim() || `${row.title} ${row.artist} ${row.album} ${row.rel}`.toLowerCase().includes(librarySearch.trim().toLowerCase())));
   async function loadJournal() { try { const journal = await readJournal(journalPath) as { state?: string; plan?: { files?: number }; result?: { copied?: number } }; jobs = [{ kind: 'Loaded journal', status: journal.state === 'completed' ? 'Completed' : journal.state ?? 'Unknown', detail: `${journal.result?.copied ?? 0} copied · ${journal.plan?.files ?? 0} planned` }, ...jobs]; journalNotice = 'Journal loaded. Nothing was changed.'; } catch (error) { journalNotice = `Could not load journal: ${errorMessage(error)}`; } }
   async function exportSelectedPlaylist() { try { await exportPlaylist(playlistPath, selectedPlaylist, playlistOutput); playlistNotice = `Exported ${selectedPlaylist}. Nothing in the source library was changed.`; } catch (error) { playlistNotice = `Could not export playlist: ${errorMessage(error)}`; } }
   const settingLabel = (id: number) => ({ 10: 'Volume', 11: 'Colour index', 12: 'Repeat', 13: 'Shuffle', 15: 'Meter', 16: 'EQ', 18: 'Saved position', 19: 'Resume on', 24: 'Library history', 25: 'Index build ID', 26: 'Shuffle All seed', 27: 'Library off' } as Record<number, string>)[id] ?? `Word ${id}`;
@@ -40,7 +42,7 @@
   const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 </script>
 
-<main><aside aria-label="Primary navigation"><div class="brand"><span class="mark">τ</span><span>Tau Omega<small>Library companion</small></span></div><nav><button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button><button class:active={page === 'compare'} on:click={() => page = 'compare'}>Compare cores</button><button class:active={page === 'sync'} on:click={() => page = 'sync'}>Sync library</button><button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button><button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button><button class:active={page === 'jobs'} on:click={() => page = 'jobs'}>Recent jobs</button><button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button></nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
+<main><aside aria-label="Primary navigation"><div class="brand"><span class="mark">τ</span><span>Tau Omega<small>Library companion</small></span></div><nav><button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button><button class:active={page === 'compare'} on:click={() => page = 'compare'}>Compare cores</button><button class:active={page === 'sync'} on:click={() => page = 'sync'}>Sync library</button><button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button><button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button><button class:active={page === 'library'} on:click={() => page = 'library'}>Library</button><button class:active={page === 'jobs'} on:click={() => page = 'jobs'}>Recent jobs</button><button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button></nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
   {#if page === 'cards'}<section class="page" id="cards"><header><div><p class="eyebrow">CARD LIBRARY</p><h1>Start with a card</h1><p class="lede">Inspect a Pocket card or a staging folder. Your music stays untouched.</p></div><button class="primary" on:click={openFolder}>Open folder</button></header>
     <section class="open-card" aria-labelledby="open-card-title"><div><p class="eyebrow">READ-ONLY</p><h2 id="open-card-title">Open a staging card</h2><p>Choose a folder containing <code>Cores</code> and <code>Assets</code>. You can review its cores before planning any changes.</p></div><div class="folder"><label for="card-path">Card or staging-folder path</label><div><input id="card-path" bind:value={path} placeholder="/Volumes/My Pocket"/><button on:click={() => chooseFolder('card')}>Choose</button><button on:click={openFolder}>Inspect</button></div></div></section><p class="notice" role="status">{notice}</p>
     {#if cores.length}<section aria-labelledby="core-title"><div class="section-title"><div><p class="eyebrow">DETECTED</p><h2 id="core-title">Cores on this card</h2></div><span>{cores.length} found</span></div><div class="core-list">{#each cores as core}<article><div class="core-icon">{core.id.split('.').at(-1)?.[0] ?? 'τ'}</div><div><h3>{core.id}</h3><p>{core.author || 'Unknown author'} · {core.version || 'Version unknown'} · {core.platform || 'No platform declared'} · {core.index_status}{core.tracks === null ? '' : ` · ${core.tracks} tracks`}</p></div><span class:capable={core.library_capable} class="chip">{core.library_capable ? 'Library ready' : 'Legacy core'}</span><button class="quiet" aria-label={`Open ${core.id}`}>View</button></article>{/each}</div></section>{:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}</section>
@@ -59,7 +61,7 @@
   <ProblemsView bind:path={problemsPath} groups={duplicateGroups} notice={problemsNotice} loading={problemsLoading} choose={() => chooseFolder('problems')} scan={scanDuplicates} />
 {/if}
 {#if page === 'library'}
-  <LibraryView bind:path={libraryPath} summary={librarySummary} notice={libraryNotice} choose={() => libraryNotice = 'Enter a media root path, then inspect it.'} scan={inspectLibrary} />
+  <LibraryView bind:path={libraryPath} scan={libraryScan} rows={libraryRows} notice={libraryNotice} loading={libraryLoading} progress={libraryProgress} bind:search={librarySearch} bind:format={libraryFormat} choose={() => chooseFolder('library')} inspect={inspectLibrary} cancel={cancelLibraryScan} />
 {/if}
 {#if false && page === 'jobs'}
   <section class="jobs-panel page" aria-labelledby="jobs-title"><header><div><p class="eyebrow">ACTIVITY</p><h1 id="jobs-title">Recent jobs</h1><p class="lede">Operations completed during this session.</p></div><button class="primary" on:click={() => page = 'sync'}>Start a sync</button></header>{#if jobs.length}<section class="core-list">{#each jobs as job}<article><div class="core-icon">{job.status === 'Completed' ? '✓' : '!'}</div><div><h3>{job.kind}</h3><p>{job.detail}</p></div><span class="chip" class:capable={job.status === 'Completed'}>{job.status}</span></article>{/each}</section>{:else}<section class="empty"><div class="empty-art">◷</div><h2>No jobs yet</h2><p>Reviewed syncs will appear here after they complete.</p></section>{/if}</section>
@@ -90,23 +92,17 @@
 {/if}
 
 <style>
-  .picker-row { display: flex; gap: 8px; align-items: stretch; }
-  .picker-row input, .picker-row textarea { flex: 1; min-width: 0; }
-  .picker { padding: 0 12px; background: #314244; color: #e8ecec; font-weight: 600; border-radius: 8px; }
-  .jobs-panel { position: fixed; inset: 0 0 0 244px; z-index: 5; background: #111617; overflow: auto; }
-  .settings-card { display: flex; justify-content: space-between; gap: 24px; align-items: center; max-width: 720px; margin-bottom: 14px; padding: 22px 24px; border: 1px solid #2c393a; border-radius: 12px; background: #1a2325; }
-  .settings-card h2 { margin-bottom: 7px; }
-  .settings-card p { margin: 0; color: #a6b3b2; line-height: 1.55; font-size: 13px; }
-  .settings-values { display: grid; gap: 6px; margin-top: 14px; }
-  .settings-values div { display: grid; grid-template-columns: 80px 100px 1fr; gap: 10px; align-items: center; padding: 9px 10px; background: #101617; border-radius: 7px; color: #c7d1d0; font-size: 12px; }
-  .settings-values code { color: #9fb3aa; }
-  .settings-values strong { font-weight: 500; overflow-wrap: anywhere; }
+  /* .picker-row/.picker/.jobs-panel/.settings-card/.settings-values/
+     .comparison-counts live in styles.css, not here: they're rendered by
+     child view components (JobsView, PlaylistsView, ProblemsView,
+     SettingsView, LibraryView), and Svelte's per-component CSS scoping
+     never applies a <style> block's rules to another component's markup --
+     a scoped rule here silently does nothing for them. Confirmed by
+     driving the app in a real browser: every one of those screens rendered
+     as an inert, unstyled, non-overlaying block until this moved. */
   @font-face { font-family: 'Space Grotesk'; src: url('/assets/SpaceGrotesk-VariableFont_wght.ttf') format('truetype'); font-style: normal; font-weight: 300 700; font-display: swap; }
   :global(:root), :global(body) { font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; }
   .comparison { margin-top: 20px; border: 1px solid #2c393a; border-radius: 15px; padding: 29px 31px; background: #1a2325; }
-  .comparison-counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 22px 0; }
-  .comparison-counts span { padding: 12px; background: #101617; border: 1px solid #344244; border-radius: 9px; color: #aab8b7; font-size: 12px; }
-  .comparison-counts b { display: block; color: #edf4f2; font-size: 21px; margin-bottom: 4px; }
   .difference-list { padding: 0; margin: 0; border: 1px solid #344244; border-radius: 9px; overflow: auto; max-height: 380px; }
   .difference-list li { min-width: 500px; display: grid; grid-template-columns: 100px 1fr 110px; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #2c393a; font-size: 12px; color: #c7d1d0; }
   .difference-list li:last-child { border-bottom: 0; }

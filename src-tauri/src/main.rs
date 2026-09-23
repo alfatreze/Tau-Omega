@@ -16,11 +16,13 @@ use tauri::{Emitter, State, Window};
 // `PersistedSetting` and `MediaDifference` are returned to the front-end
 // directly, since they now implement `Serialize` themselves. The views that
 // remain (`CoreView`, `SyncPlanView`, `ComparisonView`, `PlaylistView`,
-// `MediaScanView`, `LibrarySummaryView`, `DuplicateView`) stay because they
-// do real work a serde derive can't: `CoreView` turns `IndexStatus` into an
-// English sentence (presentation, not a serde limitation); the others
-// aggregate counts (`new_files`, `tracks`, `only_left`, ...) that are not
-// fields stored on the engine type, only derivable from it.
+// `MediaScanView`, `TrackRow`/`LibraryScanView`, `DuplicateView`) stay
+// because they do real work a serde derive can't: `CoreView` turns
+// `IndexStatus` into an English sentence and `TrackRow` picks friendly
+// display fields out of `Entry::tags` (presentation, not a serde
+// limitation); the others aggregate counts (`new_files`, `tracks`,
+// `only_left`, ...) that are not fields stored on the engine type, only
+// derivable from it.
 
 #[derive(Serialize)]
 struct CoreView { id: String, author: String, version: String, platform: String, library_capable: bool, index_status: String, tracks: Option<usize> }
@@ -42,8 +44,51 @@ struct PlaylistView { name: String, tracks: usize }
 struct MediaScanView { playlists: Vec<PlaylistView>, warnings: Vec<tau_core::Warning> }
 #[derive(Serialize)]
 struct DuplicateView { files: Vec<String> }
+/// One row for the Library screen's track table: friendly display fields
+/// derived from `Entry::tags` (untouched original tag text, not the
+/// ASCII-folded index encoding `build_index` produces) -- this is
+/// presentation, same as `CoreView`'s status sentence, not a serde
+/// limitation, so it stays a hand-written view.
 #[derive(Serialize)]
-struct LibrarySummaryView { tracks: usize, playlists: usize, warnings: Vec<tau_core::Warning> }
+struct TrackRow {
+    rel: String,
+    title: String,
+    artist: String,
+    album: String,
+    secs: u16,
+    format: &'static str,
+}
+fn track_row(entry: tau_core::Entry) -> TrackRow {
+    let title = entry
+        .tags
+        .get("TIT2")
+        .cloned()
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| {
+            entry
+                .file
+                .rsplit_once('.')
+                .map(|(stem, _)| stem.to_string())
+                .unwrap_or_else(|| entry.file.clone())
+        });
+    let artist = entry
+        .tags
+        .get("TPE1")
+        .or_else(|| entry.tags.get("TPE2"))
+        .cloned()
+        .unwrap_or_default();
+    let album = entry.tags.get("TALB").cloned().unwrap_or_default();
+    TrackRow {
+        rel: entry.rel,
+        title,
+        artist,
+        album,
+        secs: entry.secs,
+        format: if entry.fmt == 2 { "FLAC" } else { "MP3" },
+    }
+}
+#[derive(Serialize)]
+struct LibraryScanView { tracks: Vec<TrackRow>, playlists: Vec<PlaylistView>, warnings: Vec<tau_core::Warning> }
 
 /// A serialisable mirror of `tau_core::Progress`, emitted as a `"tau://progress"`
 /// window event so the front-end can show a live scan/copy indicator (P0-3).
@@ -118,11 +163,19 @@ fn with_job<T>(
 }
 
 #[tauri::command]
-fn summarize_library(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<LibrarySummaryView, TauError> {
+fn scan_library(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<LibraryScanView, TauError> {
     let scan = with_job(&window, &jobs, job_id, |progress| {
         tau_core::scan_dir_with_progress(Path::new(&path), true, progress)
     })?;
-    Ok(LibrarySummaryView { tracks: scan.entries.len(), playlists: scan.playlists.len(), warnings: scan.warnings })
+    Ok(LibraryScanView {
+        tracks: scan.entries.into_iter().map(track_row).collect(),
+        playlists: scan
+            .playlists
+            .into_iter()
+            .map(|playlist| PlaylistView { name: playlist.name, tracks: playlist.rel_ids.len() })
+            .collect(),
+        warnings: scan.warnings,
+    })
 }
 
 #[tauri::command]
@@ -246,7 +299,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, summarize_library, scan_media, export_playlist, find_duplicates, compare_media, read_journal, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_duplicates, compare_media, read_journal, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

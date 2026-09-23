@@ -8,7 +8,8 @@ export type Comparison = { left: string; right: string; only_left: number; only_
 export type Playlist = { name: string; tracks: number };
 export type MediaScan = { playlists: Playlist[]; warnings: Warning[] };
 export type DuplicateGroup = { files: string[] };
-export type LibrarySummary = { tracks: number; playlists: number; warnings: Warning[] };
+export type TrackRow = { rel: string; title: string; artist: string; album: string; secs: number; format: string };
+export type LibraryScan = { tracks: TrackRow[]; playlists: Playlist[]; warnings: Warning[] };
 /** The engine's own `tau_core::sync::SyncReport`, returned directly from
  * execute_sync/execute_core_copy/execute_core_move now that it implements
  * `Serialize` (P1-1) -- no hand-written result DTO duplicates it. */
