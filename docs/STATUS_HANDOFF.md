@@ -1,17 +1,20 @@
 # Tau Omega — status handoff
 
-Updated 2026-09-22. All implementation work is contained in `Tau Omega/`.
+Updated 2026-09-23. All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
 1. This file — state, known issues, what to do next.
 2. `DECISIONS.md` — D-001..D-012, including the integration target and the licence boundary.
-3. `PORTABILITY_AUDIT.md` — the ranked P0/P1 work that comes before new features.
+3. `PORTABILITY_AUDIT.md` — every P0/P1/P2 item, all done as of 2026-09-22.
 4. `FIRMWARE_SYNC.md` — what we assume about tau-alpha, last verified 2026-09-22 against v0.4.0.
 
-This folder is a Git repository (initialised 2026-09-22, branch `main`). It has **no remote**, so the
-history is local-only — worth fixing before it matters. The firmware project is the sibling
-`../tau-alpha`, which is read-only from here (D-010).
+This folder is a Git repository, pushed to **github.com/alfatreze/Tau-Omega** (public), branch
+`main`, with branch protection (PRs required, admin can bypass) and a GitHub Actions CI workflow
+(`cargo fmt`/`clippy`/`test` — default and `serde`-feature builds — across macOS/Windows/Linux, plus
+`npm run check`). Tagged releases: `v0.1.0`, `v0.2.0` (version bump only). Current version across
+`Cargo.toml`/`src-tauri/Cargo.toml`/`src-tauri/tauri.conf.json`/`ui/package.json` is `0.2.0`. The
+firmware project is the sibling `../tau-alpha`, which is read-only from here (D-010).
 
 ## Current deliverable
 
@@ -166,7 +169,6 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Known issues and incomplete wiring
 
-- `LibraryView.svelte` exists and the `summarizeLibrary` backend/API exists, but Library navigation and its native picker were not completed. Do not claim the Library screen is user-accessible until this is wired and rebuilt.
 - Recent Jobs can load a selected journal but does not yet discover journals automatically or persist a configurable report directory.
 - Problems currently reports duplicate groups only; it does not yet include format, tag, cover, path, FAT32, or collision checks.
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
@@ -185,6 +187,16 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   `FIRMWARE_SYNC.md`. Two firmware-side questions remain open there: the art file's data slot is
   double-booked with the Phase G cold image, and its pixel format is unconfirmed — both due before
   thumbnails can be built.
+- **Fixed 2026-09-23:** the Library screen is now user-accessible end to end — nav button, native
+  folder picker, `scan_library` (renamed from `summarize_library`) returning real `TrackRow`s
+  (title/artist/album from tags, filename fallback, duration, format), progress/cancel during the
+  scan, a search box plus MP3/FLAC filter, and a hand-rolled virtualised track table (fixed row
+  height, overscan window, `translateY`) verified against 12,000 synthetic rows in a real browser
+  session. Incidental find while verifying it: a pre-existing Svelte CSS-scoping bug meant
+  `App.svelte`'s shared rules (`.jobs-panel`, `.picker`, `.picker-row`, `.settings-card`,
+  `.settings-values`, `.comparison-counts`) never applied to *any* child-component overlay screen
+  (Jobs/Playlists/Problems/Settings, not just Library) — a component's `<style>` block only scopes
+  to its own template. Fixed by moving those rules into the already-global `ui/src/styles.css`.
 
 ## Deferred because validation/fixtures are required
 
@@ -201,7 +213,8 @@ done (2026-09-22; see "Portability boundary", "P1-1", "P1-2", "P1-3" and "P2" ab
 ready for Pocket Sync to adopt as a crate dependency on the boundary-correctness front; nothing
 below is blocked on it. Next:
 
-1. Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.
+1. ~~Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.~~ **Done
+   2026-09-23** — see "Known issues and incomplete wiring" above.
 2. Expand Problems checks from duplicates to format/tag/path/cover issues.
 3. Persist Job history through a configured reports directory and detail view.
 4. Add playlist create/rename/reorder/import plan flows.
