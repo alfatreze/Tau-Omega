@@ -66,3 +66,20 @@ slot table, and adding `crates/tau-core/tests/card.rs`.
 **The lesson is the durable part:** the index path is byte-exact against a Python oracle and was
 flawless; the card path was checked against a fiction and was broken. *Fixtures for anything the
 firmware or APF produces must be copied from real artefacts, not written from memory of the format.*
+
+## Second bug this check found — fixed 2026-09-23
+
+The lesson above wasn't followed for `read_persisted_settings` either. It looked for `variables` at
+the JSON root; every real hardware-captured `interact_persist.json` nests it under `interact_persist`
+(`{"interact_persist": {"magic": "APF_VER_1", "variables": [...]}}`). Its own test fixture used the
+flat shape, so the test passed while the real Settings screen silently returned nothing from every
+real card since it was written.
+
+Found only by copying three real `interact_persist.json` captures from `tau-alpha/work/diagnostics/`
+into `Tau Omega/testdata/interact_persist/` (see that folder's README for provenance and exact source
+paths) instead of continuing to trust the hand-written fixture. Fixed by checking
+`/interact_persist/variables` first, falling back to the bare top-level shape for older hand-written
+fixtures/tools. Same real fixtures also back a new `tau_core::diag::{decode_check_summary,
+read_check_summary}` — a byte-exact port of `tau-alpha/tools/decode_tau_suite.py`'s `unpack_words`
+(the persisted 4-word Check-report summary at persist ids 20-23), cross-checked against that script's
+own `--interact --json` output on the same files.

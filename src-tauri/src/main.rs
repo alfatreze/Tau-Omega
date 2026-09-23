@@ -351,6 +351,19 @@ fn read_persisted_settings(path: String) -> Result<Vec<tau_core::diag::Persisted
     tau_core::diag::read_persisted_settings(path)
 }
 
+/// `None` means these persist ids don't currently hold a Check summary --
+/// the normal case (no Check has been run, or they're this core's legacy
+/// playlist state, per `docs/FIRMWARE_SYNC.md`'s overloaded-ids trap), not
+/// an error the front-end needs to display as one.
+#[tauri::command]
+fn read_check_summary(path: String) -> Result<Option<tau_core::diag::CheckSummary>, TauError> {
+    match tau_core::diag::read_check_summary(path) {
+        Ok(summary) => Ok(Some(summary)),
+        Err(error) if error.code() == ErrorCode::NotACheckSummary => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 #[tauri::command]
 fn inspect_card(path: String) -> Result<Vec<CoreView>, TauError> {
     Ok(tau_core::inspect_card(path)?.cores.into_iter().map(|core| {
@@ -452,7 +465,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
