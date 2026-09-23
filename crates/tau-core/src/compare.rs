@@ -101,12 +101,16 @@ pub fn media_roots(left: &Path, right: &Path) -> Result<MediaComparison, TauErro
     })
 }
 
-struct MediaFile {
-    bytes: u64,
-    hash: String,
+pub(crate) struct MediaFile {
+    pub(crate) bytes: u64,
+    pub(crate) hash: String,
 }
 
-fn files_by_relative_path(root: &Path) -> Result<BTreeMap<PathBuf, MediaFile>, TauError> {
+/// Walks `root` for supported media/playlist files and hashes each one.
+/// `pub(crate)` so [`crate::backup`] can reuse the same walk-and-hash logic
+/// for a plain folder backup, rather than duplicating it under a second
+/// name.
+pub(crate) fn files_by_relative_path(root: &Path) -> Result<BTreeMap<PathBuf, MediaFile>, TauError> {
     let mut files = Vec::new();
     collect_files(root, root, &mut files)?;
     files.sort();
