@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, Setting, SyncReport } from './types';
+import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, Setting, SyncReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -29,4 +29,6 @@ export const planBackup = (source: string, destination: string) => invoke<Backup
 export const inspectPackage = (path: string) => invoke<PackageManifest>('inspect_package', { path });
 export const planPackageInstall = (path: string, card: string) => invoke<PackagePlan>('plan_package_install', { path, card });
 export const executePackageInstall = (path: string, card: string, confirmation: string) => invoke<PackageReport>('execute_package_install', { path, card, confirmation });
+export const planRemoveCore = (card: string, coreId: string) => invoke<RemovePlan>('plan_remove_core', { card, coreId });
+export const executeRemoveCore = (card: string, coreId: string, confirmation: string) => invoke<RemoveReport>('execute_remove_core', { card, coreId, confirmation });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';

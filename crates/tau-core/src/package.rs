@@ -9,11 +9,11 @@
 //! that changed on disk between planning and confirming is caught rather
 //! than silently installed.
 //!
-//! Removing an installed core is out of scope here: `Cores/<id>` is safe to
-//! delete on its own, but more than one core can share an `Assets/<platform>`
-//! folder, so a correct "remove" needs to check every other installed core's
-//! `core.json` before touching shared media -- a separate, smaller piece of
-//! work, not a corner to cut in this one.
+//! Removing an installed core is [`crate::remove`], not this module: `Cores/<id>`
+//! is safe to delete on its own, but more than one core can share an
+//! `Assets/<platform>` folder, so a correct "remove" needs to check every
+//! other installed core's `core.json` before touching shared media -- a
+//! separate, smaller piece of work from install/update.
 
 use crate::{compare::DifferenceState, ErrorCode, TauError};
 use sha2::{Digest, Sha256};
