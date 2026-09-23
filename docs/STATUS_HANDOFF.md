@@ -1,7 +1,7 @@
 # Tau Omega — status handoff
 
-Updated 2026-09-23 (core removal, then the full TAUD1 QR decoder, added). All implementation work
-is contained in `Tau Omega/`.
+Updated 2026-09-24 (core removal, the full TAUD1 QR decoder, real hardware write validation, and
+screenshot discovery, added in sequence). All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -167,9 +167,9 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Validation
 
-- `cargo test` (workspace): 58 `tau-core` unit tests passing as of 2026-09-23 (grown from 20 across
+- `cargo test` (workspace): 61 `tau-core` unit tests passing as of 2026-09-24 (grown from 20 across
   this session's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag/
-  Remove/taud — each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
+  Remove/taud/screenshots — each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
   inspection, 1 fuzz-lite, 2 testkit; +6 more in the feature-gated `serde_feature.rs` (only compiled
   with `--features tau-core/serde`). Re-run `cargo test --workspace` for the current exact count
   rather than trusting this number as it ages.
@@ -335,10 +335,22 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   SDRAM-speed FAILURE (verdict, value 506, matching B-060), a USER CHECK short run, a STANDARD run
   with stress tests, and the non-Check now-playing screenshot correctly reported as "no QR found"
   rather than a false decode.
+- **Fixed 2026-09-24:** screenshot discovery is now built. New `tau_core::screenshots::{ScreenshotEntry,
+  list_screenshots}`: lists every file under a card's `Memories/Screenshots/` (the Pocket's own
+  screenshot save location, confirmed by inspecting a real mounted card — `tau-alpha/docs/
+  AUDIT_TRAIL.md` B-133), newest first, parsing the Pocket's own `YYYYMMDD_HHMMSS.png` filenames into
+  a plain timestamp while still listing anything that doesn't match that shape rather than dropping
+  it, and skipping Finder's `._*` junk and non-PNG files. Returns an empty list, not an error, when
+  the folder doesn't exist (a normal card that has never taken a screenshot). New `list_screenshots`
+  Tauri command and a "Browse screenshots on a card" section on the Settings page, above the existing
+  QR-decode card: choose the card root, list its screenshots with timestamp/filename/size, click one
+  to decode it directly — no more hunting for a file path by hand. 3 new engine tests, two against the
+  real files in `testdata/screenshots/` (newest-first ordering, timestamp parsing, junk-file
+  skipping) and one for a file that doesn't match the naming convention.
 
 ## Deferred because validation/fixtures are required
 
-- Real SD-card write/eject validation.
+- **Done 2026-09-23:** real SD-card write/eject validation — see "Real hardware write validation" above.
 - **Done 2026-09-23:** removing an installed core — see "Known issues and incomplete wiring" above.
 - **Done 2026-09-23:** the persisted Check-report summary (persist ids 20-23) is decoded —
   `tau_core::diag::{decode_check_summary, read_check_summary}`, a byte-exact port of
@@ -346,8 +358,9 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   `interact_persist.json` fixtures in `testdata/interact_persist/` (all passed, some failed, and the
   legacy-overload rejection case). See "Known issues and incomplete wiring" below.
 - **Done 2026-09-23:** the full TAUD1 QR report is decoded — `tau_core::taud`, see "Known issues and
-  incomplete wiring" above. Screenshot/log *discovery* (finding screenshots on a card automatically,
-  as opposed to decoding one the user picked) is still unbuilt.
+  incomplete wiring" above.
+- **Done 2026-09-24:** screenshot *discovery* — `tau_core::screenshots::list_screenshots`, see "Known
+  issues and incomplete wiring" above.
 - Real device-specific capability verification.
 
 ## Next recommended implementation order
@@ -370,10 +383,11 @@ below is blocked on it. Next:
    scope until item 6's fixtures arrive (it needs the same zip-reading groundwork as real package
    install, so it isn't worth building twice).
 6. ~~Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source
-   fixtures are provided.~~ **Done 2026-09-23** — see "Known issues and incomplete wiring" above.
-   Diagnostics (Check summary and now the full TAUD1 QR report), core package install/update, core
-   removal, and real QR/screenshot fixtures are all in place. Still open: screenshot/log *discovery*
-   (finding screenshots on a card automatically, rather than the user picking one file).
+   fixtures are provided.~~ **Done 2026-09-23/24** — see "Known issues and incomplete wiring" above.
+   Diagnostics (Check summary and the full TAUD1 QR report), core package install/update, core
+   removal, real QR/screenshot fixtures, and screenshot discovery are all in place. Log discovery
+   (finding e.g. host-side journals or a firmware log format, if one exists beyond the journal this
+   project already writes itself) is not scoped further — nothing has asked for it yet.
 7. ~~Validate write operations on a designated test card only after review.~~ **Done 2026-09-23** —
    see "Real hardware write validation" below.
 

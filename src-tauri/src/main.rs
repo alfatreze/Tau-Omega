@@ -378,6 +378,15 @@ fn read_qr_report(path: String) -> Result<Option<tau_core::taud::TaudReport>, Ta
     }
 }
 
+/// Lists every screenshot the Pocket has saved on this card
+/// (`Memories/Screenshots/`), newest first -- the "find it automatically"
+/// complement to `read_qr_report`, which decodes one the caller already has
+/// a path for.
+#[tauri::command]
+fn list_screenshots(card: String) -> Result<Vec<tau_core::screenshots::ScreenshotEntry>, TauError> {
+    tau_core::screenshots::list_screenshots(Path::new(&card))
+}
+
 #[tauri::command]
 fn inspect_card(path: String) -> Result<Vec<CoreView>, TauError> {
     Ok(tau_core::inspect_card(path)?.cores.into_iter().map(|core| {
@@ -522,7 +531,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

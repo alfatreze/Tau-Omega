@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CheckSummary, Setting, TaudReport } from './types';
+  import type { CheckSummary, ScreenshotEntry, Setting, TaudReport } from './types';
   export let settingsPath = '';
   export let settings: Setting[] = [];
   export let checkSummary: CheckSummary | null = null;
@@ -16,6 +16,15 @@
   export let qrReport: TaudReport | null = null;
   export let qrNotFound = false;
   export let qrNotice = '';
+
+  export let screenshotCardPath = '';
+  export let chooseScreenshotCard: () => void;
+  export let browseScreenshots: () => void;
+  export let screenshots: ScreenshotEntry[] = [];
+  export let screenshotsNotice = '';
+  export let selectScreenshot: (path: string) => void;
+
+  const size = (bytes: number) => bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 </script>
 
 <section class="settings-view page" aria-labelledby="settings-title">
@@ -35,6 +44,32 @@
       </div>
     </div></section>
   {/if}
+  <section class="settings-card">
+    <div style="width:100%">
+      <h2>Browse screenshots on a card</h2>
+      <p>The Pocket saves every screenshot to <code>Memories/Screenshots/</code> on the card itself.
+        Choose the card (not a single file) to list them, newest first, then pick one below to
+        decode instead of hunting for the file path yourself.</p>
+      <div class="picker-row">
+        <input bind:value={screenshotCardPath} placeholder="/Volumes/Pocket"/>
+        <button class="picker" on:click={chooseScreenshotCard}>Choose</button>
+        <button class="primary" on:click={browseScreenshots}>List screenshots</button>
+      </div>
+      <p class="notice" role="status">{screenshotsNotice}</p>
+      {#if screenshots.length}
+        <ul class="qr-test-list screenshot-list">
+          {#each screenshots as shot}
+            <li>
+              <span>{shot.captured_at ?? shot.filename}</span>
+              <span>{shot.filename}</span>
+              <span>{size(shot.bytes)}</span>
+              <button class="picker" on:click={() => selectScreenshot(shot.path)}>Decode</button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  </section>
   <section class="settings-card">
     <div style="width:100%">
       <h2>Full Check report (QR screenshot)</h2>
@@ -80,4 +115,5 @@
   .qr-result.pass { color: #b9e9a5; }
   .qr-result.fail { color: #f29b83; }
   .qr-result.skipped, .qr-result.na { color: #8f9e9d; }
+  .screenshot-list li { grid-template-columns: 150px 1fr 70px 70px; }
 </style>
