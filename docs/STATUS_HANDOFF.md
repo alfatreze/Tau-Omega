@@ -270,14 +270,30 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   `tau_core::diag::{decode_check_summary, read_check_summary}` (see "Deferred" below) and wired a
   "Diagnostic Check summary" card into `SettingsView.svelte`, shown only when persist ids 20-23
   actually decode as one. Verified against the real fixtures in the browser.
+- **Fixed 2026-09-23:** core package install/update against a real release zip. New
+  `tau_core::package::{PackageManifest, PackagePlan, PackageReport, inspect, plan_install,
+  execute_install}`, the same plan -> review -> confirm -> execute shape as `sync`/`playlist`:
+  `execute_install` re-hashes every entry against the zip immediately before writing (catches a zip
+  that changed on disk since the plan) and reads the written file back to verify it after. Needed the
+  `zip` crate (owner decision) — real release zips are deflate-compressed, so structure-only parsing
+  wasn't enough; scoped to `deflate-flate2-zlib-rs` only (no `zopfli`, which is compression-only and
+  this is read-only), 7 new transitive packages, written up in `DEPENDENCIES.md`. Tested against the
+  real `alfatreze.TAU_0.4.0_2026-09-22.zip` copied into `testdata/packages/` (15 real files): first
+  install is all-new, a second plan against the now-installed card sees everything unchanged, and
+  changing one file on disk makes the next plan correctly call it out as an update and only rewrite
+  that one file. New Tauri commands `inspect_package`/`plan_package_install`/`execute_package_install`
+  and a new "Packages" nav page (`PackageView.svelte`): choose a zip and a staging-card folder,
+  inspect, plan, review the new/updated/unchanged counts and full item list, confirm. Verified in a
+  browser against the real manifest shape. Removing an installed core is explicitly out of scope —
+  `Cores/<id>` is safe to delete alone, but more than one core can share an `Assets/<platform>`
+  folder, so a correct "remove" needs to check every other installed core's `core.json` first; a
+  separate, smaller piece of work, not a corner to cut here.
 
 ## Deferred because validation/fixtures are required
 
 - Real SD-card write/eject validation.
-- Core install/update/remove against real package zips and staging-card fixtures. Real package zips
-  now exist in the sibling `tau-alpha` repo's `release/` (e.g. `alfatreze.TAU_0.4.0_2026-09-22.zip`,
-  15 files, the exact `Cores/Assets/Platforms` shape `inspect_card` already understands) — not yet
-  pulled in as a Tau Omega fixture or built against.
+- Removing an installed core (`Cores/<id>` plus, only when safe, its `Assets/<platform>` folder) —
+  see "Known issues and incomplete wiring" above for why this is separate from install/update.
 - **Done 2026-09-23:** the persisted Check-report summary (persist ids 20-23) is decoded —
   `tau_core::diag::{decode_check_summary, read_check_summary}`, a byte-exact port of
   `tau-alpha/tools/decode_tau_suite.py`'s `unpack_words`, tested against three real hardware-captured
@@ -308,7 +324,10 @@ below is blocked on it. Next:
    done 2026-09-23** — see "Known issues and incomplete wiring" above. Package dry-run stays out of
    scope until item 6's fixtures arrive (it needs the same zip-reading groundwork as real package
    install, so it isn't worth building twice).
-6. Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source fixtures are provided.
+6. Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source
+   fixtures are provided. **Diagnostics (Check summary) and core package install/update done
+   2026-09-23** — see "Known issues and incomplete wiring" above. Still open: core remove, the full
+   TAUD1 QR/text record format, and screenshot/log discovery (no real fixtures found yet for either).
 7. Validate write operations on a designated test card only after review.
 
 ## Safety and UX baseline

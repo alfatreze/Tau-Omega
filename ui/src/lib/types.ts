@@ -44,3 +44,14 @@ export type BackupPlan = { source: string; destination: string; items: BackupIte
  * summary from persist ids 20-23. `null` (not this type) means those ids
  * don't currently hold one -- the normal case, not an error. */
 export type CheckSummary = { profile: string; run: number; verdict: string; passed: string[]; failed: string[]; worst_access_cycles: number; cold_cycles_per_word: number; late_underruns: number; draw_stall_ms: number; last_load_s: number; library_error: number; cold_error: number; firmware_minor: number };
+/** Mirrors `tau_core::package::{PackageEntry, PackageManifest}`: what a core
+ * release zip declares, read without touching any card. */
+export type PackageEntry = { path: string; bytes: number; sha256: string };
+export type PackageManifest = { source: string; core_ids: string[]; entries: PackageEntry[] };
+/** Mirrors `tau_core::package::{PackageItem, PackagePlan}`: a reviewed,
+ * not-yet-written install/update, following the same plan -> confirm ->
+ * execute shape as `Plan`/`PlaylistPlan`. */
+export type PackageItem = { path: string; state: 'only_left' | 'only_right' | 'different' | 'identical'; bytes: number };
+export type PackagePlan = { id: string; source: string; destination: string; items: PackageItem[]; new_files: number; updated_files: number; unchanged_files: number; bytes_to_write: number };
+/** Mirrors `tau_core::package::PackageReport`, the result of `execute_package_install`. */
+export type PackageReport = { written: number; unchanged: number; bytes_written: number };
