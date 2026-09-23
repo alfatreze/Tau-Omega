@@ -3,7 +3,7 @@
   "productName": "Tau Omega",
   "version": "0.3.0",
   "identifier": "dev.tau.omega",
-  "build": { "beforeDevCommand": "npm run dev", "beforeBuildCommand": "npm run build", "devUrl": "http://localhost:5173", "frontendDist": "../ui/dist" },
+  "build": { "beforeDevCommand": { "script": "npm run dev", "cwd": "../ui" }, "beforeBuildCommand": { "script": "npm run build", "cwd": "../ui" }, "devUrl": "http://localhost:5173", "frontendDist": "../ui/dist" },
   "app": { "windows": [{ "title": "Tau Omega", "width": 1120, "height": 760, "minWidth": 900, "minHeight": 620 }] },
   "bundle": { "active": true, "targets": ["app"], "icon": ["../assets/appicon.png"] }
 }
