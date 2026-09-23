@@ -387,6 +387,18 @@ fn list_screenshots(card: String) -> Result<Vec<tau_core::screenshots::Screensho
     tau_core::screenshots::list_screenshots(Path::new(&card))
 }
 
+/// Reads one screenshot's raw bytes and returns them as a `data:` URL, so
+/// the UI can show the actual image inline (a real preview, not just its
+/// filename) without granting the webview broader filesystem access via
+/// Tauri's asset protocol -- this only ever serves a path `list_screenshots`
+/// or the user's own file picker already produced.
+#[tauri::command]
+fn read_image_data_url(path: String) -> Result<String, TauError> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let bytes = std::fs::read(&path)?;
+    Ok(format!("data:image/png;base64,{}", STANDARD.encode(bytes)))
+}
+
 #[tauri::command]
 fn inspect_card(path: String) -> Result<Vec<CoreView>, TauError> {
     Ok(tau_core::inspect_card(path)?.cores.into_iter().map(|core| {
@@ -531,7 +543,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
