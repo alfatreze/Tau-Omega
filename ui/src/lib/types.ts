@@ -55,3 +55,10 @@ export type PackageItem = { path: string; state: 'only_left' | 'only_right' | 'd
 export type PackagePlan = { id: string; source: string; destination: string; items: PackageItem[]; new_files: number; updated_files: number; unchanged_files: number; bytes_to_write: number };
 /** Mirrors `tau_core::package::PackageReport`, the result of `execute_package_install`. */
 export type PackageReport = { written: number; unchanged: number; bytes_written: number };
+/** Mirrors `tau_core::remove::RemovePlan`: what removing one installed core
+ * would delete. `platform_shared` is true when another installed core still
+ * uses the same platform, in which case the shared `Assets/<platform>`
+ * files are deliberately left out of `paths`. */
+export type RemovePlan = { id: string; card_root: string; core_id: string; platform: string; platform_shared: boolean; paths: string[]; files_to_remove: number; bytes_to_remove: number };
+/** Mirrors `tau_core::remove::RemoveReport`, the result of `execute_remove_core`. */
+export type RemoveReport = { removed_files: number; bytes_removed: number };

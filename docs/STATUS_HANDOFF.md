@@ -1,6 +1,6 @@
 # Tau Omega — status handoff
 
-Updated 2026-09-23. All implementation work is contained in `Tau Omega/`.
+Updated 2026-09-23 (core removal added). All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -166,9 +166,9 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Validation
 
-- `cargo test` (workspace): 46 `tau-core` unit tests passing as of 2026-09-23 (grown from 20 across
-  this session's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag —
-  each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
+- `cargo test` (workspace): 51 `tau-core` unit tests passing as of 2026-09-23 (grown from 20 across
+  this session's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag/Remove
+  — each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
   inspection, 1 fuzz-lite, 2 testkit; +6 more in the feature-gated `serde_feature.rs` (only compiled
   with `--features tau-core/serde`). Re-run `cargo test --workspace` for the current exact count
   rather than trusting this number as it ages.
@@ -299,10 +299,23 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   that one file. New Tauri commands `inspect_package`/`plan_package_install`/`execute_package_install`
   and a new "Packages" nav page (`PackageView.svelte`): choose a zip and a staging-card folder,
   inspect, plan, review the new/updated/unchanged counts and full item list, confirm. Verified in a
-  browser against the real manifest shape. Removing an installed core is explicitly out of scope —
-  `Cores/<id>` is safe to delete alone, but more than one core can share an `Assets/<platform>`
-  folder, so a correct "remove" needs to check every other installed core's `core.json` first; a
-  separate, smaller piece of work, not a corner to cut here.
+  browser against the real manifest shape.
+- **Fixed 2026-09-23:** removing an installed core is now implemented. New
+  `tau_core::remove::{plan_remove, execute_remove, RemovePlan, RemoveReport}`, the same plan ->
+  review -> confirm -> execute shape as `package`/`playlist`: `plan_remove` takes an already-inspected
+  `Card` (so it always sees every other installed core) and a core id, always includes `Cores/<id>`
+  and that core's own `Assets/<platform>/<id>` subfolder, and only additionally includes the
+  platform-wide shared files (`Assets/<platform>/common`, `Platforms/<platform>.json`,
+  `Platforms/_images/<platform>.bin`) when no *other* installed core still declares that platform.
+  When the whole `Assets/<platform>` folder would end up holding only this core's own subfolder plus
+  `common`, the plan removes that one folder instead of leaving an empty directory behind. New
+  `plan_remove_core`/`execute_remove_core` Tauri commands (re-inspecting the card each time, matching
+  `execute_package_install`'s own re-plan-before-execute pattern) and a "Remove an installed core"
+  section on the Packages page: list the card's installed cores, pick one, review exactly which paths
+  would be deleted and why (shared or not), confirm. 5 new engine tests against the real
+  `alfatreze.TAU_0.4.0_2026-09-22.zip` fixture, including one that installs it twice under two core
+  ids sharing `Assets/tau` (the same two-Tau-cores-on-one-card shape tau-alpha's own audit trail
+  records on real hardware) to verify the shared files survive removing one of them.
 
 ## Deferred because validation/fixtures are required
 
@@ -340,8 +353,8 @@ below is blocked on it. Next:
    scope until item 6's fixtures arrive (it needs the same zip-reading groundwork as real package
    install, so it isn't worth building twice).
 6. Add fixture-based diagnostics, screenshots, logs, and core package workflows when their source
-   fixtures are provided. **Diagnostics (Check summary) and core package install/update done
-   2026-09-23** — see "Known issues and incomplete wiring" above. Still open: core remove, the full
+   fixtures are provided. **Diagnostics (Check summary), core package install/update, and core
+   removal done 2026-09-23** — see "Known issues and incomplete wiring" above. Still open: the full
    TAUD1 QR/text record format, and screenshot/log discovery (no real fixtures found yet for either).
 7. Validate write operations on a designated test card only after review.
 

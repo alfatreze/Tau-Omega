@@ -1,10 +1,14 @@
 <script lang="ts">
-  import type { PackageManifest, PackagePlan, PackageReport } from './types';
+  import type { Core, PackageManifest, PackagePlan, PackageReport, RemovePlan, RemoveReport } from './types';
   export let zipPath = ''; export let cardPath = '';
   export let chooseZip: () => void; export let chooseCard: () => void;
   export let inspect: () => void; export let manifest: PackageManifest | null = null; export let inspectNotice = '';
   export let review: () => void; export let plan: PackagePlan | null = null; export let planNotice = '';
   export let confirm: () => void; export let report: PackageReport | null = null; export let confirmNotice = '';
+
+  export let loadCoresToRemove: () => void; export let removeCores: Core[] = []; export let removeCoresNotice = '';
+  export let removeCoreId = ''; export let reviewRemove: () => void; export let removePlan: RemovePlan | null = null; export let removePlanNotice = '';
+  export let confirmRemove: () => void; export let removeReport: RemoveReport | null = null; export let removeConfirmNotice = '';
 
   const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   const STATE_LABEL: Record<string, string> = { only_left: 'New', different: 'Update', identical: 'Unchanged', only_right: 'Card only' };
@@ -61,6 +65,54 @@
   {#if report}
     <section class="settings-card"><div><h2>Installed</h2><p>{report.written} files written · {report.unchanged} already up to date · {size(report.bytes_written)} written</p></div><span class="chip capable">Verified</span></section>
   {/if}
+
+  <header><div><p class="eyebrow">CORE PACKAGES</p><h1>Remove an installed core</h1><p class="lede">Checks every other installed core on this card first. Files shared with another core (the platform's <code>Assets/&lt;platform&gt;/common</code> media root and its <code>Platforms</code> entry) are only removed when no sibling core still needs them.</p></div></header>
+
+  <section class="settings-card">
+    <div style="width:100%">
+      <h2>Choose a card</h2>
+      <p>Uses the staging card folder above.</p>
+      <button class="primary" disabled={!cardPath.trim()} on:click={loadCoresToRemove}>List installed cores</button>
+      <p class="notice" role="status">{removeCoresNotice}</p>
+    </div>
+  </section>
+
+  {#if removeCores.length}
+    <section class="settings-card">
+      <div style="width:100%">
+        <h2>Pick a core to remove</h2>
+        <label for="remove-core-select">Installed core</label>
+        <select id="remove-core-select" bind:value={removeCoreId}>
+          <option value="" disabled>Choose a core…</option>
+          {#each removeCores as core}<option value={core.id}>{core.id} ({core.platform}, v{core.version})</option>{/each}
+        </select>
+        <button class="primary" disabled={!removeCoreId} on:click={reviewRemove}>Plan removal</button>
+        <p class="notice" role="status">{removePlanNotice}</p>
+      </div>
+    </section>
+  {/if}
+
+  {#if removePlan}
+    <section class="settings-card">
+      <div style="width:100%">
+        <h2>{removePlan.files_to_remove} files · {size(removePlan.bytes_to_remove)} to delete</h2>
+        {#if removePlan.platform_shared}
+          <p class="safety">Another installed core still uses platform <code>{removePlan.platform}</code>, so its shared <code>Assets/{removePlan.platform}/common</code> and <code>Platforms</code> files are kept.</p>
+        {:else if removePlan.platform}
+          <p class="safety">No other installed core uses platform <code>{removePlan.platform}</code>, so its shared platform files are removed too.</p>
+        {/if}
+        <ul class="difference-list remove-list">
+          {#each removePlan.paths as removePath}<li><span>{removePath}</span></li>{/each}
+        </ul>
+        <button class="danger" on:click={confirmRemove}>Confirm and remove</button>
+        <p class="notice" role="status">{removeConfirmNotice}</p>
+      </div>
+    </section>
+  {/if}
+
+  {#if removeReport}
+    <section class="settings-card"><div><h2>Removed</h2><p>{removeReport.removed_files} files deleted · {size(removeReport.bytes_removed)} freed</p></div><span class="chip capable">Verified</span></section>
+  {/if}
 </section>
 <style>
   .package-counts { max-width: 540px; }
@@ -74,4 +126,6 @@
   .difference.different { color: #d9c47e; }
   .difference.identical { color: #8f9e9d; }
   .difference.only_right { color: #f29b83; }
+  .remove-list li { display: block; }
+  .remove-list li > span { color: #c7d1d0; }
 </style>

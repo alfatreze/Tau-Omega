@@ -12,6 +12,7 @@ pub mod journal;
 pub mod package;
 pub mod playlist;
 pub mod problems;
+pub mod remove;
 pub mod storage;
 pub mod sync;
 
