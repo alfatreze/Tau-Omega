@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"Capabilities for Tau Omega's single main window: this app's own commands (sync/package/remove/taud/screenshots/etc.) are always allowed and need no grant here -- this file only covers the plugin- and core-API surface Tauri itself gates.","local":true,"windows":["main"],"permissions":["core:default","core:event:default","dialog:default"]}}
