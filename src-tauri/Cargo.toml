@@ -9,6 +9,7 @@ edition = "2024"
 tau-core = { path = "../crates/tau-core", features = ["serde"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+base64 = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

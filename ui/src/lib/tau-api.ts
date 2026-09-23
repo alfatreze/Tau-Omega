@@ -33,4 +33,5 @@ export const planRemoveCore = (card: string, coreId: string) => invoke<RemovePla
 export const executeRemoveCore = (card: string, coreId: string, confirmation: string) => invoke<RemoveReport>('execute_remove_core', { card, coreId, confirmation });
 export const readQrReport = (path: string) => invoke<TaudReport | null>('read_qr_report', { path });
 export const listScreenshots = (card: string) => invoke<ScreenshotEntry[]>('list_screenshots', { card });
+export const readImageDataUrl = (path: string) => invoke<string>('read_image_data_url', { path });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';

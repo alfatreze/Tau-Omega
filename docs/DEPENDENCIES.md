@@ -48,6 +48,7 @@ against three real fixtures.
 | Dependency | Purpose | Licence / review |
 |---|---|---|
 | `tauri` 2, `tauri-plugin-dialog` | Desktop shell and native file pickers | MIT OR Apache-2.0. Ships in the macOS bundle today. |
+| `base64` (src-tauri only) | Encoding a screenshot's bytes as a `data:` URL for `read_image_data_url`, so the Settings screenshot gallery can show the real image inline | MIT OR Apache-2.0. Already resolved in the workspace lockfile via `tau-core`'s own `base64` dependency (`taud`), so this adds zero new transitive crates -- a presentation-only pass-through kept in the Tauri adapter rather than `tau-core`, since it has no domain logic (which file is valid is already `list_screenshots`'s decision). Deliberately not using Tauri's asset protocol (`convertFileSrc`), which would need broadening the webview's filesystem access via a capability/scope change for arbitrary card paths; this keeps that surface at zero. |
 | Svelte, Vite, TypeScript, `@tauri-apps/api` | UI build and Tauri bridge | MIT. |
 
 `tau-cli` has no dependency beyond `tau-core`, which is the check that the engine really is

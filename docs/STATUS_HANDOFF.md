@@ -1,7 +1,8 @@
 # Tau Omega — status handoff
 
-Updated 2026-09-24 (core removal, the full TAUD1 QR decoder, real hardware write validation, and
-screenshot discovery, added in sequence). All implementation work is contained in `Tau Omega/`.
+Updated 2026-09-24 (core removal, the full TAUD1 QR decoder, real hardware write validation,
+screenshot discovery, and a UX/UI review with two real bug fixes and a screenshot gallery, added
+in sequence). All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -424,6 +425,53 @@ shared `Assets/tau/common/tau.rom`, and `Platforms/tau.json`/`_images/tau.bin` w
 unchanged. All scratch namespaces (`tauomegasync`, `tauomegapkg`) were removed after validation and
 the card ejected cleanly (`diskutil eject`). See the sibling `tau-alpha` repo's `docs/AUDIT_TRAIL.md`
 for the paired log entry.
+
+## UX/UI review (2026-09-24)
+
+Owner asked for a product-design review focused on simple flows, instant feedback, visible
+progress, polished UI, and rich content over raw inputs/lists. No installed skill matched "product
+design," so this was a direct review — done by actually running the app in a browser (real DOM/
+accessibility-tree inspection, not just reading markup), which surfaced two real, verified defects
+rather than only opinions:
+
+1. **Every non-Cards/Sync/Compare page kept the Compare page mounted and hidden behind it.**
+   `App.svelte`'s router rendered Cards/Sync/(trailing-`{:else}`)Compare inside `<main>`, then
+   separately mounted Playlists/Backup/Packages/Problems/Library/Jobs/Settings as
+   `position:fixed` overlays *after* `</main>` closed — the `{:else}` fired for every page that
+   wasn't Cards/Sync, not just Compare, so Compare's form fields stayed mounted and focusable
+   behind whichever page was actually showing. Confirmed via the accessibility tree: two full sets
+   of interactive fields present at once.
+2. **Content could render past the viewport's right edge on every fixed-overlay page.** Confirmed
+   by measuring the DOM directly: Backup's own lede paragraph rendered 182px past a 1024px-wide
+   window. The overlay's child `.page` never resolved its `width:100%` against the fixed
+   container correctly.
+
+**Fixed:** one exclusive `if`/`else if` chain for all ten page values, all as real children of
+`<main>`'s grid content column instead of the overlay hack; `.jobs-panel` (and the "jobs-panel"
+class on the six view components that had it) removed; `<aside>` is now `position:sticky` so the
+sidebar stays in view as content scrolls, instead of relying on the overlay to cover it. Also fixed
+a header-wrapping bug found in the same pass (long lede text pushed a header's button off the right
+edge instead of wrapping onto a second line). Verified live: all ten pages now render exactly one
+`.page` element each, zero hidden duplicate content, zero horizontal overflow at 1024px width.
+
+**Built:** a real screenshot gallery replacing the plain filename-list-with-a-Decode-button. New
+`read_image_data_url` Tauri command (base64-encodes one image file as a `data:` URL — deliberately
+not Tauri's asset protocol, which would need broadening filesystem access via a capability/scope
+change; see `DEPENDENCIES.md`). The Settings screen's "Screenshots & Check reports" card is now a
+master-detail layout: a scrollable row list on the left (unchanged, cheap — no eager thumbnail
+loading, since a card can have 100+ screenshots), and a detail panel on the right that shows the
+actual selected image alongside its decoded TAUD1 report (or a plain "no QR code in this image"
+message) the moment a row is clicked. The two previously separate cards ("Browse screenshots" and
+"Full Check report") are now one flow; the manual path-entry field is kept as a collapsed "or
+decode a screenshot from elsewhere…" fallback rather than removed. Verified end to end in a browser
+against a mocked Tauri backend (`window.__TAURI_INTERNALS__.invoke`) covering the loading, decoded,
+and no-QR-found states.
+
+**Not done, deliberately scoped as future work, not started without further direction:** a real
+"recent cards" home screen with drag-and-drop, a shared toast/progress system wiring the engine's
+existing `ProgressObserver` plumbing into visible progress bars everywhere (today only Sync/Library
+scan use it), cover-art thumbnails in the core/library lists, and sidebar grouping/icons. See the
+conversation this session for the full write-up.
 
 ## Safety and UX baseline
 
