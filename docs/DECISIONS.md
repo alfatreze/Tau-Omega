@@ -94,3 +94,28 @@ as a reference implementation for adding player features here, rather than as a 
 **If code is actually copied, MIT still requires attribution** — carry the upstream copyright notice
 and licence text. D-010 says never copy *from* copyleft; this is the complement: copying from a
 permissive project is allowed *with* its notice preserved, not silently.
+
+## D-013 — release artifact versioning and layout
+
+Every distributable app build is versioned with semver (`MAJOR.MINOR.PATCH`), kept in sync across
+`Cargo.toml` (workspace), `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, and `ui/package.json`
+— already the existing practice (v0.2.0 today; matches the `v0.1.0`/`v0.2.0` git tags already pushed).
+
+Every release's build artifacts (platform bundles, checksums, release notes) are stored under a
+root-level `releases/` folder, one subfolder per release, named `v{version}` to match the git tag
+convention:
+
+```
+releases/
+  v0.2.0/
+    Tau Omega_0.2.0_aarch64.dmg
+    Tau Omega_0.2.0_x64.msi
+    Tau Omega_0.2.0_amd64.deb
+    SHA256SUMS.txt
+    RELEASE_NOTES.md
+  v0.3.0/
+    ...
+```
+
+Before committing a new release folder's contents, show a directory-tree preview for approval first
+— release artifacts are typically binary and can be large, so review before commit rather than after.
