@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { Comparison, Core, DuplicateGroup, LibraryScan, MediaScan, Plan, Setting, SyncReport } from './types';
+import type { Comparison, Core, LibraryScan, MediaScan, Plan, Problem, Setting, SyncReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -11,7 +11,7 @@ export const executeCoreCopy = (source: string, destination: string, confirmatio
 export const executeCoreMove = (source: string, destination: string, confirmation: string, backupPath: string, manifestPath: string, jobId: string) => invoke<SyncReport>('execute_core_move', { source, destination, confirmation, deleteConfirmation: confirmation, backupPath, manifestPath, jobId });
 export const scanMedia = (path: string, jobId: string) => invoke<MediaScan>('scan_media', { path, jobId });
 export const exportPlaylist = (mediaRoot: string, playlistName: string, output: string) => invoke<void>('export_playlist', { mediaRoot, playlistName, output });
-export const findDuplicates = (path: string) => invoke<DuplicateGroup[]>('find_duplicates', { path });
+export const findProblems = (path: string) => invoke<Problem[]>('find_problems', { path });
 export const readJournal = (path: string) => invoke<unknown>('read_journal', { path });
 export const scanLibrary = (path: string, jobId: string) => invoke<LibraryScan>('scan_library', { path, jobId });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';

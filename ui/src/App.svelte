@@ -1,14 +1,14 @@
 <script lang="ts">
   import { open } from '@tauri-apps/plugin-dialog';
-  import type { Comparison, Core, Difference, DuplicateGroup, Job, LibraryScan, MediaScan, Plan, Setting } from './lib/types';
+  import type { Comparison, Core, Difference, Job, LibraryScan, MediaScan, Plan, Problem, Setting } from './lib/types';
   import { invoke } from './lib/backend';
-  import { cancelJob, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executeSync, exportPlaylist, findDuplicates, inspectCard, newJobId, onProgress, planCoreCopy, planSync, readJournal, readPersistedSettings, scanLibrary, scanMedia } from './lib/tau-api';
+  import { cancelJob, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executeSync, exportPlaylist, findProblems, inspectCard, newJobId, onProgress, planCoreCopy, planSync, readJournal, readPersistedSettings, scanLibrary, scanMedia } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import JobsView from './lib/JobsView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
   import ProblemsView from './lib/ProblemsView.svelte';
   import LibraryView from './lib/LibraryView.svelte';
-  let page: 'cards' | 'compare' | 'sync' | 'jobs' | 'settings' | 'playlists' | 'problems' | 'library' = 'cards'; let cores: Core[] = []; let path = ''; let jobs: Job[] = []; let journalPath = ''; let journalNotice = 'Choose a host-side Tau Omega journal to load it.'; let problemsPath = ''; let duplicateGroups: DuplicateGroup[] | null = null; let problemsNotice = 'Choose a media root to inspect duplicate files.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
+  let page: 'cards' | 'compare' | 'sync' | 'jobs' | 'settings' | 'playlists' | 'problems' | 'library' = 'cards'; let cores: Core[] = []; let path = ''; let jobs: Job[] = []; let journalPath = ''; let journalNotice = 'Choose a host-side Tau Omega journal to load it.'; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let libraryPath = ''; let libraryScan: LibraryScan | null = null; let libraryNotice = 'Choose a media root to inspect it.'; let libraryLoading = false; let libraryJobId = ''; let libraryProgress = ''; let librarySearch = ''; let libraryFormat: 'all' | 'mp3' | 'flac' = 'all';
   let syncJobId = ''; let syncProgress = '';
   onProgress((event) => { if (event.job_id === syncJobId) syncProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; if (event.job_id === libraryJobId) libraryProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; });
@@ -24,7 +24,7 @@
   }
   async function loadSettings() { try { settings = await readPersistedSettings(settingsPath); settingsNotice = `${settings.length} persisted values loaded. Nothing was changed.`; } catch (error) { settings = []; settingsNotice = `Could not read settings: ${errorMessage(error)}`; } }
   async function scanPlaylists() { try { playlistResult = await scanMedia(playlistPath, newJobId()); playlistNotice = `${playlistResult.playlists.length} playlists found. Nothing was changed.`; } catch (error) { playlistResult = null; playlistNotice = `Could not scan this folder: ${errorMessage(error)}`; } }
-  async function scanDuplicates() { problemsLoading = true; try { duplicateGroups = await findDuplicates(problemsPath); problemsNotice = `${duplicateGroups.length} duplicate groups found. Nothing was changed.`; } catch (error) { duplicateGroups = null; problemsNotice = `Could not scan this folder: ${errorMessage(error)}`; } finally { problemsLoading = false; } }
+  async function scanProblems() { problemsLoading = true; try { problems = await findProblems(problemsPath); problemsNotice = `${problems.length} problem${problems.length === 1 ? '' : 's'} found. Nothing was changed.`; } catch (error) { problems = null; problemsNotice = `Could not scan this folder: ${errorMessage(error)}`; } finally { problemsLoading = false; } }
   async function inspectLibrary() { libraryLoading = true; libraryJobId = newJobId(); libraryProgress = 'starting…'; librarySearch = ''; libraryFormat = 'all'; try { libraryScan = await scanLibrary(libraryPath, libraryJobId); libraryNotice = `${libraryScan.tracks.length} tracks found. Nothing was changed.`; } catch (error) { libraryScan = null; libraryNotice = `Could not inspect this folder: ${errorMessage(error)}`; } finally { libraryLoading = false; libraryProgress = ''; } }
   async function cancelLibraryScan() { if (libraryJobId) await cancelJob(libraryJobId); }
   $: libraryRows = (libraryScan?.tracks ?? []).filter((row) => (libraryFormat === 'all' || row.format.toLowerCase() === libraryFormat) && (!librarySearch.trim() || `${row.title} ${row.artist} ${row.album} ${row.rel}`.toLowerCase().includes(librarySearch.trim().toLowerCase())));
@@ -58,7 +58,7 @@
   <PlaylistsView bind:path={playlistPath} result={playlistResult} notice={playlistNotice} bind:output={playlistOutput} bind:selected={selectedPlaylist} choose={() => chooseFolder('playlists')} scan={scanPlaylists} exportList={exportSelectedPlaylist} />
 {/if}
 {#if page === 'problems'}
-  <ProblemsView bind:path={problemsPath} groups={duplicateGroups} notice={problemsNotice} loading={problemsLoading} choose={() => chooseFolder('problems')} scan={scanDuplicates} />
+  <ProblemsView bind:path={problemsPath} {problems} notice={problemsNotice} loading={problemsLoading} choose={() => chooseFolder('problems')} scan={scanProblems} />
 {/if}
 {#if page === 'library'}
   <LibraryView bind:path={libraryPath} scan={libraryScan} rows={libraryRows} notice={libraryNotice} loading={libraryLoading} progress={libraryProgress} bind:search={librarySearch} bind:format={libraryFormat} choose={() => chooseFolder('library')} inspect={inspectLibrary} cancel={cancelLibraryScan} />

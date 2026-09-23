@@ -16,13 +16,14 @@ use tauri::{Emitter, State, Window};
 // `PersistedSetting` and `MediaDifference` are returned to the front-end
 // directly, since they now implement `Serialize` themselves. The views that
 // remain (`CoreView`, `SyncPlanView`, `ComparisonView`, `PlaylistView`,
-// `MediaScanView`, `TrackRow`/`LibraryScanView`, `DuplicateView`) stay
-// because they do real work a serde derive can't: `CoreView` turns
-// `IndexStatus` into an English sentence and `TrackRow` picks friendly
-// display fields out of `Entry::tags` (presentation, not a serde
-// limitation); the others aggregate counts (`new_files`, `tracks`,
-// `only_left`, ...) that are not fields stored on the engine type, only
-// derivable from it.
+// `MediaScanView`, `TrackRow`/`LibraryScanView`) stay because they do real
+// work a serde derive can't: `CoreView` turns `IndexStatus` into an English
+// sentence and `TrackRow` picks friendly display fields out of `Entry::tags`
+// (presentation, not a serde limitation); the others aggregate counts
+// (`new_files`, `tracks`, `only_left`, ...) that are not fields stored on the
+// engine type, only derivable from it. `find_problems` returns
+// `tau_core::problems::Problem` directly -- it's already exactly the shape a
+// front-end needs, no DTO layer earns its keep there.
 
 #[derive(Serialize)]
 struct CoreView { id: String, author: String, version: String, platform: String, library_capable: bool, index_status: String, tracks: Option<usize> }
@@ -42,8 +43,6 @@ struct ComparisonView {
 struct PlaylistView { name: String, tracks: usize }
 #[derive(Serialize)]
 struct MediaScanView { playlists: Vec<PlaylistView>, warnings: Vec<tau_core::Warning> }
-#[derive(Serialize)]
-struct DuplicateView { files: Vec<String> }
 /// One row for the Library screen's track table: friendly display fields
 /// derived from `Entry::tags` (untouched original tag text, not the
 /// ASCII-folded index encoding `build_index` produces) -- this is
@@ -203,10 +202,9 @@ fn export_playlist(media_root: String, playlist_name: String, output: String) ->
 }
 
 #[tauri::command]
-fn find_duplicates(path: String) -> Result<Vec<DuplicateView>, TauError> {
+fn find_problems(path: String) -> Result<Vec<tau_core::problems::Problem>, TauError> {
     let scan = tau_core::scan_dir(Path::new(&path), false)?;
-    Ok(tau_core::duplicates::find_duplicates(&path, &scan.entries)?
-        .into_iter().map(|files| DuplicateView { files }).collect())
+    tau_core::problems::find_problems(&path, &scan.entries)
 }
 
 #[tauri::command]
@@ -299,7 +297,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_duplicates, compare_media, read_journal, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, read_persisted_settings, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

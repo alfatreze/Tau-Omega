@@ -170,7 +170,6 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 ## Known issues and incomplete wiring
 
 - Recent Jobs can load a selected journal but does not yet discover journals automatically or persist a configurable report directory.
-- Problems currently reports duplicate groups only; it does not yet include format, tag, cover, path, FAT32, or collision checks.
 - Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
 - Jobs shown from a loaded journal are a concise summary, not a full journal-detail view.
 - Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
@@ -197,6 +196,16 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
   `.settings-values`, `.comparison-counts`) never applied to *any* child-component overlay screen
   (Jobs/Playlists/Problems/Settings, not just Library) — a component's `<style>` block only scopes
   to its own template. Fixed by moving those rules into the already-global `ui/src/styles.css`.
+- **Fixed 2026-09-23:** Problems now covers five categories, not just duplicates — new
+  `tau_core::problems::find_problems` (replacing the old bare `find_duplicates` command, renamed
+  `find_problems`) also flags missing title/artist tags, ID3v2.2 tags (the cover embedder only
+  handles v2.3/v2.4), path issues (non-ASCII names that would be renamed on sync, paths over the
+  firmware's 200-character limit, and names that collide once folded to on-card ASCII — reusing
+  `ascii_name`), and folders with neither a folder-level cover file nor any embedded APIC/PICTURE
+  art (new `cover::has_embedded_cover`, read-only). `ProblemsView.svelte` groups results by category
+  with counts; verified in a browser against synthetic data covering all five kinds. FAT32-specific
+  checks are not covered — nothing in this engine writes to a card yet, so there is no FAT32 path to
+  validate against.
 
 ## Deferred because validation/fixtures are required
 
@@ -215,7 +224,8 @@ below is blocked on it. Next:
 
 1. ~~Finish Library navigation, picker, scanned rows, search, filters, and virtualisation.~~ **Done
    2026-09-23** — see "Known issues and incomplete wiring" above.
-2. Expand Problems checks from duplicates to format/tag/path/cover issues.
+2. ~~Expand Problems checks from duplicates to format/tag/path/cover issues.~~ **Done 2026-09-23** —
+   see "Known issues and incomplete wiring" above.
 3. Persist Job history through a configured reports directory and detail view.
 4. Add playlist create/rename/reorder/import plan flows.
 5. Add storage planning and backup/package dry-run views.
