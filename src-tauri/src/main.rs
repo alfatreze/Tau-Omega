@@ -225,6 +225,83 @@ fn set_reports_dir(app: tauri::AppHandle, path: String) -> Result<(), TauError> 
     Ok(())
 }
 
+const RECENT_CARDS_FILE: &str = "recent_cards.txt";
+const RECENT_CARDS_MAX: usize = 8;
+
+/// Cards this app has successfully opened before, most-recent-first, so the
+/// Cards screen can offer them back on the next launch instead of the user
+/// retyping a path -- one small text file in this app's config directory,
+/// same convention as [`get_reports_dir`]. A card that no longer exists
+/// (ejected, renamed) stays listed; the frontend decides how to handle that
+/// when the user picks it, this command only remembers paths.
+#[tauri::command]
+fn get_recent_cards(app: tauri::AppHandle) -> Result<Vec<String>, TauError> {
+    let path = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?
+        .join(RECENT_CARDS_FILE);
+    match std::fs::read_to_string(path) {
+        Ok(contents) => Ok(contents.lines().map(str::to_string).collect()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(TauError::from(error)),
+    }
+}
+
+/// Records a successfully opened card: moves it to the front if already
+/// remembered, otherwise prepends it, and caps the list at
+/// [`RECENT_CARDS_MAX`] entries.
+#[tauri::command]
+fn record_recent_card(app: tauri::AppHandle, path: String) -> Result<(), TauError> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?;
+    std::fs::create_dir_all(&dir)?;
+    let file = dir.join(RECENT_CARDS_FILE);
+    let path = path.trim().to_string();
+    let mut recent: Vec<String> = match std::fs::read_to_string(&file) {
+        Ok(contents) => contents.lines().map(str::to_string).collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(TauError::from(error)),
+    };
+    recent.retain(|existing| existing != &path);
+    recent.insert(0, path);
+    recent.truncate(RECENT_CARDS_MAX);
+    std::fs::write(file, recent.join("\n"))?;
+    Ok(())
+}
+
+/// Looks for mounted volumes that look like an Analogue Pocket card (a
+/// top-level folder with both `Cores` and `Assets` -- the same shape
+/// `tau_core::inspect_card` checks, done cheaply here as a plain directory
+/// check rather than a full inspection, since this only decides what to
+/// offer, not what to trust). macOS only for now (this app only ships a
+/// macOS bundle today, per `docs/DEPENDENCIES.md`); returns an empty list on
+/// every other OS rather than guessing at unverified mount conventions.
+#[tauri::command]
+fn list_mounted_cards() -> Result<Vec<String>, TauError> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut found = Vec::new();
+        let volumes = Path::new("/Volumes");
+        if let Ok(entries) = std::fs::read_dir(volumes) {
+            for entry in entries.flatten() {
+                let candidate = entry.path();
+                if candidate.join("Cores").is_dir() && candidate.join("Assets").is_dir() {
+                    found.push(candidate.to_string_lossy().into_owned());
+                }
+            }
+        }
+        found.sort();
+        Ok(found)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(Vec::new())
+    }
+}
+
 #[tauri::command]
 fn scan_media(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<MediaScanView, TauError> {
     let scan = with_job(&window, &jobs, job_id, |progress| {
@@ -543,7 +620,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
