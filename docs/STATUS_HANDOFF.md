@@ -596,38 +596,48 @@ widget's empty state, the populated state after opening a card, the dropdown's c
 switching core (sidebar updates, navigates to Library, pre-fills the right media-root path) all
 confirmed working.
 
-## Real per-core icon.bin decoding (2026-09-24)
+## Real per-core artwork: icon.bin and the platform banner (2026-09-24)
 
 Owner noticed the core artwork/dev icon weren't real and correctly guessed it needed a specialised
-decoder. New `tau_core::icon::decode_icon_bin`: `Cores/<id>/icon.bin` is a 36x36 monochrome bitmap,
-16 bits per pixel, stored rotated 90 degrees CCW — documented in the sibling `tau-alpha` repo's
-`analogue-pocket-dev` skill (`references/sd-packaging-assets.md`), sourced from Analogue's own
-SD-packaging notes. That description alone left two things ambiguous (which byte of the 16-bit pixel
-actually holds the brightness, and which rotation direction undoes the stored one), so both were
-resolved empirically before trusting them: decoded the real shipped `alfatreze.TAU` icon four ways
-(no rotation, CW, CCW, 180°) and compared each pixel-for-pixel against `tau-alpha/assets/branding/
-author-icon.png` — the same emblem drawn by hand — using a throwaway Python prototype (render as PGM,
-convert with macOS's `sips`, view with `Read`). The 90°-clockwise render was an exact silhouette
-match; brightness turned out to be the **first** byte of each pixel pair (a plain byte offset, not a
-16-bit read at all — the "upper byte" language in the source doc was about big-endian byte order, not
-a machine word's usual low/high split, confirmed by checking the raw byte range: values only ever
-spanned 0-255 as little-endian 16-bit words, which would make no sense for a 0xFF00-is-full-brightness
-format).
+decoder. New `tau_core::icon` module, two decoders sharing one implementation:
 
-Decodes to a grayscale+alpha PNG (opaque white where "on", transparent elsewhere, so it composites
+- `decode_icon_bin`: `Cores/<id>/icon.bin`, 36x36 monochrome, 16 bits per pixel, stored rotated 90
+  degrees CCW — documented in the sibling `tau-alpha` repo's `analogue-pocket-dev` skill
+  (`references/sd-packaging-assets.md`), sourced from Analogue's own SD-packaging notes. That
+  description left two things ambiguous (which byte of the 16-bit pixel holds the brightness, and
+  which rotation direction undoes the stored one), resolved empirically before trusting them:
+  decoded the real shipped `alfatreze.TAU` icon four ways (no rotation, CW, CCW, 180°) and compared
+  each pixel-for-pixel against `tau-alpha/assets/branding/author-icon.png` — the same emblem drawn
+  by hand — using a throwaway Python prototype (render as PGM, convert with macOS's `sips`, view with
+  `Read`). The 90°-clockwise render was an exact silhouette match; brightness turned out to be the
+  **first** byte of each pixel pair (a plain byte offset, not a 16-bit read at all — the "upper byte"
+  language in the source doc was about big-endian byte order, not a machine word's usual low/high
+  split, confirmed by checking the raw byte range: values only ever spanned 0-255 as little-endian
+  16-bit words, which would make no sense for a 0xFF00-is-full-brightness format).
+- `decode_platform_image`: **a second, distinct asset** — `Platforms/_images/<platform>.bin`, 521x165,
+  the *real* per-platform artwork, shared by every core on that platform (not a second copy of the
+  small icon). Found only because the owner's follow-up ("the card is still showing the developer
+  icon instead of the main core image") made clear the icon and the "main artwork" were never meant
+  to be the same picture. Confirmed the same encoding applies (rendered the real shipped `tau.bin`
+  banner and got a clean "TAUα" wordmark on graph paper, not noise) — but doing that surfaced a real
+  bug the square icon case couldn't: the shared rotation math used `height` where it needed the
+  actual stored buffer's row length, which only happens to equal `height` when width == height. Fixed
+  and re-verified against both the icon and the banner before trusting either.
+
+Both decode to a grayscale+alpha PNG (opaque white where "on", transparent elsewhere, so it composites
 over any card background colour) using the `png` crate already in `tau-core`'s dependency list — no
-new dependency needed. New `read_core_icon` Tauri command (`card + core_id → Option<data: URL>`,
-`None` when a core simply has no `icon.bin`, not an error). 2 new engine tests: the real shipped icon
-decodes to a valid PNG with the exact promised dimensions/colour type and isn't blank, and a
-wrong-sized buffer is rejected rather than misread.
+new dependency needed. New `read_core_icon` (`card + core_id`) and `read_platform_image` (`card +
+platform`) Tauri commands, both `Option`-returning (`None`, not an error, when the file doesn't
+exist). 4 engine tests: each decoder against its own real shipped file (valid PNG, exact promised
+dimensions/colour type, not blank) and each rejecting a wrong-sized buffer rather than misreading it.
 
-Wired into both card-tier UIs: the big player-card's main art square, and — per the owner's follow-up
-("the icon should be next to the dev name, replacing the `<>`, while the core artwork [is in] the
-main image area") — a small copy of the same icon next to the developer name, replacing the generic
-bracket glyph there. The small list (`Show other cores`) got the same treatment. Icons are fetched
-once per core id and cached in memory (`coreIcons`); a core with no icon keeps the existing
-monogram/bracket-glyph fallback rather than showing nothing. Confirmed working against a real card
-in conversation (the real `HarpMudd.Mp3Player` icon rendered correctly, not just Tau's own).
+Wired correctly this time: the big player-card's main art square shows the **platform banner**
+(`platformImages`, cached by platform id since it's shared across cores, e.g. TAU and TAU
+Diagnostic fetch it once between them); a small copy of the **core icon** (`coreIcons`, cached by
+core id) sits next to the developer name, replacing the generic bracket glyph there, and in the small
+"Show other cores" list. A core/platform with no file keeps the existing monogram/bracket-glyph
+fallback rather than showing nothing. Confirmed working against a real card in conversation (the real
+`HarpMudd.Mp3Player` icon rendered correctly next to its dev name, not just Tau's own).
 
 ## Safety and UX baseline
 

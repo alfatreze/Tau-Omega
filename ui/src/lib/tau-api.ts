@@ -40,4 +40,5 @@ export const readQrReport = (path: string) => invoke<TaudReport | null>('read_qr
 export const listScreenshots = (card: string) => invoke<ScreenshotEntry[]>('list_screenshots', { card });
 export const readImageDataUrl = (path: string) => invoke<string>('read_image_data_url', { path });
 export const readCoreIcon = (card: string, coreId: string) => invoke<string | null>('read_core_icon', { card, coreId });
+export const readPlatformImage = (card: string, platform: string) => invoke<string | null>('read_platform_image', { card, platform });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';
