@@ -333,6 +333,12 @@ pub struct Core {
     pub platform: String,
     pub library_capable: bool,
     pub index_status: IndexStatus,
+    /// The declaring platform's own `category` (`Platforms/<platform>.json`'s
+    /// `platform.category`, e.g. `"Media Players"`), when that file exists
+    /// and parses. This is the real APF signal for "is this a media player
+    /// core" -- general across authors, not a guess from the core's id or
+    /// name.
+    pub platform_category: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -402,6 +408,7 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
                 .map(|value| slots_have_library(&value))
                 .unwrap_or(false);
             let index_status = index_status_for(&root, &platform);
+            let platform_category = platform_category_for(&root, &platform);
             cores.push(Core {
                 id,
                 author: string("author"),
@@ -410,6 +417,7 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
                 platform,
                 library_capable,
                 index_status,
+                platform_category,
             });
         }
     }
@@ -442,6 +450,25 @@ fn index_status_for(card_root: &Path, platform: &str) -> IndexStatus {
             Err(_) => IndexStatus::NeedsRepair,
         },
     }
+}
+
+/// Reads `Platforms/<platform>.json`'s `platform.category` (e.g.
+/// `"Media Players"`), the real APF signal a front-end can use to tell a
+/// media-player core apart from any other kind, without guessing from the
+/// core's id, author or name. `None` when the platform id is empty, the file
+/// is missing, or it doesn't parse -- never an error, since this is display
+/// metadata, not something `inspect_card` should fail over.
+fn platform_category_for(card_root: &Path, platform: &str) -> Option<String> {
+    if platform.is_empty() {
+        return None;
+    }
+    let path = card_root
+        .join("Platforms")
+        .join(format!("{platform}.json"));
+    let json: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    json.pointer("/platform/category")
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 /// A core supports the media library if any data slot serves `tau-library.tdb`.

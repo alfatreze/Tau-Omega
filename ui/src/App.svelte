@@ -3,7 +3,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, Difference, Job, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport } from './lib/types';
   import { invoke } from './lib/backend';
-  import { cancelJob, checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, readCheckSummary, readImageDataUrl, readJournal, readPersistedSettings, readQrReport, recordRecentCard, scanLibrary, scanMedia, setReportsDir } from './lib/tau-api';
+  import { cancelJob, checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, readCheckSummary, readImageDataUrl, readJournal, readPersistedSettings, readQrReport, recordRecentCard, scanLibrary, scanMedia, setManualPlayer, setReportsDir } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import JobsView from './lib/JobsView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
@@ -36,6 +36,12 @@
     // app never opens to an empty Cards screen once it has seen any card.
     const toOpen = mountedCards[0] ?? recentCards[0];
     if (toOpen) { path = toOpen; await openFolder(); }
+    // Catches an eject the app wasn't open to see happen live -- "possibly
+    // only a refresh, in case I eject the card" is exactly what regaining
+    // focus already means: the user just switched back to this window. This
+    // component lives for the whole app session, so the listener is never
+    // removed.
+    window.addEventListener('focus', checkCardMounted);
   });
   async function chooseReportsDir() {
     const selected = await open({ directory: true });
@@ -117,25 +123,49 @@
     try {
       cores = await inspectCard(path);
       notice = `${cores.length} core${cores.length === 1 ? '' : 's'} found. This is a read-only inspection.`;
+      cardMounted = true;
       recordRecentCard(path).then(() => refreshKnownCards()).catch(() => { /* remembering a card is best-effort, not a reason to fail the open */ });
     } catch (error) { notice = `Could not inspect this folder: ${errorMessage(error)}`; cores = []; }
   }
-  let mountedCards: string[] = []; let recentCards: string[] = [];
+  let mountedCards: string[] = []; let recentCards: string[] = []; let manualPlayers: string[] = [];
   $: knownCards = [...mountedCards, ...recentCards.filter((card) => !mountedCards.includes(card))];
   async function refreshKnownCards() {
     try { mountedCards = await listMountedCards(); } catch { mountedCards = []; }
     try { recentCards = await getRecentCards(); } catch { recentCards = []; }
+    try { manualPlayers = await getManualPlayers(); } catch { manualPlayers = []; }
   }
   async function openKnownCard(card: string) { path = card; await openFolder(); }
-  let showAllCores = false;
-  const isTauCore = (core: Core) => core.id.toLowerCase().includes('tau') || core.platform.toLowerCase().includes('tau');
-  $: visibleCores = showAllCores ? cores : cores.filter(isTauCore);
-  function viewCore(core: Core) {
+
+  // Whether the currently open card is still there: null when the open path
+  // isn't a removable volume at all (a plain staging folder never "ejects"),
+  // so there is nothing to warn about either way.
+  let cardMounted: boolean | null = null;
+  async function checkCardMounted() {
+    if (!path || !cores.length || !path.startsWith('/Volumes/')) return;
+    try { mountedCards = await listMountedCards(); cardMounted = mountedCards.includes(path); } catch { /* a failed check isn't reason to flip to "ejected" */ }
+  }
+
+  // Takes `players` explicitly (rather than closing over `manualPlayers`)
+  // so the `$:` statements below, which only track variables they reference
+  // directly, see the real dependency and re-run when the list changes --
+  // a closure over an outer variable is invisible to Svelte's reactivity.
+  const isPlayerCore = (core: Core, players: string[]) => players.includes(core.id) || core.platform_category === 'Media Players' || (core.platform_category == null && (core.id.toLowerCase().includes('tau') || core.platform.toLowerCase().includes('tau')));
+  $: playerCores = cores.filter((core) => isPlayerCore(core, manualPlayers));
+  $: otherCores = cores.filter((core) => !isPlayerCore(core, manualPlayers));
+  let showOtherCores = false;
+  async function toggleManualPlayer(core: Core) { try { await setManualPlayer(core.id, true); manualPlayers = [...manualPlayers, core.id]; } catch (error) { notice = `Could not set ${core.id} as a player: ${errorMessage(error)}`; } }
+
+  let detailCore: Core | null = null;
+  function showCoreDetail(core: Core) { detailCore = core; }
+  function closeCoreDetail() { detailCore = null; }
+  function openCoreLibrary(core: Core) {
     if (!core.platform) { notice = `${core.id} has no declared platform, so its media root can't be located.`; return; }
     libraryPath = `${path.replace(/\/+$/, '')}/Assets/${core.platform}/common`;
     page = 'library';
     inspectLibrary();
   }
+
+  let showHelp = false;
   let syncCapacity: CapacityCheck | null = null;
   async function makePlan() { plan = null; syncCapacity = null; syncNotice = ''; try { plan = await planSync(sources.split('\n'), destination, embedCovers); syncNotice = `Plan ${plan.id} is ready for review. Nothing has been written.`; try { syncCapacity = await checkStorageCapacity(destination, plan.bytes_to_write); } catch { /* capacity check is informational; a plan still reviews without it */ } } catch (error) { syncNotice = `Could not make a plan: ${errorMessage(error)}`; } }
   async function runSync() { if (!plan) return; syncJobId = newJobId(); syncProgress = 'starting…'; const manifest = reportsDir ? autoJournalPath('sync') : manifestPath; try { const result = await executeSync(sources.split('\n'), destination, plan.id, manifest, embedCovers, syncJobId); syncNotice = `Verified: ${result.copied} copied, ${result.unchanged} unchanged. Index: ${result.index_path}`; jobs = [{ kind: 'Library sync', status: 'Completed', detail: `${result.copied} copied · ${result.unchanged} unchanged` }, ...jobs]; plan = null; if (reportsDir) await refreshHistory(); } catch (error) { syncNotice = `Nothing was reported as complete: ${errorMessage(error)}`; jobs = [{ kind: 'Library sync', status: 'Failed', detail: errorMessage(error) }, ...jobs]; if (reportsDir) await refreshHistory(); } finally { syncProgress = ''; } }
@@ -150,9 +180,40 @@
 
 <main><aside aria-label="Primary navigation"><div class="brand"><span class="mark">τ</span><span>Tau Omega<small>Library companion</small></span></div><nav><button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button><button class:active={page === 'compare'} on:click={() => page = 'compare'}>Compare cores</button><button class:active={page === 'sync'} on:click={() => page = 'sync'}>Sync library</button><button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button><button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button><button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button><button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button><button class:active={page === 'library'} on:click={() => page = 'library'}>Library</button><button class:active={page === 'jobs'} on:click={() => page = 'jobs'}>Recent jobs</button><button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button></nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
   {#if page === 'cards'}<section class="page" id="cards"><header><div><p class="eyebrow">CARD LIBRARY</p><h1>Start with a card</h1><p class="lede">Inspect a Pocket card or a staging folder. Your music stays untouched.</p></div><button class="primary" on:click={() => chooseFolder('card')}>Open folder</button></header>
-    {#if knownCards.length}<section class="known-cards" aria-labelledby="known-cards-title"><p class="eyebrow">QUICK OPEN</p><h2 id="known-cards-title">Known cards</h2><div class="known-card-list">{#each knownCards as card}<button class="known-card" class:active={path === card} on:click={() => openKnownCard(card)}><span class="known-card-badge" class:mounted={mountedCards.includes(card)}>{mountedCards.includes(card) ? 'Mounted' : 'Recent'}</span><span class="known-card-path">{card}</span></button>{/each}</div></section>{/if}
-    <section class="open-card" aria-labelledby="open-card-title"><div><p class="eyebrow">READ-ONLY</p><h2 id="open-card-title">Or type a path directly</h2><p>Paste or type a folder containing <code>Cores</code> and <code>Assets</code> — useful for a path "Open folder"'s picker can't reach. You can review its cores before planning any changes.</p></div><div class="folder"><label for="card-path">Card or staging-folder path</label><div><input id="card-path" bind:value={path} placeholder="/Volumes/My Pocket"/><button class="primary" on:click={openFolder}>Inspect</button></div></div></section><p class="notice" role="status">{notice}</p>
-    {#if cores.length}<section aria-labelledby="core-title"><div class="section-title"><div><p class="eyebrow">DETECTED</p><h2 id="core-title">Cores on this card</h2></div><span>{visibleCores.length} of {cores.length} shown<label class="show-all"><input type="checkbox" bind:checked={showAllCores}/> Show all cores</label></span></div>{#if visibleCores.length}<div class="core-list">{#each visibleCores as core}<article><div class="core-icon">{core.id.split('.').at(-1)?.[0] ?? 'τ'}</div><div><h3>{core.id}</h3><p>{core.author || 'Unknown author'} · {core.version || 'Version unknown'} · {core.platform || 'No platform declared'} · {core.index_status}{core.tracks === null ? '' : ` · ${core.tracks} tracks`}</p></div><span class:capable={core.library_capable} class="chip">{core.library_capable ? 'Library ready' : 'Legacy core'}</span><button class="quiet" aria-label={`View ${core.id}'s library`} on:click={() => viewCore(core)}>View</button></article>{/each}</div>{:else}<section class="empty"><div class="empty-art">τ</div><h2>No Tau cores found</h2><p>This card has {cores.length} other core{cores.length === 1 ? '' : 's'} installed. Turn on "Show all cores" to see them.</p></section>{/if}</section>{:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}</section>
+    {#if cardMounted === false}<div class="ejected-banner" role="status"><span>This card is no longer connected.</span><button class="quiet" on:click={() => openKnownCard(path)}>Reconnect</button></div>{/if}
+    {#if knownCards.length}<section class="known-cards" aria-labelledby="known-cards-title"><p class="eyebrow">QUICK OPEN</p><h2 id="known-cards-title">Known cards</h2><div class="known-card-list">{#each knownCards as card}<button class="known-card" class:active={path === card} on:click={() => openKnownCard(card)}><span class="known-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="5" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="16.5" r="1.1" fill="currentColor"/><circle cx="15" cy="16.5" r="1.1" fill="currentColor"/><circle cx="12" cy="19.2" r="1.1" fill="currentColor"/></svg></span><span class="known-card-body"><strong class="known-card-name">{card.split('/').filter(Boolean).pop() ?? card}</strong><span class="known-card-badge" class:mounted={mountedCards.includes(card)}>{mountedCards.includes(card) ? 'Available now' : 'Recently used'}</span><span class="known-card-path">{card}</span></span></button>{/each}</div></section>{/if}
+    <p class="notice" role="status">{notice}</p>
+    {#if cores.length}
+      <section aria-labelledby="player-title">
+        <div class="section-title"><div><p class="eyebrow">MEDIA PLAYERS</p><h2 id="player-title">Player cores on this card</h2></div><button class="quiet refresh-btn" aria-label="Refresh this card" title="Refresh" on:click={openFolder}><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+        {#if playerCores.length}
+          <div class="player-grid">
+            {#each playerCores as core}
+              <article class="player-card">
+                <button class="player-card-main" on:click={() => openCoreLibrary(core)}>
+                  <div class="player-card-art" aria-hidden="true"><span>{(core.shortname || core.id).slice(0, 2).toUpperCase()}</span></div>
+                  <h3>{core.shortname || core.id}</h3>
+                  <div class="player-card-dev"><svg viewBox="0 0 24 24" fill="none" width="13" height="13" aria-hidden="true"><path d="M8 6 3 12l5 6M16 6l5 6-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>{core.author || 'Unknown developer'}</span></div>
+                  <p class="player-card-meta">{core.tracks === null ? 'No index yet' : `${core.tracks} tracks`}</p>
+                </button>
+                <div class="player-card-footer">
+                  <span class:capable={core.library_capable} class="chip">{core.library_capable ? 'Library ready' : 'Legacy core'}</span>
+                  <button class="quiet" aria-label={`Details for ${core.id}`} title="Details" on:click={() => showCoreDetail(core)}>
+                    <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v5.5M12 8v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  </button>
+                </div>
+              </article>
+            {/each}
+          </div>
+        {:else}<section class="empty"><div class="empty-art">τ</div><h2>No player cores found</h2><p>This card has {cores.length} other core{cores.length === 1 ? '' : 's'} installed. Show them below to set one as a player.</p></section>{/if}
+      </section>
+      {#if otherCores.length}
+        <section aria-labelledby="other-core-title">
+          <div class="section-title"><div><p class="eyebrow">EVERYTHING ELSE</p><h2 id="other-core-title">Other cores on this card</h2></div><label class="show-all"><input type="checkbox" bind:checked={showOtherCores}/> Show {otherCores.length} other core{otherCores.length === 1 ? '' : 's'}</label></div>
+          {#if showOtherCores}<div class="core-list">{#each otherCores as core}<article><div class="core-icon">{core.id.split('.').at(-1)?.[0] ?? '?'}</div><div><h3>{core.id}</h3><p>{core.author || 'Unknown author'} · {core.version || 'Version unknown'} · {core.platform || 'No platform declared'}</p></div><button class="quiet" on:click={() => toggleManualPlayer(core)}>Set as player</button></article>{/each}</div>{/if}
+        </section>
+      {/if}
+    {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}</section>
   {:else if page === 'sync'}<section class="page sync-page"><header><div><p class="eyebrow">SAFE SYNC</p><h1>Review before copying</h1><p class="lede">Sources are read-only. Every file is verified, then the index is published last.</p></div></header><section class="wizard" aria-labelledby="sync-title"><div class="steps" aria-label="Sync steps"><span class="current">1 Sources</span><span class:current={plan}>2 Plan</span><span>3 Confirm</span></div><h2 id="sync-title">Build a sync plan</h2><label for="sources">Source folders or files — one per line</label><div class="picker-row"><textarea id="sources" bind:value={sources} placeholder="/Users/me/Music/Album"></textarea><button class="picker" on:click={() => chooseFolder('source')}>Choose</button></div><label for="destination">Destination media root</label><div class="picker-row"><input id="destination" bind:value={destination} placeholder="/Volumes/Pocket/Assets/tau/common"/><button class="picker" on:click={() => chooseFolder('destination')}>Choose</button></div><label for="manifest">Report location on this computer</label><div class="picker-row"><input id="manifest" bind:value={manifestPath} placeholder="/Users/me/Documents/tau-sync-report.json"/><button class="picker" on:click={() => chooseFolder('manifest')}>Choose</button></div><label class="cover-option"><input type="checkbox" bind:checked={embedCovers}/> Add folder cover art to MP3 and FLAC copies <small>Baseline JPEG only. Your originals are never changed.</small></label><button class="primary" on:click={makePlan}>Review plan</button></section>
     {#if plan}<section class="plan-card" aria-labelledby="plan-title"><div><p class="eyebrow">READY FOR CONFIRMATION</p><h2 id="plan-title">{plan.id}</h2><p class="lede">{plan.new_files} new · {plan.updates} updated · {plan.unchanged} unchanged · {size(plan.bytes_to_write)} to write</p>{#if syncCapacity}<p class:capacity-ok={syncCapacity.fits} class:capacity-bad={!syncCapacity.fits}>{syncCapacity.fits ? 'Fits' : 'Does not fit'} on the destination volume — {size(syncCapacity.space.available_bytes)} free.</p>{/if}</div><button class="danger" on:click={runSync}>Confirm and sync</button>{#if syncProgress}<p class="notice" role="status">{syncProgress} <button class="quiet" on:click={cancelSync}>Cancel</button></p>{/if}{#if plan.warnings.length}<ul>{#each plan.warnings as warning}<li>{warning.message}</li>{/each}</ul>{/if}<p class="safety">This action targets the exact destination above. It copies, hashes, verifies, and writes the index last.</p></section>{/if}<p class="notice" role="status">{syncNotice}</p></section>
   {:else if page === 'compare'}<section class="page compare-page"><header><div><p class="eyebrow">CORE TRANSFER</p><h1>Compare, then copy safely</h1><p class="lede">Compare two Tau media roots before copying the complete library to the second core.</p></div></header><section class="wizard" aria-labelledby="compare-title"><h2 id="compare-title">Compare two cores</h2><label for="left-core">Source media root</label><div class="picker-row"><input id="left-core" bind:value={leftCore} placeholder="/Volumes/Pocket/Assets/tau/common"/><button class="picker" on:click={() => chooseFolder('left')}>Choose</button></div><label for="right-core">Destination media root</label><div class="picker-row"><input id="right-core" bind:value={rightCore} placeholder="/Volumes/Pocket/Assets/tau-test/common"/><button class="picker" on:click={() => chooseFolder('right')}>Choose</button></div><label for="copy-report">Copy report location on this computer</label><div class="picker-row"><input id="copy-report" bind:value={copyReportPath} placeholder="/Users/me/Documents/tau-core-copy.json"/><button class="picker" on:click={() => chooseFolder('copyReport')}>Choose</button></div><button class="primary" on:click={compareCores}>Compare safely</button></section><p class="notice" role="status">{compareNotice}</p>{#if comparison}<section class="comparison" aria-labelledby="comparison-title"><div class="section-title"><div><p class="eyebrow">RESULT</p><h2 id="comparison-title">{comparison.differences.length} files compared</h2></div><span>Read-only</span></div><div class="comparison-counts"><span><b>{comparison.only_left}</b> only in source</span><span><b>{comparison.only_right}</b> only in destination</span><span><b>{comparison.different}</b> different</span><span><b>{comparison.identical}</b> matching</span></div><ul class="difference-list">{#each comparison.differences as item}<li><span class={`difference ${item.state}`}>{item.state === 'only_left' ? 'Source only' : item.state === 'only_right' ? 'Destination only' : item.state === 'different' ? 'Different' : 'Matching'}</span><span>{item.relative}</span><span>{item.left_bytes === null ? '—' : size(item.left_bytes)} / {item.right_bytes === null ? '—' : size(item.right_bytes)}</span></li>{/each}</ul><button class="primary" on:click={reviewCoreCopy}>Review full-library copy</button>{#if coreCopyPlan}<div class="copy-plan"><p class="eyebrow">READY FOR CONFIRMATION</p><h3>{coreCopyPlan.id}</h3><p>{coreCopyPlan.new_files} new · {coreCopyPlan.updates} updated · {coreCopyPlan.unchanged} unchanged · {size(coreCopyPlan.bytes_to_write)} to write</p>{#if coreCopyCapacity}<p class:capacity-ok={coreCopyCapacity.fits} class:capacity-bad={!coreCopyCapacity.fits}>{coreCopyCapacity.fits ? 'Fits' : 'Does not fit'} on the destination volume — {size(coreCopyCapacity.space.available_bytes)} free.</p>{/if}<button class="danger" on:click={runCoreCopy}>Confirm and copy</button></div>{/if}<p class="safety">The source is never changed. The destination files are verified and its index is rebuilt last. Move remains unavailable until its separate backup and deletion review is ready.</p></section>{/if}</section>
@@ -176,6 +237,38 @@
     <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} />
   {/if}
 </main>
+
+<button class="help-fab" aria-label="Help" title="Help" on:click={() => showHelp = !showHelp}>?</button>
+{#if showHelp}
+  <div class="help-backdrop" role="presentation" on:click={() => showHelp = false}></div>
+  <section class="help-panel" aria-labelledby="help-title">
+    <div class="help-panel-header"><h2 id="help-title">Using Tau Omega</h2><button class="quiet" aria-label="Close help" on:click={() => showHelp = false}>✕</button></div>
+    <div class="help-panel-body">
+      <p><strong>Open folder</strong> browses to a Pocket card or a plain staging folder (anything with <code>Cores</code> and <code>Assets</code>). A mounted Pocket and any card you've opened before show up under <strong>Known cards</strong> for one-click reopening.</p>
+      <p>Cores that look like media players (Tau, or anything whose platform declares itself a "Media Players" core) get a large card here. Anything else can be shown with "Show other cores" and promoted with <strong>Set as player</strong>.</p>
+      <p>Every write anywhere in the app goes through <strong>plan → review → confirm</strong> — nothing is copied, moved, or deleted until you've seen exactly what will change and confirmed it.</p>
+      <p>This is all read-only until you explicitly confirm a plan on Sync, Compare cores, Backup, or Packages.</p>
+    </div>
+  </section>
+{/if}
+
+{#if detailCore}
+  <div class="detail-backdrop" role="presentation" on:click={closeCoreDetail}></div>
+  <aside class="detail-panel" aria-labelledby="detail-title">
+    <div class="detail-panel-header"><h2 id="detail-title">{detailCore.shortname || detailCore.id}</h2><button class="quiet" aria-label="Close details" on:click={closeCoreDetail}>✕</button></div>
+    <div class="detail-panel-body">
+      <div><span>Core ID</span><strong>{detailCore.id}</strong></div>
+      <div><span>Developer</span><strong>{detailCore.author || 'Unknown'}</strong></div>
+      <div><span>Version</span><strong>{detailCore.version || 'Unknown'}</strong></div>
+      <div><span>Platform</span><strong>{detailCore.platform || 'None declared'}</strong></div>
+      {#if detailCore.platform_category}<div><span>Category</span><strong>{detailCore.platform_category}</strong></div>{/if}
+      <div><span>Library</span><strong>{detailCore.library_capable ? 'Library ready' : 'Legacy core'}</strong></div>
+      <div><span>Index</span><strong>{detailCore.index_status}</strong></div>
+      <div><span>Tracks</span><strong>{detailCore.tracks ?? '—'}</strong></div>
+    </div>
+    <button class="primary" on:click={() => { if (detailCore) openCoreLibrary(detailCore); closeCoreDetail(); }}>Open library</button>
+  </aside>
+{/if}
 
 {#if page === 'compare' && coreCopyPlan}
   <section class="move-review" aria-labelledby="move-review-title">

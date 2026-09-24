@@ -2,8 +2,10 @@
 
 Updated 2026-09-24 (core removal, the full TAUD1 QR decoder, real hardware write validation,
 screenshot discovery, a UX/UI review with two real bug fixes and a screenshot gallery, fixes for
-`cargo tauri dev` and a missing event capability found running the real app for the first time, and
-known/mounted-card auto-open, added in sequence). All implementation work is contained in
+`cargo tauri dev` and a missing event capability found running the real app for the first time,
+known/mounted-card auto-open, and a Cards-screen redesign — player-core cards, a platform-category
+signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
+added in sequence). All implementation work is contained in
 `Tau Omega/`.
 
 ## Read these first
@@ -512,8 +514,64 @@ rather than guessing at unverified mount conventions) for the same `Cores`+`Asse
 launch, the app now auto-opens a card without the user doing anything: a currently-mounted Pocket
 takes priority over a merely remembered path (since that's almost certainly what the user wants to
 see), falling back to the most recent card otherwise. A "Known cards" quick-open row appears on the
-Cards page above the manual path field, badged "Mounted" or "Recent", so switching cards is a single
-click instead of retyping or re-browsing a path.
+Cards page, badged "Mounted"/"Recent", so switching cards is a single click instead of retyping or
+re-browsing a path. (This section's own wording and the manual path field it originally described
+were superseded the same day — see the redesign below.)
+
+## Cards-screen redesign: player cores, "Set as player", detail panel, help panel (2026-09-24)
+
+Owner feedback after using the redesigned app for real, addressed as one pass:
+
+- **The manual "type a path directly" panel is gone.** It only ever duplicated what the native
+  folder picker already does (macOS's own dialog supports typing/pasting a path via Cmd+Shift+G),
+  so nothing was actually lost. Replaced with a small "?" help button, fixed to the top-right corner
+  across every page, opening a side panel with the same instructions the removed panel's prose gave
+  plus a summary of the player-core/plan-review-confirm model below.
+- **A real, general signal for "is this a media player core."** New `Core::platform_category`
+  (`tau_core`): reads `Platforms/<platform>.json`'s own `platform.category` field (e.g. `"Media
+  Players"` — the exact field the real shipped `tau.json` declares), the actual APF metadata for
+  this, rather than string-matching "tau" in a core's id. Falls back to the old id/platform
+  substring check only when the category is missing entirely (an older or malformed
+  `Platforms/*.json`), so a card lacking that file doesn't regress. 2 new tests against the real
+  shipped shape and the missing-file case, both through `inspect_card` end to end, not just the
+  private helper. `CoreView` now also carries `shortname` (previously read by the engine but dropped
+  before reaching the UI) for a core's human name, separate from its dev-prefixed id.
+- **Two-tier core display.** Cores whose platform category is "Media Players" (or that the user has
+  manually promoted) render as large cards — art placeholder, human name, developer name + a generic
+  glyph, track count, a "Library ready"/"Legacy core" chip, and an (i) button opening a detail side
+  panel with every field `Core` carries. Clicking the card itself opens that core's library directly.
+  Every other core on the card is collapsed behind a "Show N other cores" checkbox, in the existing
+  small list format, each row offering **Set as player** — the "even if it's just the media copying"
+  exception for a media player Tau Omega hasn't specifically recognised (e.g. a real card's own
+  `HarpMudd.Mp3Player`, correctly auto-detected as a player by its platform category in testing,
+  demonstrating the mechanism already generalises beyond Tau). New `get_manual_players`/
+  `set_manual_player` commands persist the override list the same one-file-in-config-dir way
+  recent cards do.
+- **A real reactivity bug found and fixed while verifying this live**: `isPlayerCore` originally
+  closed over the `manualPlayers` array rather than taking it as a parameter, so Svelte's `$:`
+  dependency tracking (which only sees variables referenced directly inside the reactive statement,
+  not inside an arbitrary closure) never re-ran `playerCores`/`otherCores` when a manual override
+  changed — "Set as player" silently did nothing until an unrelated re-render. Fixed by passing
+  `manualPlayers` in explicitly; verified live (via a mocked Tauri backend in a browser) that
+  clicking "Set as player" moves a core into the grid immediately, no reload needed.
+- **Card-ejection detection**: the manual "Inspect" button is gone from the main flow (auto-inspect
+  on choose already covered opening; the header keeps a small, subtle refresh icon next to "Player
+  cores on this card" instead of a prominent button). A `window.addEventListener('focus', ...)`
+  handler re-checks `list_mounted_cards` whenever the app regains focus — exactly the "possibly only
+  a refresh, in case I eject the card" case, since switching back to the app *is* that refresh
+  moment — and shows a small inline banner ("This card is no longer connected") with a Reconnect
+  action when a currently-open card (one under `/Volumes/`) is no longer in that list. A plain
+  staging folder outside `/Volumes/` never triggers this (nothing to "eject").
+- **Layout: top-aligned, not centered.** `.page{margin:auto}` centers a grid item both horizontally
+  *and* vertically in CSS Grid when the row is taller than its content — auto margins override
+  `align-items`, which is why the earlier `align-items:start` fix wasn't enough on its own. Changed
+  to `margin:0 auto` (horizontal centering only).
+- **Icons are a deliberate placeholder, not the real thing.** No Analogue Pocket icon or logo asset
+  was available to embed, and reproducing Analogue's actual trademarked logo without a legitimate
+  source isn't something to fabricate — every device/developer glyph here is a generic inline SVG
+  (a plain handheld-device silhouette, a plain bracket "code" glyph), not a stand-in for a specific
+  brand. Real per-core artwork would need `icon.bin` decoded (each core folder has one), whose binary
+  format is unconfirmed — not attempted this pass rather than guessed at.
 
 ## Safety and UX baseline
 

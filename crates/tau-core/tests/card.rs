@@ -85,3 +85,35 @@ fn the_flat_legacy_shape_is_still_accepted() {
     assert!(card.cores[0].library_capable);
     fs::remove_dir_all(root).unwrap();
 }
+
+/// `Platforms/<platform>.json`'s own `category` field (the exact shape the
+/// real shipped `tau.json` declares) is the general, author-independent
+/// signal for "is this a media player core" -- verified end to end through
+/// `inspect_card`, not just a private helper.
+#[test]
+fn reads_the_platform_category_from_the_real_shipped_shape() {
+    let root = card_with(REAL_DATA_JSON);
+    fs::create_dir_all(root.join("Platforms")).unwrap();
+    fs::write(
+        root.join("Platforms/tau.json"),
+        r#"{"platform":{"category":"Media Players","name":"TAU","year":2026,"manufacturer":"alfatreze"}}"#,
+    )
+    .unwrap();
+    let card = tau_core::inspect_card(&root).unwrap();
+    assert_eq!(
+        card.cores[0].platform_category.as_deref(),
+        Some("Media Players")
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+/// A card with no `Platforms/<platform>.json` at all reports `None`, not an
+/// error -- this is display metadata, not something `inspect_card` should
+/// fail over.
+#[test]
+fn missing_platform_json_reports_no_category_rather_than_failing() {
+    let root = card_with(REAL_DATA_JSON);
+    let card = tau_core::inspect_card(&root).unwrap();
+    assert_eq!(card.cores[0].platform_category, None);
+    fs::remove_dir_all(root).unwrap();
+}
