@@ -3,9 +3,9 @@
 Updated 2026-09-24 (core removal, the full TAUD1 QR decoder, real hardware write validation,
 screenshot discovery, a UX/UI review with two real bug fixes and a screenshot gallery, fixes for
 `cargo tauri dev` and a missing event capability found running the real app for the first time,
-known/mounted-card auto-open, and a Cards-screen redesign — player-core cards, a platform-category
+known/mounted-card auto-open, a Cards-screen redesign — player-core cards, a platform-category
 signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
-added in sequence). All implementation work is contained in
+and a sidebar active-card/-core switcher, added in sequence). All implementation work is contained in
 `Tau Omega/`.
 
 ## Read these first
@@ -572,6 +572,30 @@ Owner feedback after using the redesigned app for real, addressed as one pass:
   (a plain handheld-device silhouette, a plain bracket "code" glyph), not a stand-in for a specific
   brand. Real per-core artwork would need `icon.bin` decoded (each core folder has one), whose binary
   format is unconfirmed — not attempted this pass rather than guessed at.
+
+## Sidebar active-card/-core switcher (2026-09-24)
+
+Owner: "I always want to know which card and core I am working with... visible on the sidebar and
+easily swappable... considering the Cards UI does the heavy lifting when needed." A compact widget
+between the brand and the nav list, always visible on every page: the current card's volume name
+and the current core's name (`activeCore`, a new piece of app-wide state), with the same device-icon
+glyph the known-card tiles use. Clicking it opens a small dropdown, not a full page:
+
+- **Switch card** — every known card (mounted or recent), same list the Cards page's own tiles show,
+  with a small dot marking whichever one is actually mounted right now.
+- **Switch core** — every player core on the *currently open* card; picking one sets `activeCore` and
+  opens that core's library directly (reuses `openCoreLibrary`, the same action a Cards-page card
+  click already performs).
+- **"Manage cards & cores →"** at the bottom jumps to the full Cards page — the heavy-lifting surface
+  (Set as player, the detail panel, Show other cores) stays there rather than being duplicated in a
+  small dropdown.
+
+`activeCore` defaults to the first player core once a card's cores (and any manual-player overrides)
+are known, and is preserved by id across a same-card refresh (`openFolder`'s own logic) rather than
+being silently reset to the default every time. Verified live against a mocked Tauri backend: the
+widget's empty state, the populated state after opening a card, the dropdown's card/core lists, and
+switching core (sidebar updates, navigates to Library, pre-fills the right media-root path) all
+confirmed working.
 
 ## Safety and UX baseline
 
