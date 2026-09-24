@@ -47,7 +47,7 @@
 .player-card-main{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:18px 18px 14px;text-align:left;background:transparent;width:100%}
 .player-card-main:hover{background:#1e2a2c}
 .player-card-art{width:100%;aspect-ratio:1.6;margin-bottom:8px;border-radius:9px;background:linear-gradient(135deg,#273638,#1a2325);display:grid;place-items:center;color:#5c716f;font-size:22px;font-weight:700;letter-spacing:.05em}
-.player-card-art img{width:44%;height:44%;object-fit:contain;image-rendering:pixelated}
+.player-card-art img{width:88%;height:88%;object-fit:contain;image-rendering:pixelated}
 .player-card h3{font-size:16px;margin:0 0 2px;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .player-card-dev{display:flex;align-items:center;gap:6px;color:#8c9c9b;font-size:12px}
 .player-card-dev-icon{width:13px;height:13px;object-fit:contain;image-rendering:pixelated;flex-shrink:0}

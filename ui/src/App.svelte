@@ -3,7 +3,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, Difference, Job, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport } from './lib/types';
   import { invoke } from './lib/backend';
-  import { cancelJob, checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, readCheckSummary, readCoreIcon, readImageDataUrl, readJournal, readPersistedSettings, readQrReport, recordRecentCard, scanLibrary, scanMedia, setManualPlayer, setReportsDir } from './lib/tau-api';
+  import { cancelJob, checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, readCheckSummary, readCoreIcon, readImageDataUrl, readJournal, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanLibrary, scanMedia, setManualPlayer, setReportsDir } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import JobsView from './lib/JobsView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
@@ -167,9 +167,22 @@
   async function ensureCoreIcon(core: Core) {
     if (core.id in coreIcons) return;
     coreIcons = { ...coreIcons, [core.id]: null };
-    try { const icon = await readCoreIcon(path, core.id); if (icon) coreIcons = { ...coreIcons, [core.id]: icon }; } catch { /* falls back to the monogram placeholder */ }
+    try { const icon = await readCoreIcon(path, core.id); if (icon) coreIcons = { ...coreIcons, [core.id]: icon }; } catch { /* falls back to the monogram/bracket placeholder */ }
   }
   $: cores.forEach(ensureCoreIcon);
+
+  // The real per-core artwork: a platform's own banner
+  // (Platforms/_images/<platform>.bin), not a second copy of the small
+  // icon. Shared by every core on that platform, so cached by platform id,
+  // not core id -- two cores on the same platform (e.g. TAU and TAU
+  // Diagnostic) fetch it once between them.
+  let platformImages: Record<string, string | null> = {};
+  async function ensurePlatformImage(core: Core) {
+    if (!core.platform || core.platform in platformImages) return;
+    platformImages = { ...platformImages, [core.platform]: null };
+    try { const image = await readPlatformImage(path, core.platform); if (image) platformImages = { ...platformImages, [core.platform]: image }; } catch { /* falls back to the monogram placeholder */ }
+  }
+  $: cores.forEach(ensurePlatformImage);
 
   // The core the rest of the app is "working with" -- shown in the sidebar
   // and switchable there, so nowhere else has to guess. Defaults to the
@@ -244,7 +257,7 @@
             {#each playerCores as core}
               <article class="player-card">
                 <button class="player-card-main" on:click={() => openCoreLibrary(core)}>
-                  <div class="player-card-art" aria-hidden="true">{#if coreIcons[core.id]}<img src={coreIcons[core.id]} alt="" />{:else}<span>{(core.shortname || core.id).slice(0, 2).toUpperCase()}</span>{/if}</div>
+                  <div class="player-card-art" aria-hidden="true">{#if platformImages[core.platform]}<img src={platformImages[core.platform]} alt="" />{:else}<span>{(core.shortname || core.id).slice(0, 2).toUpperCase()}</span>{/if}</div>
                   <h3>{core.shortname || core.id}</h3>
                   <div class="player-card-dev">{#if coreIcons[core.id]}<img class="player-card-dev-icon" src={coreIcons[core.id]} alt="" />{:else}<svg viewBox="0 0 24 24" fill="none" width="13" height="13" aria-hidden="true"><path d="M8 6 3 12l5 6M16 6l5 6-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>{/if}<span>{core.author || 'Unknown developer'}</span></div>
                   <p class="player-card-meta">{core.tracks === null ? 'No index yet' : `${core.tracks} tracks`}</p>
