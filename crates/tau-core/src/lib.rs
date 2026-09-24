@@ -8,6 +8,7 @@ pub mod compare;
 pub mod cover;
 pub mod diag;
 pub mod duplicates;
+pub mod icon;
 pub mod journal;
 pub mod package;
 pub mod playlist;

@@ -3,7 +3,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, Difference, Job, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport } from './lib/types';
   import { invoke } from './lib/backend';
-  import { cancelJob, checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, readCheckSummary, readImageDataUrl, readJournal, readPersistedSettings, readQrReport, recordRecentCard, scanLibrary, scanMedia, setManualPlayer, setReportsDir } from './lib/tau-api';
+  import { cancelJob, checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, readCheckSummary, readCoreIcon, readImageDataUrl, readJournal, readPersistedSettings, readQrReport, recordRecentCard, scanLibrary, scanMedia, setManualPlayer, setReportsDir } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import JobsView from './lib/JobsView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
@@ -160,6 +160,17 @@
   let showOtherCores = false;
   async function toggleManualPlayer(core: Core) { try { await setManualPlayer(core.id, true); manualPlayers = [...manualPlayers, core.id]; } catch (error) { notice = `Could not set ${core.id} as a player: ${errorMessage(error)}`; } }
 
+  // Real per-core artwork (Cores/<id>/icon.bin, decoded server-side). `null`
+  // means "asked, no icon" (most cores don't ship one) -- distinct from
+  // "haven't asked yet" (key absent), so a core is only ever fetched once.
+  let coreIcons: Record<string, string | null> = {};
+  async function ensureCoreIcon(core: Core) {
+    if (core.id in coreIcons) return;
+    coreIcons = { ...coreIcons, [core.id]: null };
+    try { const icon = await readCoreIcon(path, core.id); if (icon) coreIcons = { ...coreIcons, [core.id]: icon }; } catch { /* falls back to the monogram placeholder */ }
+  }
+  $: cores.forEach(ensureCoreIcon);
+
   // The core the rest of the app is "working with" -- shown in the sidebar
   // and switchable there, so nowhere else has to guess. Defaults to the
   // first player core once the card's cores (and any manual overrides) are
@@ -233,9 +244,9 @@
             {#each playerCores as core}
               <article class="player-card">
                 <button class="player-card-main" on:click={() => openCoreLibrary(core)}>
-                  <div class="player-card-art" aria-hidden="true"><span>{(core.shortname || core.id).slice(0, 2).toUpperCase()}</span></div>
+                  <div class="player-card-art" aria-hidden="true">{#if coreIcons[core.id]}<img src={coreIcons[core.id]} alt="" />{:else}<span>{(core.shortname || core.id).slice(0, 2).toUpperCase()}</span>{/if}</div>
                   <h3>{core.shortname || core.id}</h3>
-                  <div class="player-card-dev"><svg viewBox="0 0 24 24" fill="none" width="13" height="13" aria-hidden="true"><path d="M8 6 3 12l5 6M16 6l5 6-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>{core.author || 'Unknown developer'}</span></div>
+                  <div class="player-card-dev">{#if coreIcons[core.id]}<img class="player-card-dev-icon" src={coreIcons[core.id]} alt="" />{:else}<svg viewBox="0 0 24 24" fill="none" width="13" height="13" aria-hidden="true"><path d="M8 6 3 12l5 6M16 6l5 6-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>{/if}<span>{core.author || 'Unknown developer'}</span></div>
                   <p class="player-card-meta">{core.tracks === null ? 'No index yet' : `${core.tracks} tracks`}</p>
                 </button>
                 <div class="player-card-footer">
@@ -252,7 +263,7 @@
       {#if otherCores.length}
         <section aria-labelledby="other-core-title">
           <div class="section-title"><div><p class="eyebrow">EVERYTHING ELSE</p><h2 id="other-core-title">Other cores on this card</h2></div><label class="show-all"><input type="checkbox" bind:checked={showOtherCores}/> Show {otherCores.length} other core{otherCores.length === 1 ? '' : 's'}</label></div>
-          {#if showOtherCores}<div class="core-list">{#each otherCores as core}<article><div class="core-icon">{core.id.split('.').at(-1)?.[0] ?? '?'}</div><div><h3>{core.id}</h3><p>{core.author || 'Unknown author'} · {core.version || 'Version unknown'} · {core.platform || 'No platform declared'}</p></div><button class="quiet" on:click={() => toggleManualPlayer(core)}>Set as player</button></article>{/each}</div>{/if}
+          {#if showOtherCores}<div class="core-list">{#each otherCores as core}<article><div class="core-icon">{#if coreIcons[core.id]}<img src={coreIcons[core.id]} alt="" />{:else}{core.id.split('.').at(-1)?.[0] ?? '?'}{/if}</div><div><h3>{core.id}</h3><p>{core.author || 'Unknown author'} · {core.version || 'Version unknown'} · {core.platform || 'No platform declared'}</p></div><button class="quiet" on:click={() => toggleManualPlayer(core)}>Set as player</button></article>{/each}</div>{/if}
         </section>
       {/if}
     {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}</section>
