@@ -5,8 +5,8 @@ screenshot discovery, a UX/UI review with two real bug fixes and a screenshot ga
 `cargo tauri dev` and a missing event capability found running the real app for the first time,
 known/mounted-card auto-open, a Cards-screen redesign — player-core cards, a platform-category
 signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
-and a sidebar active-card/-core switcher, added in sequence). All implementation work is contained in
-`Tau Omega/`.
+a sidebar active-card/-core switcher, and real per-core icon.bin decoding, added in sequence). All
+implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -566,12 +566,11 @@ Owner feedback after using the redesigned app for real, addressed as one pass:
   *and* vertically in CSS Grid when the row is taller than its content — auto margins override
   `align-items`, which is why the earlier `align-items:start` fix wasn't enough on its own. Changed
   to `margin:0 auto` (horizontal centering only).
-- **Icons are a deliberate placeholder, not the real thing.** No Analogue Pocket icon or logo asset
-  was available to embed, and reproducing Analogue's actual trademarked logo without a legitimate
-  source isn't something to fabricate — every device/developer glyph here is a generic inline SVG
-  (a plain handheld-device silhouette, a plain bracket "code" glyph), not a stand-in for a specific
-  brand. Real per-core artwork would need `icon.bin` decoded (each core folder has one), whose binary
-  format is unconfirmed — not attempted this pass rather than guessed at.
+- **The device/card icon is a deliberate placeholder, not the real thing** — no Analogue Pocket icon
+  or logo asset was available to embed, and reproducing Analogue's actual trademarked logo without a
+  legitimate source isn't something to fabricate. Used for the sidebar widget and known-card tiles
+  (both represent a *card*, not a specific core, so there's no per-card artwork to decode anyway).
+  **Per-core artwork is real, decoded from the card itself** — see below.
 
 ## Sidebar active-card/-core switcher (2026-09-24)
 
@@ -596,6 +595,39 @@ being silently reset to the default every time. Verified live against a mocked T
 widget's empty state, the populated state after opening a card, the dropdown's card/core lists, and
 switching core (sidebar updates, navigates to Library, pre-fills the right media-root path) all
 confirmed working.
+
+## Real per-core icon.bin decoding (2026-09-24)
+
+Owner noticed the core artwork/dev icon weren't real and correctly guessed it needed a specialised
+decoder. New `tau_core::icon::decode_icon_bin`: `Cores/<id>/icon.bin` is a 36x36 monochrome bitmap,
+16 bits per pixel, stored rotated 90 degrees CCW — documented in the sibling `tau-alpha` repo's
+`analogue-pocket-dev` skill (`references/sd-packaging-assets.md`), sourced from Analogue's own
+SD-packaging notes. That description alone left two things ambiguous (which byte of the 16-bit pixel
+actually holds the brightness, and which rotation direction undoes the stored one), so both were
+resolved empirically before trusting them: decoded the real shipped `alfatreze.TAU` icon four ways
+(no rotation, CW, CCW, 180°) and compared each pixel-for-pixel against `tau-alpha/assets/branding/
+author-icon.png` — the same emblem drawn by hand — using a throwaway Python prototype (render as PGM,
+convert with macOS's `sips`, view with `Read`). The 90°-clockwise render was an exact silhouette
+match; brightness turned out to be the **first** byte of each pixel pair (a plain byte offset, not a
+16-bit read at all — the "upper byte" language in the source doc was about big-endian byte order, not
+a machine word's usual low/high split, confirmed by checking the raw byte range: values only ever
+spanned 0-255 as little-endian 16-bit words, which would make no sense for a 0xFF00-is-full-brightness
+format).
+
+Decodes to a grayscale+alpha PNG (opaque white where "on", transparent elsewhere, so it composites
+over any card background colour) using the `png` crate already in `tau-core`'s dependency list — no
+new dependency needed. New `read_core_icon` Tauri command (`card + core_id → Option<data: URL>`,
+`None` when a core simply has no `icon.bin`, not an error). 2 new engine tests: the real shipped icon
+decodes to a valid PNG with the exact promised dimensions/colour type and isn't blank, and a
+wrong-sized buffer is rejected rather than misread.
+
+Wired into both card-tier UIs: the big player-card's main art square, and — per the owner's follow-up
+("the icon should be next to the dev name, replacing the `<>`, while the core artwork [is in] the
+main image area") — a small copy of the same icon next to the developer name, replacing the generic
+bracket glyph there. The small list (`Show other cores`) got the same treatment. Icons are fetched
+once per core id and cached in memory (`coreIcons`); a core with no icon keeps the existing
+monogram/bracket-glyph fallback rather than showing nothing. Confirmed working against a real card
+in conversation (the real `HarpMudd.Mp3Player` icon rendered correctly, not just Tau's own).
 
 ## Safety and UX baseline
 

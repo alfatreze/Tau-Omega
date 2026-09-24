@@ -39,4 +39,5 @@ export const executeRemoveCore = (card: string, coreId: string, confirmation: st
 export const readQrReport = (path: string) => invoke<TaudReport | null>('read_qr_report', { path });
 export const listScreenshots = (card: string) => invoke<ScreenshotEntry[]>('list_screenshots', { card });
 export const readImageDataUrl = (path: string) => invoke<string>('read_image_data_url', { path });
+export const readCoreIcon = (card: string, coreId: string) => invoke<string | null>('read_core_icon', { card, coreId });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';
