@@ -26,7 +26,7 @@ use tauri::{Emitter, Manager, State, Window};
 // front-end needs, no DTO layer earns its keep there.
 
 #[derive(Serialize)]
-struct CoreView { id: String, author: String, version: String, platform: String, library_capable: bool, index_status: String, tracks: Option<usize> }
+struct CoreView { id: String, author: String, shortname: String, version: String, platform: String, platform_category: Option<String>, library_capable: bool, index_status: String, tracks: Option<usize> }
 
 #[derive(Serialize)]
 struct SyncPlanView { id: String, new_files: usize, updates: usize, unchanged: usize, bytes_to_write: u64, warnings: Vec<tau_core::Warning> }
@@ -302,6 +302,48 @@ fn list_mounted_cards() -> Result<Vec<String>, TauError> {
     }
 }
 
+const MANUAL_PLAYERS_FILE: &str = "manual_players.txt";
+
+/// Core ids the user has manually marked as a player (`Set as player`) even
+/// though their platform's own `category` isn't `"Media Players"` (or is
+/// unknown) -- an override list, not a replacement for the real signal.
+/// Same one-file-in-the-config-dir convention as recent cards.
+#[tauri::command]
+fn get_manual_players(app: tauri::AppHandle) -> Result<Vec<String>, TauError> {
+    let path = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?
+        .join(MANUAL_PLAYERS_FILE);
+    match std::fs::read_to_string(path) {
+        Ok(contents) => Ok(contents.lines().map(str::to_string).collect()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(TauError::from(error)),
+    }
+}
+
+/// Adds or removes one core id from the manual-players override list.
+#[tauri::command]
+fn set_manual_player(app: tauri::AppHandle, core_id: String, enabled: bool) -> Result<(), TauError> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?;
+    std::fs::create_dir_all(&dir)?;
+    let file = dir.join(MANUAL_PLAYERS_FILE);
+    let mut ids: Vec<String> = match std::fs::read_to_string(&file) {
+        Ok(contents) => contents.lines().map(str::to_string).collect(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(error) => return Err(TauError::from(error)),
+    };
+    ids.retain(|existing| existing != &core_id);
+    if enabled {
+        ids.push(core_id);
+    }
+    std::fs::write(file, ids.join("\n"))?;
+    Ok(())
+}
+
 #[tauri::command]
 fn scan_media(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<MediaScanView, TauError> {
     let scan = with_job(&window, &jobs, job_id, |progress| {
@@ -484,7 +526,7 @@ fn inspect_card(path: String) -> Result<Vec<CoreView>, TauError> {
             IndexStatus::Ready { tracks } => ("Index ready".to_string(), Some(tracks as usize)),
             IndexStatus::NeedsRepair => ("Index needs repair".to_string(), None),
         };
-        CoreView { id: core.id, author: core.author, version: core.version, platform: core.platform, library_capable: core.library_capable, index_status, tracks }
+        CoreView { id: core.id, author: core.author, shortname: core.shortname, version: core.version, platform: core.platform, platform_category: core.platform_category, library_capable: core.library_capable, index_status, tracks }
     }).collect())
 }
 
@@ -620,7 +662,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

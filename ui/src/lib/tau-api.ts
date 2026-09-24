@@ -26,6 +26,8 @@ export const setReportsDir = (path: string) => invoke<void>('set_reports_dir', {
 export const getRecentCards = () => invoke<string[]>('get_recent_cards');
 export const recordRecentCard = (path: string) => invoke<void>('record_recent_card', { path });
 export const listMountedCards = () => invoke<string[]>('list_mounted_cards');
+export const getManualPlayers = () => invoke<string[]>('get_manual_players');
+export const setManualPlayer = (coreId: string, enabled: boolean) => invoke<void>('set_manual_player', { coreId, enabled });
 export const scanLibrary = (path: string, jobId: string) => invoke<LibraryScan>('scan_library', { path, jobId });
 export const checkStorageCapacity = (path: string, bytesNeeded: number) => invoke<CapacityCheck>('check_storage_capacity', { path, bytesNeeded });
 export const planBackup = (source: string, destination: string) => invoke<BackupPlan>('plan_backup', { source, destination });
