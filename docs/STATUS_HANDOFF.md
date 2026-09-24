@@ -1,8 +1,10 @@
 # Tau Omega — status handoff
 
 Updated 2026-09-24 (core removal, the full TAUD1 QR decoder, real hardware write validation,
-screenshot discovery, and a UX/UI review with two real bug fixes and a screenshot gallery, added
-in sequence). All implementation work is contained in `Tau Omega/`.
+screenshot discovery, a UX/UI review with two real bug fixes and a screenshot gallery, fixes for
+`cargo tauri dev` and a missing event capability found running the real app for the first time, and
+known/mounted-card auto-open, added in sequence). All implementation work is contained in
+`Tau Omega/`.
 
 ## Read these first
 
@@ -467,11 +469,51 @@ decode a screenshot from elsewhere…" fallback rather than removed. Verified en
 against a mocked Tauri backend (`window.__TAURI_INTERNALS__.invoke`) covering the loading, decoded,
 and no-QR-found states.
 
-**Not done, deliberately scoped as future work, not started without further direction:** a real
-"recent cards" home screen with drag-and-drop, a shared toast/progress system wiring the engine's
-existing `ProgressObserver` plumbing into visible progress bars everywhere (today only Sync/Library
-scan use it), cover-art thumbnails in the core/library lists, and sidebar grouping/icons. See the
-conversation this session for the full write-up.
+**Not done, deliberately scoped as future work, not started without further direction:** drag-and-drop
+onto the Cards screen, a shared toast/progress system wiring the engine's existing `ProgressObserver`
+plumbing into visible progress bars everywhere (today only Sync/Library scan use it), cover-art
+thumbnails in the core/library lists, and sidebar grouping/icons. See the conversation this session
+for the full write-up. ("Recent cards" itself is now done — see below.)
+
+## Running the real app for the first time, and Cards-page fixes (2026-09-24)
+
+Every fix up to this point had only been verified via `npm run dev` in a plain browser (Tauri IPC
+mocked or absent). Running the actual `cargo tauri dev` desktop app for the first time surfaced two
+more real defects, plus three UX gaps the owner found by using it:
+
+- **`cargo tauri dev` didn't work at all.** `tauri.conf.json`'s `beforeDevCommand`/
+  `beforeBuildCommand` ran `npm run dev`/`npm run build` from the repo root, but `package.json` lives
+  in `ui/` — every attempt failed with `ENOENT`. Fixed with the object form (`{ "script": ...,
+  "cwd": "../ui" }`) both hooks support.
+- **The app had no `capabilities/` file at all**, so Tauri v2's default permission set blocked
+  `event.listen` the moment the app launched — the `tau://progress` event Sync/Library scan progress
+  relies on was silently broken in every real build anyone had made. Added
+  `src-tauri/capabilities/default.json` granting `core:event:default` and `dialog:default`. This
+  app's own commands (sync/package/remove/taud/screenshots/etc.) need no grant — only Tauri's own
+  plugin/core APIs are capability-gated.
+- **Choosing a card required a separate "Inspect" click.** Picking a folder now inspects it
+  immediately; the manual path field + Inspect button still exist for retyping a path.
+- **The core list showed every core on the card**, unfiltered — dozens of unrelated Analogue cores
+  (Amiga, NES, GB, …) on a real card, not just Tau ones. Now defaults to Tau cores only (matched by
+  id/platform containing "tau"), with a "Show all cores" checkbox for everything else, and an empty
+  state explaining why nothing showed.
+- **The "View" button on each core did nothing** — no click handler at all. It now jumps to the
+  Library screen scoped to that core's actual media root (`Assets/<platform>/common`) and scans it
+  immediately.
+
+**Known/mounted-card auto-open**, per the owner's explicit ask ("always open known cards by default
+as well as checking cards or mounted analogue pockets on load"): new `get_recent_cards`/
+`record_recent_card`/`list_mounted_cards` Tauri commands. Recent cards persist the same way
+`reports_dir` already does (one small text file in the app's config directory, most-recent-first,
+capped at 8); every successful `inspect_card` call records itself. `list_mounted_cards` checks
+`/Volumes/*` (macOS only, matching this app's current bundle target — returns empty on other OSes
+rather than guessing at unverified mount conventions) for the same `Cores`+`Assets` shape
+`inspect_card` itself checks, done as a cheap directory check rather than a full inspection. On
+launch, the app now auto-opens a card without the user doing anything: a currently-mounted Pocket
+takes priority over a merely remembered path (since that's almost certainly what the user wants to
+see), falling back to the most recent card otherwise. A "Known cards" quick-open row appears on the
+Cards page above the manual path field, badged "Mounted" or "Recent", so switching cards is a single
+click instead of retyping or re-browsing a path.
 
 ## Safety and UX baseline
 

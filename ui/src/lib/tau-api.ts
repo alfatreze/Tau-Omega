@@ -23,6 +23,9 @@ export const readJournal = (path: string) => invoke<unknown>('read_journal', { p
 export const listJournals = (dir: string) => invoke<JournalSummary[]>('list_journals', { dir });
 export const getReportsDir = () => invoke<string | null>('get_reports_dir');
 export const setReportsDir = (path: string) => invoke<void>('set_reports_dir', { path });
+export const getRecentCards = () => invoke<string[]>('get_recent_cards');
+export const recordRecentCard = (path: string) => invoke<void>('record_recent_card', { path });
+export const listMountedCards = () => invoke<string[]>('list_mounted_cards');
 export const scanLibrary = (path: string, jobId: string) => invoke<LibraryScan>('scan_library', { path, jobId });
 export const checkStorageCapacity = (path: string, bytesNeeded: number) => invoke<CapacityCheck>('check_storage_capacity', { path, bytesNeeded });
 export const planBackup = (source: string, destination: string) => invoke<BackupPlan>('plan_backup', { source, destination });
