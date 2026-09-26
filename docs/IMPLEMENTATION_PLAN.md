@@ -32,10 +32,14 @@ Omega-facing interfaces at very different levels of readiness. Sequenced per
    files to verify against. `tau_core::image` implements `TIM1` decode (all payload shapes real
    tooling produces: `rgb565`, `palette` at 8/6/4 bpp) and a palette-256 encoder (own quantizer, not
    required to match `tau_image.py` pixel-for-pixel — only the container shape is shared). Verified
-   against a real fixture, not an invented one (`testdata/images/README.md`). **Caveat that changes
-   nothing about priority but does change what this unlocks today:** no firmware reader exists yet
-   (`IMAGE_FORMATS.md`'s own status line) and no data slot is assigned (D-I05, open) — this is
-   forward-prep plus a real decode path for previews in our own UI, not a Pocket-visible feature yet.
+   against a real fixture, not an invented one (`testdata/images/README.md`). **Done, 2026-09-26:**
+   `art_sidecar_pal256` is a `sync::PlanOptions` field wired end to end (engine, `tau-cli`, the Tauri
+   adapter, the Sync screen's checkbox and plan review) — one `.timg` sidecar planned per album
+   folder, written and read back through `image::decode_tim1` at execute time. **Still open:** no
+   decode-and-show thumbnail anywhere in the UI yet (Library/Cards). **Caveat that changes nothing
+   about priority but does change what this unlocks today:** no firmware reader exists yet
+   (`IMAGE_FORMATS.md`'s own status line) and no data slot is assigned (D-I05, open) — writing these
+   files to a real card has no effect on the Pocket itself yet.
 2. **Meter presets (`tau-assets.bin`/`METR`), tracked, not started.** `METER_MODULE_SPEC.md`'s full
    Omega-facing design (§6, §20-22: the container, `.tmeter`/`.tmeterpack`, `meters_schema.json`,
    capture-from-QR) is decided (D-M01–M13) but tau-alpha is only at the start of its own build order

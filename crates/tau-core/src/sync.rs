@@ -3,7 +3,7 @@
 
 use crate::{
     ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, WarningCode, ascii_name,
-    build_index, cover, parse, scan_dir_with_progress, tick, verify,
+    build_index, cover, image, parse, scan_dir_with_progress, tick, verify,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -36,6 +36,18 @@ pub enum CopyState {
     Update,
     Same,
 }
+/// A folder-level `tau-art/cover_128.pal256.timg` sidecar this plan would
+/// write. One entry per album folder (not per track), since the cover is
+/// shared by every track in it — matching `tools/sync_media.py
+/// --art-variants`'s own one-file-per-album convention.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ArtSidecarItem {
+    pub source_folder: PathBuf,
+    pub destination: PathBuf,
+    pub cover_source: PathBuf,
+    pub cover_sha256: String,
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeleteItem {
@@ -53,6 +65,7 @@ pub struct SyncPlan {
     pub items: Vec<CopyItem>,
     pub deletions: Vec<DeleteItem>,
     pub embed_covers: bool,
+    pub art_sidecars: Vec<ArtSidecarItem>,
     pub warnings: Vec<Warning>,
     pub bytes_to_write: u64,
 }
@@ -64,6 +77,7 @@ pub struct SyncReport {
     pub unchanged: usize,
     pub bytes_written: u64,
     pub deleted: usize,
+    pub art_sidecars_written: usize,
     pub index_path: PathBuf,
     pub index_sha256: String,
     pub warnings: Vec<Warning>,
@@ -85,6 +99,13 @@ pub struct PlanOptions {
     /// cover hash is part of the plan token, preventing an unreviewed
     /// replacement.
     pub embed_covers: bool,
+    /// Write a `tau-art/cover_128.pal256.timg` sidecar next to each album
+    /// folder that has a discovered cover, encoded per tau-alpha's decided
+    /// default (`IMAGE_FORMATS.md` D-I01/D-I02). Forward-prep: no firmware
+    /// reader exists yet, so this has no effect on the Pocket itself today
+    /// (`docs/FIRMWARE_SYNC.md`'s "Watched interfaces"); it does feed this
+    /// app's own decode-and-preview path.
+    pub art_sidecar_pal256: bool,
 }
 
 /// Produces a read-only sync plan. Sources are copied below `common` using
@@ -136,6 +157,7 @@ fn plan_with_layout(
     let PlanOptions {
         mirror,
         embed_covers,
+        art_sidecar_pal256,
     } = options;
     validate_media_root(common)?;
     if sources.is_empty() {
@@ -166,7 +188,9 @@ fn plan_with_layout(
     }
     candidates.sort_by(|a, b| a.1.cmp(&b.1));
     let mut seen = std::collections::BTreeSet::new();
+    let mut seen_art_folders = std::collections::BTreeSet::new();
     let mut items = Vec::new();
+    let mut art_sidecars = Vec::new();
     let mut warnings = Vec::new();
     let mut bytes_to_write = 0;
     let total = candidates.len() as u64;
@@ -212,6 +236,25 @@ fn plan_with_layout(
         } else {
             None
         };
+        if art_sidecar_pal256
+            && audio_file(&source)
+            && let Some(source_folder) = source.parent()
+            && seen_art_folders.insert(source_folder.to_path_buf())
+            && let Some(cover_source) = cover::find_cover(source_folder)
+        {
+            let destination_folder = target.parent().ok_or_else(|| {
+                TauError::e(
+                    ErrorCode::InvalidPathReference,
+                    "destination file has no parent folder",
+                )
+            })?;
+            art_sidecars.push(ArtSidecarItem {
+                source_folder: source_folder.to_path_buf(),
+                destination: destination_folder.join(image::pal256_sidecar_name(128)),
+                cover_sha256: sha256_file(&cover_source)?,
+                cover_source,
+            });
+        }
         let mut state = if target.is_file()
             && fs::metadata(&target)?.len() == bytes
             && sha256_file(&target).ok().as_deref() == Some(&sha256)
@@ -260,12 +303,17 @@ fn plan_with_layout(
             hasher.update(cover.sha256.as_bytes());
         }
     }
+    for item in &art_sidecars {
+        hasher.update(item.destination.to_string_lossy().as_bytes());
+        hasher.update(item.cover_sha256.as_bytes());
+    }
     for item in &deletions {
         hasher.update(item.relative.to_string_lossy().as_bytes());
         hasher.update(item.sha256.as_bytes());
     }
     hasher.update([mirror as u8]);
     hasher.update([embed_covers as u8]);
+    hasher.update([art_sidecar_pal256 as u8]);
     hasher.update(root_prefix.as_bytes());
     // The full SHA-256 hex digest (P2-1): a 32-bit truncation is thin for a
     // token that may be persisted or handed across a process boundary, and
@@ -281,6 +329,7 @@ fn plan_with_layout(
         items,
         deletions,
         embed_covers,
+        art_sidecars,
         warnings,
         bytes_to_write,
     })
@@ -337,6 +386,27 @@ pub fn execute_with_mirror(
             }
         }
     }
+    let mut art_sidecars_written = 0;
+    for item in &plan.art_sidecars {
+        if sha256_file(&item.cover_source).ok().as_deref() != Some(item.cover_sha256.as_str()) {
+            return Err(TauError::e(
+                ErrorCode::SourceChangedSincePlan,
+                format!(
+                    "cover changed since the plan was reviewed: {}",
+                    item.cover_source.display()
+                ),
+            ));
+        }
+        let packed = image::encode_pal256_bytes(&fs::read(&item.cover_source)?, 128)?;
+        if let Some(parent) = item.destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        write_durable(&item.destination, &packed)?;
+        // Read the just-written file back and decode it, the same
+        // write-then-verify discipline every other write path here follows.
+        image::decode_tim1(&fs::read(&item.destination)?)?;
+        art_sidecars_written += 1;
+    }
     let mut deleted = 0;
     if !plan.deletions.is_empty() {
         if delete_confirmation != Some(plan.id.as_str()) {
@@ -382,6 +452,7 @@ pub fn execute_with_mirror(
                 unchanged,
                 bytes_written,
                 deleted,
+                art_sidecars_written,
                 index_path,
                 index_sha256: sha256_bytes(&current),
                 warnings: plan.warnings.clone(),
@@ -417,6 +488,7 @@ pub fn execute_with_mirror(
         unchanged,
         bytes_written,
         deleted,
+        art_sidecars_written,
         index_path,
         index_sha256: sha256_bytes(&index),
         warnings,
@@ -942,6 +1014,7 @@ mod tests {
             PlanOptions {
                 mirror: true,
                 embed_covers: false,
+                art_sidecar_pal256: false,
             },
             &mut None,
         )
@@ -979,6 +1052,7 @@ mod tests {
             PlanOptions {
                 mirror: false,
                 embed_covers: true,
+                art_sidecar_pal256: false,
             },
             &mut None,
         )
@@ -993,6 +1067,62 @@ mod tests {
         )
         .unwrap();
         assert!(copy.windows(4).any(|window| window == b"APIC"));
+        fs::remove_dir_all(source).unwrap();
+        fs::remove_dir_all(card).unwrap();
+    }
+
+    #[test]
+    fn art_sidecar_is_planned_once_per_album_and_written_verifiably() {
+        let source = root("art-sidecar-source");
+        let card = root("art-sidecar-card");
+        let common = card.join("Assets/tau/common");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&common).unwrap();
+        fs::write(source.join("01 Track.mp3"), b"audio one").unwrap();
+        fs::write(source.join("02 Track.mp3"), b"audio two").unwrap();
+        let mut real_cover = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        real_cover.push("../../testdata/images/cover455.jpg");
+        fs::copy(&real_cover, source.join("cover.jpg")).unwrap();
+
+        let sync_plan = plan(
+            &[source.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions {
+                mirror: false,
+                embed_covers: false,
+                art_sidecar_pal256: true,
+            },
+            &mut None,
+        )
+        .unwrap();
+        // One album, two tracks -> exactly one sidecar, not one per track.
+        assert_eq!(sync_plan.art_sidecars.len(), 1);
+        let report = execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
+        assert_eq!(report.art_sidecars_written, 1);
+
+        let sidecar_path = common
+            .join(source.file_name().unwrap())
+            .join(image::pal256_sidecar_name(128));
+        let decoded = image::decode_tim1(&fs::read(&sidecar_path).unwrap()).unwrap();
+        assert_eq!((decoded.width, decoded.height), (128, 128));
+
+        // Re-planning and re-executing with nothing changed writes it again
+        // (idempotent, not "only once ever") but the plan token is identical.
+        let second_plan = plan(
+            &[source.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions {
+                mirror: false,
+                embed_covers: false,
+                art_sidecar_pal256: true,
+            },
+            &mut None,
+        )
+        .unwrap();
+        assert_eq!(second_plan.id, sync_plan.id);
+
         fs::remove_dir_all(source).unwrap();
         fs::remove_dir_all(card).unwrap();
     }

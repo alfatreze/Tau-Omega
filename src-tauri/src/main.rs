@@ -29,7 +29,7 @@ use tauri::{Emitter, Manager, State, Window};
 struct CoreView { id: String, author: String, shortname: String, version: String, platform: String, platform_category: Option<String>, library_capable: bool, index_status: String, tracks: Option<usize> }
 
 #[derive(Serialize)]
-struct SyncPlanView { id: String, new_files: usize, updates: usize, unchanged: usize, bytes_to_write: u64, warnings: Vec<tau_core::Warning> }
+struct SyncPlanView { id: String, new_files: usize, updates: usize, unchanged: usize, bytes_to_write: u64, art_sidecars: usize, warnings: Vec<tau_core::Warning> }
 #[derive(Serialize)]
 struct ComparisonView {
     #[serde(flatten)]
@@ -582,7 +582,7 @@ fn compare_media(left: String, right: String) -> Result<ComparisonView, TauError
     Ok(ComparisonView { comparison, only_left, only_right, different, identical })
 }
 
-fn make_plan(sources: Vec<String>, destination: String, embed_covers: bool) -> Result<tau_core::sync::SyncPlan, TauError> {
+fn make_plan(sources: Vec<String>, destination: String, embed_covers: bool, art_sidecar_pal256: bool) -> Result<tau_core::sync::SyncPlan, TauError> {
     let destination = PathBuf::from(destination);
     let source_paths = sources.into_iter().filter(|source| !source.trim().is_empty()).map(PathBuf::from).collect::<Vec<_>>();
     let root_prefix = tau_core::root_prefix(&destination)?;
@@ -590,7 +590,7 @@ fn make_plan(sources: Vec<String>, destination: String, embed_covers: bool) -> R
         &source_paths,
         &destination,
         &root_prefix,
-        tau_core::sync::PlanOptions { mirror: false, embed_covers },
+        tau_core::sync::PlanOptions { mirror: false, embed_covers, art_sidecar_pal256 },
         &mut None,
     )
 }
@@ -601,15 +601,15 @@ fn make_core_copy_plan(source: String, destination: String) -> Result<tau_core::
 }
 
 #[tauri::command]
-fn plan_sync(sources: Vec<String>, destination: String, embed_covers: bool) -> Result<SyncPlanView, TauError> {
-    let plan = make_plan(sources, destination, embed_covers)?;
-    Ok(SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, warnings: plan.warnings })
+fn plan_sync(sources: Vec<String>, destination: String, embed_covers: bool, art_sidecar_pal256: bool) -> Result<SyncPlanView, TauError> {
+    let plan = make_plan(sources, destination, embed_covers, art_sidecar_pal256)?;
+    Ok(SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, art_sidecars: plan.art_sidecars.len(), warnings: plan.warnings })
 }
 
 #[tauri::command]
 fn plan_core_copy(source: String, destination: String) -> Result<SyncPlanView, TauError> {
     let plan = make_core_copy_plan(source, destination)?;
-    Ok(SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, warnings: plan.warnings })
+    Ok(SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, art_sidecars: plan.art_sidecars.len(), warnings: plan.warnings })
 }
 
 /// Whether a plan's `bytes_needed` fits at `path`'s volume, with the
@@ -672,8 +672,8 @@ fn execute_remove_core(
 }
 
 #[tauri::command]
-fn execute_sync(sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
-    let plan = make_plan(sources, destination, embed_covers)?;
+fn execute_sync(sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, art_sidecar_pal256: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
+    let plan = make_plan(sources, destination, embed_covers, art_sidecar_pal256)?;
     let manifest = PathBuf::from(manifest_path);
     with_job(&window, &jobs, job_id, |progress| {
         tau_core::journal::execute_to_journal(&plan, &confirmation, "sync", &manifest, progress)
