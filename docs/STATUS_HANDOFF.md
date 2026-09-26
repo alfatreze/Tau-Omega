@@ -7,8 +7,9 @@ known/mounted-card auto-open, a Cards-screen redesign — player-core cards, a p
 signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
 a sidebar active-card/-core switcher, real per-core icon.bin decoding, `TIM1` cover-image
 decode/encode, cover-sidecar writing wired into Sync, a lazy cover preview in the Sync plan review,
-playlist path pickers, extracting the last three inline pages, and a Meters UI-structure scaffold
-against a synthetic schema, added in sequence). All implementation work is contained in `Tau Omega/`.
+playlist path pickers, extracting the last three inline pages, a Meters UI-structure scaffold against
+a synthetic schema, and real USB connection detection (Pocket vs. plain USB storage) driving a
+connection-aware card icon, added in sequence). All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -818,6 +819,57 @@ New "Meters" nav entry. Verified live in a browser: switching meters preserves e
 independent parameter state, toggling "Peak cap" off correctly hides its two dependent params and
 removes the peak dot from the animating preview, and all three meters' distinct preview shapes (bars,
 scope, rings) render and animate correctly. `npm run check`: 0 errors, 0 warnings.
+
+## Firmware/app update feature: design, then connection detection + card icon (2026-09-26)
+
+Owner asked for a firmware upgrade feature (both a Tau Omega self-update check and browsing/
+installing Tau Alpha core releases by channel/build), a transfer-safety warning for USB-connected
+Pocket writes, and a connection-aware card icon — designed first with the `design-system` skill
+(new pattern extending the existing dark-workbench system, not a new visual language) before any
+code: [`docs/FIRMWARE_UPDATE_SPEC.md`](FIRMWARE_UPDATE_SPEC.md). Real research grounded the design
+rather than guessing: Analogue's own cached developer docs give a hard ~700 KB/s–1 MB/s figure for
+USB SD Access mode, and the Pocket's own on-device screen (read directly, with it connected) states
+"<10MB suggested" — the spec's warning threshold. Scope and data-source decisions (two separate
+update targets; GitHub releases API, a first network capability for this app) were confirmed with
+the owner before writing anything.
+
+**Built and hardware-verified this pass: USB connection detection + the card icon swap** — the
+smallest, most self-contained piece, no network access, chosen deliberately as the starting point.
+New `src-tauri` command `connection_kind(path)`: resolves a path's whole-disk BSD identifier via
+`diskutil info`, and if its protocol is USB, walks `ioreg -l -w0`'s registry tree to the disk's
+ancestor USB device and matches its `idVendor`/`USB Product Name` against the real Analogue Pocket
+descriptor. That descriptor isn't published anywhere by Analogue — found empirically by reading
+`ioreg` directly against the owner's actual mounted Pocket (idVendor `0x04D8`/Microchip Technology,
+product name `"Analogue Pocket"`), with a real contrasting device (a CalDigit USB3 card reader, also
+attached at that moment) confirming the match is discriminating, not just "any USB device."
+
+**A real parsing bug was found and fixed by testing against the real device, not by inspection:**
+the first implementation matched `ioreg` lines with `.trim()` then exact-string equality — but
+`ioreg`'s own tree-drawing `|` characters aren't whitespace, so `.trim()` left a leading `|` on every
+property line and the equality check silently matched nothing, on every single property, the entire
+time. Caught immediately because the real-hardware test failed while the synthetic unit test (whose
+fixture happened not to trigger the bug) passed — exactly the class of gap real-artifact testing
+exists to catch. Fixed with `.contains`/`.split_once` instead of exact equality. Two `#[ignore]`d
+regression tests lock in both real cases (`cargo test --features tau-core/serde -- --ignored`, needs
+real hardware attached): the genuine Pocket detected correctly, and a real, differently-branded USB
+storage device (a Raspberry Pi Pico in mass-storage mode) correctly *not* misdetected as one.
+
+New `CardIcon.svelte` (Pocket glyph / a new generic SD-card glyph / the existing fallback for
+unknown — still no Analogue logo, same trademark-avoidance constraint as before), wired into both
+the sidebar active-card widget and the known-card tiles, fetched lazily and cached per path like
+`coreIcons`/`platformImages` already are. Verified live in a browser against a mocked backend: two
+known cards with different mocked connection kinds render visibly different icons.
+
+`cargo test --workspace`: 75 passing (unchanged, this was `src-tauri`-only). `src-tauri`'s own test
+suite (not previously run standalone this session): 3 passing including both hardware-gated tests.
+`npm run check`: 0 errors, 0 warnings. `cargo clippy` clean for every file this touched (2
+pre-existing, unrelated `too_many_arguments` findings in `src-tauri` noted, not fixed, same as
+before).
+
+**Not built yet:** sections 3a (Tau Omega self-update), 3b (the Firmware screen: per-card version
+detection, channel/build picker, browsing GitHub releases), and 3c (the transfer-safety banner
+itself, threaded through Sync/Backup/Package/Core-copy) — all still design-only in the spec, next in
+line per the owner's own chosen build order.
 
 ## Safety and UX baseline
 

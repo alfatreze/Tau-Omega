@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { Core } from './types';
+  import type { ConnectionKind } from './tau-api';
+  import CardIcon from './CardIcon.svelte';
   export let path = '';
+  export let connectionKinds: Record<string, ConnectionKind> = {};
   export let cardMounted: boolean | null = null;
   export let openKnownCard: (card: string) => void;
   export let knownCards: string[] = [];
@@ -22,7 +25,7 @@
 <section class="page" id="cards">
   <header><div><p class="eyebrow">CARD LIBRARY</p><h1>Start with a card</h1><p class="lede">Inspect a Pocket card or a staging folder. Your music stays untouched.</p></div><button class="primary" on:click={choose}>Open folder</button></header>
   {#if cardMounted === false}<div class="ejected-banner" role="status"><span>This card is no longer connected.</span><button class="quiet" on:click={() => openKnownCard(path)}>Reconnect</button></div>{/if}
-  {#if knownCards.length}<section class="known-cards" aria-labelledby="known-cards-title"><p class="eyebrow">QUICK OPEN</p><h2 id="known-cards-title">Known cards</h2><div class="known-card-list">{#each knownCards as card}<button class="known-card" class:active={path === card} on:click={() => openKnownCard(card)}><span class="known-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="5" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="16.5" r="1.1" fill="currentColor"/><circle cx="15" cy="16.5" r="1.1" fill="currentColor"/><circle cx="12" cy="19.2" r="1.1" fill="currentColor"/></svg></span><span class="known-card-body"><strong class="known-card-name">{cardName(card)}</strong><span class="known-card-badge" class:mounted={mountedCards.includes(card)}>{mountedCards.includes(card) ? 'Available now' : 'Recently used'}</span><span class="known-card-path">{card}</span></span></button>{/each}</div></section>{/if}
+  {#if knownCards.length}<section class="known-cards" aria-labelledby="known-cards-title"><p class="eyebrow">QUICK OPEN</p><h2 id="known-cards-title">Known cards</h2><div class="known-card-list">{#each knownCards as card}<button class="known-card" class:active={path === card} on:click={() => openKnownCard(card)}><span class="known-card-icon" aria-hidden="true"><CardIcon kind={connectionKinds[card]} /></span><span class="known-card-body"><strong class="known-card-name">{cardName(card)}</strong><span class="known-card-badge" class:mounted={mountedCards.includes(card)}>{mountedCards.includes(card) ? 'Available now' : 'Recently used'}</span><span class="known-card-path">{card}</span></span></button>{/each}</div></section>{/if}
   <p class="notice" role="status">{notice}</p>
   {#if cores.length}
     <section aria-labelledby="player-title">
