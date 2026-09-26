@@ -5,8 +5,9 @@ screenshot discovery, a UX/UI review with two real bug fixes and a screenshot ga
 `cargo tauri dev` and a missing event capability found running the real app for the first time,
 known/mounted-card auto-open, a Cards-screen redesign — player-core cards, a platform-category
 signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
-a sidebar active-card/-core switcher, real per-core icon.bin decoding, and `TIM1` cover-image
-decode/encode, added in sequence). All implementation work is contained in `Tau Omega/`.
+a sidebar active-card/-core switcher, real per-core icon.bin decoding, `TIM1` cover-image
+decode/encode, and cover-sidecar writing wired into Sync, added in sequence). All implementation
+work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -173,9 +174,10 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Validation
 
-- `cargo test` (workspace): 71 `tau-core` unit tests passing as of 2026-09-26 (grown from 20 across
+- `cargo test` (workspace): 72 `tau-core` unit tests passing as of 2026-09-26 (grown from 20 across
   this project's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag/
-  Remove/taud/screenshots/image — each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
+  Remove/taud/screenshots/image/sync-art-sidecar — each with its own tests against real or synthetic
+  fixtures), plus 6 index conformance, 4 card
   inspection, 1 fuzz-lite, 2 testkit; +6 more in the feature-gated `serde_feature.rs` (only compiled
   with `--features tau-core/serde`). Re-run `cargo test --workspace` for the current exact count
   rather than trusting this number as it ages.
@@ -670,12 +672,38 @@ through the same decoder against a real source JPEG (`testdata/images/cover455.j
 `IMAGE_FORMATS.md`'s own comparison-table covers). 6 new tests, `cargo test --workspace` at 71 passing
 (up from 65), `cargo clippy --all-targets` clean for this module.
 
-**Honestly unfinished:** no UI wiring yet (no Sync-plan option to write the sidecar, no thumbnail
-shown anywhere), and — carried over from tau-alpha's own status, not something this side controls —
-no firmware reader exists for this format yet and its data-slot number is still unassigned, so
-writing these files to a real card today has no effect on the Pocket itself. Next: wire
-`encode_cover_pal256` into `sync::plan`/`execute` as an opt-in step, and a decode-and-show path in the
-Library/Cards UI (useful immediately, independent of the firmware reader).
+**Honestly unfinished at the time:** no UI wiring, no Sync-plan option to write the sidecar, no
+thumbnail shown anywhere. — carried over from tau-alpha's own status, not something this side
+controls — no firmware reader exists for this format yet and its data-slot number is still
+unassigned, so writing these files to a real card today has no effect on the Pocket itself.
+
+## Cover-sidecar writing wired into Sync (2026-09-26)
+
+Closed the first half of the "Next" item above: `art_sidecar_pal256` is a new `PlanOptions` field
+(default off, same shape as the existing `embed_covers`). `plan`/`plan_with_layout` detect one
+`ArtSidecarItem` per **album folder** (not per track — a shared cover only needs encoding once,
+matching `tools/sync_media.py --art-variants`'s own convention) whenever a discovered cover exists;
+the destination path and the cover's SHA-256 are folded into the plan token, so a changed cover
+invalidates a stale plan the same way an embedded-cover change already does. `execute`/
+`execute_with_mirror` re-verify the cover hasn't changed since the plan, encode with
+`image::encode_pal256_bytes`, write via the same durable-write helper the index uses, then read the
+result back through `image::decode_tim1` before counting it — write-then-verify, the same discipline
+every other write path here follows. New `SyncReport::art_sidecars_written` field.
+
+Wired end to end: `tau-cli` gained `--art-sidecar`; the Tauri `plan_sync`/`execute_sync` commands and
+`SyncPlanView` carry the count through; the Sync screen has a second checkbox next to "Add folder
+cover art", with the same honest caveat inline ("no firmware reader exists yet, so this has no effect
+on the Pocket today"), and the plan-review line shows "· N art sidecar(s)" when non-zero. Verified
+live in a browser against a mocked Tauri backend (checkbox toggle changes the mocked `plan_sync`
+response, plan card renders the count and correct singular/plural). New engine test
+(`art_sidecar_is_planned_once_per_album_and_written_verifiably`, against a real source JPEG) confirms
+one sidecar for a two-track album, not two, and that the written file decodes back to 128×128.
+`cargo test --workspace`: 72 passing. `npm run check`: 0 errors. `cargo clippy --all-targets`: clean
+for every file this touched (collapsed three new nested-`if`s into `if`-let-chains, matching the
+2024-edition style already elsewhere in the crate).
+
+**Still open:** no thumbnail is decoded and shown anywhere in the UI yet (Library/Cards). That's the
+next natural step, independent of tau-alpha's firmware reader.
 
 ## Safety and UX baseline
 

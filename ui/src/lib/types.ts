@@ -1,6 +1,6 @@
 export type Warning = { code: string; message: string };
 export type Core = { id: string; author: string; shortname: string; version: string; platform: string; platform_category: string | null; library_capable: boolean; index_status: string; tracks: number | null };
-export type Plan = { id: string; new_files: number; updates: number; unchanged: number; bytes_to_write: number; warnings: Warning[] };
+export type Plan = { id: string; new_files: number; updates: number; unchanged: number; bytes_to_write: number; art_sidecars: number; warnings: Warning[] };
 export type Setting = { id: number; kind: string; value: unknown };
 export type Job = { kind: string; status: string; detail: string };
 /** Mirrors `tau_core::journal::JournalSummary`: one row for the Jobs history
@@ -25,7 +25,7 @@ export type LibraryScan = { tracks: TrackRow[]; playlists: Playlist[]; warnings:
 /** The engine's own `tau_core::sync::SyncReport`, returned directly from
  * execute_sync/execute_core_copy/execute_core_move now that it implements
  * `Serialize` (P1-1) -- no hand-written result DTO duplicates it. */
-export type SyncReport = { plan_id: string; copied: number; unchanged: number; bytes_written: number; deleted: number; index_path: string; index_sha256: string; warnings: Warning[] };
+export type SyncReport = { plan_id: string; copied: number; unchanged: number; bytes_written: number; deleted: number; art_sidecars_written: number; index_path: string; index_sha256: string; warnings: Warning[] };
 /** What a rejected `invoke()` resolves to now that the engine's errors carry
  * a stable numeric `code` (see `tau_core::ErrorCode`) across the boundary
  * instead of a flattened English string. */

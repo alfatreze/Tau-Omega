@@ -43,7 +43,7 @@ impl fmt::Display for CliError {
 
 fn usage() {
     eprintln!(
-        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only."
+        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--art-sidecar]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover] [--art-sidecar]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. --art-sidecar writes a tau-art/cover_128.pal256.timg per album (tau-alpha's decided format, no firmware reader yet)."
     );
 }
 fn main() -> ExitCode {
@@ -372,20 +372,22 @@ fn sync_execute(a: &[String], j: bool) -> Result<(), CliError> {
     }?;
     if j {
         println!(
-            r#"{{"plan_id":{},"copied":{},"unchanged":{},"bytes_written":{},"index":{},"warnings":{}}}"#,
+            r#"{{"plan_id":{},"copied":{},"unchanged":{},"bytes_written":{},"art_sidecars_written":{},"index":{},"warnings":{}}}"#,
             q(&report.plan_id),
             report.copied,
             report.unchanged,
             report.bytes_written,
+            report.art_sidecars_written,
             q(&report.index_path.to_string_lossy()),
             warnings_array(&report.warnings)
         );
     } else {
         println!(
-            "Sync verified: {} copied · {} unchanged · {} bytes\nIndex: {}",
+            "Sync verified: {} copied · {} unchanged · {} bytes · {} art sidecars\nIndex: {}",
             report.copied,
             report.unchanged,
             report.bytes_written,
+            report.art_sidecars_written,
             report.index_path.display()
         );
     }
@@ -401,6 +403,7 @@ fn make_plan(a: &[String]) -> Result<SyncPlan, CliError> {
         sync::PlanOptions {
             mirror: a.iter().any(|arg| arg == "--mirror"),
             embed_covers: a.iter().any(|arg| arg == "--embed-cover"),
+            art_sidecar_pal256: a.iter().any(|arg| arg == "--art-sidecar"),
         },
         &mut None,
     )?)
@@ -465,7 +468,7 @@ fn sources(a: &[String]) -> Vec<PathBuf> {
             skip = true;
             continue;
         }
-        if arg != "--yes" && arg != "--mirror" && arg != "--embed-cover" {
+        if arg != "--yes" && arg != "--mirror" && arg != "--embed-cover" && arg != "--art-sidecar" {
             out.push(PathBuf::from(arg));
         }
     }
