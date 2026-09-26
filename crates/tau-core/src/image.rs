@@ -266,6 +266,39 @@ pub fn encode_pal256_bytes(source: &[u8], long_side: u16) -> Result<Vec<u8>, Tau
     Ok(out)
 }
 
+/// Encodes plain RGB8 pixels as a PNG file — for a UI that can display an
+/// arbitrary image but not decode `TIM1` itself, the same convention
+/// `icon::decode_icon_bin`/`icon::decode_platform_image` already use.
+pub fn rgb8_to_png(width: u16, height: u16, rgb: &[u8]) -> Result<Vec<u8>, TauError> {
+    let mut bytes = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut bytes, width as u32, height as u32);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder
+            .write_header()
+            .map_err(|error| TauError::e(ErrorCode::Io, format!("PNG encode: {error}")))?;
+        writer
+            .write_image_data(rgb)
+            .map_err(|error| TauError::e(ErrorCode::Io, format!("PNG encode: {error}")))?;
+    }
+    Ok(bytes)
+}
+
+/// Decodes a `TIM1` file straight to PNG bytes.
+pub fn decode_tim1_to_png(bytes: &[u8]) -> Result<Vec<u8>, TauError> {
+    let image = decode_tim1(bytes)?;
+    rgb8_to_png(image.width, image.height, &image.rgb)
+}
+
+/// Encodes a source cover exactly as [`encode_pal256_bytes`] would for a real
+/// sync, then immediately decodes the result back to PNG — a preview of
+/// exactly what the palette-256 quantizer will produce (lossy, 256 colours),
+/// for review before a plan with `art_sidecar_pal256` is confirmed.
+pub fn preview_pal256_png(source: &[u8], long_side: u16) -> Result<Vec<u8>, TauError> {
+    decode_tim1_to_png(&encode_pal256_bytes(source, long_side)?)
+}
+
 /// Long side becomes `long_side` px, the other side scales proportionally;
 /// never crops, never pads (D-I02). Matches `tau_image.py`'s `fit_long_side`.
 fn fit_long_side(width: u32, height: u32, long_side: u32) -> (u32, u32) {
@@ -412,6 +445,11 @@ fn quantize_pal256(rgb: &[u8], width: usize, height: usize) -> (Vec<(u8, u8, u8)
         .into_iter()
         .map(|((r, g, b), n)| (r, g, b, n))
         .collect();
+    // `HashMap`'s iteration order depends on its per-instance random seed, not
+    // just its contents (confirmed: two calls on identical input produced
+    // different output before this sort was added) -- sorting here makes the
+    // rest of median-cut a pure function of the pixel data, not of hashing.
+    entries.sort_unstable();
     let palette = if entries.len() <= MAX_COLORS {
         entries.iter().map(|&(r, g, b, _)| (r, g, b)).collect()
     } else {
@@ -605,6 +643,34 @@ mod tests {
     }
 
     #[test]
+    fn decode_tim1_to_png_produces_a_real_png_a_browser_can_display() {
+        let bytes = fixture("cover_128.pal256.timg");
+        let png_bytes = decode_tim1_to_png(&bytes).expect("png encode");
+        assert_eq!(&png_bytes[0..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        // Read it back with the same `png` decoder the rest of this module
+        // (and taud's screenshot path) already relies on, confirming a real
+        // browser-displayable file, not just a byte prefix.
+        let mut decoder = png::Decoder::new(std::io::Cursor::new(&png_bytes));
+        decoder.set_transformations(png::Transformations::EXPAND);
+        let mut reader = decoder.read_info().expect("read PNG info");
+        let mut buffer = vec![0u8; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut buffer).expect("read PNG frame");
+        assert_eq!((info.width, info.height), (128, 128));
+        assert_eq!(info.color_type, png::ColorType::Rgb);
+    }
+
+    #[test]
+    fn preview_pal256_png_matches_a_direct_encode_then_decode() {
+        let source = fixture("cover455.jpg");
+        let preview = preview_pal256_png(&source, 128).expect("preview");
+        let direct = decode_tim1_to_png(&encode_pal256_bytes(&source, 128).unwrap()).unwrap();
+        // Not required to be byte-identical (two independent quantizer runs
+        // could in principle differ), but for a deterministic encoder over
+        // the same input they should agree exactly.
+        assert_eq!(preview, direct);
+    }
+
+    #[test]
     fn fit_long_side_scales_proportionally_without_cropping() {
         // 1024x1540 portrait -> 85x128, matching IMAGE_FORMATS.md's own example.
         assert_eq!(fit_long_side(1024, 1540, 128), (85, 128));
@@ -620,5 +686,19 @@ mod tests {
             let unpacked = unpack_indices(&packed, bpp, indices.len()).expect("unpack");
             assert_eq!(unpacked, indices, "bpp {bpp}");
         }
+    }
+
+    #[test]
+    fn encode_pal256_bytes_is_deterministic_across_repeated_calls() {
+        // Real bug caught here: quantize_pal256's palette build originally
+        // iterated a HashMap directly, whose order depends on a per-instance
+        // random seed, not just its contents -- two calls on the exact same
+        // input produced two different (each individually valid) TIM1 files.
+        // A caller re-encoding the same cover, or this test's own
+        // preview-matches-direct-encode check, needs this to hold.
+        let source = fixture("cover455.jpg");
+        let a = encode_pal256_bytes(&source, 128).expect("encode a");
+        let b = encode_pal256_bytes(&source, 128).expect("encode b");
+        assert_eq!(a, b);
     }
 }

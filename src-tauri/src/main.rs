@@ -28,8 +28,14 @@ use tauri::{Emitter, Manager, State, Window};
 #[derive(Serialize)]
 struct CoreView { id: String, author: String, shortname: String, version: String, platform: String, platform_category: Option<String>, library_capable: bool, index_status: String, tracks: Option<usize> }
 
+/// One album's worth of `plan_sync`'s discovered `art_sidecars`: enough for
+/// the Sync screen to list what would be written and to ask
+/// `preview_art_sidecar` for a look at one of them, without sending every
+/// track's own destination path across the boundary.
+#[derive(Serialize, Clone)]
+struct ArtSidecarPreviewView { folder: String, cover_source: String }
 #[derive(Serialize)]
-struct SyncPlanView { id: String, new_files: usize, updates: usize, unchanged: usize, bytes_to_write: u64, art_sidecars: usize, warnings: Vec<tau_core::Warning> }
+struct SyncPlanView { id: String, new_files: usize, updates: usize, unchanged: usize, bytes_to_write: u64, art_sidecars: usize, art_sidecar_previews: Vec<ArtSidecarPreviewView>, warnings: Vec<tau_core::Warning> }
 #[derive(Serialize)]
 struct ComparisonView {
     #[serde(flatten)]
@@ -518,6 +524,18 @@ fn read_image_data_url(path: String) -> Result<String, TauError> {
     Ok(format!("data:image/png;base64,{}", STANDARD.encode(bytes)))
 }
 
+/// Previews what `art_sidecar_pal256` will encode for one album's cover
+/// (`cover_source`, from a `plan_sync` result's `art_sidecar_previews`),
+/// without writing anything: runs the exact same quantizer `execute_sync`
+/// will use, so what's shown here matches what actually ends up on the card.
+#[tauri::command]
+fn preview_art_sidecar(cover_source: String) -> Result<String, TauError> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let bytes = std::fs::read(&cover_source)?;
+    let png = tau_core::image::preview_pal256_png(&bytes, 128)?;
+    Ok(format!("data:image/png;base64,{}", STANDARD.encode(png)))
+}
+
 /// Decodes a core's `icon.bin` (`Cores/<core_id>/icon.bin`) into a PNG data
 /// URL. `None`, not an error, when the file simply doesn't exist -- not
 /// every core ships one.
@@ -603,13 +621,31 @@ fn make_core_copy_plan(source: String, destination: String) -> Result<tau_core::
 #[tauri::command]
 fn plan_sync(sources: Vec<String>, destination: String, embed_covers: bool, art_sidecar_pal256: bool) -> Result<SyncPlanView, TauError> {
     let plan = make_plan(sources, destination, embed_covers, art_sidecar_pal256)?;
-    Ok(SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, art_sidecars: plan.art_sidecars.len(), warnings: plan.warnings })
+    Ok(sync_plan_view(plan))
+}
+
+/// Shared by `plan_sync`/`plan_core_copy` so both surface the same counts and
+/// the same `art_sidecar_previews` list, computed once instead of twice.
+fn sync_plan_view(plan: tau_core::sync::SyncPlan) -> SyncPlanView {
+    let art_sidecar_previews = plan
+        .art_sidecars
+        .iter()
+        .map(|item| ArtSidecarPreviewView {
+            folder: item
+                .source_folder
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| item.source_folder.to_string_lossy().into_owned()),
+            cover_source: item.cover_source.to_string_lossy().into_owned(),
+        })
+        .collect();
+    SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, art_sidecars: plan.art_sidecars.len(), art_sidecar_previews, warnings: plan.warnings }
 }
 
 #[tauri::command]
 fn plan_core_copy(source: String, destination: String) -> Result<SyncPlanView, TauError> {
     let plan = make_core_copy_plan(source, destination)?;
-    Ok(SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, art_sidecars: plan.art_sidecars.len(), warnings: plan.warnings })
+    Ok(sync_plan_view(plan))
 }
 
 /// Whether a plan's `bytes_needed` fits at `path`'s volume, with the
@@ -704,7 +740,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

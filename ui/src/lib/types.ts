@@ -1,6 +1,7 @@
 export type Warning = { code: string; message: string };
 export type Core = { id: string; author: string; shortname: string; version: string; platform: string; platform_category: string | null; library_capable: boolean; index_status: string; tracks: number | null };
-export type Plan = { id: string; new_files: number; updates: number; unchanged: number; bytes_to_write: number; art_sidecars: number; warnings: Warning[] };
+export type ArtSidecarPreview = { folder: string; cover_source: string };
+export type Plan = { id: string; new_files: number; updates: number; unchanged: number; bytes_to_write: number; art_sidecars: number; art_sidecar_previews: ArtSidecarPreview[]; warnings: Warning[] };
 export type Setting = { id: number; kind: string; value: unknown };
 export type Job = { kind: string; status: string; detail: string };
 /** Mirrors `tau_core::journal::JournalSummary`: one row for the Jobs history

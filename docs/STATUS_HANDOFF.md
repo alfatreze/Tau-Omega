@@ -6,8 +6,8 @@ screenshot discovery, a UX/UI review with two real bug fixes and a screenshot ga
 known/mounted-card auto-open, a Cards-screen redesign — player-core cards, a platform-category
 signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
 a sidebar active-card/-core switcher, real per-core icon.bin decoding, `TIM1` cover-image
-decode/encode, and cover-sidecar writing wired into Sync, added in sequence). All implementation
-work is contained in `Tau Omega/`.
+decode/encode, cover-sidecar writing wired into Sync, and a lazy cover preview in the Sync plan
+review, added in sequence). All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -174,7 +174,7 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Validation
 
-- `cargo test` (workspace): 72 `tau-core` unit tests passing as of 2026-09-26 (grown from 20 across
+- `cargo test` (workspace): 75 `tau-core` unit tests passing as of 2026-09-26 (grown from 20 across
   this project's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag/
   Remove/taud/screenshots/image/sync-art-sidecar — each with its own tests against real or synthetic
   fixtures), plus 6 index conformance, 4 card
@@ -702,8 +702,43 @@ one sidecar for a two-track album, not two, and that the written file decodes ba
 for every file this touched (collapsed three new nested-`if`s into `if`-let-chains, matching the
 2024-edition style already elsewhere in the crate).
 
-**Still open:** no thumbnail is decoded and shown anywhere in the UI yet (Library/Cards). That's the
-next natural step, independent of tau-alpha's firmware reader.
+**Still open at the time:** no thumbnail is decoded and shown anywhere in the UI yet (Library/Cards).
+
+## Cover preview: decode-and-show in the Sync plan review (2026-09-26)
+
+Closed the "decode and show" half of the original plan. Rather than a Library/Cards thumbnail grid
+(the Library screen is a flat, virtualised 12,000+-row track table with no album grouping at all —
+not a natural fit, and a separate, already-tracked future item), the real point of contact is the
+Sync plan review itself, right where the user is deciding whether to write these files: each planned
+`art_sidecar_previews` entry gets a lazy "Preview" button (no eager thumbnail loading for a large
+batch, same precedent as the Settings screenshot gallery) that decodes the *exact* pal256 quantizer
+output the real write would produce and shows it inline.
+
+New `tau_core::image::{rgb8_to_png, decode_tim1_to_png, preview_pal256_png}` — the same "decode
+straight to PNG bytes" convention `icon::decode_icon_bin`/`icon::decode_platform_image` already
+established, so a UI that can't render `TIM1` doesn't need to. New Tauri command
+`preview_art_sidecar`; `SyncPlanView` gained `art_sidecar_previews` (folder name + cover path per
+album, not the full per-track item list). Verified live in a browser against a mocked backend: two
+mock albums, clicking "Preview" on one renders its thumbnail while the other stays lazy.
+
+**A real bug found and fixed by this step's own tests, before it shipped further:**
+`encode_pal256_bytes` was not deterministic — two calls on the exact same input byte-for-byte
+produced two different (each individually valid) `TIM1` files. Root cause: `quantize_pal256`'s
+median-cut palette build iterated a `HashMap` directly, whose iteration order depends on a
+per-instance random seed (confirmed: Rust's default hasher reseeds per `HashMap::new()` call on the
+same thread, not just once per process), not only on its contents. Fixed with one `sort_unstable()`
+on the collected histogram before quantizing, making the rest of the pipeline a pure function of the
+pixel data. Caught by a new test that specifically encodes the same real cover twice and compares
+byte-for-byte (`encode_pal256_bytes_is_deterministic_across_repeated_calls`) — added because the
+preview-matches-a-direct-encode test kept failing intermittently until the real cause was traced,
+not assumed.
+
+`cargo test --workspace`: 75 passing (up from 72). `npm run check`: 0 errors.
+`cargo clippy --all-targets`: clean for every file this touched. (Also ran clippy on `src-tauri`
+directly for the first time this session — found 2 pre-existing `too_many_arguments` findings on
+`execute_sync`/`execute_core_move`, unrelated to this change: both already exceeded the default
+7-argument threshold before today, `src-tauri` was simply never part of the workspace's own
+documented "clean" claim. Not fixed here, flagged for whoever picks up that cleanup.)
 
 ## Safety and UX baseline
 
