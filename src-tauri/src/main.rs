@@ -308,6 +308,177 @@ fn list_mounted_cards() -> Result<Vec<String>, TauError> {
     }
 }
 
+/// What a mounted path's underlying disk is, for the transfer-safety warning
+/// (`docs/FIRMWARE_UPDATE_SPEC.md` section 5) and the card-icon swap. `Other`
+/// covers everything that isn't confirmed USB storage matching the real
+/// Analogue Pocket descriptor -- an internal drive, a network volume, or any
+/// other brand of USB card reader (a `CalDigit` reader was the real
+/// contrasting case found alongside the Pocket during detection design;
+/// deliberately never guessed as "probably a reader", since a false "this is
+/// Pocket" warning on the wrong device costs more trust than a missed one).
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum ConnectionKind {
+    /// The real Analogue Pocket, connected directly via USB-C with SD
+    /// Access on -- matched on `idVendor == 0x04D8` (Microchip Technology,
+    /// USB-IF assigned) AND `USB Product Name == "Analogue Pocket"`,
+    /// empirically confirmed against a real device (2026-09-26), not
+    /// documented anywhere by Analogue.
+    Pocket,
+    /// Some other USB mass-storage device (an SD card reader, a USB drive).
+    UsbStorage,
+    /// Not USB storage, or detection couldn't determine anything -- the
+    /// fail-safe default (`FIRMWARE_UPDATE_SPEC.md` section 5 point 5): no
+    /// transfer-safety banner is ever shown for this state.
+    Other,
+}
+
+/// Detects what `path`'s underlying disk is. macOS only (shells out to the
+/// system's own `diskutil`/`ioreg`, both always present -- no new
+/// dependency); every other OS returns `Other` rather than guessing at an
+/// unverified detection method, same posture as `list_mounted_cards`.
+#[tauri::command]
+fn connection_kind(path: String) -> ConnectionKind {
+    #[cfg(target_os = "macos")]
+    {
+        macos_connection_kind(&path)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        ConnectionKind::Other
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_connection_kind(path: &str) -> ConnectionKind {
+    let Ok(info) = std::process::Command::new("diskutil")
+        .args(["info", path])
+        .output()
+    else {
+        return ConnectionKind::Other;
+    };
+    let info_text = String::from_utf8_lossy(&info.stdout);
+    let field = |name: &str| -> Option<String> {
+        info_text.lines().find_map(|line| {
+            let line = line.trim();
+            line.strip_prefix(name)
+                .and_then(|rest| rest.trim().strip_prefix(':'))
+                .map(|value| value.trim().to_string())
+        })
+    };
+    if field("Protocol").as_deref() != Some("USB") {
+        return ConnectionKind::Other;
+    }
+    // "Part of Whole" gives the whole-disk BSD name for a partition (e.g.
+    // "disk6" for "/Volumes/Pock" at "disk6s1"); a whole disk passed
+    // directly already has no partition to look past.
+    let Some(whole_disk) = field("Part of Whole").or_else(|| field("Device Identifier")) else {
+        return ConnectionKind::UsbStorage;
+    };
+    // Deliberately the default IOService plane, not `-p IOUSB`: the USB
+    // plane alone stops at the USB device/interface/pipe level and never
+    // reaches the SCSI/IOMedia storage descendants at all (confirmed by
+    // testing against the real mounted Pocket -- `-p IOUSB`'s own output
+    // contains zero "BSD Name" occurrences), so a disk's BSD identity can
+    // only be found by walking the full registry tree.
+    let Ok(usb_tree) = std::process::Command::new("ioreg").args(["-l", "-w0"]).output() else {
+        return ConnectionKind::UsbStorage;
+    };
+    let usb_text = String::from_utf8_lossy(&usb_tree.stdout);
+    if usb_disk_is_pocket(&usb_text, &whole_disk) {
+        ConnectionKind::Pocket
+    } else {
+        ConnectionKind::UsbStorage
+    }
+}
+
+/// Scans `ioreg -l -w0`'s indented tree text for `whole_disk`
+/// (e.g. `"disk6"`) and reports whether the nearest preceding
+/// `IOUSBHostDevice` matches the real Pocket descriptor. `ioreg`'s tree is
+/// depth-first, so the most recently seen device header when a disk's own
+/// properties appear is that disk's real parent -- a hub or unrelated
+/// sibling device earlier in the dump is never mistaken for it, since each
+/// new `IOUSBHostDevice` header resets the pending match.
+#[cfg(target_os = "macos")]
+fn usb_disk_is_pocket(usb_tree_text: &str, whole_disk: &str) -> bool {
+    // `ioreg`'s tree-drawing characters ("|", spaces, "+-o") vary in width
+    // per indentation depth and are not whitespace, so `.trim()` alone
+    // leaves a leading "|" in front of every property line -- a real bug
+    // found by testing against a live Pocket, not by inspection: an
+    // exact-equality match against a `.trim()`-ed line silently never
+    // matched anything, so this used `.contains`/`.split_once` throughout
+    // instead, which works regardless of how much tree decoration precedes
+    // the actual `"key" = value` text.
+    let bsd_unit = whole_disk.trim_start_matches("disk");
+    let mut pending_vendor: Option<i64> = None;
+    let mut pending_product: Option<String> = None;
+    for line in usb_tree_text.lines() {
+        if line.contains("<class IOUSBHostDevice") {
+            pending_vendor = None;
+            pending_product = None;
+        } else if let Some((_, value)) = line.split_once("\"idVendor\" = ") {
+            pending_vendor = value.trim().parse().ok();
+        } else if let Some((_, value)) = line.split_once("\"USB Product Name\" = ") {
+            pending_product = Some(value.trim().trim_matches('"').to_string());
+        } else if let Some((_, value)) = line.split_once("\"BSD Name\" = ")
+            && value.trim().trim_matches('"') == whole_disk
+        {
+            return pending_vendor == Some(0x04D8) && pending_product.as_deref() == Some("Analogue Pocket");
+        } else if let Some((_, value)) = line.split_once("\"BSD Unit\" = ")
+            && value.trim() == bsd_unit
+        {
+            return pending_vendor == Some(0x04D8) && pending_product.as_deref() == Some("Analogue Pocket");
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod connection_kind_tests {
+    use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn matches_the_real_confirmed_pocket_descriptor() {
+        // A trimmed real excerpt of `ioreg -p IOUSB -l -w0` output captured
+        // 2026-09-26 with a real Pocket connected (USB SD Access on) and a
+        // real CalDigit card reader also attached -- the exact contrasting
+        // case detection design confirmed against, not an invented fixture.
+        let tree = r#"
++-o Analogue Pocket@02100000  <class IOUSBHostDevice, id 0x100017a33, registered>
+    {
+      "idProduct" = 51737
+      "USB Product Name" = "Analogue Pocket"
+      "idVendor" = 1240
+      "USB Vendor Name" = "Microchip Technology Inc."
+    }
+    +-o IOUSBHostInterface@0
+      +-o IOMedia
+        {
+          "BSD Name" = "disk6"
+          "BSD Unit" = 6
+        }
++-o Card Reader@22800000  <class IOUSBHostDevice, id 0x10000cb47, registered>
+    {
+      "idProduct" = 1880
+      "USB Product Name" = "Card Reader"
+      "idVendor" = 8584
+      "USB Vendor Name" = "CalDigit"
+    }
+    +-o IOUSBHostInterface@0
+      +-o IOMedia
+        {
+          "BSD Name" = "disk7"
+          "BSD Unit" = 7
+        }
+"#;
+        assert!(usb_disk_is_pocket(tree, "disk6"));
+        assert!(!usb_disk_is_pocket(tree, "disk7"));
+        assert!(!usb_disk_is_pocket(tree, "disk8"));
+    }
+}
+
 const MANUAL_PLAYERS_FILE: &str = "manual_players.txt";
 
 /// Core ids the user has manually marked as a player (`Set as player`) even
@@ -740,7 +911,38 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, connection_kind, cancel_job])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
+}
+
+/// `#[ignore]`d by default (they need this exact machine's currently
+/// attached hardware, unlike every other test here) -- run explicitly with
+/// `cargo test --features tau-core/serde -- --ignored` whenever real
+/// devices are attached to re-confirm detection hasn't regressed. Both were
+/// used to *find* the real parsing bug this module's own doc comment
+/// describes (an exact-equality match against a `.trim()`-ed `ioreg` line
+/// silently never matched, since `.trim()` doesn't strip ioreg's own
+/// tree-drawing `|` characters) -- kept as permanent regression coverage,
+/// not deleted once the bug was fixed.
+#[cfg(test)]
+mod real_hardware_checks {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn real_pocket_is_detected_right_now() {
+        let kind = macos_connection_kind("/Volumes/Pock");
+        assert_eq!(kind, ConnectionKind::Pocket, "expected the real mounted Pocket to be detected");
+    }
+
+    /// A real, differently-branded USB storage device (a Raspberry Pi Pico
+    /// in mass-storage mode) confirmed mounted alongside the Pocket during
+    /// detection design -- the genuine contrasting case, not a fixture.
+    #[test]
+    #[ignore]
+    fn a_different_real_usb_device_is_not_detected_as_pocket() {
+        let kind = macos_connection_kind("/Volumes/DSPICO");
+        assert_ne!(kind, ConnectionKind::Pocket, "a Pi Pico must never be misdetected as a Pocket");
+    }
 }

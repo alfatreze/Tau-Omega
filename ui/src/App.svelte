@@ -3,8 +3,9 @@
   import { open, save } from '@tauri-apps/plugin-dialog';
   import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, Difference, Job, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport } from './lib/types';
   import { invoke } from './lib/backend';
-  import { cancelJob, checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, previewArtSidecar, readCheckSummary, readCoreIcon, readImageDataUrl, readJournal, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanLibrary, scanMedia, setManualPlayer, setReportsDir } from './lib/tau-api';
+  import { cancelJob, checkStorageCapacity, compareMedia, connectionKind, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, previewArtSidecar, readCheckSummary, readCoreIcon, readImageDataUrl, readJournal, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanLibrary, scanMedia, setManualPlayer, setReportsDir, type ConnectionKind } from './lib/tau-api';
   import CardsView from './lib/CardsView.svelte';
+  import CardIcon from './lib/CardIcon.svelte';
   import SyncView from './lib/SyncView.svelte';
   import CompareView from './lib/CompareView.svelte';
   import MetersView from './lib/MetersView.svelte';
@@ -215,6 +216,20 @@
   }
   $: cores.forEach(ensurePlatformImage);
 
+  // Whether an open card is the real Pocket connected directly via USB, a
+  // plain USB storage device (an SD reader), or neither/unknown --
+  // real detection (`docs/FIRMWARE_UPDATE_SPEC.md` section 5), not a guess.
+  // Cached per path like `coreIcons`/`platformImages`, so re-opening the
+  // same card doesn't re-check on every render.
+  let connectionKinds: Record<string, ConnectionKind> = {};
+  async function ensureConnectionKind(cardPath: string) {
+    if (!cardPath || cardPath in connectionKinds) return;
+    try { connectionKinds = { ...connectionKinds, [cardPath]: await connectionKind(cardPath) }; }
+    catch { /* detection failure falls back to the generic icon, same as "other" */ }
+  }
+  $: ensureConnectionKind(path);
+  $: knownCards.forEach(ensureConnectionKind);
+
   // The core the rest of the app is "working with" -- shown in the sidebar
   // and switchable there, so nowhere else has to guess. Defaults to the
   // first player core once the card's cores (and any manual overrides) are
@@ -253,7 +268,7 @@
 <main><aside aria-label="Primary navigation"><div class="brand"><span class="mark">τ</span><span>Tau Omega<small>Library companion</small></span></div>
   <div class="active-context">
     <button class="active-context-btn" on:click={() => showSwitcher = !showSwitcher} aria-expanded={showSwitcher} aria-label="Switch card or core">
-      <span class="active-context-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="5" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="16.5" r="1.1" fill="currentColor"/><circle cx="15" cy="16.5" r="1.1" fill="currentColor"/><circle cx="12" cy="19.2" r="1.1" fill="currentColor"/></svg></span>
+      <span class="active-context-icon" aria-hidden="true"><CardIcon kind={connectionKinds[path]} /></span>
       <span class="active-context-text">
         <strong>{path ? cardName(path) : 'No card open'}</strong>
         <small>{activeCore ? (activeCore.shortname || activeCore.id) : (cores.length ? 'Choose a core' : 'Open a card to begin')}</small>
@@ -277,7 +292,7 @@
   </div>
   <nav><button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button><button class:active={page === 'compare'} on:click={() => page = 'compare'}>Compare cores</button><button class:active={page === 'sync'} on:click={() => page = 'sync'}>Sync library</button><button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button><button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button><button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button><button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meters</button><button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button><button class:active={page === 'library'} on:click={() => page = 'library'}>Library</button><button class:active={page === 'jobs'} on:click={() => page = 'jobs'}>Recent jobs</button><button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button></nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
   {#if page === 'cards'}
-    <CardsView {path} {cardMounted} {openKnownCard} {knownCards} {mountedCards} {cardName} {notice} {cores} {openFolder} choose={() => chooseFolder('card')} {playerCores} {otherCores} {platformImages} {coreIcons} {openCoreLibrary} {showCoreDetail} bind:showOtherCores {toggleManualPlayer} />
+    <CardsView {path} {cardMounted} {openKnownCard} {knownCards} {mountedCards} {cardName} {notice} {cores} {openFolder} choose={() => chooseFolder('card')} {playerCores} {otherCores} {platformImages} {coreIcons} {openCoreLibrary} {showCoreDetail} bind:showOtherCores {toggleManualPlayer} {connectionKinds} />
   {:else if page === 'sync'}
     <SyncView bind:sources bind:destination bind:manifestPath bind:embedCovers bind:artSidecar chooseSource={() => chooseFolder('source')} chooseDestination={() => chooseFolder('destination')} chooseManifest={() => chooseFolder('manifest')} {makePlan} {plan} {syncCapacity} {artPreviews} {artPreviewsLoading} {loadArtPreview} {runSync} {syncProgress} {cancelSync} {syncNotice} />
   {:else if page === 'compare'}
