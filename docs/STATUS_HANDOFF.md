@@ -6,8 +6,9 @@ screenshot discovery, a UX/UI review with two real bug fixes and a screenshot ga
 known/mounted-card auto-open, a Cards-screen redesign — player-core cards, a platform-category
 signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
 a sidebar active-card/-core switcher, real per-core icon.bin decoding, `TIM1` cover-image
-decode/encode, cover-sidecar writing wired into Sync, and a lazy cover preview in the Sync plan
-review, added in sequence). All implementation work is contained in `Tau Omega/`.
+decode/encode, cover-sidecar writing wired into Sync, a lazy cover preview in the Sync plan review,
+playlist path pickers, extracting the last three inline pages, and a Meters UI-structure scaffold
+against a synthetic schema, added in sequence). All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -193,10 +194,15 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Known issues and incomplete wiring
 
-- Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
-- Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
-- Playlist create/import destination filenames are typed by hand rather than picked from a directory
-  listing of existing `.m3u` files, same limitation as playlist export above.
+- **Fixed 2026-09-26:** playlist export now has a native save-dialog picker (filtered to `.m3u`); the
+  rename/create/import destination fields gained a `<datalist>` of the media root's own already-known
+  `.m3u` filenames (from the existing scan result, no new backend command) so an existing file can be
+  picked instead of retyped, while free typing for a new name still works. See "Playlist path pickers
+  and page extraction" below.
+- **Fixed 2026-09-26:** Cards, Sync and Compare Cores are now extracted components (`CardsView.svelte`,
+  `SyncView.svelte`, `CompareView.svelte`), matching the `BackupView`/`PackageView`/etc. pattern —
+  `App.svelte`'s own template shrank from ~110 to ~25 lines across these three pages. See "Playlist
+  path pickers and page extraction" below.
 - **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2/P1-3/P2):** every item in `PORTABILITY_AUDIT.md` is
   now done — the three P0 boundary defects (duplicated root-prefix/index-status logic,
   English-only warnings and errors, no progress/cancellation), P1-1 (optional `serde` feature; DTO
@@ -739,6 +745,79 @@ directly for the first time this session — found 2 pre-existing `too_many_argu
 `execute_sync`/`execute_core_move`, unrelated to this change: both already exceeded the default
 7-argument threshold before today, `src-tauri` was simply never part of the workspace's own
 documented "clean" claim. Not fixed here, flagged for whoever picks up that cleanup.)
+
+## Playlist path pickers and page extraction (2026-09-26)
+
+Closed both remaining "Known issues" wiring gaps in one pass.
+
+**Playlist pickers.** `output` (the export destination) is a real host filesystem path, so it got a
+native save-dialog `Choose` button (`@tauri-apps/plugin-dialog`'s `save()`, filtered to `.m3u`,
+mirroring `chooseFolder`'s existing cancel-returns-null precedent). `renameNewFile`/`createFile`/
+`importDestFile` are filenames *within* the already-chosen media root, not arbitrary host paths — a
+save dialog rooted anywhere would let a mistaken pick land outside it — so those three instead got a
+shared `<datalist>` populated from the folder's own already-scanned `result.playlists`, no new backend
+command needed (the cheaper path the scoping pass identified: the data was already there). Free typing
+for a brand-new name still works alongside the suggestions.
+
+**Page extraction.** Cards, Sync and Compare Cores were the last three inline pages in `App.svelte`,
+per its own "Known issues" note. Extracted as `CardsView.svelte`, `SyncView.svelte`,
+`CompareView.svelte`, following the exact `BackupView.svelte` pattern (props in, callback props out,
+no internal Tauri calls) already used by seven other views. Behaviour-neutral by construction — same
+markup, same bindings, same handlers, just moved. One real thing found and fixed doing this: Compare's
+locally-scoped `<style>` rules (`.comparison`, `.copy-plan`, `.move-review`, …) had to move to
+`CompareView.svelte` too — Svelte's per-component CSS scoping never applies a `<style>` block's rules
+to another component's markup (the exact class of mistake `App.svelte`'s own comment already warns
+about for `.jobs-panel`/`.settings-card`/etc.), caught immediately by `svelte-check`'s
+`css_unused_selector` warnings rather than shipped silently unstyled.
+
+**A real, pre-existing UI redundancy found while verifying this live, not fixed (out of scope for a
+behaviour-neutral extraction):** reviewing a core copy shows *two* confirmation surfaces at once —
+an inline `.copy-plan` card inside the Compare page itself, and a separate full-screen `.move-review`
+modal layered on top of it (both gated on the same `coreCopyPlan`). The modal visually covers the
+inline card, so this isn't a live bug (nothing is double-clickable), but the inline card's own
+"Confirm and copy" button is dead markup the instant a plan exists, since the modal always appears at
+the same time. Confirmed by screenshot during live verification. Worth deleting the inline `.copy-plan`
+card in a future pass — the modal is the one real confirmation flow (it's the only one offering the
+move option) — but that's a product decision, not a mechanical refactor, so left as-is here.
+
+Verified live in a browser against a mocked Tauri backend: Cards (player-core grid, other-cores list,
+detail panel), Sync (plan review including the art-sidecar preview built two commits ago), and Compare
+(comparison result, the copy-plan card, and the move-review modal) all render and behave identically to
+before extraction. Playlist datalist suggestions confirmed populated from real scanned filenames via a
+direct DOM query, not just visual inspection. `cargo test --workspace`: 75 passing (unchanged, this was
+a frontend-only pass). `npm run check`: 0 errors, 0 warnings.
+
+## Meters: UI-structure scaffold, synthetic schema (2026-09-26)
+
+Owner decision on how to start meter work given tau-alpha's instability (active hardware bug-hunting
+that same day, M0 built but uncommitted on their side, no tagged release containing a real
+`meters_schema.json`): **scaffold the UI structure and preview plumbing against a synthetic schema
+now; swap in the real one once tau-alpha tags a release.** Zero dependency on their churn, zero rework
+risk — this is pure frontend, no Tauri command, no engine code, nothing written anywhere.
+
+New `ui/src/lib/meters/schema.ts`: `MeterSchema`/`MeterParam`/`MeterPreset` types mirroring
+`docs/METER_MODULE_SPEC.md` section 4's real manifest shape field-for-field, so swapping in the real
+`meters_schema.json` later is a data change, not a UI rewrite. Three synthetic meters (`winamp_bars`,
+`winamp_scope`, `chladni`) — not arbitrary placeholders: their parameter shapes are drawn from
+tau-alpha's own real, hardware-shipped `wviz_bars_cfg_t`/`wviz_scope_cfg_t` fields per that project's
+audit trail, so the editor and preview exercise a realistic shape. Every placeholder is labelled as
+such, loudly, in both the code comments and the on-screen UI copy — this is a scaffold, not a feature.
+
+New `ui/src/lib/MetersView.svelte`: a meter list (cost-class chip per meter), a generated parameter
+editor (range/checkbox/select per `param.type`, honouring `when` clauses to show/hide, e.g. "Peak fall
+style"/"Peak hold" only when "Peak cap" is on), a preset dropdown that snaps to `CUSTOM` the instant any
+value is hand-edited, and a Reset-to-template action. New `ui/src/lib/meters/MeterPreview.svelte`: a
+`<canvas>` animation loop driven by synthetic (not real) audio-level data, dispatching by which
+parameters a meter declares (`bands` → bar meter with attack/release easing and an optional peak dot;
+`smooth`/`trail` → scrolling scope with fade; otherwise → a generic reactive placeholder) — explicitly
+not tau-alpha's real preview stack (`METER_MODULE_SPEC.md` section 7's `tau_fb.js`/`tau_theme.js`/
+`tau_audio.js`/`tau_ballistics.js`, which doesn't exist to vendor yet), captioned as such on screen, but
+real enough that the editor and preview are genuinely live and interactive.
+
+New "Meters" nav entry. Verified live in a browser: switching meters preserves each one's own
+independent parameter state, toggling "Peak cap" off correctly hides its two dependent params and
+removes the peak dot from the animating preview, and all three meters' distinct preview shapes (bars,
+scope, rings) render and animate correctly. `npm run check`: 0 errors, 0 warnings.
 
 ## Safety and UX baseline
 

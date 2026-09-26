@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { MediaScan, PlaylistPlan } from './types';
-  export let path = ''; export let result: MediaScan | null = null; export let notice = ''; export let output = ''; export let selected = ''; export let choose: () => void; export let scan: () => void; export let exportList: () => void;
+  export let path = ''; export let result: MediaScan | null = null; export let notice = ''; export let output = ''; export let selected = ''; export let choose: () => void; export let scan: () => void; export let exportList: () => void; export let chooseOutput: () => void;
 
   export let selectedPlaylistDetail: { name: string; file: string; tracks: string[] } | null = null;
   export let reorderTracks: string[] = [];
@@ -24,7 +24,14 @@
   {#if result}
     <section class="core-list">{#each result.playlists as playlist}<article><div class="core-icon">♪</div><div><h3>{playlist.name}</h3><p>{playlist.tracks.length} tracks · {playlist.file}</p></div><span class="chip" class:capable={selected === playlist.name}>{selected === playlist.name ? 'Selected' : 'Imported'}</span><button class="quiet" on:click={() => selected = playlist.name}>Select</button></article>{/each}</section>
 
-    <section class="settings-card"><h2>Export playlist</h2><div class="picker-row"><input bind:value={output} placeholder="/Users/me/Desktop/playlist.m3u"/><button class="primary" disabled={!selected || !output} on:click={exportList}>Export</button></div><p class="notice">{selected ? `Selected: ${selected}` : 'Select a playlist first.'}</p></section>
+    <section class="settings-card"><h2>Export playlist</h2><div class="picker-row"><input bind:value={output} placeholder="/Users/me/Desktop/playlist.m3u"/><button class="picker" on:click={chooseOutput}>Choose</button><button class="primary" disabled={!selected || !output} on:click={exportList}>Export</button></div><p class="notice">{selected ? `Selected: ${selected}` : 'Select a playlist first.'}</p></section>
+
+    <!-- Existing .m3u filenames in this media root, for the rename/create/import
+         destination fields below -- picked from the folder's own scan result
+         rather than a new "list files" command, since scanMedia already knows
+         every playlist file here. A plain <input list=…> keeps free typing for
+         a brand-new name while suggesting the ones that already exist. -->
+    <datalist id="playlist-file-suggestions">{#each result.playlists as playlist}<option value={playlist.file}></option>{/each}</datalist>
 
     {#if selectedPlaylistDetail}
       <section class="settings-card">
@@ -45,7 +52,7 @@
       <section class="settings-card">
         <div style="width:100%">
           <h2>Rename "{selectedPlaylistDetail.name}"</h2>
-          <div class="picker-row"><input bind:value={renameNewFile} placeholder="NewName.m3u"/><button class="primary" disabled={!renameNewFile.trim()} on:click={reviewRename}>Review rename</button></div>
+          <div class="picker-row"><input bind:value={renameNewFile} list="playlist-file-suggestions" placeholder="NewName.m3u"/><button class="primary" disabled={!renameNewFile.trim()} on:click={reviewRename}>Review rename</button></div>
           {#if renamePlan}<div class="plan-inline"><p>{selectedPlaylistDetail.file} → {renamePlan.file}</p><button class="danger" on:click={confirmRename}>Confirm and rename</button></div>{/if}
           <p class="notice" role="status">{renameNotice}</p>
         </div>
@@ -56,7 +63,7 @@
       <div style="width:100%">
         <h2>Create a playlist</h2>
         <p>One track's media-relative path per line (as shown in the Library screen).</p>
-        <div class="picker-row"><input bind:value={createFile} placeholder="My Mix.m3u"/></div>
+        <div class="picker-row"><input bind:value={createFile} list="playlist-file-suggestions" placeholder="My Mix.m3u"/></div>
         <textarea bind:value={createTracksText} placeholder="Artist/Album/01 - Track.mp3"></textarea>
         <button class="primary" disabled={!createFile.trim() || !createTracksText.trim()} on:click={reviewCreate}>Review</button>
         {#if createPlan}<div class="plan-inline"><p>{createPlan.tracks.length} tracks{createPlan.overwrites_existing ? ' · replaces an existing file' : ''}</p><button class="danger" on:click={confirmCreate}>Confirm and create</button></div>{/if}
@@ -69,7 +76,7 @@
         <h2>Import a playlist</h2>
         <p>Matches each line of an external `.m3u` against tracks already in this media root by path or filename; anything unmatched is listed, not silently kept.</p>
         <div class="picker-row"><input bind:value={importSource} placeholder="/Users/me/Music/exported.m3u"/><button class="picker" on:click={chooseImportSource}>Choose</button></div>
-        <div class="picker-row"><input bind:value={importDestFile} placeholder="Imported.m3u"/><button class="primary" disabled={!importSource.trim() || !importDestFile.trim()} on:click={reviewImport}>Review</button></div>
+        <div class="picker-row"><input bind:value={importDestFile} list="playlist-file-suggestions" placeholder="Imported.m3u"/><button class="primary" disabled={!importSource.trim() || !importDestFile.trim()} on:click={reviewImport}>Review</button></div>
         {#if importPlan}
           <div class="plan-inline"><p>{importPlan.tracks.length} matched · {importPlan.dropped.length} dropped{importPlan.overwrites_existing ? ' · replaces an existing file' : ''}</p><button class="danger" on:click={confirmImport}>Confirm and import</button></div>
           {#if importPlan.dropped.length}<ul class="dropped-list">{#each importPlan.dropped as line}<li>{line}</li>{/each}</ul>{/if}
