@@ -4,8 +4,8 @@ Tau Omega writes files that Tau's firmware reads, so its assumptions go stale wh
 ships. This is the standing record of when they were last checked and what is still open. **Re-run it
 after every tau-alpha release**, and when the blit engine lands.
 
-Last checked **2026-09-22** against tau-alpha **v0.4.0** (Phase G cold code shipped; Phase F blit
-engine is that project's active work item).
+Last checked **2026-09-26** against tau-alpha's working tree (post-B-294; Phase F blit engine and the
+meter-module/image-format work are both in progress, no new tagged release since v0.4.0).
 
 ## Verified correct — no action
 
@@ -24,13 +24,31 @@ engine is that project's active work item).
 
 ## Open conflicts — tau-alpha must decide
 
-1. **Data slot 6 is double-booked.** `MEDIA_LIBRARY_0.4_SPEC.md` section 3 reserves slot 6 for
-   `tau-library-art.bin`; Phase G shipped the cold image `tau-cold.bin` in slot 6, and it is in the
-   released core today. The art file has no slot. Live, because the blit engine is next.
-2. **Art pixel format unconfirmed.** The firmware spec says "RGB565 assumed; verify against
-   `fw/art.inc` before freezing". Do not encode thumbnails until it is frozen.
+1. **Data slot 6 is still double-booked.** `MEDIA_LIBRARY_0.4_SPEC.md` section 3 reserved slot 6 for
+   the art file; Phase G shipped the cold image `tau-cold.bin` in slot 6, and it is in the released
+   core today. `IMAGE_FORMATS.md` (2026-09-26, D-I05) doesn't resolve this either — the container is
+   explicitly still unfrozen and no slot number is assigned. Live, because the format decision that
+   was blocking this (pixel format, next item) is now made.
+2. **Superseded 2026-09-26 — art pixel format is no longer "RGB565 assumed".** tau-alpha ran a real
+   study (`IMAGE_FORMATS.md`, owner decision D-I01/D-I02) and decided **palette-256 (`TIM1` container,
+   CLUT + 8-bit indices) at 128 px on the long side, proportional scale, no crop or letterbox** — not
+   raw RGB565. `tau_core::image` is built against this decision (see `IMPLEMENTATION_PLAN.md`'s new
+   cross-project section). The container itself is still explicitly unfrozen (D-I05) and there is
+   still no firmware reader — re-check both before trusting a byte layout across a tau-alpha update.
 
 Both are recorded in `DATA_FORMATS.md` section 3 next to the design they affect.
+
+## Watched interfaces — not yet real, don't build against them
+
+- **Meter presets (`tau-assets.bin`, `METR` section, `SR_T_METERCFG`, `meters_schema.json`).**
+  `tau-alpha/docs/METER_MODULE_SPEC.md` fully designs this (decisions D-M01–M13 already resolved),
+  but as of 2026-09-26 tau-alpha is only mid-**M0** (manifest generator, `meters_schema.json`
+  emission just landed) — **M2** (the generic Configure page + `SR_T_METERCFG`) and **M4** (the
+  actual `tau-assets.bin` container + the Omega hand-off) haven't happened, so there is no real
+  container or schema file to verify a fixture against yet. Do not build the Omega-side editor,
+  `.tmeter`/`.tmeterpack` handling, or the container writer until tau-alpha tags a release that
+  actually contains `meters_schema.json` and a real `tau-assets.bin` — then re-run this check, copy
+  a real captured container into `testdata/`, and build against that, per section 2's rule.
 
 ## Traps to respect
 
@@ -83,3 +101,13 @@ fixtures/tools. Same real fixtures also back a new `tau_core::diag::{decode_chec
 read_check_summary}` — a byte-exact port of `tau-alpha/tools/decode_tau_suite.py`'s `unpack_words`
 (the persisted 4-word Check-report summary at persist ids 20-23), cross-checked against that script's
 own `--interact --json` output on the same files.
+
+## New interface built this check — 2026-09-26
+
+New `tau_core::image`: `TIM1` decode for every payload shape real tooling produces (`rgb565`,
+`palette` at 8/6/4 bpp) and a palette-256 encoder for the newly decided default (D-I01/D-I02).
+Verified against a real `.timg` file copied from a real album on tau-alpha's own card backup
+(`testdata/images/README.md`), not a fixture invented from `IMAGE_FORMATS.md`'s prose — same
+discipline as the two bugs above, applied before either the encoder or decoder was trusted. No bug
+found this time (the format is new enough here that there was no prior, wrong assumption to catch),
+but recorded per this file's own convention of logging what was checked and against what.

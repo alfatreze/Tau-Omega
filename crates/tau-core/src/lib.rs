@@ -9,6 +9,7 @@ pub mod cover;
 pub mod diag;
 pub mod duplicates;
 pub mod icon;
+pub mod image;
 pub mod journal;
 pub mod package;
 pub mod playlist;
@@ -84,6 +85,7 @@ pub enum ErrorCode {
     NotACheckSummary = 46,
     InvalidTaudRecord = 47,
     NoQrCodeFound = 48,
+    InvalidTim1Container = 49,
 }
 
 impl ErrorCode {
@@ -129,6 +131,7 @@ impl TryFrom<u16> for ErrorCode {
             46 => Self::NotACheckSummary,
             47 => Self::InvalidTaudRecord,
             48 => Self::NoQrCodeFound,
+            49 => Self::InvalidTim1Container,
             _ => return Err(()),
         })
     }
