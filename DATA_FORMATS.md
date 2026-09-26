@@ -92,21 +92,32 @@ playlist checks (E17); E10 = no file, E16 = PSRAM proof failed. The firmware rea
 the header's `file_size` must be exact (the last byte reads, one byte past it does not). Tau Omega must therefore write files whose size equals
 `file_size` and must never append data.
 
-## 3. Art file `tau-library-art.bin` (RESERVED, not built)
-Deferred until the blit engine exists. Design kept in `tau-alpha/docs/MEDIA_LIBRARY_0.4_SPEC.md` section 3: 512-byte header (`TART`, version,
-counts, `art_id` = CRC32 of the header), section A of 32x32 RGB565 list thumbnails, section B of 92x92 RGB565 detail thumbnails, fixed stride per album.
-Tau Omega should already own the thumbnail pipeline (extract, square, scale, cache by cover hash) so this becomes a switch, not a project.
+## 3. Cover images: `TIM1` container, `tau-art/` sidecars (superseded 2026-09-26, `tau_core::image` built)
 
-> **Two questions must be answered by tau-alpha before this is built (raised 2026-09-22).** The blit
-> engine is now that project's *active* work item, so these are live, not hypothetical:
-> 1. **The slot number is taken.** `MEDIA_LIBRARY_0.4_SPEC.md` section 3 reserves **data slot 6** for
->    this file, but Phase G shipped the cold image `tau-cold.bin` in slot 6 and it is in the released
->    v0.4.0 core today. The art file needs a different slot; nobody has picked one.
-> 2. **RGB565 is an assumption, not a fact.** The firmware spec itself says "RGB565 assumed; *verify
->    against `fw/art.inc` before freezing*". Do not encode thumbnails against it until confirmed.
+**This section previously described `tau-library-art.bin`, a single-file RGB565 thumbnail store per
+`MEDIA_LIBRARY_0.4_SPEC.md` section 3. That design is superseded.** tau-alpha ran a real study
+(`tau-alpha/docs/IMAGE_FORMATS.md`, owner decision 2026-09-26, D-I01/D-I02) and decided differently:
+per-album `<album>/tau-art/cover_<size>.pal256.timg` sidecar files, not one big art-store file,
+**palette-256** (an 8-bit-indexed `TIM1` container: 16-byte header, then a 256-entry RGB565 CLUT,
+then one index byte per pixel), not raw RGB565, at **128 px on the long side, scaled proportionally
+with no crop or letterbox** (a non-square cover stays non-square; the header carries the real width
+and height).
+
+`tau_core::image` implements this: `decode_tim1` (every payload shape real tooling can produce —
+`rgb565` and `palette` at 8/6/4 bpp) and `encode_pal256_bytes`/`encode_cover_pal256` (the decided
+default). Verified against a real `.timg` file from a real album, not invented from this section's
+prose (`Tau Omega/testdata/images/README.md`).
+
+> **Both open questions from the previous design are still open, just restated (`FIRMWARE_SYNC.md`
+> "Open conflicts"):**
+> 1. **The slot number is still unassigned and slot 6 is still double-booked** (Phase G's cold image
+>    `tau-cold.bin` occupies it in the shipped core). Deciding the pixel format didn't resolve this.
+> 2. **The container itself is explicitly not frozen** (`IMAGE_FORMATS.md` D-I05) and **no firmware
+>    reader exists yet**. Writing `.timg` sidecars today is real, tested forward-prep and a real
+>    decode path for our own UI's previews — it does not yet do anything on the Pocket itself.
 >
-> The reserved fields are safe either way: the index header keeps `art_id` at offset 44 and the album
-> record keeps `art` u16 = 0xFFFF, so the index format does not change when art arrives.
+> The reserved index fields are unaffected either way: `art_id` stays at offset 44 and the album
+> record's `art` field stays `u16 = 0xFFFF` until a slot exists.
 
 ## 4. Persisted settings (read-only display)
 `Settings/<core>/Interact/_core/interact_persist.json` holds `variables[]` `{id, type, val}`. Tau library builds use (id -> word):

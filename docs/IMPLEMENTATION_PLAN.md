@@ -20,6 +20,35 @@ Tau Omega has one shared local operator surface. A user selects folders, reviews
 | Results | Duplicate groups found | Review paths only |
 | Failed | Folder/file could not be read | Retry after selecting an accessible folder |
 
+## Cross-project interface order (tau-alpha's meter/image work, 2026-09-26)
+
+tau-alpha's B-284 (image formats) and B-274/B-294 (meter module) sessions produced two new
+Omega-facing interfaces at very different levels of readiness. Sequenced per
+`docs/CROSS_PROJECT_INTERFACE.md`'s own rule (never build against a spec with no real artifact yet):
+
+1. **Cover images (`TIM1`), started now.** `tau-alpha/docs/IMAGE_FORMATS.md` D-I01/D-I02 (2026-09-26)
+   decided palette-256 at 128 px, proportional scale, no crop/letterbox — final enough to build
+   against, and the tool that produces it (`tools/tau_image.py`) already exists with real output
+   files to verify against. `tau_core::image` implements `TIM1` decode (all payload shapes real
+   tooling produces: `rgb565`, `palette` at 8/6/4 bpp) and a palette-256 encoder (own quantizer, not
+   required to match `tau_image.py` pixel-for-pixel — only the container shape is shared). Verified
+   against a real fixture, not an invented one (`testdata/images/README.md`). **Caveat that changes
+   nothing about priority but does change what this unlocks today:** no firmware reader exists yet
+   (`IMAGE_FORMATS.md`'s own status line) and no data slot is assigned (D-I05, open) — this is
+   forward-prep plus a real decode path for previews in our own UI, not a Pocket-visible feature yet.
+2. **Meter presets (`tau-assets.bin`/`METR`), tracked, not started.** `METER_MODULE_SPEC.md`'s full
+   Omega-facing design (§6, §20-22: the container, `.tmeter`/`.tmeterpack`, `meters_schema.json`,
+   capture-from-QR) is decided (D-M01–M13) but tau-alpha is only at the start of its own build order
+   (M0), with M2 (`SR_T_METERCFG`) and M4 (the actual container + hand-off) still ahead. Building the
+   Omega side now would mean building against a spec with no real artifact — the exact mistake
+   `CROSS_PROJECT_INTERFACE.md` §4 already caught twice for this project. See `docs/FIRMWARE_SYNC.md`'s
+   new watched-interface entry; pick this up once tau-alpha tags a release containing
+   `meters_schema.json`.
+
+No new repo, and no dependency on tau-alpha's own Python tooling: both interfaces are reimplemented
+in `tau-core` (Rust), the same pattern as `icon.rs`/`taud.rs` before them, verified against real
+captured artifacts rather than shelling out to or forking the other project's tools.
+
 ## Accessibility baseline
 
 Target WCAG 2.2 AA. Problems results use text labels in addition to colour, native buttons and inputs, visible focus, keyboard operation, status messages, and no automatic destructive action. Compliance still requires runtime testing.

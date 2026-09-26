@@ -1,12 +1,12 @@
 # Tau Omega — status handoff
 
-Updated 2026-09-24 (core removal, the full TAUD1 QR decoder, real hardware write validation,
+Updated 2026-09-26 (core removal, the full TAUD1 QR decoder, real hardware write validation,
 screenshot discovery, a UX/UI review with two real bug fixes and a screenshot gallery, fixes for
 `cargo tauri dev` and a missing event capability found running the real app for the first time,
 known/mounted-card auto-open, a Cards-screen redesign — player-core cards, a platform-category
 signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
-a sidebar active-card/-core switcher, and real per-core icon.bin decoding, added in sequence). All
-implementation work is contained in `Tau Omega/`.
+a sidebar active-card/-core switcher, real per-core icon.bin decoding, and `TIM1` cover-image
+decode/encode, added in sequence). All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -14,7 +14,8 @@ implementation work is contained in `Tau Omega/`.
 2. `DECISIONS.md` — D-001..D-013, including the integration target, the licence boundary, and the
    release artifact versioning/layout rule.
 3. `PORTABILITY_AUDIT.md` — every P0/P1/P2 item, all done as of 2026-09-22.
-4. `FIRMWARE_SYNC.md` — what we assume about tau-alpha, last verified 2026-09-22 against v0.4.0.
+4. `FIRMWARE_SYNC.md` — what we assume about tau-alpha, last verified 2026-09-26 against its working
+   tree (post-B-294; no new tagged release since v0.4.0).
 
 This folder is a Git repository, pushed to **github.com/alfatreze/Tau-Omega** (public), branch
 `main`, with branch protection (PRs required, admin can bypass) and a GitHub Actions CI workflow
@@ -172,9 +173,9 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Validation
 
-- `cargo test` (workspace): 61 `tau-core` unit tests passing as of 2026-09-24 (grown from 20 across
-  this session's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag/
-  Remove/taud/screenshots — each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
+- `cargo test` (workspace): 71 `tau-core` unit tests passing as of 2026-09-26 (grown from 20 across
+  this project's features — Library/Problems/Job-history/Playlist/Storage/Backup/Package/diag/
+  Remove/taud/screenshots/image — each with its own tests against real or synthetic fixtures), plus 6 index conformance, 4 card
   inspection, 1 fuzz-lite, 2 testkit; +6 more in the feature-gated `serde_feature.rs` (only compiled
   with `--features tau-core/serde`). Re-run `cargo test --workspace` for the current exact count
   rather than trusting this number as it ages.
@@ -638,6 +639,43 @@ core id) sits next to the developer name, replacing the generic bracket glyph th
 "Show other cores" list. A core/platform with no file keeps the existing monogram/bracket-glyph
 fallback rather than showing nothing. Confirmed working against a real card in conversation (the real
 `HarpMudd.Mp3Player` icon rendered correctly next to its dev name, not just Tau's own).
+
+## Cover images: `TIM1` decode and encode (2026-09-26)
+
+Reviewed tau-alpha's latest work (image-format study B-284 and the meter-module design B-274/B-294)
+against this project's plan and wrote up a revised cross-project sequencing in
+`docs/IMPLEMENTATION_PLAN.md` — cover images are ready to build now (a final format decision plus a
+real tool already producing real files); meter presets are fully designed on tau-alpha's side but not
+real yet (only mid-M0 of its own build order) and are tracked, not started, in
+`docs/FIRMWARE_SYNC.md`'s new "Watched interfaces" section, to avoid repeating the two fixture-vs-
+reality bugs already recorded there.
+
+Built the cover-image half: new `tau_core::image` module. `decode_tim1` reads every payload shape
+real tooling can produce (`rgb565`; `palette` at 8/6/4 bits per pixel, matching `tau_image.py`'s own
+bit-packing bit for bit) into plain RGB8. `encode_cover_pal256`/`encode_pal256_bytes` produce the
+newly decided default (`IMAGE_FORMATS.md` D-I01/D-I02, 2026-09-26: palette-256, 128 px on the long
+side, proportional scale, no crop or letterbox) from a real JPEG or PNG source cover — own
+from-scratch median-cut quantizer plus Floyd-Steinberg dithering and a plain Lanczos3 resize, since
+the container format is the only shared contract, not the Python tool's exact quantizer output.
+Three new dependencies, each measured before adding (`docs/DEPENDENCIES.md`): `zune-jpeg` (one
+transitive crate, pure Rust) for JPEG source decode, reusing the existing `png` dependency for PNG
+source decode; `resize` (`default-features = false` to drop its default `rayon` thread pool, not
+needed for a single small cover) plus `rgb` (its own pixel-type dependency, needed directly to name
+`RGB8` in this crate) for the resample step.
+
+Verified against a real `.timg` file copied from a real album on tau-alpha's own card backup
+(`testdata/images/README.md`, hash-verified) — decoded pixel values cross-checked against
+`tau_image.py`'s own decoder, not invented from the format description. The encoder is round-tripped
+through the same decoder against a real source JPEG (`testdata/images/cover455.jpg`, one of
+`IMAGE_FORMATS.md`'s own comparison-table covers). 6 new tests, `cargo test --workspace` at 71 passing
+(up from 65), `cargo clippy --all-targets` clean for this module.
+
+**Honestly unfinished:** no UI wiring yet (no Sync-plan option to write the sidecar, no thumbnail
+shown anywhere), and — carried over from tau-alpha's own status, not something this side controls —
+no firmware reader exists for this format yet and its data-slot number is still unassigned, so
+writing these files to a real card today has no effect on the Pocket itself. Next: wire
+`encode_cover_pal256` into `sync::plan`/`execute` as an opt-in step, and a decode-and-show path in the
+Library/Cards UI (useful immediately, independent of the firmware reader).
 
 ## Safety and UX baseline
 
