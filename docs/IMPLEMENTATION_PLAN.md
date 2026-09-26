@@ -35,11 +35,16 @@ Omega-facing interfaces at very different levels of readiness. Sequenced per
    against a real fixture, not an invented one (`testdata/images/README.md`). **Done, 2026-09-26:**
    `art_sidecar_pal256` is a `sync::PlanOptions` field wired end to end (engine, `tau-cli`, the Tauri
    adapter, the Sync screen's checkbox and plan review) — one `.timg` sidecar planned per album
-   folder, written and read back through `image::decode_tim1` at execute time. **Still open:** no
-   decode-and-show thumbnail anywhere in the UI yet (Library/Cards). **Caveat that changes nothing
-   about priority but does change what this unlocks today:** no firmware reader exists yet
-   (`IMAGE_FORMATS.md`'s own status line) and no data slot is assigned (D-I05, open) — writing these
-   files to a real card has no effect on the Pocket itself yet.
+   folder, written and read back through `image::decode_tim1` at execute time. **Also done,
+   2026-09-26:** decode-and-show, as a lazy "Preview" button in the Sync plan review itself (not a
+   Library/Cards thumbnail grid — the Library screen's flat, virtualised track table has no album
+   grouping and stays a separately-tracked future item). Along the way, found and fixed a real
+   determinism bug in the palette quantizer (median-cut was iterating a `HashMap` directly, whose
+   order isn't just a function of its contents) — a new test encodes the same real cover twice and
+   checks for byte-for-byte agreement. **Caveat that changes nothing about priority but does change
+   what this unlocks today:** no firmware reader exists yet (`IMAGE_FORMATS.md`'s own status line)
+   and no data slot is assigned (D-I05, open) — writing these files to a real card has no effect on
+   the Pocket itself yet.
 2. **Meter presets (`tau-assets.bin`/`METR`), tracked, not started.** `METER_MODULE_SPEC.md`'s full
    Omega-facing design (§6, §20-22: the container, `.tmeter`/`.tmeterpack`, `meters_schema.json`,
    capture-from-QR) is decided (D-M01–M13) but tau-alpha is only at the start of its own build order

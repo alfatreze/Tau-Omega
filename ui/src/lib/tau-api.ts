@@ -5,6 +5,7 @@ export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { pa
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
 export const readCheckSummary = (path: string) => invoke<CheckSummary | null>('read_check_summary', { path });
 export const planSync = (sources: string[], destination: string, embedCovers: boolean, artSidecarPal256: boolean) => invoke<Plan>('plan_sync', { sources, destination, embedCovers, artSidecarPal256 });
+export const previewArtSidecar = (coverSource: string) => invoke<string>('preview_art_sidecar', { coverSource });
 export const executeSync = (sources: string[], destination: string, confirmation: string, manifestPath: string, embedCovers: boolean, artSidecarPal256: boolean, jobId: string) => invoke<SyncReport>('execute_sync', { sources, destination, confirmation, manifestPath, embedCovers, artSidecarPal256, jobId });
 export const compareMedia = (left: string, right: string) => invoke<Comparison>('compare_media', { left, right });
 export const planCoreCopy = (source: string, destination: string) => invoke<Plan>('plan_core_copy', { source, destination });
