@@ -2,7 +2,7 @@
 // Usage: (npm run dev &) && node scripts/screenshots.cjs [outDir]
 const { chromium } = require('playwright');
 const out = process.argv[2] || 'screenshots';
-const pages = ['Cards', 'Compare cores', 'Sync library', 'Playlists', 'Backup', 'Packages', 'Problems', 'Library', 'Recent jobs', 'Settings'];
+const pages = ['Cards', 'Library workbench', 'Compare cores', 'Sync library', 'Playlists', 'Backup', 'Packages', 'Problems', 'Library', 'Recent jobs', 'Settings'];
 (async () => {
   require('fs').mkdirSync(out, { recursive: true });
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
