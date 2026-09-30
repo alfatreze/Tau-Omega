@@ -195,6 +195,18 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Known issues and incomplete wiring
 
+- **Open, 2026-09-29 (cross-project, from Tau-Alpha):** Tau Omega running (even just open, not
+  actively syncing) appears to hold the Pocket's mounted SD card in a way that blocks other
+  processes from touching it — observed directly in the sibling Tau-Alpha session: `ls /Volumes/`
+  (and other basic filesystem calls) failed there with no card listed while Tau Omega was open, and
+  the mount appeared immediately once the owner closed Tau Omega. Not yet root-caused on this side —
+  candidates worth checking: a held file handle from a background watcher/poll (e.g. a
+  `fs::read_dir`/tokio task left scanning the card path), a Tauri asset-protocol scope keeping the
+  volume referenced, or a lock file Tau Omega writes and never releases while the window is open. A
+  fix should let the OS unmount/eject the card cleanly whenever Tau Omega has no operation actually
+  in flight against it, not just when the app is fully quit. Needs someone to reproduce with Tau
+  Omega open + idle, then narrow with `lsof`/Activity Monitor's "Open Files" against the mounted
+  volume path before touching any code.
 - **Fixed 2026-09-26:** playlist export now has a native save-dialog picker (filtered to `.m3u`); the
   rename/create/import destination fields gained a `<datalist>` of the media root's own already-known
   `.m3u` filenames (from the existing scan result, no new backend command) so an existing file can be
@@ -681,8 +693,8 @@ through the same decoder against a real source JPEG (`testdata/images/cover455.j
 
 **Honestly unfinished at the time:** no UI wiring, no Sync-plan option to write the sidecar, no
 thumbnail shown anywhere. — carried over from tau-alpha's own status, not something this side
-controls — no firmware reader exists for this format yet and its data-slot number is still
-unassigned, so writing these files to a real card today has no effect on the Pocket itself.
+controls — *(superseded 2026-09-27: tau-alpha v0.5.0 ships the firmware reader, cover data slot 7; the
+fast cover is hardware-confirmed)*. Originally: no firmware reader existed and no slot was assigned.
 
 ## Cover-sidecar writing wired into Sync (2026-09-26)
 
@@ -699,8 +711,7 @@ every other write path here follows. New `SyncReport::art_sidecars_written` fiel
 
 Wired end to end: `tau-cli` gained `--art-sidecar`; the Tauri `plan_sync`/`execute_sync` commands and
 `SyncPlanView` carry the count through; the Sync screen has a second checkbox next to "Add folder
-cover art", with the same honest caveat inline ("no firmware reader exists yet, so this has no effect
-on the Pocket today"), and the plan-review line shows "· N art sidecar(s)" when non-zero. Verified
+cover art", with an inline note (originally "no firmware reader exists yet"; updated 2026-09-27 to say v0.5.0+ cores show it), and the plan-review line shows "· N art sidecar(s)" when non-zero. Verified
 live in a browser against a mocked Tauri backend (checkbox toggle changes the mocked `plan_sync`
 response, plan card renders the count and correct singular/plural). New engine test
 (`art_sidecar_is_planned_once_per_album_and_written_verifiably`, against a real source JPEG) confirms

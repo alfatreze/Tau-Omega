@@ -101,10 +101,10 @@ pub struct PlanOptions {
     pub embed_covers: bool,
     /// Write a `tau-art/cover_128.pal256.timg` sidecar next to each album
     /// folder that has a discovered cover, encoded per tau-alpha's decided
-    /// default (`IMAGE_FORMATS.md` D-I01/D-I02). Forward-prep: no firmware
-    /// reader exists yet, so this has no effect on the Pocket itself today
-    /// (`docs/FIRMWARE_SYNC.md`'s "Watched interfaces"); it does feed this
-    /// app's own decode-and-preview path.
+    /// default (`IMAGE_FORMATS.md` D-I01/D-I02). The firmware reader
+    /// shipped in Tau v0.5.0 (hardware-confirmed for MP3 and FLAC albums; older
+    /// cores ignore the file), and it also feeds this app's own
+    /// decode-and-preview path.
     pub art_sidecar_pal256: bool,
 }
 

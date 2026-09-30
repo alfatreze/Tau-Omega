@@ -5,8 +5,8 @@
 //! letterbox).
 //!
 //! Status, carried over honestly from the source spec: the container is
-//! **not frozen** (D-I05) and **no firmware reader exists yet** — this is
-//! forward-prep, not a feature the device uses today. The decoder is
+//! **not formally frozen** (D-I05), but the firmware reader shipped in Tau
+//! v0.5.0 and is hardware-confirmed for MP3 and FLAC albums. The decoder is
 //! verified against a real file `tools/tau_image.py` produced
 //! (`testdata/images/README.md`), never a fixture invented from the format
 //! description; the encoder does not need to match that tool's quantizer

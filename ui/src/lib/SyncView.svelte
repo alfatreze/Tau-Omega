@@ -35,7 +35,7 @@
     <label for="manifest">Report location on this computer</label>
     <div class="picker-row"><input id="manifest" bind:value={manifestPath} placeholder="/Users/me/Documents/tau-sync-report.json"/><button class="picker" on:click={chooseManifest}>Choose</button></div>
     <label class="cover-option"><input type="checkbox" bind:checked={embedCovers}/> Add folder cover art to MP3 and FLAC copies <small>Baseline JPEG only. Your originals are never changed.</small></label>
-    <label class="cover-option"><input type="checkbox" bind:checked={artSidecar}/> Write a tau-art cover thumbnail alongside each album <small>tau-alpha's decided format (palette-256, 128px); no firmware reader exists yet, so this has no effect on the Pocket today.</small></label>
+    <label class="cover-option"><input type="checkbox" bind:checked={artSidecar}/> Write a tau-art cover thumbnail alongside each album <small>tau-alpha's decided format (palette-256, 128px); Tau v0.5.0 and later show it as the album cover in about 90 ms. Older cores ignore it.</small></label>
     <button class="primary" on:click={makePlan}>Review plan</button>
   </section>
   {#if plan}

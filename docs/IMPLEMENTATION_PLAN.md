@@ -42,10 +42,10 @@ Omega-facing interfaces at very different levels of readiness. Sequenced per
    determinism bug in the palette quantizer (median-cut was iterating a `HashMap` directly, whose
    order isn't just a function of its contents) — a new test encodes the same real cover twice and
    checks for byte-for-byte agreement. **Caveat that changes nothing about priority but does change
-   what this unlocks today:** no firmware reader exists yet (`IMAGE_FORMATS.md`'s own status line)
-   and no data slot is assigned (D-I05, open) — writing these files to a real card has no effect on
-   the Pocket itself yet.
-2. **Meter presets (`tau-assets.bin`/`METR`), tracked, not started.** `METER_MODULE_SPEC.md`'s full
+   what this unlocks:** as of tau-alpha v0.5.0 (2026-09-27) the firmware reader exists and is
+   hardware-confirmed (cover data slot 7, by name), so these files now show as fast album covers on
+   the Pocket; the container is still formally unfrozen (D-I05).
+2. **Meter presets (`tau-assets.bin`/`METR`), tracked, not started. Update 2026-09-27: tau-alpha v0.5.0 now ships the container reader, `meters_schema.json` and `SR_T_METERCFG`, so the blocker below is gone; the remaining gate is capturing a real file from a card.** `METER_MODULE_SPEC.md`'s full
    Omega-facing design (§6, §20-22: the container, `.tmeter`/`.tmeterpack`, `meters_schema.json`,
    capture-from-QR) is decided (D-M01–M13) but tau-alpha is only at the start of its own build order
    (M0), with M2 (`SR_T_METERCFG`) and M4 (the actual container + hand-off) still ahead. Building the

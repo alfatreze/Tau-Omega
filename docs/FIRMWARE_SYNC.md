@@ -4,8 +4,11 @@ Tau Omega writes files that Tau's firmware reads, so its assumptions go stale wh
 ships. This is the standing record of when they were last checked and what is still open. **Re-run it
 after every tau-alpha release**, and when the blit engine lands.
 
-Last checked **2026-09-26** against tau-alpha's working tree (post-B-294; Phase F blit engine and the
-meter-module/image-format work are both in progress, no new tagged release since v0.4.0).
+Last checked **2026-09-27** against tau-alpha **v0.5.0** (tag `v0.5.0`, commit `63ea499`), by re-reading its docs
+(`CROSS_PROJECT_INTERFACE.md`, `tools/tau_data_slots.py`, `THEME_FILE_FORMAT.md`, `CHANGELOG.md`) and the shipped
+`dist/Cores/alfatreze.TAU/data.json`. **Not yet done: re-verifying our code against real files captured from a card**
+(a `tau-assets.bin`, a `SR_T_METERCFG` record, a fresh `.timg`); until then the items below marked *re-verify* are
+docs-level only.
 
 ## Verified correct — no action
 
@@ -22,14 +25,16 @@ meter-module/image-format work are both in progress, no new tagged release since
 - **Thumbnails deferred on both sides.** 0.4 draws a numbered placeholder tile; our T8 correctly
   waits. Nothing we assume was dropped.
 
-## Open conflicts — tau-alpha must decide
+## Open conflicts — resolved by v0.5.0 (2026-09-27)
 
-1. **Data slot 6 is still double-booked.** `MEDIA_LIBRARY_0.4_SPEC.md` section 3 reserved slot 6 for
+1. **RESOLVED: data slot 6 was double-booked.** As shipped, slot 6 is the cold image, the cover image is slot 7 (opened by name) and `tau-assets.bin` is slot 8. Original text follows.
+
+   **(old)** Data slot 6 was double-booked. `MEDIA_LIBRARY_0.4_SPEC.md` section 3 reserved slot 6 for
    the art file; Phase G shipped the cold image `tau-cold.bin` in slot 6, and it is in the released
    core today. `IMAGE_FORMATS.md` (2026-09-26, D-I05) doesn't resolve this either — the container is
    explicitly still unfrozen and no slot number is assigned. Live, because the format decision that
    was blocking this (pixel format, next item) is now made.
-2. **Superseded 2026-09-26 — art pixel format is no longer "RGB565 assumed".** tau-alpha ran a real
+2. **Firmware reader shipped in v0.5.0 (was: none), path `tau-art/cover_128.pal256.timg`, hardware-confirmed for MP3 and FLAC albums; container still formally unfrozen (D-I05). *Re-verify*: run our encoder's output through a card and compare with a `.timg` the firmware accepted.** Earlier: art pixel format is no longer "RGB565 assumed". tau-alpha ran a real
    study (`IMAGE_FORMATS.md`, owner decision D-I01/D-I02) and decided **palette-256 (`TIM1` container,
    CLUT + 8-bit indices) at 128 px on the long side, proportional scale, no crop or letterbox** — not
    raw RGB565. `tau_core::image` is built against this decision (see `IMPLEMENTATION_PLAN.md`'s new
@@ -38,11 +43,14 @@ meter-module/image-format work are both in progress, no new tagged release since
 
 Both are recorded in `DATA_FORMATS.md` section 3 next to the design they affect.
 
-## Watched interfaces — not yet real, don't build against them
+## Interfaces that became real in v0.5.0 (re-verify against captured files before building)
 
-- **Meter presets (`tau-assets.bin`, `METR` section, `SR_T_METERCFG`, `meters_schema.json`).**
-  `tau-alpha/docs/METER_MODULE_SPEC.md` fully designs this (decisions D-M01–M13 already resolved),
-  but as of 2026-09-26 tau-alpha is only mid-**M0** (manifest generator, `meters_schema.json`
+- **Meter presets (`tau-assets.bin`, `METR` section, `SR_T_METERCFG`, `meters_schema.json`) and themes (`THEM`).**
+  **Update 2026-09-27:** M0-M5 are built and v0.5.0 ships the `TAUA` container reader (data slot 8),
+  `tools/meters_schema.json`, `SR_T_METERCFG` (tag 20) and `SR_T_METERTRACE` (tag 21); the container format is
+  documented in `tau-alpha/docs/THEME_FILE_FORMAT.md` but explicitly not frozen until a Pocket has read a real file
+  (a Pocket run of the release is pending, and only a 351-byte sample file exists). So the guidance below still
+  applies in spirit: capture a real file from a card first. Original (2026-09-26) text follows: tau-alpha was only mid-**M0** (manifest generator, `meters_schema.json`
   emission just landed) — **M2** (the generic Configure page + `SR_T_METERCFG`) and **M4** (the
   actual `tau-assets.bin` container + the Omega hand-off) haven't happened, so there is no real
   container or schema file to verify a fixture against yet. Do not build the Omega-side editor,
