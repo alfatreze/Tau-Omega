@@ -62,7 +62,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // --- slow direct connection: one dialog, not two -------------------------
   await pc().getByLabel('Select Mingus Ah Um').check(); await p.getByRole('button', { name: /^Add 1 to Pocket/ }).click();
-  assert.match(await text(p.getByRole('button', { name: /Direct USB/ })), /slow/); ok('detects the direct Pocket connection');
+  assert.match(await text(p.getByRole('button', { name: /Connected directly/ })), /slow/); ok('detects the direct Pocket connection');
   await p.getByRole('button', { name: 'Start sync' }).click();
   const merged = p.getByRole('alertdialog');
   assert.equal(await merged.count(), 1); assert.match(await text(merged), /Ready to sync/); assert.match(await text(merged), /connected to the Pocket directly/); ok('the slow-connection warning is inside the review sheet (one dialog, not two)');
@@ -74,9 +74,10 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByLabel(/Don't ask again/).check(); await p.getByRole('button', { name: 'Sync anyway' }).click();
   // --- run, progress, result ---------------------------------------------
   await p.waitForTimeout(700);
-  assert.match(await text(p.getByRole('dialog', { name: /Syncing/ })), /Copying/); ok('progress shows the current step');
-  assert.match(await text(p.getByRole('dialog', { name: /Syncing/ })), /MB of 402 MB/); ok('progress shows bytes copied');
+  assert.match(await text(p.getByRole('region', { name: 'Sync progress' })), /Copying/); ok('progress shows the current step');
+  assert.match(await text(p.getByRole('region', { name: 'Sync progress' })), /MB of 402 MB/); ok('progress shows bytes copied');
   assert.equal(await p.evaluate(() => document.activeElement?.textContent?.trim().startsWith('Cancel')), false); ok('focus is not on Cancel while syncing (Enter cannot cancel by accident)');
+  assert.equal(await p.getByRole('dialog').count() + await p.getByRole('alertdialog').count(), 0); ok('progress is docked in the tray, not a blocking dialog');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 });
   assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /9 tracks copied/); ok('result summarises what happened');
   assert.equal(await p.evaluate(() => document.activeElement?.textContent?.trim()), 'Done'); ok('focus lands on Done when the sync completes');
@@ -175,7 +176,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   
   assert.match(await text(review), /What's changing \(2\)/); assert.match(await text(review), /Mingus Ah Um/); assert.match(await text(review), /Head Hunters/); ok('the review sheet lists the albums that will change');
   await p.getByRole('button', { name: 'Confirm and start' }).click(); await p.waitForTimeout(600);
-  assert.match(await text(p.getByRole('dialog', { name: /Syncing/ })), /Keep the Pocket connected/); ok('progress tells you to keep the Pocket connected');
+  assert.match(await text(p.getByRole('region', { name: 'Sync progress' })), /Keep the Pocket connected/); ok('progress tells you to keep the Pocket connected');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 });
   assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /disconnect the Pocket now/); ok('completion says when it is safe to disconnect');
   await p.getByRole('button', { name: 'Done' }).click();
@@ -296,6 +297,62 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   for (let i = 0; i < 12; i++) await p.keyboard.press('Tab');
   assert.equal(await p.evaluate(() => !!document.activeElement?.closest('.help-panel')), true); ok('and keeps focus inside it');
   await p.keyboard.press('Escape'); assert.equal(await p.getByRole('dialog', { name: 'Using Tau Omega' }).count(), 0); ok('Escape closes it');
+
+  // --- selection: whole-row click, ranges, select all, filters, sort ------------------------
+  await fresh('?connection=card_reader'); await openLibrary(); await chooseFolder();
+  const rowOf = (title) => pc().locator('.wb-row', { hasText: title }).first();
+  await rowOf('Moanin').locator('strong').click();
+  assert.equal(await pc().getByLabel('Select Moanin').isChecked(), true); assert.match(await text(pc()), /1 selected/); ok('clicking anywhere on a row selects it');
+  await rowOf('A Love Supreme').locator('strong').click({ modifiers: ['Shift'] });
+  assert.match(await text(pc()), /5 selected/); assert.equal(await pc().locator('.wb-row.sel.dim').count(), 0); ok('Shift-click selects a range (5 albums), skipping the ones already on the Pocket');
+  await p.keyboard.press('Escape'); assert.equal(await pc().locator('.wb-row.sel').count(), 0); ok('Escape clears the selection');
+  await pc().getByLabel('Select A Love Supreme').focus(); await p.keyboard.press('Control+a');
+  assert.match(await text(pc()), /8 selected/); ok('Ctrl/Cmd+A selects everything that can be added (7 new albums and the changed one)');
+  await p.keyboard.press('Escape');
+  await pc().getByLabel(/Select all \d+ shown/).check();
+  assert.match(await text(pc()), /8 selected/); ok('"Select all shown" selects the same set');
+  await pc().getByLabel(/Select all \d+ shown/).uncheck(); assert.equal(await pc().locator('.wb-row.sel').count(), 0);
+  assert.match(await text(pc()), /All \(11\)/); assert.match(await text(pc()), /New \(7\)/); assert.match(await text(pc()), /Changed \(1\)/); assert.match(await text(pc()), /On Pocket \(3\)/); ok('filter chips show how many albums are in each state');
+  await pc().getByRole('button', { name: /^Changed \(1\)/ }).click();
+  assert.equal(await pc().locator('.wb-row').count(), 1); assert.match(await text(pc()), /Pocket has 4 tracks/); ok('the Changed filter shows one album and says how it differs from the Pocket');
+  await pc().getByRole('button', { name: /^New \(7\)/ }).click(); await pc().getByLabel(/Select all \d+ shown/).check();
+  await p.getByRole('button', { name: /^Add 7 to Pocket/ }).click(); assert.match(await text(tray()), /7 albums to add/); ok('filter New, select all, add: seven albums queued in three clicks');
+  await p.getByRole('button', { name: 'Clear all' }).click();
+  await pc().getByRole('button', { name: /^All \(11\)/ }).click();
+  await pc().getByLabel('Sort albums').selectOption('largest');
+  assert.match(await pc().locator('.wb-row').first().innerText(), /Bitches Brew/); ok('sort: largest first');
+  await pc().getByLabel('Sort albums').selectOption('title');
+  assert.match(await pc().locator('.wb-row').first().innerText(), /A Love Supreme/); ok('sort: title A to Z');
+
+  // --- long lists stay fast (windowing) -------------------------------------------------------
+  await fresh('?connection=card_reader&big=2000'); await openLibrary(); await chooseFolder(); await p.waitForTimeout(600);
+  assert.match(await text(pc()), /Select all 20\d\d shown|Select all 2011 shown|Select all 200\d shown/);
+  const domRows = await pc().locator('.wb-row').count();
+  assert.ok(domRows < 60, `rendered ${domRows} rows`); ok(`2,011 albums, only ${domRows} rows in the page`);
+  await pc().locator('.vl').evaluate((el) => { el.scrollTop = el.scrollHeight; }); await p.waitForTimeout(500);
+  assert.match(await text(pc()), /Album 19\d\d|Album 20\d\d/); ok('scrolling to the end shows the last albums');
+  await pc().getByLabel(/Select all \d+ shown/).check(); assert.match(await text(pc()), /2008 selected/); ok('select all works across the whole long list');
+
+  // --- cover thumbnails ------------------------------------------------------------------------------
+  await fresh('?connection=card_reader'); await openLibrary(); await chooseFolder(); await p.waitForTimeout(700);
+  assert.ok(await pc().locator('.wb-art img').count() >= 5); ok('albums on this computer show their cover pictures');
+  assert.ok(await pk().locator('.wb-art img').count() >= 2); ok('and so do albums on the Pocket');
+  assert.equal(await pk().locator('.wb-row', { hasText: 'Time Out' }).locator('.wb-art img').count(), 0); assert.match(await pk().locator('.wb-row', { hasText: 'Time Out' }).locator('.wb-art').innerText(), /♪/); ok('an album with no picture keeps the placeholder');
+  await pk().getByLabel('Select Blue Train').check(); await p.getByRole('button', { name: 'Edit…' }).click();
+  assert.equal(await p.locator('.wb-drawer .wb-cov img').count(), 1); assert.match(await text(p.locator('.wb-drawer')), /Now/); ok('the edit drawer shows the current cover');
+  await p.getByRole('button', { name: /Choose image/ }).click(); await p.waitForTimeout(300);
+  assert.match(await text(p.locator('.wb-drawer')), /New/); assert.equal(await p.locator('.wb-drawer .wb-cov img, .wb-drawer .wb-newcov').count() >= 2, true); ok('choosing a picture shows Now next to New');
+  await p.getByRole('button', { name: 'Cancel' }).click();
+
+  // --- progress is docked, not blocking -----------------------------------------------------------------
+  await stage('Moanin');
+  await p.getByRole('button', { name: 'Start sync' }).click(); await p.getByRole('button', { name: 'Confirm and start' }).click(); await p.waitForTimeout(500);
+  const dock = p.getByRole('region', { name: 'Sync progress' });
+  assert.match(await text(dock), /Syncing to Pocket/); assert.match(await text(dock), /keep looking around/); ok('progress sits in the tray with Cancel and a note that you can keep browsing');
+  assert.equal(await p.getByRole('button', { name: /^Add \d* ?to Pocket/ }).isDisabled(), true); assert.equal(await p.getByRole('button', { name: 'Clear all' }).isDisabled(), true); ok('changing the queue is disabled while a sync runs');
+  await pk().getByRole('tab', { name: 'Tracks' }).click(); assert.match(await text(pk()), /Track 1/); ok('but you can still browse the Pocket while it runs');
+  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await p.getByRole('button', { name: 'Done' }).click();
+  assert.equal(await p.getByRole('region', { name: 'Sync progress' }).count(), 0); ok('the dock goes away when the sync finishes');
 
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();

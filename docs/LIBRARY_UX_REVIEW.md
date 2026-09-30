@@ -47,3 +47,7 @@ Five people who own a Pocket. Tasks, no coaching: (a) put two albums from a fold
 1. P0 items 1 to 6 (about a day of work, mostly small).
 2. P1 items 7, 8 and 9 (largest perceived quality gain), then 10 to 14.
 3. Run the usability session after P0 and before P1 so P1 is guided by observation rather than opinion.
+
+
+## Round 2 status (after the usability session and the owner's decisions)
+Built: **bulk selection** (click anywhere on a row, Shift-click ranges, Ctrl/Cmd+A, "Select all N shown", Escape to clear), **filters** (All / New / Changed / On Pocket, with counts) and **sort** (artist, title, largest, smallest), an explanation on every *Changed* row ("Pocket has 4 tracks"), **windowed lists** (2,000+ albums stay fast; the old 300-track cap on the Tracks tab is gone), **cover artwork** on both panes and the current cover shown next to the new one in the edit drawer, **non-blocking progress** (docked in the tray; the queue is locked while a sync runs, but you can keep browsing), one **Edit...** button, a plain-language wording pass (library list instead of index, "Connected directly", "Pocket limit", "Free space afterwards", "put each album's cover picture inside the copied songs"), sync history, one review sheet with the slow-connection warning and estimate, and the fit check. Still open: the Home/PageUp scroll behaviour reported at 200% zoom, a restore action for removed albums, and wording on the older Tools pages (Compare cores, Backup, Packages, Problems), which keep their original engineer-facing language.

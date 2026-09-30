@@ -103,3 +103,6 @@ export type HistoryEntry = JournalSummary & { error_code: number | null; started
 /** What the Library screen stores with each sync so history can describe it in words. */
 export type HistoryContext = { card?: string; core?: string; connection?: string; items?: { kind: 'add' | 'remove' | 'edit'; title: string; artist?: string; tracks?: number; bytes?: number; note?: string; label?: string }[] };
 export type ChangeResult = ChangeReport & { journal: string };
+
+/** One album's cover thumbnail: a base64 PNG, or null when it has no readable picture. */
+export type Thumbnail = { id: string; png_base64: string | null; /** Only the dev mock sets this; the engine always returns PNG. */ mime?: string };
