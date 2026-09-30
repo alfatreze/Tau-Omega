@@ -44,7 +44,10 @@ let prefs = { remove_mode: 'backup', backup_dir: null as string | null, remove_e
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
+let maxTracks = 16384;
+let failNext: null | { code: number; message: string } = null;
 const listing = (albums: Album[]) => ({
+  limits: { max_tracks: maxTracks, max_albums: 2048, max_artists: 1024 },
   albums,
   tracks: albums.flatMap((a) => Array.from({ length: a.tracks }, (_, i) => ({
     rel: `${a.dest_id}/${String(i + 1).padStart(2, '0')} Track ${i + 1}.mp3`, album_id: a.id, title: `Track ${i + 1}`, artist: a.artist, album: a.title,
@@ -55,6 +58,11 @@ const listing = (albums: Album[]) => ({
 });
 
 const plan = (request: any) => {
+  const trackCount = (list: Album[]) => list.reduce((n, a) => n + a.tracks, 0);
+  const addList = (request.add_albums as string[]).map((id) => sourceAlbums.find((a) => a.id === id)!).filter(Boolean);
+  const rmList = (request.remove_albums as string[]).map((id) => cardAlbums.find((a) => a.id === id)!).filter(Boolean);
+  const after = trackCount(cardAlbums) + trackCount(addList.filter((a) => !cardAlbums.some((c) => c.id === a.id))) - trackCount(rmList);
+  if (after > maxTracks) throw { code: 14, message: `This would put ${after} tracks on the Pocket, but its library holds at most ${maxTracks}. Remove some albums or add fewer.` };
   const adds = (request.add_albums as string[]).map((id) => sourceAlbums.find((a) => a.id === id)!).filter(Boolean);
   const removes = (request.remove_albums as string[]).map((id) => cardAlbums.find((a) => a.id === id)!).filter(Boolean);
   const files = (list: Album[]) => list.reduce((n, a) => n + a.tracks, 0);
@@ -69,6 +77,7 @@ const plan = (request: any) => {
 
 /** Emits copy progress over a few seconds, then applies the change set. */
 async function runChanges(request: any, jobId: string) {
+  if (failNext) { const e = failNext; failNext = null; await new Promise((r) => setTimeout(r, 300)); throw e; }
   const p = plan(request);
   const total = p.bytes_to_write;
   const steps = 24;
@@ -132,6 +141,8 @@ export function installDevMock() {
     setMounted: (value: boolean) => { mounted = value; },
     addCardAlbum: (title: string) => { cardAlbums = [...cardAlbums, { ...album('Test Artist', title, 3, 100, 2001) }]; },
     setConnection: (value: typeof connection) => { connection = value; },
+    setMaxTracks: (value: number) => { maxTracks = value; },
+    failNext: (code: number, message: string) => { failNext = { code, message }; },
   };
   // Test hook: `?connection=card_reader` or `?connection=unknown` in the URL.
   const wanted = new URLSearchParams(location.search).get('connection');

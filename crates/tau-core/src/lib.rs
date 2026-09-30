@@ -46,9 +46,12 @@ const SECTIONS: [&str; 8] = [
     "letters",
     "playlists",
 ];
-const MAX_TRACKS: usize = 16_384;
-const MAX_ALBUMS: usize = 2_048;
-const MAX_ARTISTS: usize = 1_024;
+/// The Pocket index's hard capacity limit (see the index format).
+pub const MAX_TRACKS: usize = 16_384;
+/// The Pocket index's hard capacity limit (see the index format).
+pub const MAX_ALBUMS: usize = 2_048;
+/// The Pocket index's hard capacity limit (see the index format).
+pub const MAX_ARTISTS: usize = 1_024;
 const MAX_PLAYLISTS: usize = 64;
 const MAX_FILE: usize = 4 << 20;
 const MAX_STRINGS: usize = 3 << 20;

@@ -55,6 +55,40 @@ pub struct ChangeReport {
     pub index_path: PathBuf,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct Counts {
+    tracks: usize,
+    albums: usize,
+}
+
+/// Fails if the library after the change would exceed the index's capacity.
+/// Tracks are counted exactly. Albums are estimated from folders (the index
+/// groups by tag), so this can only under-count a folder holding several
+/// albums, never block a library that fits.
+fn check_index_limits(now: Counts, add: Counts, remove: Counts, limits: workbench::IndexLimits) -> Result<(), TauError> {
+    let tracks = (now.tracks + add.tracks).saturating_sub(remove.tracks);
+    let albums = (now.albums + add.albums).saturating_sub(remove.albums);
+    if tracks > limits.max_tracks {
+        return Err(TauError::e(
+            ErrorCode::IndexCapExceeded,
+            format!(
+                "This would put {tracks} tracks on the Pocket, but its library holds at most {}. Remove some albums or add fewer.",
+                limits.max_tracks
+            ),
+        ));
+    }
+    if albums > limits.max_albums {
+        return Err(TauError::e(
+            ErrorCode::IndexCapExceeded,
+            format!(
+                "This would put about {albums} albums on the Pocket, but its library holds at most {}. Remove some albums or add fewer.",
+                limits.max_albums
+            ),
+        ));
+    }
+    Ok(())
+}
+
 /// Plans a change set against the card media root `common`. Read-only.
 pub fn plan_changes(
     common: &Path,
@@ -108,6 +142,29 @@ pub fn plan_changes(
     } else {
         Some(tagedit::plan_edit(common, &request.edits)?)
     };
+    // Refuse a change set the Pocket's index could not hold *before* anything
+    // is copied; otherwise every file would be written and the index step
+    // would then fail.
+    let (tracks_now, dirs_now) = workbench::count_audio(common)?;
+    let new_tracks = sync_plan.as_ref().map_or(0, |p| {
+        p.items.iter().filter(|i| i.state == sync::CopyState::New && sync::audio_file(&i.destination)).count()
+    });
+    let new_albums = sync_plan.as_ref().map_or(0, |p| {
+        p.items
+            .iter()
+            .filter(|i| i.state == sync::CopyState::New)
+            .filter_map(|i| i.destination.parent()?.strip_prefix(common.canonicalize().ok()?).ok().map(|d| d.to_string_lossy().replace('\\', "/")))
+            .filter(|d| !dirs_now.contains(d))
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+    });
+    let removed_tracks = removal.as_ref().map_or(0, |r| r.items.iter().filter(|i| sync::audio_file(&i.destination)).count());
+    check_index_limits(
+        Counts { tracks: tracks_now, albums: dirs_now.len() },
+        Counts { tracks: new_tracks, albums: new_albums },
+        Counts { tracks: removed_tracks, albums: request.remove_albums.len() },
+        workbench::IndexLimits::default(),
+    )?;
     let mut hasher = Sha256::new();
     hasher.update(b"changes-v1");
     for id in [
@@ -314,6 +371,29 @@ mod tests {
             plan_changes(&common, &request, &mut None).unwrap_err().code(),
             ErrorCode::NameCollision
         );
+    }
+
+    #[test]
+    fn the_index_limits_are_enforced_before_anything_is_copied() {
+        let limits = workbench::IndexLimits { max_tracks: 10, max_albums: 3, max_artists: 5 };
+        let c = |tracks, albums| Counts { tracks, albums };
+        assert!(check_index_limits(c(8, 2), c(2, 1), c(0, 0), limits).is_ok()); // exactly full is fine
+        assert_eq!(check_index_limits(c(8, 2), c(3, 0), c(0, 0), limits).unwrap_err().code(), ErrorCode::IndexCapExceeded);
+        assert_eq!(check_index_limits(c(8, 3), c(1, 1), c(0, 0), limits).unwrap_err().code(), ErrorCode::IndexCapExceeded);
+        // removing in the same run makes room
+        assert!(check_index_limits(c(8, 3), c(3, 1), c(2, 1), limits).is_ok());
+        let message = check_index_limits(c(9, 1), c(5, 0), c(0, 0), limits).unwrap_err().message;
+        assert!(message.contains("14 tracks") && message.contains("at most 10"));
+    }
+
+    #[test]
+    fn a_real_plan_counts_what_is_already_on_the_card() {
+        let lib = library();
+        let common = card_with(&lib, &["B/Two", "C/Three"]);
+        let (tracks, dirs) = workbench::count_audio(&common).unwrap();
+        assert_eq!((tracks, dirs.len()), (2, 2));
+        let request = ChangeRequest { library_root: Some(lib), add_albums: vec!["A/One".into()], ..Default::default() };
+        assert!(plan_changes(&common, &request, &mut None).is_ok());
     }
 
     #[test]

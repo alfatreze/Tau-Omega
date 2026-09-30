@@ -41,6 +41,7 @@
     // component lives for the whole app session, so the listener is never
     // removed.
     window.addEventListener('focus', checkCardMounted);
+    window.addEventListener('tau-pending', () => { pendingTick += 1; });
     // Auto-detect a card or Pocket being plugged in or removed: poll the cheap
     // mounted-volume list and re-read the open card when its state changes.
     detectTimer = setInterval(detectChange, 3000);
@@ -54,6 +55,19 @@
   // The selected core's media root: what the Library screen lists and writes.
   $: mediaRoot = path && activeCore?.platform ? `${path.replace(/\/+$/, '')}/Assets/${activeCore.platform}/common` : '';
   let cardRevision = 0;
+  // "N pending" badge: the Library screen keeps each card+core's unsent changes in localStorage.
+  let pendingTick = 0;
+  function pendingFor(cardPath: string, _tick: number): number {
+    try {
+      const prefix = `tau.wb.pending.${cardPath.replace(/\/+$/, '')}/`;
+      let total = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) total += (JSON.parse(localStorage.getItem(key) ?? '[]') as unknown[]).length;
+      }
+      return total;
+    } catch { return 0; }
+  }
   let detectTimer: ReturnType<typeof setInterval>;
   onDestroy(() => clearInterval(detectTimer));
   let refreshedAt = 'just now';
@@ -246,6 +260,7 @@
       <span class="active-context-text">
         <strong>{path ? cardName(path) : 'No card open'}</strong>
         <small>{activeCore ? (activeCore.shortname || activeCore.id) : (cores.length ? 'Choose a core' : 'Open a card to begin')}</small>
+        {#if path && page !== 'workbench' && pendingFor(path, pendingTick)}<small class="ctx-pending">{pendingFor(path, pendingTick)} pending</small>{/if}
       </span>
       <svg class="active-context-chevron" class:open={showSwitcher} viewBox="0 0 24 24" fill="none" width="14" height="14" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
@@ -254,7 +269,7 @@
       <div class="switcher-panel">
         {#if knownCards.length}
           <p class="switcher-label">Switch card</p>
-          {#each knownCards as card}<button class="switcher-row" class:active={path === card} on:click={() => switchToKnownCard(card)}>{cardName(card)}{#if mountedCards.includes(card)}<span class="switcher-dot" aria-hidden="true"></span>{/if}</button>{/each}
+          {#each knownCards as card}<button class="switcher-row" class:active={path === card} on:click={() => switchToKnownCard(card)}>{cardName(card)}{#if pendingFor(card, pendingTick)}<span class="switcher-pending">{pendingFor(card, pendingTick)} pending</span>{/if}{#if mountedCards.includes(card)}<span class="switcher-dot" aria-hidden="true"></span>{/if}</button>{/each}
         {/if}
         {#if playerCores.length}
           <p class="switcher-label">Switch core</p>
@@ -316,7 +331,7 @@
       {/if}
     {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}</section>
   {:else if page === 'workbench'}
-    <Workbench cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} mediaRoot={mediaRoot} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} />
+    <Workbench cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} mediaRoot={mediaRoot} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} connected={cardMounted} />
   {:else if page === 'compare'}<section class="page compare-page"><header><div><p class="eyebrow">CORE TRANSFER</p><h1>Compare, then copy safely</h1><p class="lede">Compare two Tau media roots before copying the complete library to the second core.</p></div></header><section class="wizard" aria-labelledby="compare-title"><h2 id="compare-title">Compare two cores</h2><label for="left-core">Source media root</label><div class="picker-row"><input id="left-core" bind:value={leftCore} placeholder="/Volumes/Pocket/Assets/tau/common"/><button class="picker" on:click={() => chooseFolder('left')}>Choose</button></div><label for="right-core">Destination media root</label><div class="picker-row"><input id="right-core" bind:value={rightCore} placeholder="/Volumes/Pocket/Assets/tau-test/common"/><button class="picker" on:click={() => chooseFolder('right')}>Choose</button></div><label for="copy-report">Copy report location on this computer</label><div class="picker-row"><input id="copy-report" bind:value={copyReportPath} placeholder="/Users/me/Documents/tau-core-copy.json"/><button class="picker" on:click={() => chooseFolder('copyReport')}>Choose</button></div><button class="primary" on:click={compareCores}>Compare safely</button></section><p class="notice" role="status">{compareNotice}</p>{#if comparison}<section class="comparison" aria-labelledby="comparison-title"><div class="section-title"><div><p class="eyebrow">RESULT</p><h2 id="comparison-title">{comparison.differences.length} files compared</h2></div><span>Read-only</span></div><div class="comparison-counts"><span><b>{comparison.only_left}</b> only in source</span><span><b>{comparison.only_right}</b> only in destination</span><span><b>{comparison.different}</b> different</span><span><b>{comparison.identical}</b> matching</span></div><ul class="difference-list">{#each comparison.differences as item}<li><span class={`difference ${item.state}`}>{item.state === 'only_left' ? 'Source only' : item.state === 'only_right' ? 'Destination only' : item.state === 'different' ? 'Different' : 'Matching'}</span><span>{item.relative}</span><span>{item.left_bytes === null ? '—' : size(item.left_bytes)} / {item.right_bytes === null ? '—' : size(item.right_bytes)}</span></li>{/each}</ul><button class="primary" on:click={reviewCoreCopy}>Review full-library copy</button>{#if coreCopyPlan}<div class="copy-plan"><p class="eyebrow">READY FOR CONFIRMATION</p><h3>{coreCopyPlan.id}</h3><p>{coreCopyPlan.new_files} new · {coreCopyPlan.updates} updated · {coreCopyPlan.unchanged} unchanged · {size(coreCopyPlan.bytes_to_write)} to write</p>{#if coreCopyCapacity}<p class:capacity-ok={coreCopyCapacity.fits} class:capacity-bad={!coreCopyCapacity.fits}>{coreCopyCapacity.fits ? 'Fits' : 'Does not fit'} on the destination volume — {size(coreCopyCapacity.space.available_bytes)} free.</p>{/if}<button class="danger" on:click={runCoreCopy}>Confirm and copy</button></div>{/if}<p class="safety">The source is never changed. The destination files are verified and its index is rebuilt last. Move remains unavailable until its separate backup and deletion review is ready.</p></section>{/if}</section>
   {:else if page === 'jobs'}
     <JobsView {jobs} bind:journalPath notice={journalNotice} chooseJournal={() => chooseFolder('journal')} {loadJournal} startSync={() => page = 'workbench'} {reportsDir} {historyNotice} {history} {chooseReportsDir} {refreshHistory} detail={journalDetail} detailNotice={journalDetailNotice} openDetail={openJournalDetail} closeDetail={closeJournalDetail} />

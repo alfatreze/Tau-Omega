@@ -150,6 +150,7 @@ Suggested order of value: P0, P1, P2 gives you what you described first (browse,
 | P3 remove from Pocket | Done: staged, undoable, backup per preference, playlists rewritten, index rebuilt | `workbench::plan_removal`/`execute_removal`, Settings > Library |
 | P4 rename, edit info, cover | Done: album title/artist/album artist/year, track title, cover; ID3v2.3/2.4 and FLAC; edits recorded on the card and re-applied after a re-sync | `crates/tau-core/src/tagedit.rs` |
 | P5 polish | Partly done: keyboard-reachable controls, states and empty states, docs and tests. Not done: automated accessibility audit (axe), cross-card copy as a source | |
+| UX review P0 | Done: disconnected-card handling, Pocket library limits, keep-connected messages, review list, plain-language errors, Delete key and pending badge (`docs/LIBRARY_UX_REVIEW.md`) | `Workbench.svelte`, `changes.rs`, `backend.ts` |
 | Auto-detect | Done in code for macOS, Linux and Windows (polls mounted volumes every 3 s, refreshes on window focus, refresh button); not verified on hardware | `ui/src/App.svelte`, `src-tauri/src/device.rs` |
 | Tools and settings menu | Done: Compare cores, Backup, Packages, Problems, Recent jobs and Settings sit in a collapsible section; Library preferences live in Settings | `ui/src/App.svelte`, `LibrarySettings.svelte` |
 
