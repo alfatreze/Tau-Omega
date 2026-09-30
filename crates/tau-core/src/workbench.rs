@@ -189,7 +189,7 @@ pub fn list_library(
 }
 
 /// Rejects an album id that could leave `root` (absolute, `..`, prefixes).
-fn checked_dir(root: &Path, id: &str) -> Result<PathBuf, TauError> {
+pub(crate) fn checked_dir(root: &Path, id: &str) -> Result<PathBuf, TauError> {
     let relative = Path::new(id);
     if relative
         .components()
@@ -211,7 +211,7 @@ fn checked_dir(root: &Path, id: &str) -> Result<PathBuf, TauError> {
 }
 
 /// Audio (and album-local playlist) files directly in `dir`, sorted.
-fn direct_files(dir: &Path) -> Result<Vec<PathBuf>, TauError> {
+pub(crate) fn direct_files(dir: &Path) -> Result<Vec<PathBuf>, TauError> {
     let mut files = Vec::new();
     for child in fs::read_dir(dir)? {
         let child = child?;
