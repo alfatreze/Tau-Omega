@@ -75,7 +75,7 @@ Severity is the testers' word, adjusted where I could verify. **Status** says wh
 * **Fit check:** shown **both** when an album is selected (before adding) and after queuing. *Built.*
 * **Dialogs:** merge the slow-connection warning into the review sheet. Time estimates use a **canonical default speed** until a real transfer on that card has been timed; real figures will be collected during development to replace the placeholder. *Built (placeholder speeds: direct USB 1.5 MB/s, card reader 20 MB/s, unknown 5 MB/s; see `DEFAULT_SPEED` in `Workbench.svelte`).*
 * **Narrow windows:** keep a menu instead of hiding the sidebar. *Built (Menu button below 720 px).*
-* **Order of work:** reordered as proposed below. *Steps 1 to 4 built; bulk selection, artwork and non-blocking progress are still ahead.*
+* **Order of work:** reordered as proposed below. *Steps 1 to 5 built, plus bulk selection, filters and sort, cover artwork and non-blocking progress. Still open: a jargon pass over the older Tools pages, a restore action for removed albums, and Home/PageUp scrolling at large zoom.*
 
 ## 6. What I would put first (for you to accept or change)
 1. Fix history (real bug + plain wording + "last sync" on the Library screen).

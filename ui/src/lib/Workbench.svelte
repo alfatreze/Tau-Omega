@@ -7,8 +7,9 @@
   // card and core so switching cards switches the list.
   import { onDestroy, onMount, tick } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { cancelJob, checkStorageCapacity, detectConnection, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, readImageDataUrl, setPrefs } from './tau-api';
+  import { cancelJob, checkStorageCapacity, detectConnection, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
   import { modal } from './a11y';
+  import VirtualList from './VirtualList.svelte';
   import type { AlbumInfo, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
 
   /** Root folder of the open card (used to detect how it is connected). */
@@ -38,8 +39,7 @@
    * timed. These are placeholders to be replaced with real figures collected during development; the review sheet
    * always says when an estimate rests on them rather than on a measured transfer. */
   const DEFAULT_SPEED: Record<string, number> = { direct_usb: 1.5 * MB, card_reader: 20 * MB, unknown: 5 * MB };
-  const TRACK_LIMIT = 300;
-  const STAGES: Record<string, string> = { scanning: 'Reading files', hashing: 'Checking files', copying: 'Copying', building_index: 'Writing index', verifying: 'Verifying', deleting: 'Removing', editing: 'Updating tags' };
+  const STAGES: Record<string, string> = { scanning: 'Reading files', hashing: 'Checking files', copying: 'Copying', building_index: 'Updating the library list', verifying: 'Verifying', deleting: 'Removing', editing: 'Updating tags' };
 
   // ---- persistence (per card + core) ---------------------------------------
   const storeKey = (name: string) => `tau.wb.${name}.${mediaRoot}`;
@@ -103,7 +103,7 @@
     sourcePath = mediaRoot ? load<string>('source', '') : '';
     embedCovers = mediaRoot ? load<boolean>('embed', true) : true;
     lastFailed = mediaRoot ? load<boolean>('lastfail', false) : false;
-    picked = new Set(); pocketPicked = new Set(); source = null; card = null; space = null;
+    picked = new Set(); pocketPicked = new Set(); source = null; card = null; space = null; resetThumbs('s'); resetThumbs('c'); stateFilter = 'all';
     if (sourcePath) scanSource();
     await reloadCard();
     if (cardPath) detectConnection(cardPath).then((c) => (connection = c)).catch(() => (connection = { kind: 'unknown', detail: '' }));
@@ -112,7 +112,7 @@
     if (!mediaRoot) return;
     cardBusy = true; cardError = ''; cardJob = newJobId(); cardProgress = '';
     try {
-      card = await listLibrary(mediaRoot, cardJob);
+      card = await listLibrary(mediaRoot, cardJob); resetThumbs('c');
       space = await checkStorageCapacity(mediaRoot, 0).catch(() => null);
       // Drop staged removals/edits for albums that are no longer on the card.
       const here = new Set(card.albums.map((a) => a.id));
@@ -131,7 +131,7 @@
   async function chooseSource() {
     const selected = await open({ directory: true });
     if (!selected || Array.isArray(selected)) return;
-    sourcePath = selected; save('source', sourcePath); picked = new Set();
+    sourcePath = selected; save('source', sourcePath); picked = new Set(); resetThumbs('s');
     await scanSource();
   }
   async function doRefresh() { spinning = true; try { await refresh(); } finally { setTimeout(() => (spinning = false), 700); } }
@@ -186,11 +186,22 @@
   $: pickOver = afterPick !== null ? Math.max(0, margin - afterPick) : 0;
   $: pickTooMany = !!limits && tracksAfter + pickedNetTracks > limits.max_tracks;
   $: canStart = pendingCount > 0 && !overCapacity && !overLimit && !disconnected && !run && !!card;
-  $: pocketAlbums = (card?.albums ?? []).filter((a) => match(`${a.title} ${a.artist}`, pocketSearch));
-  $: sourceAlbums = (source?.albums ?? []).filter((a) => match(`${a.title} ${a.artist}`, sourceSearch));
+  // ---- what each list shows: search, state filter and sort ----------------------------
+  type SortKey = 'artist' | 'title' | 'largest' | 'smallest';
+  let sort: SortKey = (() => { try { return (localStorage.getItem('tau.wb.sort') as SortKey) || 'artist'; } catch { return 'artist'; } })();
+  $: { try { localStorage.setItem('tau.wb.sort', sort); } catch { /* a per-viewer convenience only */ } }
+  let stateFilter: 'all' | AlbumState = 'all';
+  const byArtist = (x: AlbumInfo, y: AlbumInfo) => (x.artist || '~').localeCompare(y.artist || '~') || x.title.localeCompare(y.title);
+  const sorter = (k: SortKey) => (x: AlbumInfo, y: AlbumInfo) => k === 'largest' ? y.bytes - x.bytes : k === 'smallest' ? x.bytes - y.bytes : k === 'title' ? x.title.localeCompare(y.title) : byArtist(x, y);
+  $: srcStates = (source?.albums ?? []).map((a) => [a, stateOf(a, queuedIds, cardByDest)] as const);
+  $: stateCounts = { all: srcStates.length, new: srcStates.filter(([, st]) => st === 'new').length, changed: srcStates.filter(([, st]) => st === 'changed').length, on: srcStates.filter(([, st]) => st === 'on').length };
+  $: sourceAlbums = srcStates.filter(([a, st]) => match(`${a.title} ${a.artist}`, sourceSearch) && (stateFilter === 'all' || st === stateFilter)).map(([a]) => a).sort(sorter(sort));
+  $: pocketAlbums = (card?.albums ?? []).filter((a) => match(`${a.title} ${a.artist}`, pocketSearch)).sort(sorter(sort));
+  type PocketItem = { key: string; kind: 'card'; a: AlbumInfo } | { key: string; kind: 'add'; p: Extract<Pending, { kind: 'add' }> };
+  $: pocketItems = [...pocketAlbums.map((a): PocketItem => ({ key: a.id, kind: 'card', a })), ...adds.map((p): PocketItem => ({ key: p.key, kind: 'add', p }))];
   $: artists = [...pocketAlbums.reduce((m, a) => m.set(a.artist || 'Unknown artist', [...(m.get(a.artist || 'Unknown artist') ?? []), a]), new Map<string, AlbumInfo[]>())];
   $: allTracks = (card?.tracks ?? []).filter((t) => match(`${t.title} ${t.artist} ${t.album}`, pocketSearch));
-  $: tracksShown = allTracks.slice(0, TRACK_LIMIT);
+  $: busy = !!run && !run.finished;
 
   const size = (n: number) => (n >= GB ? `${(n / GB).toFixed(1)} GB` : n >= MB ? `${Math.round(n / MB)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
   const match = (text: string, q: string) => !q.trim() || text.toLowerCase().includes(q.trim().toLowerCase());
@@ -216,8 +227,60 @@
   async function focusTray() { await tick(); trayEl?.focus(); }
   function toggle(set: Set<string>, id: string) { const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id); return next; }
 
+  // ---- selection: whole-row click, Shift-click ranges, select all ------------------------
+  const selectableSrc = (a: AlbumInfo) => { const st = stateOf(a, queuedIds, cardByDest); return st !== 'on' && st !== 'queued'; };
+  const selectablePk = (a: AlbumInfo) => !removingIds.has(a.id);
+  let anchorSrc: string | null = null, anchorPk: string | null = null;
+  /** Ticks or unticks `a`; with Shift held, selects the whole range from the last one clicked. */
+  function pickFrom(set: Set<string>, a: { id: string }, e: MouseEvent | null, rows: { id: string }[], ok: (r: any) => boolean, anchor: string | null): { set: Set<string>; anchor: string } {
+    if (e?.shiftKey && anchor) {
+      const ids = rows.map((r) => r.id), i = ids.indexOf(anchor), j = ids.indexOf(a.id);
+      if (i >= 0 && j >= 0) { const next = new Set(set); for (const r of rows.slice(Math.min(i, j), Math.max(i, j) + 1)) if (ok(r)) next.add(r.id); return { set: next, anchor }; }
+    }
+    return { set: toggle(set, a.id), anchor: a.id };
+  }
+  function pickSrc(a: AlbumInfo, e: MouseEvent | null) { if (busy || !selectableSrc(a)) return; const r = pickFrom(picked, a, e, sourceAlbums, selectableSrc, anchorSrc); picked = r.set; anchorSrc = r.anchor; }
+  function pickPk(a: AlbumInfo, e: MouseEvent | null) { if (busy || !selectablePk(a)) return; const r = pickFrom(pocketPicked, a, e, pocketAlbums, selectablePk, anchorPk); pocketPicked = r.set; anchorPk = r.anchor; }
+  function pickTrack(t: TrackInfo, e: MouseEvent | null) { const r = pickFrom(pocketPicked, { id: t.rel }, e, allTracks.map((x) => ({ id: x.rel })), () => true, anchorPk); pocketPicked = r.set; anchorPk = r.anchor; }
+  /** A click anywhere on a row (not on its own controls) selects it. */
+  const onRow = (e: MouseEvent, fn: () => void) => { if (!(e.target as HTMLElement).closest('input,button,a,label,select')) fn(); };
+  $: shownSrc = sourceAlbums.filter(selectableSrc);
+  $: allSrcSelected = shownSrc.length > 0 && shownSrc.every((a) => picked.has(a.id));
+  $: someSrcSelected = shownSrc.some((a) => picked.has(a.id));
+  function toggleAllSrc() { if (busy) return; const next = new Set(picked); if (allSrcSelected) shownSrc.forEach((a) => next.delete(a.id)); else shownSrc.forEach((a) => next.add(a.id)); picked = next; }
+  $: shownPk = view === 'albums' ? pocketAlbums.filter(selectablePk).map((a) => a.id) : view === 'tracks' ? allTracks.map((t) => t.rel) : [];
+  $: allPkSelected = shownPk.length > 0 && shownPk.every((id) => pocketPicked.has(id));
+  $: somePkSelected = shownPk.some((id) => pocketPicked.has(id));
+  function toggleAllPk() { if (busy) return; const next = new Set(pocketPicked); if (allPkSelected) shownPk.forEach((id) => next.delete(id)); else shownPk.forEach((id) => next.add(id)); pocketPicked = next; }
+  let selAllSrcEl: HTMLInputElement, selAllPkEl: HTMLInputElement;
+  $: if (selAllSrcEl) selAllSrcEl.indeterminate = someSrcSelected && !allSrcSelected;
+  $: if (selAllPkEl) selAllPkEl.indeterminate = somePkSelected && !allPkSelected;
+
+  // ---- cover thumbnails: loaded lazily for the rows on screen ------------------------------
+  let thumbs: Record<string, string> = {};
+  const asked = new Set<string>();
+  function resetThumbs(side: 's' | 'c') { thumbs = Object.fromEntries(Object.entries(thumbs).filter(([k]) => !k.startsWith(side + ':'))); for (const k of [...asked]) if (k.startsWith(side + ':')) asked.delete(k); }
+  function wantThumbs(side: 's' | 'c', ids: string[]) {
+    const root = side === 's' ? sourcePath : mediaRoot;
+    const need = ids.filter((id) => !asked.has(`${side}:${id}`));
+    if (!root || !need.length) return;
+    need.forEach((id) => asked.add(`${side}:${id}`));
+    albumThumbnails(root, need).then((list) => {
+      const next = { ...thumbs };
+      for (const t of list) next[`${side}:${t.id}`] = t.png_base64 ? `data:${t.mime ?? 'image/png'};base64,${t.png_base64}` : '';
+      thumbs = next;
+    }).catch(() => need.forEach((id) => asked.delete(`${side}:${id}`)));
+  }
+  const onSrcRange = (e: CustomEvent<{ start: number; end: number }>) => wantThumbs('s', sourceAlbums.slice(e.detail.start, e.detail.end).map((a) => a.id));
+  const onPkRange = (e: CustomEvent<{ start: number; end: number }>) => {
+    const rows = pocketItems.slice(e.detail.start, e.detail.end);
+    wantThumbs('c', rows.filter((r): r is Extract<PocketItem, { kind: 'card' }> => r.kind === 'card').map((r) => r.a.id));
+    wantThumbs('s', rows.filter((r): r is Extract<PocketItem, { kind: 'add' }> => r.kind === 'add').map((r) => r.p.id));
+  };
+
   // ---- staging -------------------------------------------------------------
   function addAlbums(ids: string[]) {
+    if (busy) return;
     const wanted = ids.map((id) => source?.albums.find((a) => a.id === id)).filter((a): a is AlbumInfo => !!a);
     const fresh: AlbumInfo[] = []; let blocked = 0;
     for (const a of wanted) {
@@ -237,7 +300,7 @@
   function onDragStart(e: DragEvent, a: AlbumInfo) { const ids = picked.has(a.id) ? [...picked] : [a.id]; e.dataTransfer?.setData('text/tau-albums', JSON.stringify(ids)); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; }
   function onDrop(e: DragEvent) { e.preventDefault(); dropActive = false; const raw = e.dataTransfer?.getData('text/tau-albums'); if (raw) { try { addAlbums(JSON.parse(raw)); } catch { /* not ours */ } } }
 
-  function requestRemove() { if (!pocketPicked.size) return; if (prefs && !prefs.remove_explained) dialog = 'first-remove'; else stageRemoval(); }
+  function requestRemove() { if (busy || !pocketPicked.size) return; if (prefs && !prefs.remove_explained) dialog = 'first-remove'; else stageRemoval(); }
   async function confirmFirstRemove() {
     dialog = null;
     if (prefs) { try { prefs = await setPrefs({ ...prefs, remove_explained: true }); } catch { /* the note simply shows again */ } }
@@ -252,23 +315,24 @@
     pocketPicked = new Set();
     if (ok.length) { say(`${plural(ok.length, 'album')} marked for removal. Nothing is deleted until you sync.`); focusTray(); }
   }
-  function unstage(key: string) { pending = pending.filter((p) => p.key !== key); focusTray(); }
-  function clearAll() { const n = pending.length; pending = []; picked = new Set(); pocketPicked = new Set(); say(`Cleared ${plural(n, 'pending change')}.`); focusTray(); }
+  function unstage(key: string) { if (busy) return; pending = pending.filter((p) => p.key !== key); focusTray(); }
+  function clearAll() { if (busy) return; const n = pending.length; pending = []; picked = new Set(); pocketPicked = new Set(); say(`Cleared ${plural(n, 'pending change')}.`); focusTray(); }
 
   // ---- editing ---------------------------------------------------------------
   let editAlbum: AlbumInfo | null = null;
   let editTrack: TrackInfo | null = null;
   let editForm = { title: '', artist: '', albumArtist: '', year: '' };
-  let editCover: string | null = null, editCoverPreview: string | null = null, editCoverError = '';
+  let editCover: string | null = null, editCoverPreview: string | null = null, editCoverError = '', editCurrent = '';
   function openEdit() {
-    editCover = null; editCoverPreview = null; editCoverError = '';
+    if (busy) return;
+    editCover = null; editCoverPreview = null; editCoverError = ''; editCurrent = '';
     if (view === 'tracks') {
       const t = (card?.tracks ?? []).find((x) => pocketPicked.has(x.rel)); if (!t) return;
       editTrack = t; editAlbum = null; editForm = { title: t.title, artist: '', albumArtist: '', year: '' };
     } else {
       const a = (card?.albums ?? []).find((x) => pocketPicked.has(x.id)); if (!a) return;
       if (queuedIds.size && [...queuedIds].some((id) => source?.albums.find((s) => s.id === id)?.dest_id === a.id)) { say('This album is queued to be added. Sync first, then edit it.'); return; }
-      editAlbum = a; editTrack = null; editForm = { title: a.title, artist: a.artist, albumArtist: '', year: a.year ?? '' };
+      editAlbum = a; editTrack = null; editForm = { title: a.title, artist: a.artist, albumArtist: '', year: a.year ?? '' }; editCurrent = thumbs[`c:${a.id}`] ?? '';
     }
     dialog = 'edit';
   }
@@ -277,7 +341,7 @@
     const selected = await open({ multiple: false, filters: [{ name: 'JPEG image', extensions: ['jpg', 'jpeg'] }] });
     if (!selected || Array.isArray(selected)) return;
     editCover = selected;
-    try { editCoverPreview = await readImageDataUrl(selected); } catch { editCoverPreview = null; editCoverError = 'Could not preview this image. It will be checked when you review the sync.'; }
+    try { editCoverPreview = await imageThumbnail(selected, 160); } catch (error) { editCoverPreview = null; editCover = null; editCoverError = `That picture can\u2019t be used. ${explainError(error)}`; }
   }
   function stageEdit() {
     const fields: FieldEdits = { title: null, artist: null, album: null, album_artist: null, year: null };
@@ -392,7 +456,10 @@
   $: runSlowNote = run && !run.finished && connKind !== 'direct_usb' && run.speed > 0 && run.speed < 3 * MB && run.total > SLOW_LIMIT;
 
   function key(e: KeyboardEvent) {
-    if (e.key === 'Escape') { if (dialog && !run) dialog = null; connMenu = false; return; }
+    const t0 = e.target as HTMLElement | null;
+    const typingNow = !!t0 && (t0.tagName === 'TEXTAREA' || t0.tagName === 'SELECT' || (t0.tagName === 'INPUT' && (t0 as HTMLInputElement).type !== 'checkbox'));
+    if (e.key === 'Escape') { if (dialog && !run) dialog = null; else if (!dialog && !typingNow && (picked.size || pocketPicked.size)) { picked = new Set(); pocketPicked = new Set(); } connMenu = false; return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !dialog && !run && !typingNow) { e.preventDefault(); if (t0?.closest?.('[data-pane=pocket]')) toggleAllPk(); else toggleAllSrc(); return; }
     if ((e.key === 'Delete' || e.key === 'Backspace') && !dialog && !run && view === 'albums' && pocketPicked.size) {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'checkbox'));
@@ -404,7 +471,7 @@
     if (!prefs) return;
     try { prefs = await setPrefs({ ...prefs, connections: { ...prefs.connections, [cardLabel]: value } }); } catch { /* keeps the detected value */ }
   }
-  $: connLabel = connKind === 'direct_usb' ? 'Direct USB · slow' : connKind === 'card_reader' ? 'Card reader · fast' : 'Connection unknown';
+  $: connLabel = connKind === 'direct_usb' ? 'Connected directly · slow' : connKind === 'card_reader' ? 'Card reader · fast' : 'Connection unknown';
   $: noCard = !mediaRoot;
 </script>
 <svelte:window on:keydown={key} />
@@ -415,15 +482,15 @@
     <div class="wb-ctx">
       <p class="eyebrow">LIBRARY</p>
       <h1 id="wb-title">{cardLabel}</h1>
-      <div class="wb-sub"><span class="wb-dot" aria-hidden="true"></span>{coreLabel || 'No player core'}
+      <div class="wb-sub"><span class="wb-dot" aria-hidden="true"></span>{coreLabel ? `Player: ${coreLabel}` : 'No player core'}
         {#if cardPath}
           <span class="wb-connwrap">
             <button class="wb-conn" class:slow={connKind === 'direct_usb'} aria-haspopup="menu" aria-expanded={connMenu} title={connection.detail ? `Detected: ${connection.detail}` : 'How this card is connected'} on:click={() => (connMenu = !connMenu)}>{connLabel}</button>
             {#if connMenu}
               <div class="wb-menu" role="menu">
                 <button role="menuitem" on:click={() => setOverride('auto')}>Detect automatically{connection.detail ? ` (${connection.detail})` : ''}</button>
-                <button role="menuitem" on:click={() => setOverride('direct_usb')}>This is the Pocket (direct USB)</button>
-                <button role="menuitem" on:click={() => setOverride('card_reader')}>This is a card reader</button>
+                <button role="menuitem" on:click={() => setOverride('direct_usb')}>The Pocket itself (plugged in with its USB cable)</button>
+                <button role="menuitem" on:click={() => setOverride('card_reader')}>A card reader</button>
               </div>
             {/if}
           </span>
@@ -450,7 +517,7 @@
         <span><b>{size(used)}</b> on Pocket</span>
         {#if addBytes}<span class="add">+ {size(addBytes)} queued</span>{/if}
         {#if removeBytes}<span class="rm">− {size(removeBytes)} removing</span>{/if}
-        {#if limits}<span class="wb-limit" class:bad={overLimit} class:warn={nearLimit} title="The Pocket's library can hold at most {limits.max_tracks.toLocaleString()} tracks and {limits.max_albums.toLocaleString()} albums">{tracksAfter.toLocaleString()} of {limits.max_tracks.toLocaleString()} tracks</span>{/if}
+        {#if limits}<span class="wb-limit" class:bad={overLimit} class:warn={nearLimit} title="The Pocket's library can hold at most {limits.max_tracks.toLocaleString()} tracks and {limits.max_albums.toLocaleString()} albums">{tracksAfter.toLocaleString()} of {limits.max_tracks.toLocaleString()} tracks (Pocket limit)</span>{/if}
         <span class="wb-cap-free" class:bad={overCapacity}>{overCapacity ? `${size(Math.max(0, (space.margin_bytes ?? 0) - free))} too much for this card` : `${size(free)} free of ${size(total)}`}</span>
       </div>
       <div class="wb-bar" role="img" aria-label={`${size(used)} used, ${size(addBytes)} queued, ${size(Math.max(free, 0))} free`}>
@@ -462,7 +529,7 @@
   </div>
 
   <div class="wb-panes">
-    <section class="wb-pane" aria-labelledby="src-title">
+    <section class="wb-pane" data-pane="source" aria-labelledby="src-title">
       <div class="wb-pane-head"><h2 id="src-title">This computer</h2>{#if sourcePath}<button class="wb-link" title={sourcePath} on:click={chooseSource}>{sourcePath.split(/[\\/]/).filter(Boolean).pop()} · change</button>{/if}</div>
       {#if !sourcePath}
         <div class="wb-empty wb-cta"><b>Choose your music folder</b><p>Pick a folder on this computer to see its albums. Your files are never changed.</p><button class="primary" on:click={chooseSource}>Choose folder…</button></div>
@@ -471,28 +538,41 @@
       {:else if sourceError}
         <div class="wb-empty" role="alert"><b>Couldn't read this folder</b><p>{sourceError}</p><button class="quiet" on:click={scanSource}>Try again</button></div>
       {:else if source}
-        <input class="wb-search" bind:value={sourceSearch} placeholder="Search albums or artists" aria-label="Search this computer" />
-        <div class="wb-list" role="list">
-          {#each sourceAlbums as a (a.id)}
-            {@const st = stateOf(a, queuedIds, cardByDest)}
-            <div class="wb-row" class:sel={picked.has(a.id)} class:dim={st === 'on'} role="listitem" draggable={st !== 'on' && st !== 'queued'} on:dragstart={(e) => onDragStart(e, a)}>
-              <input type="checkbox" aria-label={`Select ${a.title}`} disabled={st === 'on' || st === 'queued'} checked={picked.has(a.id)} on:change={() => (picked = toggle(picked, a.id))} />
-              <div class="wb-art" aria-hidden="true">♪</div>
-              <div class="wb-meta"><strong>{a.title}</strong><small>{a.artist || 'Unknown artist'} · {plural(a.tracks, 'track')} · {size(a.bytes)}</small></div>
-              <span class="wb-badge {st}">{stateLabel[st]}</span>
-            </div>
-          {:else}
-            <div class="wb-empty"><b>{source.albums.length ? 'No albums match' : 'No music found'}</b><p>{source.albums.length ? 'Try a different search.' : 'This folder has no MP3 or FLAC files.'}</p></div>
+        <div class="wb-tools">
+          <input class="wb-search" bind:value={sourceSearch} placeholder="Search albums or artists" aria-label="Search this computer" />
+          <select class="wb-sort" aria-label="Sort albums" bind:value={sort}>
+            <option value="artist">Artist A–Z</option><option value="title">Title A–Z</option><option value="largest">Largest first</option><option value="smallest">Smallest first</option>
+          </select>
+        </div>
+        <div class="wb-filters" role="group" aria-label="Show albums">
+          {#each [['all', 'All'], ['new', 'New'], ['changed', 'Changed'], ['on', 'On Pocket']] as [k, label]}
+            <button class:on={stateFilter === k} aria-pressed={stateFilter === k} on:click={() => (stateFilter = k as typeof stateFilter)}>{label} ({stateCounts[k as keyof typeof stateCounts]})</button>
           {/each}
         </div>
+        <label class="wb-selectall"><input type="checkbox" bind:this={selAllSrcEl} checked={allSrcSelected} disabled={busy || !shownSrc.length} on:change={toggleAllSrc} /> Select all {shownSrc.length} shown</label>
+        <div class="wb-listwrap" data-pane="source">
+          <VirtualList items={sourceAlbums} rowHeight={58} key={(a) => a.id} label="Albums on this computer" resetKey={`${sourceSearch}|${stateFilter}|${sort}|${sourcePath}`} on:range={onSrcRange} let:item={a} let:index let:count>
+            {@const st = stateOf(a, queuedIds, cardByDest)}
+            {@const onPk = cardByDest.get(a.dest_id)}
+            {@const art = thumbs[`s:${a.id}`]}
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions (row click is a mouse convenience; keyboard users select with the row's checkbox) -->
+            <div class="wb-row" class:sel={picked.has(a.id)} class:dim={st === 'on'} role="listitem" aria-posinset={index + 1} aria-setsize={count} draggable={!busy && st !== 'on' && st !== 'queued'} on:dragstart={(e) => onDragStart(e, a)} on:click={(e) => onRow(e, () => pickSrc(a, e))}>
+              <input type="checkbox" aria-label={`Select ${a.title}`} disabled={busy || st === 'on' || st === 'queued'} checked={picked.has(a.id)} on:click|stopPropagation={(e) => pickSrc(a, e)} />
+              <div class="wb-art" aria-hidden="true">{#if art}<img src={art} alt="" />{:else}♪{/if}</div>
+              <div class="wb-meta"><strong>{a.title}</strong><small>{a.artist || 'Unknown artist'} · {plural(a.tracks, 'track')} · {size(a.bytes)}{#if st === 'changed' && onPk}{' · '}Pocket has {plural(onPk.tracks, 'track')}{/if}</small></div>
+              <span class="wb-badge {st}" title={st === 'changed' ? `The Pocket's copy has a different number of tracks (${onPk?.tracks}) than this folder (${a.tracks}).` : undefined}>{stateLabel[st]}</span>
+            </div>
+          </VirtualList>
+          {#if !sourceAlbums.length}<div class="wb-empty"><b>{source.albums.length ? 'No albums match' : 'No music found'}</b><p>{source.albums.length ? 'Try a different search or filter.' : 'This folder has no MP3 or FLAC files.'}</p></div>{/if}
+        </div>
         <div class="wb-pane-foot">
-          <span class="wb-fit-line" aria-live="polite">{#if picked.size}{picked.size} selected · {size(pickedBytes)}{#if afterPick !== null}<span class="wb-fit" class:bad={!pickFits}> {#if pickFits}· Fits, {size(afterPick)} free afterwards{:else if pickTooMany}· Too many tracks for the Pocket's library{:else}· Won't fit: {size(pickOver)} too big. You could remove something else in the same sync.{/if}</span>{/if}{:else}{plural(source.albums.length, 'album')} · tick albums or drag them across →{/if}</span>
-          <button class="primary" disabled={!picked.size} on:click={addPicked}>Add {picked.size || ''} to Pocket →</button>
+          <span class="wb-fit-line" aria-live="polite">{#if picked.size}{picked.size} selected · {size(pickedBytes)}{#if afterPick !== null}<span class="wb-fit" class:bad={!pickFits}>{' '}{#if pickFits}· Fits, {size(afterPick)} free afterwards{:else if pickTooMany}· Too many tracks for the Pocket's library{:else}· Won't fit: {size(pickOver)} too big. You could remove something else in the same sync.{/if}</span>{/if}{:else}{plural(source.albums.length, 'album')} · click albums to select them, or drag them across →{/if}</span>
+          <button class="primary" disabled={busy || !picked.size} on:click={addPicked}>Add {picked.size || ''} to Pocket →</button>
         </div>
       {/if}
     </section>
 
-    <section class="wb-pane wb-drop" class:active={dropActive} aria-labelledby="pk-title"
+    <section class="wb-pane wb-drop" data-pane="pocket" class:active={dropActive} aria-labelledby="pk-title"
       on:dragover|preventDefault={() => (dropActive = true)} on:dragleave={() => (dropActive = false)} on:drop={onDrop}>
       <div class="wb-pane-head"><h2 id="pk-title">On Pocket</h2>{#if card}<span class="wb-count">{plural(card.albums.length, 'album')} · {plural(card.tracks.length, 'track')}</span>{/if}</div>
       {#if cardBusy && !card}
@@ -505,55 +585,81 @@
             {#each ['albums', 'artists', 'tracks', 'playlists'] as t}<button role="tab" aria-selected={view === t} class:on={view === t} on:click={() => { view = t as typeof view; pocketPicked = new Set(); }}>{t[0].toUpperCase() + t.slice(1)}</button>{/each}
           </div>
           <input class="wb-search inline" bind:value={pocketSearch} placeholder="Search" aria-label="Search the Pocket" />
+          {#if view === 'albums'}<select class="wb-sort" aria-label="Sort albums on the Pocket" bind:value={sort}><option value="artist">Artist A–Z</option><option value="title">Title A–Z</option><option value="largest">Largest first</option><option value="smallest">Smallest first</option></select>{/if}
         </div>
+        {#if view === 'albums' || view === 'tracks'}
+          <label class="wb-selectall"><input type="checkbox" bind:this={selAllPkEl} checked={allPkSelected} disabled={busy || !shownPk.length} on:change={toggleAllPk} /> Select all {shownPk.length} shown</label>
+        {/if}
         {#if pocketPicked.size && (view === 'albums' || view === 'tracks')}
           <div class="wb-actions" role="toolbar" aria-label="Actions for the selection">
             <span>{pocketPicked.size} selected</span>
             {#if view === 'albums'}
-              <button on:click={openEdit} disabled={pocketPicked.size !== 1} title="Change the title, artist, year or cover">Edit…</button>
-              <button class="danger" on:click={requestRemove}>Remove</button>
+              <button on:click={openEdit} disabled={busy || pocketPicked.size !== 1} title="Change the title, artist, year or cover">Edit…</button>
+              <button class="danger" disabled={busy} on:click={requestRemove}>Remove</button>
             {:else}
-              <button on:click={openEdit} disabled={pocketPicked.size !== 1}>Rename…</button>
+              <button on:click={openEdit} disabled={busy || pocketPicked.size !== 1}>Rename…</button>
             {/if}
           </div>
         {/if}
-        <div class="wb-list" role="list">
-          {#if view === 'albums'}
-            {#each pocketAlbums as a (a.id)}
-              {@const eff = effective(a, edits)}
-              <div class="wb-row" class:sel={pocketPicked.has(a.id)} class:removing={removingIds.has(a.id)} role="listitem">
-                <input type="checkbox" aria-label={`Select ${a.title}`} disabled={removingIds.has(a.id)} checked={pocketPicked.has(a.id)} on:change={() => (pocketPicked = toggle(pocketPicked, a.id))} />
-                <div class="wb-art" aria-hidden="true">♪</div>
-                <div class="wb-meta"><strong>{eff.title}{#if eff.title !== a.title} <span class="wb-was">(was {a.title})</span>{/if}</strong><small>{eff.artist || 'Unknown artist'} · {plural(a.tracks, 'track')} · {size(a.bytes)}</small></div>
-                {#if removingIds.has(a.id)}<span class="wb-badge removing">Will be removed</span>{:else if editingIds.has(a.id)}<span class="wb-badge edit">Edit pending</span>{/if}
-              </div>
-            {/each}
-            {#each adds as p (p.key)}
-              <div class="wb-row incoming" role="listitem"><span class="wb-plus" aria-hidden="true">+</span><div class="wb-art" aria-hidden="true">♪</div><div class="wb-meta"><strong>{p.title}</strong><small>{p.artist || 'Unknown artist'} · {plural(p.tracks, 'track')} · {size(p.bytes)}</small></div><span class="wb-badge queued">Will be added</span></div>
-            {/each}
-            {#if !pocketAlbums.length && !adds.length}<div class="wb-empty"><b>{card.albums.length ? 'No albums match' : 'Nothing here yet'}</b><p>{card.albums.length ? 'Try a different search.' : 'Add albums from This computer to get started.'}</p></div>{/if}
-          {:else if view === 'artists'}
-            {#each artists as [name, list] (name)}<div class="wb-row" role="listitem"><div class="wb-art" aria-hidden="true">♪</div><div class="wb-meta"><strong>{name}</strong><small>{plural(list.length, 'album')} · {plural(list.reduce((n, a) => n + a.tracks, 0), 'track')}</small></div></div>{/each}
-          {:else if view === 'tracks'}
-            {#each tracksShown as t (t.rel)}
-              <div class="wb-row" class:sel={pocketPicked.has(t.rel)} role="listitem">
-                <input type="checkbox" aria-label={`Select ${t.title}`} checked={pocketPicked.has(t.rel)} on:change={() => (pocketPicked = toggle(pocketPicked, t.rel))} />
+        {#if view === 'albums'}
+          <div class="wb-listwrap" data-pane="pocket">
+            <VirtualList items={pocketItems} rowHeight={58} key={(x) => x.key} label="Albums on the Pocket" resetKey={`${pocketSearch}|${sort}`} on:range={onPkRange} let:item={x} let:index let:count>
+              {#if x.kind === 'card'}
+                {@const a = x.a}
+                {@const eff = effective(a, edits)}
+                {@const art = thumbs[`c:${a.id}`]}
+                <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions (row click is a mouse convenience; keyboard users select with the row's checkbox) -->
+                <div class="wb-row" class:sel={pocketPicked.has(a.id)} class:removing={removingIds.has(a.id)} role="listitem" aria-posinset={index + 1} aria-setsize={count} on:click={(e) => onRow(e, () => pickPk(a, e))}>
+                  <input type="checkbox" aria-label={`Select ${a.title}`} disabled={busy || removingIds.has(a.id)} checked={pocketPicked.has(a.id)} on:click|stopPropagation={(e) => pickPk(a, e)} />
+                  <div class="wb-art" aria-hidden="true">{#if art}<img src={art} alt="" />{:else}♪{/if}</div>
+                  <div class="wb-meta"><strong>{eff.title}{#if eff.title !== a.title} <span class="wb-was">(was {a.title})</span>{/if}</strong><small>{eff.artist || 'Unknown artist'} · {plural(a.tracks, 'track')} · {size(a.bytes)}</small></div>
+                  {#if removingIds.has(a.id)}<span class="wb-badge removing">Will be removed</span>{:else if editingIds.has(a.id)}<span class="wb-badge edit">Edit pending</span>{/if}
+                </div>
+              {:else}
+                {@const art = thumbs[`s:${x.p.id}`]}
+                <div class="wb-row incoming" role="listitem" aria-posinset={index + 1} aria-setsize={count}><span class="wb-plus" aria-hidden="true">+</span><div class="wb-art" aria-hidden="true">{#if art}<img src={art} alt="" />{:else}♪{/if}</div><div class="wb-meta"><strong>{x.p.title}</strong><small>{x.p.artist || 'Unknown artist'} · {plural(x.p.tracks, 'track')} · {size(x.p.bytes)}</small></div><span class="wb-badge queued">Will be added</span></div>
+              {/if}
+            </VirtualList>
+            {#if !pocketItems.length}<div class="wb-empty"><b>{card.albums.length ? 'No albums match' : 'Nothing here yet'}</b><p>{card.albums.length ? 'Try a different search.' : 'Add albums from This computer to get started.'}</p></div>{/if}
+          </div>
+        {:else if view === 'tracks'}
+          <div class="wb-listwrap" data-pane="pocket">
+            <VirtualList items={allTracks} rowHeight={58} key={(t) => t.rel} label="Tracks on the Pocket" resetKey={pocketSearch} let:item={t} let:index let:count>
+              <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions (row click is a mouse convenience; keyboard users select with the row's checkbox) -->
+              <div class="wb-row" class:sel={pocketPicked.has(t.rel)} role="listitem" aria-posinset={index + 1} aria-setsize={count} on:click={(e) => onRow(e, () => pickTrack(t, e))}>
+                <input type="checkbox" aria-label={`Select ${t.title}`} disabled={busy} checked={pocketPicked.has(t.rel)} on:click|stopPropagation={(e) => pickTrack(t, e)} />
                 <div class="wb-meta"><strong>{t.title}</strong><small>{t.artist || 'Unknown artist'} · {t.album || 'Unknown album'}</small></div>
                 <span class="wb-time">{duration(t.secs)}</span><span class="wb-badge">{t.format}</span>
               </div>
-            {/each}
-            {#if allTracks.length > TRACK_LIMIT}<div class="wb-more">Showing the first {TRACK_LIMIT} of {allTracks.length}. Search to narrow the list.</div>{/if}
-          {:else}
-            {#each card.playlists as pl}<div class="wb-row" role="listitem"><div class="wb-art" aria-hidden="true">≡</div><div class="wb-meta"><strong>{pl.name}</strong><small>{plural(pl.tracks, 'track')} · managed on the Playlists page</small></div></div>
-            {:else}<div class="wb-empty"><b>No playlists</b><p>Create them on the Playlists page.</p></div>{/each}
-          {/if}
-        </div>
+            </VirtualList>
+            {#if !allTracks.length}<div class="wb-empty"><b>No tracks match</b><p>Try a different search.</p></div>{/if}
+          </div>
+        {:else}
+          <div class="wb-list" role="list">
+            {#if view === 'artists'}
+              {#each artists as [name, list] (name)}<div class="wb-row" role="listitem"><div class="wb-art" aria-hidden="true">♪</div><div class="wb-meta"><strong>{name}</strong><small>{plural(list.length, 'album')} · {plural(list.reduce((n, a) => n + a.tracks, 0), 'track')}</small></div></div>{/each}
+            {:else}
+              {#each card.playlists as pl}<div class="wb-row" role="listitem"><div class="wb-art" aria-hidden="true">≡</div><div class="wb-meta"><strong>{pl.name}</strong><small>{plural(pl.tracks, 'track')} · managed on the Playlists page</small></div></div>
+              {:else}<div class="wb-empty"><b>No playlists</b><p>Create them on the Playlists page.</p></div>{/each}
+            {/if}
+          </div>
+        {/if}
       {/if}
       {#if dropActive}<div class="wb-dropveil">Drop to add to Pocket</div>{/if}
     </section>
   </div>
 
   <section class="wb-tray" aria-labelledby="tray-title" tabindex="-1" bind:this={trayEl}>
+    {#if run && !run.finished}
+      <div class="wb-dock" role="region" aria-label="Sync progress">
+        <div class="wb-dock-head"><b>Syncing to {cardLabel}</b><span class="wb-dock-step">{run.phase}</span><button class="quiet" on:click={cancelSync}>Cancel sync</button></div>
+        <div class="wb-progress" class:indeterminate={!run.total} role="progressbar" aria-label="Sync progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={run.total ? Math.round((run.done / run.total) * 100) : undefined}><i style="width:{run.total ? (run.done / run.total) * 100 : 40}%"></i></div>
+        <p class="wb-dock-line">{#if run.total}{size(run.done)} of {size(run.total)}{/if}{#if run.speed > 0}{' · '}{(run.speed / MB).toFixed(1)} MB/s · {eta(run.total - run.done, run.speed) === 'under a minute' ? 'under a minute' : `about ${eta(run.total - run.done, run.speed)}`} left{/if}</p>
+        <p class="wb-fine wb-keep" role="note">Keep the Pocket connected until this finishes. You can keep looking around while it runs.</p>
+        {#if runSlowNote}<p class="wb-fine" role="note">This is slower than a card reader usually is. If you're plugged into the Pocket directly, that's expected.</p>{/if}
+        <span class="wb-sr" role="status">{run.phase}</span>
+      </div>
+    {/if}
     <div class="wb-tray-info">
       <h2 id="tray-title">Pending changes</h2>
       <p>{#if pendingCount}{[adds.length && `${plural(adds.length, 'album')} to add (${plural(addTracks, 'track')}, ${size(addBytes)})`, removes.length && `${removes.length} to remove`, edits.length && `${edits.length} to edit`].filter(Boolean).join(' · ')}{#if space && !overCapacity && !overLimit}{' · '}<span class="wb-fit">Fits, {size(free)} free afterwards</span>{/if}{:else}Nothing yet. Changes are only made when you press Start sync.{/if}</p>
@@ -561,7 +667,7 @@
     {#if pendingCount}
       <ul class="wb-chips" aria-label="Pending changes list">
         {#each pending as p (p.key)}
-          <li class={p.kind}><span class="k">{p.kind === 'add' ? '+' : p.kind === 'remove' ? '−' : '✎'}</span><span class="t">{p.kind === 'edit' ? editLabel(p) : p.title}</span>{#if p.kind !== 'edit'}<small>{size(p.bytes)}</small>{/if}<button aria-label={p.kind === 'remove' ? `Undo removing ${p.title}` : `Remove ${p.kind === 'edit' ? editLabel(p) : p.title} from pending changes`} on:click={() => unstage(p.key)}>{p.kind === 'remove' ? 'Undo' : '×'}</button></li>
+          <li class={p.kind}><span class="k">{p.kind === 'add' ? '+' : p.kind === 'remove' ? '−' : '✎'}</span><span class="t">{p.kind === 'edit' ? editLabel(p) : p.title}</span>{#if p.kind !== 'edit'}<small>{size(p.bytes)}</small>{/if}<button aria-label={p.kind === 'remove' ? `Undo removing ${p.title}` : `Remove ${p.kind === 'edit' ? editLabel(p) : p.title} from pending changes`} disabled={busy} on:click={() => unstage(p.key)}>{p.kind === 'remove' ? 'Undo' : '×'}</button></li>
         {/each}
       </ul>
     {/if}
@@ -570,7 +676,7 @@
       {#if overCapacity}<span class="wb-slownote bad" role="alert">Won't fit on this card</span>{/if}
       {#if overLimit && limits}<span class="wb-slownote bad" role="alert">Over the Pocket's library limit ({limits.max_tracks.toLocaleString()} tracks)</span>{/if}
       {#if disconnected}<span class="wb-slownote bad" role="alert">Card disconnected</span>{/if}
-      <button class="quiet" disabled={!pendingCount} on:click={clearAll}>Clear all</button>
+      <button class="quiet" disabled={busy || !pendingCount} on:click={clearAll}>Clear all</button>
       <button class="primary" disabled={!canStart} on:click={start}>Start sync</button>
     </div>
   </section>
@@ -591,9 +697,9 @@
       <dl class="wb-review">
         {#if adds.length}<div><dt>Add</dt><dd>{plural(review.new_files + review.updated_files, 'track')} · {size(review.bytes_to_write)}{review.unchanged_files ? ` (${review.unchanged_files} already up to date)` : ''}</dd></div>{/if}
         {#if review.removed_files}<div><dt>Remove</dt><dd>{plural(review.removed_files, 'track')} · {size(review.bytes_to_remove)}{review.playlists_updated ? ` · ${plural(review.playlists_updated, 'playlist')} updated` : ''}</dd></div>{/if}
-        {#if review.edited_files}<div><dt>Edit</dt><dd>{plural(review.edited_files, 'track')} (Pocket copies only)</dd></div>{/if}
+        {#if review.edited_files}<div><dt>Edit</dt><dd>{plural(review.edited_files, 'track')} (only the copies on the Pocket)</dd></div>{/if}
         {#if reviewEta}<div><dt>Time</dt><dd>about {reviewEta}{#if estIsDefault} <small class="wb-was">(rough estimate; we haven't timed this card yet)</small>{:else} <small class="wb-was">(from your last transfer)</small>{/if}</dd></div>{/if}
-        <div><dt>Free after</dt><dd>{size(free)} of {size(total)}</dd></div>
+        <div><dt>Free space afterwards</dt><dd>{size(free)} of {size(total)}</dd></div>
       </dl>
       {#if slowWarn}
         <div class="wb-warn">
@@ -610,7 +716,7 @@
           {/each}
         </ul>
       </details>
-      {#if adds.length}<label class="wb-check"><input type="checkbox" bind:checked={embedCovers} on:change={replan} /> Embed each folder's cover art into the copies</label>{/if}
+      {#if adds.length}<label class="wb-check"><input type="checkbox" bind:checked={embedCovers} on:change={replan} /> Put each album's cover picture inside the copied songs, so the Pocket can show it</label>{/if}
       {#if review.removed_files}
         {#if prefs?.remove_mode === 'ask'}
           <label class="wb-check"><input type="checkbox" bind:checked={askBackup} /> Copy removed files to my backup folder first</label>
@@ -649,7 +755,8 @@
       <label>Year<input inputmode="numeric" maxlength="4" bind:value={editForm.year} /></label>
       <fieldset><legend>Cover</legend>
         <div class="wb-cover-pick">
-          {#if editCoverPreview}<img src={editCoverPreview} alt="Chosen cover" />{:else}<div class="wb-art big" aria-hidden="true">♪</div>{/if}
+          <figure class="wb-cov"><div class="wb-art big" aria-hidden="true">{#if editCurrent}<img src={editCurrent} alt="" />{:else}♪{/if}</div><figcaption>Now</figcaption></figure>
+          {#if editCoverPreview}<span aria-hidden="true">→</span><figure class="wb-cov"><img class="wb-newcov" src={editCoverPreview} alt="New cover" /><figcaption>New</figcaption></figure>{/if}
           <div><button id="cover-choose" class="wb-covers-file" on:click={chooseCover}>{editCover ? 'Choose a different image…' : 'Choose image…'}</button>{#if editCover}<small>{editCover.split(/[\\/]/).pop()}</small>{/if}</div>
         </div>
         {#if editCoverError}<small role="alert">{editCoverError}</small>{/if}
@@ -660,22 +767,7 @@
   </div>
 {/if}
 
-{#if run && !run.finished}
-  <div class="wb-veil" role="presentation"></div>
-  <div class="wb-modal wb-run" role="dialog" aria-labelledby="run-t" aria-live="polite" use:modal>
-    <h2 id="run-t" tabindex="-1" data-autofocus>Syncing to {cardLabel}</h2>
-    <div class="wb-progress" class:indeterminate={!run.total} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={run.total ? Math.round((run.done / run.total) * 100) : undefined}><i style="width:{run.total ? (run.done / run.total) * 100 : 40}%"></i></div>
-    <dl class="wb-review">
-      <div><dt>Step</dt><dd>{run.phase}</dd></div>
-      {#if run.total}<div><dt>Copied</dt><dd>{size(run.done)} of {size(run.total)}</dd></div>{/if}
-      {#if run.speed > 0}<div><dt>Speed</dt><dd>{(run.speed / MB).toFixed(1)} MB/s</dd></div><div><dt>Time left</dt><dd>{eta(run.total - run.done, run.speed) === 'under a minute' ? 'under a minute' : `about ${eta(run.total - run.done, run.speed)}`}</dd></div>{/if}
-    </dl>
-    {#if run.path}<p class="wb-fine wb-path" title={run.path}>{run.path}</p>{/if}
-    <p class="wb-fine wb-keep" role="note">Keep the Pocket connected until this finishes.</p>
-    {#if runSlowNote}<p class="wb-fine" role="note">This is slower than a card reader usually is. If you're plugged into the Pocket directly, that's expected.</p>{/if}
-    <div class="wb-modal-actions"><button class="quiet" on:click={cancelSync}>Cancel sync</button></div>
-  </div>
-{:else if run && run.error}
+{#if run && run.error}
   <div class="wb-veil" role="presentation"></div>
   <div class="wb-modal wb-run" role="alertdialog" aria-labelledby="run-t" aria-describedby="run-d" use:modal>
     <h2 id="run-t">{run.cancelled ? 'Sync cancelled' : 'Sync didn\u2019t finish'}</h2>
@@ -728,8 +820,8 @@
   .wb-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:#1d2c22;border-radius:9px;font-size:12px;color:#c1f0ad}
   .wb-actions button{background:#273638;color:#e8ecec;border-radius:7px;padding:5px 10px;font-size:12px}
   .wb-actions button:disabled{opacity:.4}.wb-actions .danger{background:#5a352c;color:#f4cfc4;margin-left:auto}
-  .wb-list{display:flex;flex-direction:column;gap:2px;overflow:auto;flex:1;min-height:0}
-  .wb-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:1px solid transparent;cursor:default}
+  .wb-list{display:flex;flex-direction:column;overflow:auto;flex:1;min-height:0}
+  .wb-row{height:56px;box-sizing:border-box;margin-bottom:2px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:1px solid transparent;cursor:default}
   .wb-row:hover{background:#1c2729}.wb-row.sel{background:#1d2c22;border-color:#2f4a37}.wb-row.dim .wb-art{opacity:.45}.wb-row.dim .wb-meta strong{color:#a6b3b2}
   .wb-row[draggable=true]{cursor:grab}
   .wb-row.removing .wb-art{opacity:.45}.wb-row.removing .wb-meta strong{text-decoration:line-through;color:#a6b3b2}
@@ -744,7 +836,7 @@
   .wb-pane-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#8c9c9b;margin-top:auto;padding-top:6px}
   .wb-empty{text-align:center;padding:40px 10px;color:#8c9c9b}.wb-empty b{color:#e8ecec}
   .wb-tray{flex-shrink:0;background:#161f20;border:1px solid #2c393a;border-radius:14px;padding:14px 16px}
-  .wb-tray{display:grid;grid-template-columns:1fr auto;grid-template-areas:"info actions" "chips chips";gap:10px 16px;align-items:center}
+  .wb-tray{display:grid;grid-template-columns:1fr auto;grid-template-areas:"dock dock" "info actions" "chips chips";gap:10px 16px;align-items:center}
   .wb-tray:focus{outline:2px solid #c1f0ad;outline-offset:2px}
   .wb-tray-info{grid-area:info}.wb-tray-info h2{margin:0;font-size:15px}.wb-tray-info p{margin:2px 0 0;font-size:12px;color:#8c9c9b}
   .wb-tray-actions{grid-area:actions;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
@@ -798,4 +890,18 @@
   .wb-warn{margin:0 0 12px;padding:12px 14px;background:#3d3220;border:1px solid #6b5630;border-radius:10px;color:#f0d59a;font-size:13px}.wb-warn p{margin:6px 0 8px;color:#e5d2a6}.wb-warn .wb-check{margin:0}
   .wb-banner-fail{background:#3d3220;border-color:#6b5630;color:#f0d59a}.wb-banner-actions{display:flex;gap:6px;flex-shrink:0}
   .wb-safe{color:#c1f0ad!important}
+  .wb-listwrap{display:flex;flex-direction:column;flex:1;min-height:0}
+  .wb-art img{width:100%;height:100%;object-fit:cover;border-radius:7px;display:block}
+  .wb-art{overflow:hidden}
+  .wb-tools{display:flex;gap:8px}.wb-tools .wb-search{flex:1;min-width:0}
+  .wb-sort{background:#111617;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;padding:6px 8px;font-size:12px}
+  .wb-filters{display:flex;gap:6px;flex-wrap:wrap}
+  .wb-filters button{background:#1a2325;color:#a6b3b2;border:1px solid #2c393a;border-radius:99px;padding:4px 10px;font-size:12px}
+  .wb-filters button.on{background:#1d2c22;color:#c1f0ad;border-color:#2f4a37}
+  .wb-selectall{display:flex;gap:8px;align-items:center;font-size:12px;color:#8c9c9b;padding:2px 4px;cursor:pointer}
+  .wb-dock{grid-area:dock;background:#182320;border:1px solid #2f4a37;border-radius:11px;padding:12px 14px}
+  .wb-dock-head{display:flex;align-items:center;gap:12px;margin-bottom:8px}.wb-dock-head b{font-size:14px}.wb-dock-step{color:#8c9c9b;font-size:12px;margin-right:auto}
+  .wb-dock .wb-progress{margin:0 0 8px}.wb-dock-line{margin:0 0 4px;font-size:12px;color:#b7c3c2}.wb-dock .wb-fine{margin:4px 0 0}
+  .wb-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .wb-cov{margin:0;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:#8c9c9b}.wb-newcov{width:72px;height:72px;object-fit:cover;border-radius:8px}
 </style>

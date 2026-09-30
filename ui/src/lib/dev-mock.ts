@@ -153,6 +153,14 @@ const handlers: Record<string, (args: any) => unknown> = {
   },
   plan_changes: (a) => plan(a.request),
   execute_changes: (a) => runChanges({ ...a.request, __context: a.context }, a.jobId),
+  // A colourful placeholder "cover" per album (stable per id) so lists and the edit drawer have artwork to show.
+  album_thumbnails: (a) => (a.ids as string[]).map((id) => {
+    if (id.includes('Time Out')) return { id, png_base64: null }; // one album with no picture, to test the placeholder
+    let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><rect width='96' height='96' fill='hsl(${h},45%,38%)'/><circle cx='48' cy='48' r='26' fill='hsl(${(h + 40) % 360},50%,62%)'/></svg>`;
+    return { id, png_base64: btoa(svg), mime: 'image/svg+xml' };
+  }),
+  image_thumbnail: () => "data:image/svg+xml;base64," + btoa("<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><rect width='160' height='160' fill='#b5651d'/><circle cx='80' cy='80' r='46' fill='#f2c078'/></svg>"),
   list_history: () => history,
   prune_history: () => prune(),
   clear_history: () => { const n = history.length; history = []; return n; },
@@ -183,6 +191,8 @@ export function installDevMock() {
   // Test hook: `?connection=card_reader` or `?connection=unknown` in the URL.
   const query = new URLSearchParams(location.search);
   if (query.get('history') === 'seed') seedHistory();
+  // ?big=2000 adds that many generated albums to the local library (to test long lists).
+  for (let i = 0; i < Number(query.get('big') ?? 0); i++) sourceAlbums.push(album(`Artist ${String(i % 97).padStart(2, '0')}`, `Album ${String(i).padStart(4, '0')}`, 8, 100 + (i % 50), 2000));
   const wanted = query.get('connection');
   if (wanted === 'card_reader' || wanted === 'unknown') connection = wanted;
   mockIPC((cmd, args) => {
