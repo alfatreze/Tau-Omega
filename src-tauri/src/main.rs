@@ -208,19 +208,27 @@ const REPORTS_DIR_FILE: &str = "reports_dir.txt";
 /// Where Tau Omega remembers the user's chosen reports directory: one small
 /// text file in this app's own config directory (Tauri's per-OS location),
 /// not a card or media root. Reading a config dir that does not exist yet
-/// (a first run) is `Some(None)`, not an error.
-#[tauri::command]
-fn get_reports_dir(app: tauri::AppHandle) -> Result<Option<String>, TauError> {
+/// (a first run) is `Ok(None)`, not an error. See [`get_reports_dir`] for the
+/// folder actually used.
+fn configured_reports_dir(app: &tauri::AppHandle) -> Result<Option<String>, TauError> {
     let path = app
         .path()
         .app_config_dir()
         .map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?
         .join(REPORTS_DIR_FILE);
     match std::fs::read_to_string(path) {
-        Ok(contents) => Ok(Some(contents.trim().to_string())),
+        Ok(contents) => Ok(Some(contents.trim().to_string()).filter(|c| !c.is_empty())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(TauError::from(error)),
     }
+}
+
+/// The folder every journal goes in: the folder the user chose in Settings, or
+/// a default `reports` folder in the app's data directory. Always a real path,
+/// so sync history works without any setup.
+#[tauri::command]
+fn get_reports_dir(app: tauri::AppHandle) -> Result<Option<String>, TauError> {
+    Ok(Some(resolved_reports_dir(&app)?.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
@@ -317,6 +325,10 @@ struct Prefs {
     speeds: std::collections::BTreeMap<String, f64>,
     /// Manual "how is this card connected" override per card name.
     connections: std::collections::BTreeMap<String, String>,
+    /// Sync history retention: keep at most this many entries (`0` = no limit).
+    history_keep_last: usize,
+    /// Sync history retention: delete entries older than this many days (`0` = no limit).
+    history_keep_days: u64,
 }
 impl Default for Prefs {
     fn default() -> Self {
@@ -327,6 +339,8 @@ impl Default for Prefs {
             slow_alert_suppressed: false,
             speeds: Default::default(),
             connections: Default::default(),
+            history_keep_last: 100,
+            history_keep_days: 365,
         }
     }
 }
@@ -357,10 +371,8 @@ fn read_prefs(app: &tauri::AppHandle) -> Result<Prefs, TauError> {
 /// The folder journals go in: the user's chosen reports directory if they set
 /// one on the Jobs page, otherwise a folder in the app's own data directory.
 fn resolved_reports_dir(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
-    if let Ok(Some(dir)) = get_reports_dir(app.clone()) {
-        if !dir.is_empty() {
-            return Ok(PathBuf::from(dir));
-        }
+    if let Some(dir) = configured_reports_dir(app)? {
+        return Ok(PathBuf::from(dir));
     }
     Ok(data_dir(app)?.join("reports"))
 }
@@ -862,11 +874,31 @@ fn plan_changes(request: tau_core::changes::ChangeRequest, destination: String) 
     Ok(change_plan_view(&plan))
 }
 
+/// The result of applying a change set: the engine's report plus where its
+/// journal was written, so the UI can open that entry in the sync history.
+#[derive(Serialize)]
+struct ChangeResult {
+    #[serde(flatten)]
+    report: tau_core::changes::ChangeReport,
+    journal: String,
+}
+
+/// Best-effort retention: delete history beyond the user's limits. Never fails
+/// the caller (a full disk or a permissions problem must not turn a good sync
+/// into an error).
+fn prune_history_best_effort(app: &tauri::AppHandle) {
+    if let (Ok(prefs), Ok(dir)) = (read_prefs(app), resolved_reports_dir(app)) {
+        let _ = tau_core::journal::prune_journals(&dir, prefs.history_keep_last, prefs.history_keep_days);
+    }
+}
+
 /// Applies a reviewed change set. `backup` is the folder removed files are
-/// copied to first (`None` = the user chose to remove without a backup). The
-/// journal is written to the reports directory before anything changes.
+/// copied to first (`None` = the user chose to remove without a backup).
+/// `context` is human-readable detail (titles, card, connection) stored in the
+/// journal so the sync history can describe the run in words. The journal is
+/// written to the reports directory before anything changes.
 #[tauri::command]
-fn execute_changes(app: tauri::AppHandle, request: tau_core::changes::ChangeRequest, destination: String, confirmation: String, backup: Option<String>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::changes::ChangeReport, TauError> {
+fn execute_changes(app: tauri::AppHandle, request: tau_core::changes::ChangeRequest, destination: String, confirmation: String, backup: Option<String>, context: Option<Value>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<ChangeResult, TauError> {
     let dest = PathBuf::from(&destination);
     let plan = tau_core::changes::plan_changes(&dest, &request, &mut None)?;
     let reports = resolved_reports_dir(&app)?;
@@ -877,16 +909,50 @@ fn execute_changes(app: tauri::AppHandle, request: tau_core::changes::ChangeRequ
     if let Some(dir) = &backup {
         std::fs::create_dir_all(dir)?;
     }
-    with_job(&window, &jobs, job_id, |progress| {
-        tau_core::journal::execute_changes_to_journal(&plan, &confirmation, backup.as_deref(), &journal, progress)
-    })
+    let result = with_job(&window, &jobs, job_id, |progress| {
+        tau_core::journal::execute_changes_to_journal(&plan, &confirmation, backup.as_deref(), &journal, context, progress)
+    });
+    prune_history_best_effort(&app);
+    result.map(|report| ChangeResult { report, journal: journal.to_string_lossy().into_owned() })
+}
+
+/// Every journal in the sync history folder, newest first. An absent folder
+/// (nothing synced yet) is an empty history, not an error.
+#[tauri::command]
+fn list_history(app: tauri::AppHandle) -> Result<Vec<tau_core::journal::JournalSummary>, TauError> {
+    let dir = resolved_reports_dir(&app)?;
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    tau_core::journal::list_journals(dir)
+}
+
+/// Applies the retention preferences now (also done after every sync).
+#[tauri::command]
+fn prune_history(app: tauri::AppHandle) -> Result<usize, TauError> {
+    let prefs = read_prefs(&app)?;
+    let dir = resolved_reports_dir(&app)?;
+    if !dir.is_dir() {
+        return Ok(0);
+    }
+    tau_core::journal::prune_journals(dir, prefs.history_keep_last, prefs.history_keep_days)
+}
+
+/// Deletes the whole sync history (the user's explicit "clear history").
+#[tauri::command]
+fn clear_history(app: tauri::AppHandle) -> Result<usize, TauError> {
+    let dir = resolved_reports_dir(&app)?;
+    if !dir.is_dir() {
+        return Ok(0);
+    }
+    tau_core::journal::clear_journals(dir)
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, get_prefs, set_prefs, list_library, plan_changes, execute_changes])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
@@ -912,5 +978,6 @@ mod tests {
         let sparse: Prefs = serde_json::from_str(r#"{"slow_alert_suppressed": true}"#).unwrap();
         assert_eq!(sparse.remove_mode, "backup");
         assert!(sparse.slow_alert_suppressed && !sparse.remove_explained);
+        assert_eq!((sparse.history_keep_last, sparse.history_keep_days), (100, 365));
     }
 }

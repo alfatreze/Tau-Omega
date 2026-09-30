@@ -92,8 +92,14 @@ export type FieldEdits = { title: string | null; artist: string | null; album: s
 export type EditRequest = { album_id: string; track: string | null; fields: FieldEdits; cover: string | null };
 export type ChangeRequest = { library_root: string | null; add_albums: string[]; remove_albums: string[]; edits: EditRequest[]; options: { mirror: boolean; embed_covers: boolean; art_sidecar_pal256: boolean } };
 export type ChangePlanView = { id: string; new_files: number; updated_files: number; unchanged_files: number; bytes_to_write: number; removed_files: number; bytes_to_remove: number; edited_files: number; playlists_updated: number; warnings: Warning[] };
-export type ChangeReport = { plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string };
+export type ChangeReport = { phase: string; plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string };
 export type ConnectionKind = 'direct_usb' | 'card_reader' | 'unknown';
 export type ConnectionInfo = { kind: ConnectionKind; detail: string };
-export type Prefs = { remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; speeds: Record<string, number>; connections: Record<string, string> };
+export type Prefs = { history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
+
+/** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */
+export type HistoryEntry = JournalSummary & { error_code: number | null; started_at_unix: number | null; duration_secs: number | null; edited: number | null; bytes_written: number | null; bytes_per_sec: number | null; phase: string | null; context: HistoryContext | null };
+/** What the Library screen stores with each sync so history can describe it in words. */
+export type HistoryContext = { card?: string; core?: string; connection?: string; items?: { kind: 'add' | 'remove' | 'edit'; title: string; artist?: string; tracks?: number; bytes?: number; note?: string; label?: string }[] };
+export type ChangeResult = ChangeReport & { journal: string };

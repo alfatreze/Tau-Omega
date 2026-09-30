@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { BackupPlan, ChangePlanView, ChangeReport, ChangeRequest, ConnectionInfo, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport } from './types';
+import type { BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, ConnectionInfo, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -45,7 +45,10 @@ export const readPlatformImage = (card: string, platform: string) => invoke<stri
 export { cancelJob, newJobId, onProgress, errorMessage, explainError } from './backend';
 export const listLibrary = (path: string, jobId: string) => invoke<LibraryListing>('list_library', { path, jobId });
 export const planChanges = (request: ChangeRequest, destination: string) => invoke<ChangePlanView>('plan_changes', { request, destination });
-export const executeChanges = (request: ChangeRequest, destination: string, confirmation: string, backup: string | null, jobId: string) => invoke<ChangeReport>('execute_changes', { request, destination, confirmation, backup, jobId });
+export const executeChanges = (request: ChangeRequest, destination: string, confirmation: string, backup: string | null, context: HistoryContext | null, jobId: string) => invoke<ChangeResult>('execute_changes', { request, destination, confirmation, backup, context, jobId });
+export const listHistory = () => invoke<HistoryEntry[]>('list_history');
+export const pruneHistory = () => invoke<number>('prune_history');
+export const clearHistory = () => invoke<number>('clear_history');
 export const detectConnection = (path: string) => invoke<ConnectionInfo>('detect_connection', { path });
 export const getPrefs = () => invoke<PrefsView>('get_prefs');
 export const setPrefs = (prefs: Prefs) => invoke<PrefsView>('set_prefs', { prefs });

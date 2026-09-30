@@ -70,6 +70,13 @@ Severity is the testers' word, adjusted where I could verify. **Status** says wh
 6. **Navigation at large zoom.** Keep the sidebar hidden under 720 px but provide a menu button, or never hide it?
 7. **Order of work.** The severity here differs a little from the earlier UX review: **history, the fit check and the sidebar/keyboard defects moved up**; bulk selection stays important but only one persona raised it. Do you want P1 reordered?
 
+## 5b. Owner decisions (recorded after reading this)
+* **History:** a secondary page, reachable on demand after a sync ("View details") and proposed more visibly after a failure ("See what happened", plus a banner on Library). Also browsable from **Settings**, with configurable retention (number of syncs and age) and sensible defaults (last 100 syncs, 1 year). *Built.*
+* **Fit check:** shown **both** when an album is selected (before adding) and after queuing. *Built.*
+* **Dialogs:** merge the slow-connection warning into the review sheet. Time estimates use a **canonical default speed** until a real transfer on that card has been timed; real figures will be collected during development to replace the placeholder. *Built (placeholder speeds: direct USB 1.5 MB/s, card reader 20 MB/s, unknown 5 MB/s; see `DEFAULT_SPEED` in `Workbench.svelte`).*
+* **Narrow windows:** keep a menu instead of hiding the sidebar. *Built (Menu button below 720 px).*
+* **Order of work:** reordered as proposed below. *Steps 1 to 4 built; bulk selection, artwork and non-blocking progress are still ahead.*
+
 ## 6. What I would put first (for you to accept or change)
 1. Fix history (real bug + plain wording + "last sync" on the Library screen).
 2. Fit check on selection; show the edit's result immediately; one Edit button.

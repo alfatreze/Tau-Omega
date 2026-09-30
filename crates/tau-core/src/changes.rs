@@ -53,6 +53,8 @@ pub struct ChangeReport {
     pub playlists_updated: usize,
     pub backup_dir: Option<PathBuf>,
     pub index_path: PathBuf,
+    /// How far the run got: `"copy"`, `"edit"`, `"remove"` (the step in progress or last started), or `"done"`.
+    pub phase: String,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -199,18 +201,32 @@ pub fn execute_changes(
     backup_root: Option<&Path>,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<ChangeReport, TauError> {
+    let mut report = ChangeReport::default();
+    execute_changes_with(plan, confirmation, backup_root, &mut report, progress)?;
+    Ok(report)
+}
+
+/// Like [`execute_changes`], but fills in `report` as it goes, so a caller
+/// that sees an `Err` can still tell how far the run got (`report.phase` and
+/// the counts so far). Used to journal a failed run accurately.
+pub fn execute_changes_with(
+    plan: &ChangePlan,
+    confirmation: &str,
+    backup_root: Option<&Path>,
+    report: &mut ChangeReport,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<(), TauError> {
     if confirmation != plan.id {
         return Err(TauError::e(
             ErrorCode::ConfirmationMismatch,
             "confirmation token does not match the current plan",
         ));
     }
-    let mut report = ChangeReport {
-        plan_id: plan.id.clone(),
-        index_path: plan.destination.join("tau-library.tdb"),
-        ..Default::default()
-    };
+    report.plan_id = plan.id.clone();
+    report.index_path = plan.destination.join("tau-library.tdb");
+    report.phase = "start".into();
     if let Some(sync_plan) = &plan.sync {
+        report.phase = "copy".into();
         let done = sync::execute(sync_plan, &sync_plan.id, progress)?;
         report.copied = done.copied;
         report.unchanged = done.unchanged;
@@ -237,10 +253,12 @@ pub fn execute_changes(
         }
     }
     if let Some(edit) = &plan.edit {
+        report.phase = "edit".into();
         let done = tagedit::execute_edit(edit, &edit.id, &plan.root_prefix, progress)?;
         report.edited = done.files_changed;
     }
     if let Some(removal) = &plan.removal {
+        report.phase = "remove".into();
         let done = workbench::execute_removal(
             removal,
             &removal.id,
@@ -252,7 +270,8 @@ pub fn execute_changes(
         report.playlists_updated = done.playlists_updated;
         report.backup_dir = done.backup_dir;
     }
-    Ok(report)
+    report.phase = "done".into();
+    Ok(())
 }
 
 #[cfg(test)]
@@ -394,6 +413,26 @@ mod tests {
         assert_eq!((tracks, dirs.len()), (2, 2));
         let request = ChangeRequest { library_root: Some(lib), add_albums: vec!["A/One".into()], ..Default::default() };
         assert!(plan_changes(&common, &request, &mut None).is_ok());
+    }
+
+    #[test]
+    fn a_failed_run_reports_how_far_it_got() {
+        let lib = library();
+        let common = card_with(&lib, &["B/Two"]);
+        // add one album (fine), then remove with an unsafe backup location (fails in the last step)
+        let request = ChangeRequest {
+            library_root: Some(lib),
+            add_albums: vec!["A/One".into()],
+            remove_albums: vec!["B/Two".into()],
+            ..Default::default()
+        };
+        let plan = plan_changes(&common, &request, &mut None).unwrap();
+        let mut report = ChangeReport::default();
+        let err = execute_changes_with(&plan, &plan.id, Some(&common.join("inside-the-card")), &mut report, &mut None).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::UnsafeBackupLocation);
+        assert_eq!(report.phase, "remove");
+        assert_eq!(report.copied, 1); // the add finished before the removal failed
+        assert!(common.join("B/Two/01.mp3").is_file()); // and nothing was removed
     }
 
     #[test]
