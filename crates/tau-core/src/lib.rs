@@ -19,6 +19,7 @@ pub mod screenshots;
 pub mod storage;
 pub mod sync;
 pub mod taud;
+pub mod workbench;
 
 use crc32fast::hash as crc32;
 use serde_json::Value;

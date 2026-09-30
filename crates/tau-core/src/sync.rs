@@ -154,11 +154,6 @@ fn plan_with_layout(
     include_source_root: bool,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncPlan, TauError> {
-    let PlanOptions {
-        mirror,
-        embed_covers,
-        art_sidecar_pal256,
-    } = options;
     validate_media_root(common)?;
     if sources.is_empty() {
         return Err(TauError::e(
@@ -166,9 +161,6 @@ fn plan_with_layout(
             "at least one source is required",
         ));
     }
-    let destination = common
-        .canonicalize()
-        .unwrap_or_else(|_| common.to_path_buf());
     let mut candidates = Vec::new();
     for source in sources {
         if !source.exists() {
@@ -186,6 +178,34 @@ fn plan_with_layout(
             ));
         }
     }
+    plan_candidates(candidates, common, root_prefix, options, progress)
+}
+
+/// Plans copying an explicit list of `(source file, relative destination)`
+/// pairs below `common`. This is the planning core shared by whole-folder
+/// plans and by album selections (`workbench::plan_selection`).
+pub(crate) fn plan_candidates(
+    mut candidates: Vec<(PathBuf, PathBuf)>,
+    common: &Path,
+    root_prefix: &str,
+    options: PlanOptions,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<SyncPlan, TauError> {
+    let PlanOptions {
+        mirror,
+        embed_covers,
+        art_sidecar_pal256,
+    } = options;
+    validate_media_root(common)?;
+    if candidates.is_empty() {
+        return Err(TauError::e(
+            ErrorCode::NoSources,
+            "at least one source is required",
+        ));
+    }
+    let destination = common
+        .canonicalize()
+        .unwrap_or_else(|_| common.to_path_buf());
     candidates.sort_by(|a, b| a.1.cmp(&b.1));
     let mut seen = std::collections::BTreeSet::new();
     let mut seen_art_folders = std::collections::BTreeSet::new();
@@ -622,7 +642,7 @@ fn mirror_deletions(destination: &Path, copies: &[CopyItem]) -> Result<Vec<Delet
         })
         .collect()
 }
-fn rebuild_index(
+pub(crate) fn rebuild_index(
     media_root: &Path,
     root_prefix: &str,
     plan_id: &str,
@@ -656,7 +676,7 @@ fn collect_files(root: &Path, at: &Path, out: &mut Vec<PathBuf>) -> Result<(), T
     }
     Ok(())
 }
-fn backup_then_delete(
+pub(crate) fn backup_then_delete(
     item: &DeleteItem,
     backup_root: &Path,
     plan_id: &str,
@@ -684,7 +704,7 @@ fn backup_then_delete(
     Ok(())
 }
 
-fn validate_media_root(common: &Path) -> Result<(), TauError> {
+pub(crate) fn validate_media_root(common: &Path) -> Result<(), TauError> {
     let components: Vec<_> = common.components().collect();
     let has_assets = components
         .iter()
@@ -733,7 +753,7 @@ fn collect_source(
     }
     Ok(())
 }
-fn supported(path: &Path) -> bool {
+pub(crate) fn supported(path: &Path) -> bool {
     matches!(
         path.extension()
             .and_then(|e| e.to_str())
@@ -742,7 +762,7 @@ fn supported(path: &Path) -> bool {
         Some("mp3" | "flac" | "m3u")
     )
 }
-fn audio_file(path: &Path) -> bool {
+pub(crate) fn audio_file(path: &Path) -> bool {
     matches!(
         path.extension()
             .and_then(|e| e.to_str())
@@ -751,7 +771,7 @@ fn audio_file(path: &Path) -> bool {
         Some("mp3" | "flac")
     )
 }
-fn is_junk(name: &str) -> bool {
+pub(crate) fn is_junk(name: &str) -> bool {
     name.starts_with("._") || matches!(name, ".DS_Store" | "Thumbs.db")
 }
 /// A source's file name, used to derive an ASCII-safe destination name.
@@ -772,7 +792,7 @@ fn required_file_name(path: &Path) -> Result<String, TauError> {
             )
         })
 }
-fn ascii_file_name(name: &str) -> String {
+pub(crate) fn ascii_file_name(name: &str) -> String {
     let name = ascii_name(name);
     if name.is_empty() {
         "track".into()
@@ -780,7 +800,7 @@ fn ascii_file_name(name: &str) -> String {
         name
     }
 }
-fn sha256_file(path: &Path) -> Result<String, TauError> {
+pub(crate) fn sha256_file(path: &Path) -> Result<String, TauError> {
     let mut file = fs::File::open(path)?;
     let mut h = Sha256::new();
     let mut buf = [0u8; 1 << 20];
@@ -793,10 +813,10 @@ fn sha256_file(path: &Path) -> Result<String, TauError> {
     }
     Ok(format!("{:x}", h.finalize()))
 }
-fn sha256_bytes(data: &[u8]) -> String {
+pub(crate) fn sha256_bytes(data: &[u8]) -> String {
     format!("{:x}", Sha256::digest(data))
 }
-fn write_durable(path: &Path, data: &[u8]) -> Result<(), TauError> {
+pub(crate) fn write_durable(path: &Path, data: &[u8]) -> Result<(), TauError> {
     let mut file = fs::File::create(path)?;
     file.write_all(data)?;
     file.sync_all()?;
