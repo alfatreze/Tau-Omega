@@ -133,6 +133,97 @@ fn flac_has_picture(data: &[u8]) -> Option<bool> {
     }
 }
 
+/// Returns the picture bytes (JPEG or PNG) embedded in an MP3 (ID3v2.2 to
+/// v2.4 picture frame) or FLAC (PICTURE block), or `None` when there is none
+/// or the tag is not one this can read. Read-only and forgiving: a malformed
+/// tag is "no picture", never an error, because this only feeds a preview.
+pub fn extract_embedded_cover(path: &Path) -> Option<Vec<u8>> {
+    let data = fs::read(path).ok()?;
+    if data.starts_with(b"ID3") {
+        return id3_picture(&data);
+    }
+    if data.starts_with(b"fLaC") {
+        return flac_picture(&data);
+    }
+    None
+}
+
+/// Skips a text field ended by a terminator suitable for `encoding`, returning the index after it.
+fn skip_text(data: &[u8], from: usize, encoding: u8) -> Option<usize> {
+    if matches!(encoding, 1 | 2) {
+        let mut i = from;
+        while i + 1 < data.len() {
+            if data[i] == 0 && data[i + 1] == 0 {
+                return Some(i + 2);
+            }
+            i += 2;
+        }
+        None
+    } else {
+        data.get(from..)?.iter().position(|b| *b == 0).map(|n| from + n + 1)
+    }
+}
+
+fn id3_picture(data: &[u8]) -> Option<Vec<u8>> {
+    let major = *data.get(3)?;
+    if !matches!(major, 2..=4) {
+        return None;
+    }
+    let end = (10 + syncsafe(data.get(6..10)?) as usize).min(data.len());
+    let mut position = 10;
+    while position + if major == 2 { 6 } else { 10 } <= end {
+        let (id, length, header) = if major == 2 {
+            let id = data.get(position..position + 3)?;
+            (id.to_vec(), ((data[position + 3] as usize) << 16) | ((data[position + 4] as usize) << 8) | data[position + 5] as usize, 6)
+        } else {
+            let header = data.get(position..position + 10)?;
+            let length = if major == 4 { syncsafe(&header[4..8]) as usize } else { u32::from_be_bytes(header[4..8].try_into().ok()?) as usize };
+            (header[..4].to_vec(), length, 10)
+        };
+        if id[0] == 0 || length == 0 || position + header + length > end {
+            return None;
+        }
+        if id == b"APIC" || id == b"PIC" {
+            let body = &data[position + header..position + header + length];
+            let encoding = *body.first()?;
+            let mut i = 1;
+            if major == 2 {
+                i += 3; // three-letter image format
+            } else {
+                i = skip_text(body, i, 0)?; // MIME type, always ISO-8859-1
+            }
+            i += 1; // picture type
+            i = skip_text(body, i, encoding)?; // description
+            return body.get(i..).filter(|b| !b.is_empty()).map(<[u8]>::to_vec);
+        }
+        position += header + length;
+    }
+    None
+}
+
+fn flac_picture(data: &[u8]) -> Option<Vec<u8>> {
+    let mut position = 4;
+    loop {
+        let header = *data.get(position)?;
+        let length = ((*data.get(position + 1)? as usize) << 16) | ((*data.get(position + 2)? as usize) << 8) | *data.get(position + 3)? as usize;
+        position += 4;
+        let body = data.get(position..position + length)?;
+        if header & 0x7f == 6 {
+            let read_u32 = |at: usize| -> Option<usize> { Some(u32::from_be_bytes(body.get(at..at + 4)?.try_into().ok()?) as usize) };
+            let mime = read_u32(4)?;
+            let desc_at = 8 + mime;
+            let desc = read_u32(desc_at)?;
+            let data_len_at = desc_at + 4 + desc + 16; // width, height, depth, colours
+            let picture = read_u32(data_len_at)?;
+            return body.get(data_len_at + 4..data_len_at + 4 + picture).map(<[u8]>::to_vec);
+        }
+        position += length;
+        if header & 0x80 != 0 {
+            return None;
+        }
+    }
+}
+
 /// Embeds a baseline JPEG as the only MP3 APIC frame in a copied file.
 /// Existing non-art ID3 frames and audio bytes are retained verbatim.
 pub fn embed_mp3_copy(source: &Path, cover: &Path, output: &Path) -> Result<(), TauError> {
