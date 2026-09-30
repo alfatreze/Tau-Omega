@@ -243,6 +243,42 @@ pub(crate) fn count_audio(root: &Path) -> Result<(usize, std::collections::BTree
     Ok((tracks, dirs))
 }
 
+/// One album's cover thumbnail: a small PNG, base64-encoded, or `None` when the
+/// album has no readable picture (the UI then shows a placeholder).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Thumbnail {
+    pub id: String,
+    pub png_base64: Option<String>,
+}
+
+/// Cover thumbnails for the given album folders under `root`: the folder's
+/// cover picture if it has one, otherwise the picture embedded in its first
+/// track. Never fails the batch because one album has no or a broken picture.
+/// Read-only.
+pub fn album_thumbnails(root: &Path, ids: &[String], long_side: u16) -> Result<Vec<Thumbnail>, TauError> {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let mut out = Vec::with_capacity(ids.len());
+    for id in ids {
+        let picture = checked_dir(root, id).ok().and_then(|dir| {
+            let bytes = match cover::find_cover(&dir) {
+                Some(file) => fs::read(file).ok(),
+                None => direct_files(&dir)
+                    .ok()?
+                    .into_iter()
+                    .filter(|f| sync::audio_file(f))
+                    .find_map(|f| cover::extract_embedded_cover(&f)),
+            }?;
+            if bytes.len() > 16 << 20 {
+                return None;
+            }
+            crate::image::thumbnail_png(&bytes, long_side).ok()
+        });
+        out.push(Thumbnail { id: id.clone(), png_base64: picture.map(|p| STANDARD.encode(p)) });
+    }
+    Ok(out)
+}
+
 /// Rejects an album id that could leave `root` (absolute, `..`, prefixes).
 pub(crate) fn checked_dir(root: &Path, id: &str) -> Result<PathBuf, TauError> {
     let relative = Path::new(id);
@@ -566,6 +602,89 @@ mod tests {
         assert_eq!(kob.tracks, 2);
         assert!(kob.bytes > 0 && kob.has_cover);
         assert_eq!(listing.tracks.len(), 4);
+    }
+
+    fn png(width: u16, height: u16) -> Vec<u8> {
+        let rgb: Vec<u8> = (0..width as usize * height as usize).flat_map(|i| [(i % 251) as u8, 90, 160]).collect();
+        crate::image::rgb8_to_png(width, height, &rgb).unwrap()
+    }
+    fn decode_b64(s: &str) -> Vec<u8> {
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        STANDARD.decode(s).unwrap()
+    }
+    fn png_size(bytes: &[u8]) -> (u32, u32) {
+        (u32::from_be_bytes(bytes[16..20].try_into().unwrap()), u32::from_be_bytes(bytes[20..24].try_into().unwrap()))
+    }
+
+    #[test]
+    fn a_folder_cover_becomes_a_small_thumbnail() {
+        let lib = tmp("thumb-folder");
+        fs::create_dir_all(lib.join("A/B")).unwrap();
+        fs::write(lib.join("A/B/01.mp3"), b"audio").unwrap();
+        fs::write(lib.join("A/B/cover.png"), png(200, 100)).unwrap();
+        let t = album_thumbnails(&lib, &["A/B".to_string()], 96).unwrap();
+        let bytes = decode_b64(t[0].png_base64.as_ref().unwrap());
+        assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        assert_eq!(png_size(&bytes), (96, 48)); // longest side 96, proportions kept
+        // a small picture is never enlarged
+        fs::write(lib.join("A/B/cover.png"), png(40, 40)).unwrap();
+        let t = album_thumbnails(&lib, &["A/B".to_string()], 96).unwrap();
+        assert_eq!(png_size(&decode_b64(t[0].png_base64.as_ref().unwrap())), (40, 40));
+    }
+
+    #[test]
+    fn an_embedded_mp3_or_flac_picture_is_found() {
+        let lib = tmp("thumb-embedded");
+        let picture = png(64, 64);
+        // MP3: ID3v2.3 with an APIC frame (encoding 0, mime, type 3, empty description)
+        let mut apic = vec![0u8];
+        apic.extend_from_slice(b"image/png\0");
+        apic.push(3);
+        apic.push(0);
+        apic.extend_from_slice(&picture);
+        let mut frame = b"APIC".to_vec();
+        frame.extend_from_slice(&(apic.len() as u32).to_be_bytes());
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&apic);
+        let mut mp3 = b"ID3".to_vec();
+        mp3.extend_from_slice(&[3, 0, 0]);
+        let n = frame.len();
+        mp3.extend_from_slice(&[((n >> 21) & 127) as u8, ((n >> 14) & 127) as u8, ((n >> 7) & 127) as u8, (n & 127) as u8]);
+        mp3.extend_from_slice(&frame);
+        mp3.extend_from_slice(&[0xff, 0xfb, 0x90, 0]);
+        fs::create_dir_all(lib.join("M/one")).unwrap();
+        fs::write(lib.join("M/one/01.mp3"), mp3).unwrap();
+        // FLAC: STREAMINFO then a PICTURE block
+        let mut block = Vec::new();
+        for v in [3u32] { block.extend_from_slice(&v.to_be_bytes()); }
+        block.extend_from_slice(&9u32.to_be_bytes()); block.extend_from_slice(b"image/png");
+        block.extend_from_slice(&0u32.to_be_bytes());
+        for v in [64u32, 64, 24, 0] { block.extend_from_slice(&v.to_be_bytes()); }
+        block.extend_from_slice(&(picture.len() as u32).to_be_bytes()); block.extend_from_slice(&picture);
+        let mut flac = b"fLaC".to_vec();
+        flac.extend_from_slice(&[0, 0, 0, 34]); flac.extend_from_slice(&[0u8; 34]);
+        flac.push(0x80 | 6); flac.extend_from_slice(&(block.len() as u32).to_be_bytes()[1..]); flac.extend_from_slice(&block);
+        flac.extend_from_slice(&[0xff, 0xf8]);
+        fs::create_dir_all(lib.join("F/two")).unwrap();
+        fs::write(lib.join("F/two/01.flac"), flac).unwrap();
+        let t = album_thumbnails(&lib, &["M/one".to_string(), "F/two".to_string()], 96).unwrap();
+        for entry in &t {
+            assert_eq!(png_size(&decode_b64(entry.png_base64.as_ref().unwrap_or_else(|| panic!("no picture for {}", entry.id)))), (64, 64));
+        }
+    }
+
+    #[test]
+    fn albums_without_or_with_broken_pictures_give_none_not_an_error() {
+        let lib = tmp("thumb-none");
+        for d in ["A/none", "A/broken", "A/escape"] {
+            fs::create_dir_all(lib.join(d)).unwrap();
+            fs::write(lib.join(d).join("01.mp3"), b"audio").unwrap();
+        }
+        fs::write(lib.join("A/broken/cover.jpg"), b"not an image").unwrap();
+        let ids: Vec<String> = ["A/none", "A/broken", "../outside", "A/missing"].iter().map(|s| s.to_string()).collect();
+        let t = album_thumbnails(&lib, &ids, 96).unwrap();
+        assert_eq!(t.len(), 4);
+        assert!(t.iter().all(|x| x.png_base64.is_none()));
     }
 
     #[test]

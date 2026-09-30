@@ -874,6 +874,24 @@ fn plan_changes(request: tau_core::changes::ChangeRequest, destination: String) 
     Ok(change_plan_view(&plan))
 }
 
+/// Small cover pictures for a batch of album folders under `path` (a local
+/// library or a card's media root). Albums with no readable picture come back
+/// with `png_base64: null` so the UI can show a placeholder.
+#[tauri::command]
+fn album_thumbnails(path: String, ids: Vec<String>) -> Result<Vec<tau_core::workbench::Thumbnail>, TauError> {
+    tau_core::workbench::album_thumbnails(Path::new(&path), &ids, 96)
+}
+
+/// A proper thumbnail (decoded, resized, re-encoded as PNG) of an image file the
+/// user picked, as a data URL; also proves the picture can be read at all.
+#[tauri::command]
+fn image_thumbnail(path: String, long_side: u16) -> Result<String, TauError> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let bytes = std::fs::read(&path)?;
+    let png = tau_core::image::thumbnail_png(&bytes, long_side.clamp(16, 512))?;
+    Ok(format!("data:image/png;base64,{}", STANDARD.encode(png)))
+}
+
 /// The result of applying a change set: the engine's report plus where its
 /// journal was written, so the UI can open that entry in the sync history.
 #[derive(Serialize)]
@@ -952,7 +970,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

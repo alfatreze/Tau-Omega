@@ -285,6 +285,20 @@ pub fn rgb8_to_png(width: u16, height: u16, rgb: &[u8]) -> Result<Vec<u8>, TauEr
     Ok(bytes)
 }
 
+/// Decodes a JPEG or PNG cover and returns a PNG whose longest side is at most
+/// `long_side` pixels (never enlarged, never cropped): a small picture a UI can
+/// show in a list. Read-only.
+pub fn thumbnail_png(source: &[u8], long_side: u16) -> Result<Vec<u8>, TauError> {
+    let (width, height, rgb) = decode_source_image(source)?;
+    let longest = width.max(height);
+    if longest <= long_side as u32 {
+        return rgb8_to_png(width.min(u16::MAX as u32) as u16, height.min(u16::MAX as u32) as u16, &rgb);
+    }
+    let (dw, dh) = fit_long_side(width, height, long_side as u32);
+    let resized = resize_rgb8(&rgb, width, height, dw, dh)?;
+    rgb8_to_png(dw as u16, dh as u16, &resized)
+}
+
 /// Decodes a `TIM1` file straight to PNG bytes.
 pub fn decode_tim1_to_png(bytes: &[u8]) -> Result<Vec<u8>, TauError> {
     let image = decode_tim1(bytes)?;
