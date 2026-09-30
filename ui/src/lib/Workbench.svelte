@@ -567,7 +567,7 @@
         </div>
         <div class="wb-pane-foot">
           <span class="wb-fit-line" aria-live="polite">{#if picked.size}{picked.size} selected · {size(pickedBytes)}{#if afterPick !== null}<span class="wb-fit" class:bad={!pickFits}>{' '}{#if pickFits}· Fits, {size(afterPick)} free afterwards{:else if pickTooMany}· Too many tracks for the Pocket's library{:else}· Won't fit: {size(pickOver)} too big. You could remove something else in the same sync.{/if}</span>{/if}{:else}{plural(source.albums.length, 'album')} · click albums to select them, or drag them across →{/if}</span>
-          <button class="primary" disabled={busy || !picked.size} on:click={addPicked}>Add {picked.size || ''} to Pocket →</button>
+          <button class="primary" disabled={busy || !picked.size} on:click={addPicked}>Add {picked.size || ''} to Analogue Pocket →</button>
         </div>
       {/if}
     </section>
@@ -645,7 +645,7 @@
           </div>
         {/if}
       {/if}
-      {#if dropActive}<div class="wb-dropveil">Drop to add to Pocket</div>{/if}
+      {#if dropActive}<div class="wb-dropveil">Drop to add to Analogue Pocket</div>{/if}
     </section>
   </div>
 
