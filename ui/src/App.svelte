@@ -1,18 +1,18 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, Difference, Job, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport } from './lib/types';
+  import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, Job, JournalSummary, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport } from './lib/types';
   import { invoke } from './lib/backend';
-  import { cancelJob, checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, executeSync, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, onProgress, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, planSync, previewArtSidecar, readCheckSummary, readCoreIcon, readImageDataUrl, readJournal, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanLibrary, scanMedia, setManualPlayer, setReportsDir } from './lib/tau-api';
+  import { checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listJournals, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readJournal, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanMedia, setManualPlayer, setReportsDir } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import JobsView from './lib/JobsView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
   import ProblemsView from './lib/ProblemsView.svelte';
-  import LibraryView from './lib/LibraryView.svelte';
   import BackupView from './lib/BackupView.svelte';
   import Workbench from './lib/Workbench.svelte';
+  import LibrarySettings from './lib/LibrarySettings.svelte';
   import PackageView from './lib/PackageView.svelte';
-  let page: 'cards' | 'workbench' | 'compare' | 'sync' | 'jobs' | 'settings' | 'playlists' | 'problems' | 'library' | 'backup' | 'package' = 'cards'; let cores: Core[] = []; let path = ''; let jobs: Job[] = []; let journalPath = ''; let journalNotice = 'Choose a host-side Tau Omega journal to load it.'; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
+  let page: 'cards' | 'workbench' | 'compare' | 'jobs' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' = 'cards'; let cores: Core[] = []; let path = ''; let jobs: Job[] = []; let journalPath = ''; let journalNotice = 'Choose a host-side Tau Omega journal to load it.'; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
   let packageZipPath = ''; let packageCardPath = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
   async function inspectPackageZip() { packageManifest = null; packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packageManifest = await inspectPackage(packageZipPath); packageInspectNotice = `${packageManifest.entries.length} files found. Nothing was changed.`; } catch (error) { packageInspectNotice = `Could not read this package: ${errorMessage(error)}`; } }
@@ -22,8 +22,6 @@
   async function loadCoresToRemove() { removeCores = []; removeCoreId = ''; removePlan = null; removeReport = null; removePlanNotice = ''; removeConfirmNotice = ''; try { removeCores = await inspectCard(packageCardPath); removeCoresNotice = `${removeCores.length} core${removeCores.length === 1 ? '' : 's'} found. This is a read-only inspection.`; } catch (error) { removeCoresNotice = `Could not inspect this card: ${errorMessage(error)}`; } }
   async function reviewRemoveCore() { removePlan = null; removeReport = null; removeConfirmNotice = ''; try { removePlan = await planRemoveCore(packageCardPath, removeCoreId); removePlanNotice = `Plan ${removePlan.id} is ready for review. Nothing has been deleted.`; } catch (error) { removePlanNotice = `Could not plan this removal: ${errorMessage(error)}`; } }
   async function confirmRemoveCore() { if (!removePlan) return; try { removeReport = await executeRemoveCore(packageCardPath, removeCoreId, removePlan.id); removeConfirmNotice = 'Removed and verified.'; removePlan = null; await loadCoresToRemove(); } catch (error) { removeConfirmNotice = `Nothing was reported as complete: ${errorMessage(error)}`; } }
-  let libraryPath = ''; let libraryScan: LibraryScan | null = null; let libraryNotice = 'Choose a media root to inspect it.'; let libraryLoading = false; let libraryJobId = ''; let libraryProgress = ''; let librarySearch = ''; let libraryFormat: 'all' | 'mp3' | 'flac' = 'all';
-  let syncJobId = ''; let syncProgress = '';
   let reportsDir = ''; let historyNotice = 'Choose a folder to keep durable job history across restarts.'; let history: JournalSummary[] = []; let journalDetail: unknown = null; let journalDetailNotice = '';
   onMount(async () => {
     try {
@@ -47,6 +45,15 @@
     // mounted-volume list and re-read the open card when its state changes.
     detectTimer = setInterval(detectChange, 3000);
   });
+  // Rarely-used tools and settings live in a collapsible sidebar section; it
+  // stays open while one of its pages is showing and remembers the user's choice.
+  const moreItems = ['compare', 'backup', 'package', 'problems', 'jobs', 'settings'];
+  let moreOpen = false;
+  try { moreOpen = localStorage.getItem('tau.nav.more') === '1'; } catch { /* per-viewer convenience */ }
+  function toggleMore() { moreOpen = !moreOpen; try { localStorage.setItem('tau.nav.more', moreOpen ? '1' : '0'); } catch { /* ignore */ } }
+  // The selected core's media root: what the Library screen lists and writes.
+  $: mediaRoot = path && activeCore?.platform ? `${path.replace(/\/+$/, '')}/Assets/${activeCore.platform}/common` : '';
+  let cardRevision = 0;
   let detectTimer: ReturnType<typeof setInterval>;
   onDestroy(() => clearInterval(detectTimer));
   let refreshedAt = 'just now';
@@ -58,13 +65,14 @@
     const wasMounted = mountedCards.includes(path);
     mountedCards = now;
     if (path && now.includes(path) && !wasMounted) await forceRefresh();
-    else if (path && wasMounted && !now.includes(path) && path.startsWith('/Volumes/')) cardMounted = false;
-    else if (!path && now[0]) { path = now[0]; await openFolder(); refreshedAt = new Date().toLocaleTimeString(); }
+    else if (path && wasMounted && !now.includes(path)) cardMounted = false; // it was in the mounted list a moment ago, so this is an eject on any OS
+    else if (!path && now[0]) { path = now[0]; await openFolder(); refreshedAt = new Date().toLocaleTimeString(); cardRevision += 1; }
   }
   async function forceRefresh() {
     await refreshKnownCards();
     if (path.trim()) await openFolder();
     refreshedAt = new Date().toLocaleTimeString();
+    cardRevision += 1;
   }
   async function chooseReportsDir() {
     const selected = await open({ directory: true });
@@ -80,33 +88,14 @@
   async function openJournalDetail(path: string) { journalDetailNotice = ''; try { journalDetail = await readJournal(path); } catch (error) { journalDetail = null; journalDetailNotice = `Could not read this journal: ${errorMessage(error)}`; } }
   function closeJournalDetail() { journalDetail = null; journalDetailNotice = ''; }
   const autoJournalPath = (kind: string) => `${reportsDir}/${Date.now()}-${kind}.json`;
-  onProgress((event) => { if (event.job_id === syncJobId) syncProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; if (event.job_id === libraryJobId) libraryProgress = `${event.stage}: ${event.done}${event.total ? ` / ${event.total}` : ''}${event.path ? ` (${event.path})` : ''}`; });
   let notice = 'Open a card folder to inspect it. Tau Omega will not write anything at this stage.';
-  let sources = ''; let destination = ''; let manifestPath = ''; let embedCovers = false; let artSidecar = false; let plan: Plan | null = null; let syncNotice = '';
-  // Lazy per-cover preview cache: cover_source -> data URL, or 'error' on
-  // failure. Loaded on click, not eagerly for every album in the plan (same
-  // "no eager thumbnail loading" precedent as the Settings screenshot
-  // gallery), since a plan can cover a large batch of albums at once.
-  let artPreviews: Record<string, string> = {};
-  let artPreviewsLoading: Record<string, boolean> = {};
-  async function loadArtPreview(coverSource: string) {
-    if (artPreviews[coverSource] || artPreviewsLoading[coverSource]) return;
-    artPreviewsLoading = { ...artPreviewsLoading, [coverSource]: true };
-    try {
-      artPreviews = { ...artPreviews, [coverSource]: await previewArtSidecar(coverSource) };
-    } catch (error) {
-      artPreviews = { ...artPreviews, [coverSource]: 'error' };
-    } finally {
-      artPreviewsLoading = { ...artPreviewsLoading, [coverSource]: false };
-    }
-  }
   let leftCore = ''; let rightCore = ''; let comparison: Comparison | null = null; let compareNotice = ''; let copyReportPath = ''; let coreCopyPlan: Plan | null = null; let moveSource = false; let moveBackupPath = ''; let approveDeletion = false;
   async function chooseFolder(target: 'card' | 'source' | 'destination' | 'left' | 'right' | 'manifest' | 'copyReport' | 'backup' | 'settings' | 'playlists' | 'problems' | 'journal' | 'library' | 'importSource' | 'backupSource' | 'backupDestination' | 'packageZip' | 'packageCard' | 'qrScreenshot' | 'screenshotCard') {
     const selected = await open({ directory: !['manifest', 'copyReport', 'settings', 'journal', 'importSource', 'packageZip', 'qrScreenshot'].includes(target), multiple: target === 'source' });
     if (!selected) return;
     const value = Array.isArray(selected) ? selected.join('\n') : selected;
-    if (target === 'card') { path = value; await openFolder(); } if (target === 'source') sources = value; if (target === 'destination') destination = value;
-    if (target === 'left') leftCore = value; if (target === 'right') rightCore = value; if (target === 'manifest') manifestPath = value; if (target === 'copyReport') copyReportPath = value; if (target === 'backup') moveBackupPath = value; if (target === 'settings') settingsPath = value; if (target === 'playlists') playlistPath = value; if (target === 'problems') problemsPath = value; if (target === 'journal') journalPath = value; if (target === 'library') libraryPath = value; if (target === 'importSource') importSource = value; if (target === 'backupSource') backupSourcePath = value; if (target === 'backupDestination') backupDestPath = value; if (target === 'packageZip') packageZipPath = value; if (target === 'packageCard') packageCardPath = value; if (target === 'qrScreenshot') qrPath = value; if (target === 'screenshotCard') screenshotCardPath = value;
+    if (target === 'card') { path = value; await openFolder(); } 
+    if (target === 'left') leftCore = value; if (target === 'right') rightCore = value; if (target === 'copyReport') copyReportPath = value; if (target === 'backup') moveBackupPath = value; if (target === 'settings') settingsPath = value; if (target === 'playlists') playlistPath = value; if (target === 'problems') problemsPath = value; if (target === 'journal') journalPath = value; if (target === 'importSource') importSource = value; if (target === 'backupSource') backupSourcePath = value; if (target === 'backupDestination') backupDestPath = value; if (target === 'packageZip') packageZipPath = value; if (target === 'packageCard') packageCardPath = value; if (target === 'qrScreenshot') qrPath = value; if (target === 'screenshotCard') screenshotCardPath = value;
   }
   let checkSummary: CheckSummary | null = null;
   async function loadSettings() { checkSummary = null; try { settings = await readPersistedSettings(settingsPath); settingsNotice = `${settings.length} persisted values loaded. Nothing was changed.`; try { checkSummary = await readCheckSummary(settingsPath); } catch { /* summary is informational; settings still load without it */ } } catch (error) { settings = []; settingsNotice = `Could not read settings: ${errorMessage(error)}`; } }
@@ -123,9 +112,6 @@
   }
   async function scanPlaylists() { try { playlistResult = await scanMedia(playlistPath, newJobId()); playlistNotice = `${playlistResult.playlists.length} playlists found. Nothing was changed.`; } catch (error) { playlistResult = null; playlistNotice = `Could not scan this folder: ${errorMessage(error)}`; } }
   async function scanProblems() { problemsLoading = true; try { problems = await findProblems(problemsPath); problemsNotice = `${problems.length} problem${problems.length === 1 ? '' : 's'} found. Nothing was changed.`; } catch (error) { problems = null; problemsNotice = `Could not scan this folder: ${errorMessage(error)}`; } finally { problemsLoading = false; } }
-  async function inspectLibrary() { libraryLoading = true; libraryJobId = newJobId(); libraryProgress = 'starting…'; librarySearch = ''; libraryFormat = 'all'; try { libraryScan = await scanLibrary(libraryPath, libraryJobId); libraryNotice = `${libraryScan.tracks.length} tracks found. Nothing was changed.`; } catch (error) { libraryScan = null; libraryNotice = `Could not inspect this folder: ${errorMessage(error)}`; } finally { libraryLoading = false; libraryProgress = ''; } }
-  async function cancelLibraryScan() { if (libraryJobId) await cancelJob(libraryJobId); }
-  $: libraryRows = (libraryScan?.tracks ?? []).filter((row) => (libraryFormat === 'all' || row.format.toLowerCase() === libraryFormat) && (!librarySearch.trim() || `${row.title} ${row.artist} ${row.album} ${row.rel}`.toLowerCase().includes(librarySearch.trim().toLowerCase())));
   async function loadJournal() { try { const journal = await readJournal(journalPath) as { state?: string; plan?: { files?: number }; result?: { copied?: number } }; jobs = [{ kind: 'Loaded journal', status: journal.state === 'completed' ? 'Completed' : journal.state ?? 'Unknown', detail: `${journal.result?.copied ?? 0} copied · ${journal.plan?.files ?? 0} planned` }, ...jobs]; journalNotice = 'Journal loaded. Nothing was changed.'; } catch (error) { journalNotice = `Could not load journal: ${errorMessage(error)}`; } }
   async function exportSelectedPlaylist() { try { await exportPlaylist(playlistPath, selectedPlaylist, playlistOutput); playlistNotice = `Exported ${selectedPlaylist}. Nothing in the source library was changed.`; } catch (error) { playlistNotice = `Could not export playlist: ${errorMessage(error)}`; } }
 
@@ -241,16 +227,10 @@
   function openCoreLibrary(core: Core) {
     activeCore = core;
     if (!core.platform) { notice = `${core.id} has no declared platform, so its media root can't be located.`; return; }
-    libraryPath = `${path.replace(/\/+$/, '')}/Assets/${core.platform}/common`;
-    page = 'library';
-    inspectLibrary();
+    page = 'workbench';
   }
 
   let showHelp = false;
-  let syncCapacity: CapacityCheck | null = null;
-  async function makePlan() { plan = null; syncCapacity = null; syncNotice = ''; try { plan = await planSync(sources.split('\n'), destination, embedCovers, artSidecar); syncNotice = `Plan ${plan.id} is ready for review. Nothing has been written.`; try { syncCapacity = await checkStorageCapacity(destination, plan.bytes_to_write); } catch { /* capacity check is informational; a plan still reviews without it */ } } catch (error) { syncNotice = `Could not make a plan: ${errorMessage(error)}`; } }
-  async function runSync() { if (!plan) return; syncJobId = newJobId(); syncProgress = 'starting…'; const manifest = reportsDir ? autoJournalPath('sync') : manifestPath; try { const result = await executeSync(sources.split('\n'), destination, plan.id, manifest, embedCovers, artSidecar, syncJobId); syncNotice = `Verified: ${result.copied} copied, ${result.unchanged} unchanged, ${result.art_sidecars_written} art sidecars. Index: ${result.index_path}`; jobs = [{ kind: 'Library sync', status: 'Completed', detail: `${result.copied} copied · ${result.unchanged} unchanged` }, ...jobs]; plan = null; if (reportsDir) await refreshHistory(); } catch (error) { syncNotice = `Nothing was reported as complete: ${errorMessage(error)}`; jobs = [{ kind: 'Library sync', status: 'Failed', detail: errorMessage(error) }, ...jobs]; if (reportsDir) await refreshHistory(); } finally { syncProgress = ''; } }
-  async function cancelSync() { if (syncJobId) await cancelJob(syncJobId); }
   async function compareCores() { comparison = null; compareNotice = ''; try { comparison = await compareMedia(leftCore, rightCore); compareNotice = `${comparison.differences.length} supported files compared. Nothing was changed.`; } catch (error) { compareNotice = `Could not compare these media roots: ${errorMessage(error)}`; } }
   let coreCopyCapacity: CapacityCheck | null = null;
   async function reviewCoreCopy() { coreCopyPlan = null; coreCopyCapacity = null; moveSource = false; approveDeletion = false; try { coreCopyPlan = await planCoreCopy(leftCore, rightCore); compareNotice = `Copy plan ${coreCopyPlan.id} is ready for review. The first core remains untouched.`; try { coreCopyCapacity = await checkStorageCapacity(rightCore, coreCopyPlan.bytes_to_write); } catch { /* capacity check is informational; a plan still reviews without it */ } } catch (error) { compareNotice = `Could not make a copy plan: ${errorMessage(error)}`; } }
@@ -284,7 +264,22 @@
       </div>
     {/if}
   </div>
-  <nav><button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button><button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Library workbench</button><button class:active={page === 'compare'} on:click={() => page = 'compare'}>Compare cores</button><button class:active={page === 'sync'} on:click={() => page = 'sync'}>Sync library</button><button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button><button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button><button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button><button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button><button class:active={page === 'library'} on:click={() => page = 'library'}>Library</button><button class:active={page === 'jobs'} on:click={() => page = 'jobs'}>Recent jobs</button><button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button></nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
+  <nav aria-label="Main">
+    <button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button>
+    <button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Library</button>
+    <button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button>
+    <button class="nav-group" class:has-active={moreItems.includes(page)} aria-expanded={moreOpen} aria-controls="more-tools" on:click={toggleMore}><span>Tools &amp; settings</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={moreOpen}><path d="m6 9 6 6 6-6"/></svg></button>
+    {#if moreOpen || moreItems.includes(page)}
+      <div class="nav-sub" id="more-tools">
+        <button class:active={page === 'compare'} on:click={() => page = 'compare'}>Compare cores</button>
+        <button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button>
+        <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
+        <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
+        <button class:active={page === 'jobs'} on:click={() => page = 'jobs'}>Recent jobs</button>
+        <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
+      </div>
+    {/if}
+  </nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
   {#if page === 'cards'}<section class="page" id="cards"><header><div><p class="eyebrow">CARD LIBRARY</p><h1>Start with a card</h1><p class="lede">Inspect a Pocket card or a staging folder. Your music stays untouched.</p></div><button class="primary" on:click={() => chooseFolder('card')}>Open folder</button></header>
     {#if cardMounted === false}<div class="ejected-banner" role="status"><span>This card is no longer connected.</span><button class="quiet" on:click={() => openKnownCard(path)}>Reconnect</button></div>{/if}
     {#if knownCards.length}<section class="known-cards" aria-labelledby="known-cards-title"><p class="eyebrow">QUICK OPEN</p><h2 id="known-cards-title">Known cards</h2><div class="known-card-list">{#each knownCards as card}<button class="known-card" class:active={path === card} on:click={() => openKnownCard(card)}><span class="known-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="5" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="16.5" r="1.1" fill="currentColor"/><circle cx="15" cy="16.5" r="1.1" fill="currentColor"/><circle cx="12" cy="19.2" r="1.1" fill="currentColor"/></svg></span><span class="known-card-body"><strong class="known-card-name">{cardName(card)}</strong><span class="known-card-badge" class:mounted={mountedCards.includes(card)}>{mountedCards.includes(card) ? 'Available now' : 'Recently used'}</span><span class="known-card-path">{card}</span></span></button>{/each}</div></section>{/if}
@@ -320,13 +315,11 @@
         </section>
       {/if}
     {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}</section>
-  {:else if page === 'sync'}<section class="page sync-page"><header><div><p class="eyebrow">SAFE SYNC</p><h1>Review before copying</h1><p class="lede">Sources are read-only. Every file is verified, then the index is published last.</p></div></header><section class="wizard" aria-labelledby="sync-title"><div class="steps" aria-label="Sync steps"><span class="current">1 Sources</span><span class:current={plan}>2 Plan</span><span>3 Confirm</span></div><h2 id="sync-title">Build a sync plan</h2><label for="sources">Source folders or files — one per line</label><div class="picker-row"><textarea id="sources" bind:value={sources} placeholder="/Users/me/Music/Album"></textarea><button class="picker" on:click={() => chooseFolder('source')}>Choose</button></div><label for="destination">Destination media root</label><div class="picker-row"><input id="destination" bind:value={destination} placeholder="/Volumes/Pocket/Assets/tau/common"/><button class="picker" on:click={() => chooseFolder('destination')}>Choose</button></div><label for="manifest">Report location on this computer</label><div class="picker-row"><input id="manifest" bind:value={manifestPath} placeholder="/Users/me/Documents/tau-sync-report.json"/><button class="picker" on:click={() => chooseFolder('manifest')}>Choose</button></div><label class="cover-option"><input type="checkbox" bind:checked={embedCovers}/> Add folder cover art to MP3 and FLAC copies <small>Baseline JPEG only. Your originals are never changed.</small></label><label class="cover-option"><input type="checkbox" bind:checked={artSidecar}/> Write a tau-art cover thumbnail alongside each album <small>tau-alpha's decided format (palette-256, 128px); no firmware reader exists yet, so this has no effect on the Pocket today.</small></label><button class="primary" on:click={makePlan}>Review plan</button></section>
-    {#if plan}<section class="plan-card" aria-labelledby="plan-title"><div><p class="eyebrow">READY FOR CONFIRMATION</p><h2 id="plan-title">{plan.id}</h2><p class="lede">{plan.new_files} new · {plan.updates} updated · {plan.unchanged} unchanged · {size(plan.bytes_to_write)} to write{plan.art_sidecars ? ` · ${plan.art_sidecars} art sidecar${plan.art_sidecars === 1 ? '' : 's'}` : ''}</p>{#if syncCapacity}<p class:capacity-ok={syncCapacity.fits} class:capacity-bad={!syncCapacity.fits}>{syncCapacity.fits ? 'Fits' : 'Does not fit'} on the destination volume — {size(syncCapacity.space.available_bytes)} free.</p>{/if}{#if plan.art_sidecar_previews.length}<div class="art-preview-list">{#each plan.art_sidecar_previews as preview (preview.cover_source)}<div class="art-preview-item"><span class="art-preview-folder" title={preview.cover_source}>{preview.folder}</span>{#if artPreviews[preview.cover_source] === 'error'}<span class="art-preview-error">Could not preview</span>{:else if artPreviews[preview.cover_source]}<img class="art-preview-thumb" src={artPreviews[preview.cover_source]} alt="Palette-256 preview of the {preview.folder} cover"/>{:else}<button class="quiet" disabled={artPreviewsLoading[preview.cover_source]} on:click={() => loadArtPreview(preview.cover_source)}>{artPreviewsLoading[preview.cover_source] ? 'Loading…' : 'Preview'}</button>{/if}</div>{/each}</div>{/if}</div><button class="danger" on:click={runSync}>Confirm and sync</button>{#if syncProgress}<p class="notice" role="status">{syncProgress} <button class="quiet" on:click={cancelSync}>Cancel</button></p>{/if}{#if plan.warnings.length}<ul>{#each plan.warnings as warning}<li>{warning.message}</li>{/each}</ul>{/if}<p class="safety">This action targets the exact destination above. It copies, hashes, verifies, and writes the index last.</p></section>{/if}<p class="notice" role="status">{syncNotice}</p></section>
   {:else if page === 'workbench'}
-    <Workbench cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : 'No player core'} refreshedAt={refreshedAt} refresh={forceRefresh} />
+    <Workbench cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} mediaRoot={mediaRoot} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} />
   {:else if page === 'compare'}<section class="page compare-page"><header><div><p class="eyebrow">CORE TRANSFER</p><h1>Compare, then copy safely</h1><p class="lede">Compare two Tau media roots before copying the complete library to the second core.</p></div></header><section class="wizard" aria-labelledby="compare-title"><h2 id="compare-title">Compare two cores</h2><label for="left-core">Source media root</label><div class="picker-row"><input id="left-core" bind:value={leftCore} placeholder="/Volumes/Pocket/Assets/tau/common"/><button class="picker" on:click={() => chooseFolder('left')}>Choose</button></div><label for="right-core">Destination media root</label><div class="picker-row"><input id="right-core" bind:value={rightCore} placeholder="/Volumes/Pocket/Assets/tau-test/common"/><button class="picker" on:click={() => chooseFolder('right')}>Choose</button></div><label for="copy-report">Copy report location on this computer</label><div class="picker-row"><input id="copy-report" bind:value={copyReportPath} placeholder="/Users/me/Documents/tau-core-copy.json"/><button class="picker" on:click={() => chooseFolder('copyReport')}>Choose</button></div><button class="primary" on:click={compareCores}>Compare safely</button></section><p class="notice" role="status">{compareNotice}</p>{#if comparison}<section class="comparison" aria-labelledby="comparison-title"><div class="section-title"><div><p class="eyebrow">RESULT</p><h2 id="comparison-title">{comparison.differences.length} files compared</h2></div><span>Read-only</span></div><div class="comparison-counts"><span><b>{comparison.only_left}</b> only in source</span><span><b>{comparison.only_right}</b> only in destination</span><span><b>{comparison.different}</b> different</span><span><b>{comparison.identical}</b> matching</span></div><ul class="difference-list">{#each comparison.differences as item}<li><span class={`difference ${item.state}`}>{item.state === 'only_left' ? 'Source only' : item.state === 'only_right' ? 'Destination only' : item.state === 'different' ? 'Different' : 'Matching'}</span><span>{item.relative}</span><span>{item.left_bytes === null ? '—' : size(item.left_bytes)} / {item.right_bytes === null ? '—' : size(item.right_bytes)}</span></li>{/each}</ul><button class="primary" on:click={reviewCoreCopy}>Review full-library copy</button>{#if coreCopyPlan}<div class="copy-plan"><p class="eyebrow">READY FOR CONFIRMATION</p><h3>{coreCopyPlan.id}</h3><p>{coreCopyPlan.new_files} new · {coreCopyPlan.updates} updated · {coreCopyPlan.unchanged} unchanged · {size(coreCopyPlan.bytes_to_write)} to write</p>{#if coreCopyCapacity}<p class:capacity-ok={coreCopyCapacity.fits} class:capacity-bad={!coreCopyCapacity.fits}>{coreCopyCapacity.fits ? 'Fits' : 'Does not fit'} on the destination volume — {size(coreCopyCapacity.space.available_bytes)} free.</p>{/if}<button class="danger" on:click={runCoreCopy}>Confirm and copy</button></div>{/if}<p class="safety">The source is never changed. The destination files are verified and its index is rebuilt last. Move remains unavailable until its separate backup and deletion review is ready.</p></section>{/if}</section>
   {:else if page === 'jobs'}
-    <JobsView {jobs} bind:journalPath notice={journalNotice} chooseJournal={() => chooseFolder('journal')} {loadJournal} startSync={() => page = 'sync'} {reportsDir} {historyNotice} {history} {chooseReportsDir} {refreshHistory} detail={journalDetail} detailNotice={journalDetailNotice} openDetail={openJournalDetail} closeDetail={closeJournalDetail} />
+    <JobsView {jobs} bind:journalPath notice={journalNotice} chooseJournal={() => chooseFolder('journal')} {loadJournal} startSync={() => page = 'workbench'} {reportsDir} {historyNotice} {history} {chooseReportsDir} {refreshHistory} detail={journalDetail} detailNotice={journalDetailNotice} openDetail={openJournalDetail} closeDetail={closeJournalDetail} />
   {:else if page === 'playlists'}
     <PlaylistsView bind:path={playlistPath} result={playlistResult} notice={playlistNotice} bind:output={playlistOutput} bind:selected={selectedPlaylist} choose={() => chooseFolder('playlists')} scan={scanPlaylists} exportList={exportSelectedPlaylist}
       {selectedPlaylistDetail} {reorderTracks} {moveTrack} {reorderPlan} {reorderNotice} {reviewReorder} {confirmReorder}
@@ -335,14 +328,12 @@
       bind:importSource bind:importDestFile {importPlan} {importNotice} chooseImportSource={() => chooseFolder('importSource')} {reviewImport} {confirmImport} />
   {:else if page === 'problems'}
     <ProblemsView bind:path={problemsPath} {problems} notice={problemsNotice} loading={problemsLoading} choose={() => chooseFolder('problems')} scan={scanProblems} />
-  {:else if page === 'library'}
-    <LibraryView bind:path={libraryPath} scan={libraryScan} rows={libraryRows} notice={libraryNotice} loading={libraryLoading} progress={libraryProgress} bind:search={librarySearch} bind:format={libraryFormat} choose={() => chooseFolder('library')} inspect={inspectLibrary} cancel={cancelLibraryScan} />
   {:else if page === 'backup'}
     <BackupView bind:sourcePath={backupSourcePath} bind:destinationPath={backupDestPath} chooseSource={() => chooseFolder('backupSource')} chooseDestination={() => chooseFolder('backupDestination')} review={reviewBackup} backupPlan={backupPlanResult} {backupNotice} capacity={backupCapacity} />
   {:else if page === 'package'}
     <PackageView bind:zipPath={packageZipPath} bind:cardPath={packageCardPath} chooseZip={() => chooseFolder('packageZip')} chooseCard={() => chooseFolder('packageCard')} inspect={inspectPackageZip} manifest={packageManifest} inspectNotice={packageInspectNotice} review={reviewPackageInstall} plan={packagePlan} planNotice={packagePlanNotice} confirm={confirmPackageInstall} report={packageReport} confirmNotice={packageConfirmNotice} loadCoresToRemove={loadCoresToRemove} removeCores={removeCores} removeCoresNotice={removeCoresNotice} bind:removeCoreId={removeCoreId} reviewRemove={reviewRemoveCore} removePlan={removePlan} removePlanNotice={removePlanNotice} confirmRemove={confirmRemoveCore} removeReport={removeReport} removeConfirmNotice={removeConfirmNotice} />
   {:else if page === 'settings'}
-    <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} />
+    <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings /></SettingsView>
   {/if}
 </main>
 
@@ -354,8 +345,9 @@
     <div class="help-panel-body">
       <p><strong>Open folder</strong> browses to a Pocket card or a plain staging folder (anything with <code>Cores</code> and <code>Assets</code>). A mounted Pocket and any card you've opened before show up under <strong>Known cards</strong> for one-click reopening.</p>
       <p>Cores that look like media players (Tau, or anything whose platform declares itself a "Media Players" core) get a large card here. Anything else can be shown with "Show other cores" and promoted with <strong>Set as player</strong>.</p>
+      <p><strong>Library</strong> shows the selected card's music on the right and a folder on this computer on the left. Tick albums (or drag them across) to add them, mark albums on the Pocket to remove, rename or change their cover, then press <strong>Start sync</strong>. Everything you stage sits in <strong>Pending changes</strong> and nothing is written until you confirm. The card is detected automatically; the refresh button at the top right re-reads it. Rarely used tools and settings are under <strong>Tools &amp; settings</strong> in the sidebar.</p>
       <p>Every write anywhere in the app goes through <strong>plan → review → confirm</strong> — nothing is copied, moved, or deleted until you've seen exactly what will change and confirmed it.</p>
-      <p>This is all read-only until you explicitly confirm a plan on Sync, Compare cores, Backup, or Packages.</p>
+      <p>This is all read-only until you explicitly confirm a plan on Library, Compare cores, Backup, or Packages.</p>
     </div>
   </section>
 {/if}

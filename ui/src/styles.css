@@ -90,3 +90,9 @@ nav button{padding:10px 12px;border-radius:8px;color:#a4b0b0;font-size:14px;text
 .comparison-counts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}
 .comparison-counts span{padding:12px;background:#101617;border:1px solid #344244;border-radius:9px;color:#aab8b7;font-size:12px}
 .comparison-counts b{display:block;color:#edf4f2;font-size:21px;margin-bottom:4px}
+
+.nav-group{display:flex;align-items:center;justify-content:space-between;margin-top:8px;color:#8c9c9b;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.nav-group svg{transition:transform .15s}.nav-group svg.open{transform:rotate(180deg)}
+.nav-group.has-active{color:#c1f0ad}
+.nav-sub{display:grid;gap:3px;padding-left:10px;border-left:1px solid #2c393a;margin-left:12px}
+.settings-stack{min-width:0}.lib-page{padding-bottom:0}

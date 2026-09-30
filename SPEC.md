@@ -13,8 +13,8 @@
 
 ## 3. Scope
 In: macOS and Windows desktop app plus a CLI; SD cards and folders acting as cards; MP3 and FLAC (the formats Tau plays); the index format v1; playlist import; cover embedding and optimisation for copies;
-multi-core management; diagnostics readers; installers and signing.
-Out (for now): streaming services, transcoding, editing tags in the user's files, network sync, mobile apps, playing audio inside the app (a small preview player is an optional later extra).
+multi-core management; diagnostics readers; installers and signing; the card-centred **Library workbench** (browse the card and a local library side by side, stage adds, removals and edits in one Pending changes list, sync with progress); **tag and cover edits on the copies on a card** (title, artist, album, album artist, year, cover), recorded per card and re-applied on later syncs.
+Out (for now): streaming services, transcoding, editing tags in the user's own source files, network sync, mobile apps, playing audio inside the app (a small preview player is an optional later extra).
 
 ## 4. Concepts and vocabulary
 * **Card:** a mounted volume with `Cores/` and `Assets/`. **Core:** `Cores/<Author>.<Shortname>` with `core.json`. **Platform:** the `Assets/<platform>` folder a core reads.
