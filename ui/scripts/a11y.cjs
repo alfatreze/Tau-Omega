@@ -17,7 +17,7 @@ const axeSource = fs.readFileSync(process.env.AXE || require.resolve('axe-core/a
   };
   await p.getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(500); await audit('Library, first run');
   await p.getByRole('button', { name: 'Choose folder…' }).click(); await p.waitForTimeout(500);
-  await pc.getByLabel('Select Mingus Ah Um').check(); await p.getByRole('button', { name: /^Add 1 to Pocket/ }).click(); await audit('Library, with pending changes');
+  await pc.getByLabel('Select Mingus Ah Um').check(); await p.getByRole('button', { name: /^Add 1 to Analogue Pocket/ }).click(); await audit('Library, with pending changes');
   await p.getByRole('button', { name: 'Start sync' }).click(); await audit('Review sheet with the slow-connection warning');
   await p.getByRole('button', { name: 'Back' }).click();
   await pk.getByLabel('Select Blue Train').check(); await p.getByRole('button', { name: 'Edit…' }).click(); await audit('Edit drawer');

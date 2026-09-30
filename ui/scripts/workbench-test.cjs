@@ -19,7 +19,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const openLibrary = async () => { await p.getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(400); };
   const chooseFolder = async () => { await p.getByRole('button', { name: 'Choose folder…' }).click(); await p.waitForTimeout(400); };
 
-  const stage = async (...titles) => { for (const t of titles) await pc().getByLabel(`Select ${t}`).check(); await p.getByRole('button', { name: /^Add \d+ to Pocket/ }).click(); };
+  const stage = async (...titles) => { for (const t of titles) await pc().getByLabel(`Select ${t}`).check(); await p.getByRole('button', { name: /^Add \d+ to Analogue Pocket/ }).click(); };
   // --- navigation ---------------------------------------------------------
   await fresh();
   assert.equal(await p.getByRole('button', { name: 'Sync library' }).count(), 0); ok('old Sync library screen is gone from the menu');
@@ -40,7 +40,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // --- staging ------------------------------------------------------------
   await pc().getByLabel('Select Mingus Ah Um').check(); await pc().getByLabel('Select Head Hunters').check();
-  await p.getByRole('button', { name: /^Add 2 to Pocket/ }).click();
+  await p.getByRole('button', { name: /^Add 2 to Analogue Pocket/ }).click();
   assert.match(await text(p.getByRole('group', { name: 'Storage on the Pocket' })), /\+ 782 MB queued/); ok('capacity shows queued bytes');
   assert.match(await text(p.getByRole('region', { name: 'Pending changes' })), /2 albums to add \(13 tracks, 782 MB\)/); ok('pending list counts albums, tracks and size');
   await p.getByRole('button', { name: 'Remove Head Hunters from pending changes' }).click();
@@ -48,20 +48,20 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('button', { name: 'Clear all' }).click();
   assert.match(await text(p.getByRole('region', { name: 'Pending changes' })), /Nothing yet/); ok('Clear all empties the list');
   await p.reload(); await p.waitForTimeout(700); await openLibrary();
-  await pc().getByLabel('Select Moanin').check(); await p.getByRole('button', { name: /^Add 1 to Pocket/ }).click();
+  await pc().getByLabel('Select Moanin').check(); await p.getByRole('button', { name: /^Add 1 to Analogue Pocket/ }).click();
   await p.reload(); await p.waitForTimeout(700); await openLibrary();
   assert.match(await text(p.getByRole('region', { name: 'Pending changes' })), /Moanin/); ok('pending changes survive a reload (per card and core)');
   await p.getByRole('button', { name: 'Clear all' }).click();
 
   // --- over capacity ------------------------------------------------------
   for (const t of ['Bitches Brew', 'The Black Saint', 'Moanin', 'Saxophone Colossus', 'A Love Supreme', 'Mingus Ah Um', 'Head Hunters']) await pc().getByLabel(`Select ${t}`).check();
-  await p.getByRole('button', { name: /^Add 7 to Pocket/ }).click();
+  await p.getByRole('button', { name: /^Add 7 to Analogue Pocket/ }).click();
   assert.equal(await p.getByRole('button', { name: 'Start sync' }).isDisabled(), true); ok('Start sync is disabled when it will not fit');
   assert.match(await text(p.getByRole('region', { name: 'Pending changes' })), /Won't fit/); ok('and says why');
   await p.getByRole('button', { name: 'Clear all' }).click();
 
   // --- slow direct connection: one dialog, not two -------------------------
-  await pc().getByLabel('Select Mingus Ah Um').check(); await p.getByRole('button', { name: /^Add 1 to Pocket/ }).click();
+  await pc().getByLabel('Select Mingus Ah Um').check(); await p.getByRole('button', { name: /^Add 1 to Analogue Pocket/ }).click();
   assert.match(await text(p.getByRole('button', { name: /Connected directly/ })), /slow/); ok('detects the direct Pocket connection');
   await p.getByRole('button', { name: 'Start sync' }).click();
   const merged = p.getByRole('alertdialog');
@@ -131,7 +131,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // --- connection kinds -----------------------------------------------------
   await fresh('?connection=card_reader'); await openLibrary(); await chooseFolder();
-  await pc().getByLabel('Select Mingus Ah Um').check(); await p.getByRole('button', { name: /^Add 1 to Pocket/ }).click();
+  await pc().getByLabel('Select Mingus Ah Um').check(); await p.getByRole('button', { name: /^Add 1 to Analogue Pocket/ }).click();
   assert.match(await text(p.getByRole('button', { name: /Card reader/ })), /fast/);
   await p.getByRole('button', { name: 'Start sync' }).click();
   assert.equal(await p.getByRole('alertdialog').count(), 0); ok('no slow alert over a card reader');
@@ -219,7 +219,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   for (const t of ['The Black Saint', 'Mingus Ah Um', 'Head Hunters', 'Moanin', 'Saxophone Colossus', 'A Love Supreme']) await pc().getByLabel(`Select ${t}`).check();
   assert.match(await text(pc()), /Won't fit: \d+ MB too big/); ok('and says by how much when it will not');
   for (const t of ['Bitches Brew', 'The Black Saint', 'Mingus Ah Um', 'Head Hunters', 'Saxophone Colossus', 'A Love Supreme']) await pc().getByLabel(`Select ${t}`).uncheck();
-  await p.getByRole('button', { name: /^Add 1 to Pocket/ }).click();
+  await p.getByRole('button', { name: /^Add 1 to Analogue Pocket/ }).click();
   assert.match(await text(tray()), /Fits, 3\.4 GB free afterwards/); ok('after queuing, the tray says it fits and what is left');
   assert.equal(await p.evaluate(() => document.activeElement?.classList.contains('wb-tray')), true); ok('after adding, focus moves to Pending changes');
   await p.getByRole('link', { name: 'Skip to pending changes' }).focus(); await p.keyboard.press('Enter');
@@ -316,7 +316,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await pc().getByRole('button', { name: /^Changed \(1\)/ }).click();
   assert.equal(await pc().locator('.wb-row').count(), 1); assert.match(await text(pc()), /Pocket has 4 tracks/); ok('the Changed filter shows one album and says how it differs from the Pocket');
   await pc().getByRole('button', { name: /^New \(7\)/ }).click(); await pc().getByLabel(/Select all \d+ shown/).check();
-  await p.getByRole('button', { name: /^Add 7 to Pocket/ }).click(); assert.match(await text(tray()), /7 albums to add/); ok('filter New, select all, add: seven albums queued in three clicks');
+  await p.getByRole('button', { name: /^Add 7 to Analogue Pocket/ }).click(); assert.match(await text(tray()), /7 albums to add/); ok('filter New, select all, add: seven albums queued in three clicks');
   await p.getByRole('button', { name: 'Clear all' }).click();
   await pc().getByRole('button', { name: /^All \(11\)/ }).click();
   await pc().getByLabel('Sort albums').selectOption('largest');
@@ -349,7 +349,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('button', { name: 'Start sync' }).click(); await p.getByRole('button', { name: 'Confirm and start' }).click(); await p.waitForTimeout(500);
   const dock = p.getByRole('region', { name: 'Sync progress' });
   assert.match(await text(dock), /Syncing to Pocket/); assert.match(await text(dock), /keep looking around/); ok('progress sits in the tray with Cancel and a note that you can keep browsing');
-  assert.equal(await p.getByRole('button', { name: /^Add \d* ?to Pocket/ }).isDisabled(), true); assert.equal(await p.getByRole('button', { name: 'Clear all' }).isDisabled(), true); ok('changing the queue is disabled while a sync runs');
+  assert.equal(await p.getByRole('button', { name: /^Add \d* ?to Analogue Pocket/ }).isDisabled(), true); assert.equal(await p.getByRole('button', { name: 'Clear all' }).isDisabled(), true); ok('changing the queue is disabled while a sync runs');
   await pk().getByRole('tab', { name: 'Tracks' }).click(); assert.match(await text(pk()), /Track 1/); ok('but you can still browse the Pocket while it runs');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await p.getByRole('button', { name: 'Done' }).click();
   assert.equal(await p.getByRole('region', { name: 'Sync progress' }).count(), 0); ok('the dock goes away when the sync finishes');
