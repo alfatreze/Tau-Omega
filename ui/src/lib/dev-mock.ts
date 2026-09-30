@@ -40,12 +40,34 @@ let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voy
 });
 let mounted = true;
 let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
-let prefs = { remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, speeds: {} as Record<string, number>, connections: {} as Record<string, string> };
+let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, speeds: {} as Record<string, number>, connections: {} as Record<string, string> };
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
+// Sync history, newest first (what `list_history` returns). Each mock sync adds an entry, like the real journal.
+type Entry = Record<string, unknown> & { path: string; recorded_at_unix: number };
+let history: Entry[] = [];
+const nowSecs = () => Math.floor(Date.now() / 1000);
+function addEntry(fields: Record<string, unknown>, at = nowSecs()) {
+  const entry: Entry = { path: `/mock/reports/${at}-${history.length}-library-changes.json`, kind: 'library_changes', state: 'completed', recorded_at_unix: at, plan_id: `plan-${at}-${history.length}`, destination: MEDIA, files: 0, copied: 0, deleted: 0, error: null, error_code: null, started_at_unix: at - 5, duration_secs: 5, edited: 0, bytes_written: 0, bytes_per_sec: null, phase: 'done', context: null, ...fields };
+  history = [entry, ...history].sort((a, b) => b.recorded_at_unix - a.recorded_at_unix);
+  return entry;
+}
+function seedHistory() {
+  const day = 86400, t = nowSecs();
+  addEntry({ state: 'completed', copied: 9, bytes_written: 402e6, bytes_per_sec: 2.1e6, duration_secs: 190, files: 9, context: { card: 'Pocket', core: 'omega', connection: 'direct_usb', items: [{ kind: 'add', title: 'Mingus Ah Um', artist: 'Charles Mingus', tracks: 9, bytes: 402e6 }] } }, t - 2 * day);
+  addEntry({ state: 'failed', error: 'No such file or directory (os error 2)', error_code: 42, phase: 'copy', copied: 2, bytes_written: 80e6, context: { card: 'Pocket', core: 'omega', connection: 'direct_usb', items: [{ kind: 'add', title: 'Head Hunters', artist: 'Herbie Hancock', tracks: 4, bytes: 380e6 }] } }, t - 5 * day);
+  addEntry({ state: 'completed', copied: 0, deleted: 7, edited: 5, files: 12, phase: 'done', context: { card: 'Pocket', core: 'omega', connection: 'card_reader', items: [{ kind: 'remove', title: 'Time Out', artist: 'Dave Brubeck Quartet', tracks: 7, bytes: 344e6 }, { kind: 'edit', title: 'Blue Train', label: 'Blue Train → Blue Train (Remaster) · cover', note: 'title, cover' }] } }, t - 9 * day);
+}
+function prune() {
+  const t = nowSecs();
+  let list = history;
+  if (prefs.history_keep_last > 0) list = list.slice(0, prefs.history_keep_last);
+  if (prefs.history_keep_days > 0) list = list.filter((e) => t - e.recorded_at_unix <= prefs.history_keep_days * 86400);
+  const removed = history.length - list.length; history = list; return removed;
+}
 let maxTracks = 16384;
-let failNext: null | { code: number; message: string } = null;
+let failNext: null | { code: number; message: string; phase: string } = null;
 const listing = (albums: Album[]) => ({
   limits: { max_tracks: maxTracks, max_albums: 2048, max_artists: 1024 },
   albums,
@@ -77,8 +99,13 @@ const plan = (request: any) => {
 
 /** Emits copy progress over a few seconds, then applies the change set. */
 async function runChanges(request: any, jobId: string) {
-  if (failNext) { const e = failNext; failNext = null; await new Promise((r) => setTimeout(r, 300)); throw e; }
   const p = plan(request);
+  const context = (request as any).__context ?? null;
+  if (failNext) {
+    const e = failNext; failNext = null; await new Promise((r) => setTimeout(r, 300));
+    addEntry({ state: e.code === 44 ? 'failed' : 'failed', error: e.message, error_code: e.code, phase: e.phase, files: p.new_files + p.removed_files, context });
+    throw { code: e.code, message: e.message };
+  }
   const total = p.bytes_to_write;
   const steps = 24;
   for (let i = 0; i <= steps && total > 0; i++) {
@@ -96,11 +123,14 @@ async function runChanges(request: any, jobId: string) {
   for (const e of request.edits as any[]) {
     cardAlbums = cardAlbums.map((a) => (a.id === e.album_id ? { ...a, title: e.fields.album ?? a.title, artist: e.fields.artist ?? a.artist, year: e.fields.year ?? a.year, has_cover: e.cover ? true : a.has_cover } : a));
   }
-  return { plan_id: p.id, copied: p.new_files, unchanged: 0, bytes_written: total, edited: p.edited_files, reapplied: 0, deleted: p.removed_files, playlists_updated: p.playlists_updated, backup_dir: null, index_path: `${MEDIA}/tau-library.tdb` };
+  const done = { plan_id: p.id, copied: p.new_files, unchanged: 0, bytes_written: total, edited: p.edited_files, reapplied: 0, deleted: p.removed_files, playlists_updated: p.playlists_updated, backup_dir: null, index_path: `${MEDIA}/tau-library.tdb`, phase: 'done' };
+  const entry = addEntry({ state: 'completed', copied: done.copied, deleted: done.deleted, edited: done.edited, files: done.copied + done.deleted, bytes_written: total, bytes_per_sec: 2.4e6, duration_secs: 6, context });
+  prune();
+  return { ...done, journal: entry.path };
 }
 
 const handlers: Record<string, (args: any) => unknown> = {
-  get_reports_dir: () => null,
+  get_reports_dir: () => '~/Library/Application Support/Tau Omega/reports',
   get_recent_cards: () => [CARD],
   list_mounted_cards: () => (mounted ? [CARD] : []),
   get_manual_players: () => [],
@@ -122,7 +152,10 @@ const handlers: Record<string, (args: any) => unknown> = {
     return { space: { total_bytes: CAPACITY, available_bytes: CAPACITY - used }, bytes_needed: a.bytesNeeded, margin_bytes: 16 * MB, fits: CAPACITY - used >= a.bytesNeeded };
   },
   plan_changes: (a) => plan(a.request),
-  execute_changes: (a) => runChanges(a.request, a.jobId),
+  execute_changes: (a) => runChanges({ ...a.request, __context: a.context }, a.jobId),
+  list_history: () => history,
+  prune_history: () => prune(),
+  clear_history: () => { const n = history.length; history = []; return n; },
   detect_connection: () => ({ kind: connection, detail: connection === 'direct_usb' ? 'Analogue Pocket (USB)' : 'Generic card reader (USB)' }),
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
   set_prefs: (a) => { prefs = { ...a.prefs }; return { ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }; },
@@ -142,10 +175,15 @@ export function installDevMock() {
     addCardAlbum: (title: string) => { cardAlbums = [...cardAlbums, { ...album('Test Artist', title, 3, 100, 2001) }]; },
     setConnection: (value: typeof connection) => { connection = value; },
     setMaxTracks: (value: number) => { maxTracks = value; },
-    failNext: (code: number, message: string) => { failNext = { code, message }; },
+    failNext: (code: number, message: string, phase = 'copy') => { failNext = { code, message, phase }; },
+    seedHistory,
+    addOldEntries: (n: number, daysAgo: number) => { for (let i = 0; i < n; i++) addEntry({ state: 'completed', context: { card: 'Pocket', items: [] } }, nowSecs() - daysAgo * 86400 - i); },
+    historyCount: () => history.length,
   };
   // Test hook: `?connection=card_reader` or `?connection=unknown` in the URL.
-  const wanted = new URLSearchParams(location.search).get('connection');
+  const query = new URLSearchParams(location.search);
+  if (query.get('history') === 'seed') seedHistory();
+  const wanted = query.get('connection');
   if (wanted === 'card_reader' || wanted === 'unknown') connection = wanted;
   mockIPC((cmd, args) => {
     if (cmd.startsWith('plugin:dialog|')) return (args as any)?.options?.directory ? LIBRARY : '/mock/cover.jpg';

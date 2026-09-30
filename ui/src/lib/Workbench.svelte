@@ -5,10 +5,11 @@
   // changes" and only written when you press Start sync, as one reviewed plan
   // (`plan_changes` -> `execute_changes`). Pending changes are remembered per
   // card and core so switching cards switches the list.
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { cancelJob, checkStorageCapacity, detectConnection, explainError, executeChanges, getPrefs, listLibrary, newJobId, onProgress, planChanges, readImageDataUrl, setPrefs } from './tau-api';
-  import type { AlbumInfo, ChangePlanView, ChangeReport, ChangeRequest, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
+  import { cancelJob, checkStorageCapacity, detectConnection, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, readImageDataUrl, setPrefs } from './tau-api';
+  import { modal } from './a11y';
+  import type { AlbumInfo, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
 
   /** Root folder of the open card (used to detect how it is connected). */
   export let cardPath = '';
@@ -23,6 +24,8 @@
   export let openSettings: () => void = () => {};
   /** Whether the app still sees the card as mounted (`false` = unplugged, `null` = not a removable volume). */
   export let connected: boolean | null = null;
+  /** Opens the sync history page, optionally on one entry (`'latest'` = the newest). */
+  export let openHistory: (id?: string) => void = () => {};
 
   type Pending =
     | { key: string; kind: 'add'; id: string; destId: string; title: string; artist: string; tracks: number; bytes: number }
@@ -31,6 +34,10 @@
 
   const MB = 1e6, GB = 1e9;
   const SLOW_LIMIT = 10 * MB;
+  /** Canonical fallback speeds (bytes per second) for the time estimate until a real transfer on this card has been
+   * timed. These are placeholders to be replaced with real figures collected during development; the review sheet
+   * always says when an estimate rests on them rather than on a measured transfer. */
+  const DEFAULT_SPEED: Record<string, number> = { direct_usb: 1.5 * MB, card_reader: 20 * MB, unknown: 5 * MB };
   const TRACK_LIMIT = 300;
   const STAGES: Record<string, string> = { scanning: 'Reading files', hashing: 'Checking files', copying: 'Copying', building_index: 'Writing index', verifying: 'Verifying', deleting: 'Removing', editing: 'Updating tags' };
 
@@ -62,13 +69,15 @@
   let spinning = false;
   let connMenu = false;
 
-  let dialog: null | 'review' | 'slow' | 'first-remove' | 'edit' = null;
+  let dialog: null | 'review' | 'first-remove' | 'edit' = null;
+  let trayEl: HTMLElement;
+  let lastFailed = false;
   let review: ChangePlanView | null = null;
   let reviewError = '';
   let slowDontAsk = false;
   let askBackup = true;
 
-  type Run = { phase: string; done: number; total: number; path: string; startedAt: number; speed: number; samples: { t: number; done: number }[]; finished: boolean; error: string; report: ChangeReport | null; cancelled: boolean };
+  type Run = { journal: string; phase: string; done: number; total: number; path: string; startedAt: number; speed: number; samples: { t: number; done: number }[]; finished: boolean; error: string; report: ChangeResult | null; cancelled: boolean; reassurance: string };
   let run: Run | null = null;
   let runId = '';
   let unlisten: (() => void) | undefined;
@@ -93,6 +102,7 @@
     pending = mediaRoot ? load<Pending[]>('pending', []) : [];
     sourcePath = mediaRoot ? load<string>('source', '') : '';
     embedCovers = mediaRoot ? load<boolean>('embed', true) : true;
+    lastFailed = mediaRoot ? load<boolean>('lastfail', false) : false;
     picked = new Set(); pocketPicked = new Set(); source = null; card = null; space = null;
     if (sourcePath) scanSource();
     await reloadCard();
@@ -153,6 +163,9 @@
   $: connKind = (prefs?.connections?.[cardLabel] && prefs.connections[cardLabel] !== 'auto' ? prefs.connections[cardLabel] : connection.kind) as ConnectionInfo['kind'];
   $: lastSpeed = prefs?.speeds?.[cardLabel] ?? 0;
   $: slowApplies = connKind === 'direct_usb' && addBytes > SLOW_LIMIT;
+  $: estSpeed = lastSpeed || DEFAULT_SPEED[connKind] || DEFAULT_SPEED.unknown;
+  $: estIsDefault = !lastSpeed;
+  $: slowWarn = !!review && connKind === 'direct_usb' && review.bytes_to_write > SLOW_LIMIT && !prefs?.slow_alert_suppressed;
   $: pendingCount = pending.length;
   $: disconnected = connected === false;
   // The Pocket's index has hard limits; show how full it is and stop before an over-limit sync.
@@ -163,6 +176,15 @@
   $: albumsAfter = albumsNow + adds.filter((p) => !cardByDest.has(p.destId)).length - removes.length;
   $: overLimit = !!limits && (tracksAfter > limits.max_tracks || albumsAfter > limits.max_albums);
   $: nearLimit = !!limits && !overLimit && tracksAfter > limits.max_tracks * 0.9;
+  // Fit check, both for what is ticked (before adding) and for what is queued (after).
+  $: pickedAlbums = (source?.albums ?? []).filter((a) => picked.has(a.id));
+  $: pickedBytes = pickedAlbums.reduce((n, a) => n + a.bytes, 0);
+  $: pickedNetTracks = pickedAlbums.reduce((n, a) => n + a.tracks - (cardByDest.get(a.dest_id)?.tracks ?? 0), 0);
+  $: margin = space?.margin_bytes ?? 0;
+  $: afterPick = space ? free - pickedBytes : null;
+  $: pickFits = afterPick !== null && afterPick >= margin && (!limits || tracksAfter + pickedNetTracks <= limits.max_tracks);
+  $: pickOver = afterPick !== null ? Math.max(0, margin - afterPick) : 0;
+  $: pickTooMany = !!limits && tracksAfter + pickedNetTracks > limits.max_tracks;
   $: canStart = pendingCount > 0 && !overCapacity && !overLimit && !disconnected && !run && !!card;
   $: pocketAlbums = (card?.albums ?? []).filter((a) => match(`${a.title} ${a.artist}`, pocketSearch));
   $: sourceAlbums = (source?.albums ?? []).filter((a) => match(`${a.title} ${a.artist}`, sourceSearch));
@@ -174,8 +196,9 @@
   const match = (text: string, q: string) => !q.trim() || text.toLowerCase().includes(q.trim().toLowerCase());
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const duration = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-  function eta(bytes: number, speed: number): string { if (!speed) return ''; const s = Math.ceil(bytes / speed); return s < 90 ? `${s} sec` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`; }
+  function eta(bytes: number, speed: number): string { if (!speed) return ''; const s = Math.ceil(bytes / speed); return s < 45 ? 'under a minute' : s < 5400 ? `${Math.max(1, Math.round(s / 60))} min` : `${(s / 3600).toFixed(1)} h`; }
   $: lastEta = lastSpeed && addBytes ? eta(addBytes, lastSpeed) : '';
+  $: reviewEta = review && review.bytes_to_write ? eta(review.bytes_to_write, estSpeed) : '';
 
   type AlbumState = 'queued' | 'on' | 'changed' | 'new';
   // Takes its inputs as parameters (not closure variables) so the template
@@ -188,7 +211,9 @@
   }
   const stateLabel: Record<AlbumState, string> = { on: 'On Pocket', queued: 'Queued', changed: 'Changed', new: 'New' };
 
-  function say(message: string) { toast = message; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toast = ''), 3600); }
+  function say(message: string) { toast = message; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toast = ''), 7000); }
+  /** After a change to the queue, move focus to the Pending changes area, so keyboard users land next to what they just did. */
+  async function focusTray() { await tick(); trayEl?.focus(); }
   function toggle(set: Set<string>, id: string) { const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id); return next; }
 
   // ---- staging -------------------------------------------------------------
@@ -206,6 +231,7 @@
     pending = [...pending, ...fresh.map((a) => ({ key: `add:${a.id}`, kind: 'add' as const, id: a.id, destId: a.dest_id, title: a.title, artist: a.artist, tracks: a.tracks, bytes: a.bytes }))];
     picked = new Set();
     say(`${plural(fresh.length, 'album')} added to Pending changes.`);
+    focusTray();
   }
   const addPicked = () => addAlbums([...picked]);
   function onDragStart(e: DragEvent, a: AlbumInfo) { const ids = picked.has(a.id) ? [...picked] : [a.id]; e.dataTransfer?.setData('text/tau-albums', JSON.stringify(ids)); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; }
@@ -224,17 +250,17 @@
     if (clash.length) say('An album that is queued to be added can’t also be removed. Undo the add first.');
     pending = [...pending.filter((p) => !(p.kind === 'edit' && ok.some((a) => a.id === p.id))), ...ok.map((a) => ({ key: `rm:${a.id}`, kind: 'remove' as const, id: a.id, title: a.title, artist: a.artist, tracks: a.tracks, bytes: a.bytes }))];
     pocketPicked = new Set();
-    if (ok.length) say(`${plural(ok.length, 'album')} marked for removal. Nothing is deleted until you sync.`);
+    if (ok.length) { say(`${plural(ok.length, 'album')} marked for removal. Nothing is deleted until you sync.`); focusTray(); }
   }
-  function unstage(key: string) { pending = pending.filter((p) => p.key !== key); }
-  function clearAll() { const n = pending.length; pending = []; picked = new Set(); pocketPicked = new Set(); say(`Cleared ${plural(n, 'pending change')}.`); }
+  function unstage(key: string) { pending = pending.filter((p) => p.key !== key); focusTray(); }
+  function clearAll() { const n = pending.length; pending = []; picked = new Set(); pocketPicked = new Set(); say(`Cleared ${plural(n, 'pending change')}.`); focusTray(); }
 
   // ---- editing ---------------------------------------------------------------
   let editAlbum: AlbumInfo | null = null;
   let editTrack: TrackInfo | null = null;
   let editForm = { title: '', artist: '', albumArtist: '', year: '' };
   let editCover: string | null = null, editCoverPreview: string | null = null, editCoverError = '';
-  function openEdit(focus: 'title' | 'cover' = 'title') {
+  function openEdit() {
     editCover = null; editCoverPreview = null; editCoverError = '';
     if (view === 'tracks') {
       const t = (card?.tracks ?? []).find((x) => pocketPicked.has(x.rel)); if (!t) return;
@@ -245,7 +271,6 @@
       editAlbum = a; editTrack = null; editForm = { title: a.title, artist: a.artist, albumArtist: '', year: a.year ?? '' };
     }
     dialog = 'edit';
-    setTimeout(() => document.getElementById(focus === 'cover' ? 'cover-choose' : 'edit-title')?.focus(), 30);
   }
   async function chooseCover() {
     editCoverError = '';
@@ -274,8 +299,26 @@
       if (!notes.length) return;
       pending = [...pending.filter((p) => p.key !== `ed:${a.id}`), { key: `ed:${a.id}`, kind: 'edit', id: a.id, track: null, title: a.title, fields, cover: editCover, coverPreview: editCoverPreview, note: notes.join(', ') }];
     }
-    pocketPicked = new Set(); say('Edit added to Pending changes.');
+    pocketPicked = new Set(); say('Edit saved. It will be applied to the Pocket when you sync.'); focusTray();
   }
+
+  /** What an album will look like once its pending edit is applied (shown straight away, before the sync). */
+  function effective(a: AlbumInfo, list: typeof edits) {
+    const e = list.find((p) => p.id === a.id && p.track === null);
+    return { title: e?.fields.album ?? a.title, artist: e?.fields.artist ?? a.artist, year: e?.fields.year ?? a.year, edited: !!e };
+  }
+  /** Chip and review text for an edit: "Blue Train → Blue Train (Remaster) · cover". */
+  function editLabel(p: Extract<Pending, { kind: 'edit' }>): string {
+    const rename = p.fields.album ?? p.fields.title;
+    const others = p.note.split(', ').filter((n) => n !== 'title');
+    return `${rename ? `${p.title} → ${rename}` : p.title}${others.length ? ` · ${others.join(', ')}` : ''}`;
+  }
+  const historyContext = (): HistoryContext => ({
+    card: cardLabel, core: coreLabel, connection: connKind,
+    items: pending.map((p) => p.kind === 'edit'
+      ? { kind: 'edit' as const, title: p.title, note: p.note, label: editLabel(p) }
+      : { kind: p.kind, title: p.title, artist: p.artist, tracks: p.tracks, bytes: p.bytes }),
+  });
 
   // ---- sync ------------------------------------------------------------------
   function buildRequest(): ChangeRequest {
@@ -287,42 +330,52 @@
     reviewError = ''; review = null;
     try { review = await planChanges(buildRequest(), mediaRoot); }
     catch (error) { reviewError = explainError(error); dialog = 'review'; return; }
-    const needsAlert = connKind === 'direct_usb' && review.bytes_to_write > SLOW_LIMIT && !(prefs?.slow_alert_suppressed);
-    dialog = needsAlert ? 'slow' : 'review';
+    slowDontAsk = false;
+    dialog = 'review';
   }
   /** The plan (and its confirmation token) depends on the options, so changing one in the review sheet re-plans. */
   async function replan() {
     try { review = await planChanges(buildRequest(), mediaRoot); reviewError = ''; }
     catch (error) { review = null; reviewError = explainError(error); }
   }
-  async function slowContinue() {
-    if (slowDontAsk && prefs) { try { prefs = await setPrefs({ ...prefs, slow_alert_suppressed: true }); } catch { /* the alert simply shows again */ } }
-    dialog = 'review';
-  }
   async function confirmSync() {
     if (!review) return;
+    if (slowWarn && slowDontAsk && prefs) { try { prefs = await setPrefs({ ...prefs, slow_alert_suppressed: true }); } catch { /* the warning simply shows again */ } }
     dialog = null;
     const mode = prefs?.remove_mode ?? 'backup';
     const backupOn = mode === 'backup' || (mode === 'ask' && askBackup);
     const backup = review.removed_files && backupOn ? (prefs?.backup_dir || prefs?.default_backup_dir || null) : null;
     runId = newJobId();
-    run = { phase: 'Starting', done: 0, total: review.bytes_to_write, path: '', startedAt: Date.now(), speed: 0, samples: [], finished: false, error: '', report: null, cancelled: false };
+    run = { journal: '', reassurance: '', phase: 'Starting', done: 0, total: review.bytes_to_write, path: '', startedAt: Date.now(), speed: 0, samples: [], finished: false, error: '', report: null, cancelled: false };
     const startedAt = Date.now();
     try {
-      const report = await executeChanges(buildRequest(), mediaRoot, review.id, backup, runId);
+      const report = await executeChanges(buildRequest(), mediaRoot, review.id, backup, historyContext(), runId);
       const seconds = (Date.now() - startedAt) / 1000;
       if (prefs && report.bytes_written >= 5 * MB && seconds >= 2) {
         try { prefs = await setPrefs({ ...prefs, speeds: { ...prefs.speeds, [cardLabel]: report.bytes_written / seconds } }); } catch { /* speed memory is best-effort */ }
       }
-      run = { ...run!, phase: 'Done', finished: true, report };
+      run = { ...run!, phase: 'Done', finished: true, report, journal: report.journal };
+      lastFailed = false; save('lastfail', false);
       pending = []; picked = new Set(); pocketPicked = new Set();
       await reloadCard();
     } catch (error) {
       const message = explainError(error);
-      run = { ...run!, finished: true, cancelled: (error as { code?: number })?.code === 44, error: message };
+      const cancelled = (error as { code?: number })?.code === 44;
+      run = { ...run!, finished: true, cancelled, error: message };
+      if (!cancelled) { lastFailed = true; save('lastfail', true); }
+      // Ask the journal how far the run got, so the reassurance is accurate rather than generic.
+      try { const latest = (await listHistory())[0]; run = { ...run!, journal: latest?.path ?? '', reassurance: reassure(latest?.phase ?? 'copy', cancelled) }; }
+      catch { run = { ...run!, reassurance: reassure('copy', cancelled) }; }
       await reloadCard();
     }
   }
+  /** What is and isn't safe after a run stopped, by how far it got (see `ChangeReport.phase`). */
+  function reassure(phase: string, cancelled: boolean): string {
+    if (phase === 'remove') return 'Your additions and edits were applied. Some removals may not have finished; anything removed is in your backup folder. Open the details to see exactly what was done.';
+    if (phase === 'edit') return 'Your albums were copied, but the tag edits did not finish. Nothing was removed.';
+    return `${cancelled ? '' : 'Your existing music on the Pocket is safe: '}the Pocket's library list is only updated after every file is copied and checked, so it still plays what it played before. Files copied so far were kept.`;
+  }
+  function seeDetails(id: string) { closeRun(); openHistory(id || 'latest'); }
   function handleRunProgress(stage: string, done: number, totalUnits: number, path: string) {
     if (!run) return;
     const now = Date.now();
@@ -335,25 +388,11 @@
   }
   async function cancelSync() { if (runId) await cancelJob(runId); }
   function closeRun() { run = null; }
+  function dismissFailure() { lastFailed = false; save('lastfail', false); }
   $: runSlowNote = run && !run.finished && connKind !== 'direct_usb' && run.speed > 0 && run.speed < 3 * MB && run.total > SLOW_LIMIT;
 
-  /** Dialog behaviour: focus moves in when it opens, Tab stays inside, and focus returns to where it was when it closes. */
-  function modal(node: HTMLElement) {
-    const previous = document.activeElement as HTMLElement | null;
-    const focusable = () => [...node.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [href], select, textarea, [tabindex]:not([tabindex="-1"])')];
-    (node.querySelector<HTMLElement>('input:not([type=checkbox])') ?? node.querySelector<HTMLElement>('button.primary') ?? focusable()[0])?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const items = focusable(); if (!items.length) return;
-      const first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    };
-    node.addEventListener('keydown', onKey);
-    return { destroy() { node.removeEventListener('keydown', onKey); previous?.isConnected && previous.focus(); } };
-  }
   function key(e: KeyboardEvent) {
-    if (e.key === 'Escape') { if (dialog) dialog = null; connMenu = false; return; }
+    if (e.key === 'Escape') { if (dialog && !run) dialog = null; connMenu = false; return; }
     if ((e.key === 'Delete' || e.key === 'Backspace') && !dialog && !run && view === 'albums' && pocketPicked.size) {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'checkbox'));
@@ -371,6 +410,7 @@
 <svelte:window on:keydown={key} />
 
 <section class="wb" aria-labelledby="wb-title">
+  {#if !noCard}<a class="wb-skip" href="#tray-title" on:click|preventDefault={focusTray}>Skip to pending changes</a>{/if}
   <header class="wb-top">
     <div class="wb-ctx">
       <p class="eyebrow">LIBRARY</p>
@@ -397,6 +437,9 @@
 
   {#if disconnected}
     <div class="wb-banner" role="alert"><span>This card is disconnected. Your pending changes are kept; reconnect it to continue.</span><button class="quiet" on:click={doRefresh}>Check again</button></div>
+  {/if}
+  {#if lastFailed && !run}
+    <div class="wb-banner wb-banner-fail" role="alert"><span>Your last sync didn't finish. Nothing was lost; open the details to see what happened.</span><span class="wb-banner-actions"><button class="quiet" on:click={() => openHistory('latest')}>See what happened</button><button class="quiet" on:click={dismissFailure}>Dismiss</button></span></div>
   {/if}
   {#if noCard}
     <section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Connect your Pocket or a card reader, or choose a card on the Cards screen. It will appear here automatically.</p></section>
@@ -443,7 +486,7 @@
           {/each}
         </div>
         <div class="wb-pane-foot">
-          <span>{picked.size ? `${picked.size} selected` : `${plural(source.albums.length, 'album')} · tick albums or drag them across →`}</span>
+          <span class="wb-fit-line" aria-live="polite">{#if picked.size}{picked.size} selected · {size(pickedBytes)}{#if afterPick !== null}<span class="wb-fit" class:bad={!pickFits}> {#if pickFits}· Fits, {size(afterPick)} free afterwards{:else if pickTooMany}· Too many tracks for the Pocket's library{:else}· Won't fit: {size(pickOver)} too big. You could remove something else in the same sync.{/if}</span>{/if}{:else}{plural(source.albums.length, 'album')} · tick albums or drag them across →{/if}</span>
           <button class="primary" disabled={!picked.size} on:click={addPicked}>Add {picked.size || ''} to Pocket →</button>
         </div>
       {/if}
@@ -466,21 +509,22 @@
         {#if pocketPicked.size && (view === 'albums' || view === 'tracks')}
           <div class="wb-actions" role="toolbar" aria-label="Actions for the selection">
             <span>{pocketPicked.size} selected</span>
-            <button on:click={() => openEdit('title')} disabled={pocketPicked.size !== 1}>Rename</button>
             {#if view === 'albums'}
-              <button on:click={() => openEdit('title')} disabled={pocketPicked.size !== 1}>Edit info</button>
-              <button on:click={() => openEdit('cover')} disabled={pocketPicked.size !== 1}>Change cover</button>
+              <button on:click={openEdit} disabled={pocketPicked.size !== 1} title="Change the title, artist, year or cover">Edit…</button>
               <button class="danger" on:click={requestRemove}>Remove</button>
+            {:else}
+              <button on:click={openEdit} disabled={pocketPicked.size !== 1}>Rename…</button>
             {/if}
           </div>
         {/if}
         <div class="wb-list" role="list">
           {#if view === 'albums'}
             {#each pocketAlbums as a (a.id)}
+              {@const eff = effective(a, edits)}
               <div class="wb-row" class:sel={pocketPicked.has(a.id)} class:removing={removingIds.has(a.id)} role="listitem">
                 <input type="checkbox" aria-label={`Select ${a.title}`} disabled={removingIds.has(a.id)} checked={pocketPicked.has(a.id)} on:change={() => (pocketPicked = toggle(pocketPicked, a.id))} />
                 <div class="wb-art" aria-hidden="true">♪</div>
-                <div class="wb-meta"><strong>{a.title}</strong><small>{a.artist || 'Unknown artist'} · {plural(a.tracks, 'track')} · {size(a.bytes)}</small></div>
+                <div class="wb-meta"><strong>{eff.title}{#if eff.title !== a.title} <span class="wb-was">(was {a.title})</span>{/if}</strong><small>{eff.artist || 'Unknown artist'} · {plural(a.tracks, 'track')} · {size(a.bytes)}</small></div>
                 {#if removingIds.has(a.id)}<span class="wb-badge removing">Will be removed</span>{:else if editingIds.has(a.id)}<span class="wb-badge edit">Edit pending</span>{/if}
               </div>
             {/each}
@@ -509,59 +553,55 @@
     </section>
   </div>
 
-  <section class="wb-tray" aria-labelledby="tray-title">
-    <div class="wb-tray-head">
-      <div>
-        <h2 id="tray-title">Pending changes</h2>
-        <p>{#if pendingCount}{[adds.length && `${plural(adds.length, 'album')} to add (${plural(addTracks, 'track')}, ${size(addBytes)})`, removes.length && `${removes.length} to remove`, edits.length && `${edits.length} to edit`].filter(Boolean).join(' · ')}{:else}Nothing yet. Changes are only made when you press Start sync.{/if}</p>
-      </div>
-      <div class="wb-tray-actions">
-        {#if slowApplies && (prefs?.slow_alert_suppressed)}<span class="wb-slownote" role="note">Direct connection: slow{lastEta ? ` · about ${lastEta}` : ''}</span>{/if}
-        {#if overCapacity}<span class="wb-slownote bad" role="alert">Won't fit on this card</span>{/if}
-        {#if overLimit && limits}<span class="wb-slownote bad" role="alert">Over the Pocket's library limit ({limits.max_tracks.toLocaleString()} tracks)</span>{/if}
-        {#if disconnected}<span class="wb-slownote bad" role="alert">Card disconnected</span>{/if}
-        <button class="quiet" disabled={!pendingCount} on:click={clearAll}>Clear all</button>
-        <button class="primary" disabled={!canStart} on:click={start}>Start sync</button>
-      </div>
+  <section class="wb-tray" aria-labelledby="tray-title" tabindex="-1" bind:this={trayEl}>
+    <div class="wb-tray-info">
+      <h2 id="tray-title">Pending changes</h2>
+      <p>{#if pendingCount}{[adds.length && `${plural(adds.length, 'album')} to add (${plural(addTracks, 'track')}, ${size(addBytes)})`, removes.length && `${removes.length} to remove`, edits.length && `${edits.length} to edit`].filter(Boolean).join(' · ')}{#if space && !overCapacity && !overLimit}{' · '}<span class="wb-fit">Fits, {size(free)} free afterwards</span>{/if}{:else}Nothing yet. Changes are only made when you press Start sync.{/if}</p>
     </div>
     {#if pendingCount}
-      <ul class="wb-chips">
+      <ul class="wb-chips" aria-label="Pending changes list">
         {#each pending as p (p.key)}
-          <li class={p.kind}><span class="k">{p.kind === 'add' ? '+' : p.kind === 'remove' ? '−' : '✎'}</span><span class="t">{p.title}{p.kind === 'edit' ? ` (${p.note})` : ''}</span>{#if p.kind !== 'edit'}<small>{size(p.bytes)}</small>{/if}<button aria-label={p.kind === 'remove' ? `Undo removing ${p.title}` : `Remove ${p.title} from pending changes`} on:click={() => unstage(p.key)}>{p.kind === 'remove' ? 'Undo' : '×'}</button></li>
+          <li class={p.kind}><span class="k">{p.kind === 'add' ? '+' : p.kind === 'remove' ? '−' : '✎'}</span><span class="t">{p.kind === 'edit' ? editLabel(p) : p.title}</span>{#if p.kind !== 'edit'}<small>{size(p.bytes)}</small>{/if}<button aria-label={p.kind === 'remove' ? `Undo removing ${p.title}` : `Remove ${p.kind === 'edit' ? editLabel(p) : p.title} from pending changes`} on:click={() => unstage(p.key)}>{p.kind === 'remove' ? 'Undo' : '×'}</button></li>
         {/each}
       </ul>
     {/if}
+    <div class="wb-tray-actions">
+      {#if slowApplies && (prefs?.slow_alert_suppressed)}<span class="wb-slownote" role="note">Direct connection: slow · about {eta(addBytes, estSpeed)}{estIsDefault ? ' (estimate)' : ''}</span>{/if}
+      {#if overCapacity}<span class="wb-slownote bad" role="alert">Won't fit on this card</span>{/if}
+      {#if overLimit && limits}<span class="wb-slownote bad" role="alert">Over the Pocket's library limit ({limits.max_tracks.toLocaleString()} tracks)</span>{/if}
+      {#if disconnected}<span class="wb-slownote bad" role="alert">Card disconnected</span>{/if}
+      <button class="quiet" disabled={!pendingCount} on:click={clearAll}>Clear all</button>
+      <button class="primary" disabled={!canStart} on:click={start}>Start sync</button>
+    </div>
   </section>
   {/if}
 
   {#if toast}<div class="wb-toast" role="status">{toast}</div>{/if}
 </section>
 
-{#if dialog === 'slow'}
-  <div class="wb-veil" role="presentation" on:click={() => (dialog = null)}></div>
-  <div class="wb-modal" role="alertdialog" aria-labelledby="slow-t" aria-describedby="slow-d" use:modal>
-    <h2 id="slow-t">You're connected to the Pocket directly</h2>
-    <p id="slow-d">Transfers over this connection are slow and this may take a long time{lastEta ? ` (about ${lastEta} at your last speed)` : ''}. The Pocket's USB mode is meant for transfers under 10 MB; a card reader is much faster for larger syncs. Are you sure?</p>
-    <label class="wb-check"><input type="checkbox" bind:checked={slowDontAsk} /> Don't ask again (you'll still see a small note next to Start sync)</label>
-    <div class="wb-modal-actions"><button class="quiet" on:click={() => (dialog = null)}>Cancel</button><button class="primary" on:click={slowContinue}>Sync anyway</button></div>
-  </div>
-{/if}
-
 {#if dialog === 'review'}
   <div class="wb-veil" role="presentation" on:click={() => (dialog = null)}></div>
-  <div class="wb-modal" role="dialog" aria-labelledby="rev-t" use:modal>
+  <div class="wb-modal" role={slowWarn ? 'alertdialog' : 'dialog'} aria-labelledby="rev-t" aria-describedby={slowWarn ? 'slow-d' : undefined} use:modal>
     {#if reviewError}
       <h2 id="rev-t">This can't be synced yet</h2>
       <p role="alert">{reviewError}</p>
-      <div class="wb-modal-actions"><button class="primary" on:click={() => (dialog = null)}>Back</button></div>
+      <div class="wb-modal-actions"><button class="primary" data-autofocus on:click={() => (dialog = null)}>Back</button></div>
     {:else if review}
       <h2 id="rev-t">Ready to sync to {cardLabel}?</h2>
       <dl class="wb-review">
         {#if adds.length}<div><dt>Add</dt><dd>{plural(review.new_files + review.updated_files, 'track')} · {size(review.bytes_to_write)}{review.unchanged_files ? ` (${review.unchanged_files} already up to date)` : ''}</dd></div>{/if}
         {#if review.removed_files}<div><dt>Remove</dt><dd>{plural(review.removed_files, 'track')} · {size(review.bytes_to_remove)}{review.playlists_updated ? ` · ${plural(review.playlists_updated, 'playlist')} updated` : ''}</dd></div>{/if}
         {#if review.edited_files}<div><dt>Edit</dt><dd>{plural(review.edited_files, 'track')} (Pocket copies only)</dd></div>{/if}
+        {#if reviewEta}<div><dt>Time</dt><dd>about {reviewEta}{#if estIsDefault} <small class="wb-was">(rough estimate; we haven't timed this card yet)</small>{:else} <small class="wb-was">(from your last transfer)</small>{/if}</dd></div>{/if}
         <div><dt>Free after</dt><dd>{size(free)} of {size(total)}</dd></div>
       </dl>
+      {#if slowWarn}
+        <div class="wb-warn">
+          <b>You're connected to the Pocket directly</b>
+          <p id="slow-d">Transfers over this connection are slow and this may take a long time. The Pocket's USB mode is meant for transfers under 10 MB; a card reader is much faster for larger syncs. Are you sure?</p>
+          <label class="wb-check"><input type="checkbox" bind:checked={slowDontAsk} /> Don't ask again (you'll still see a small note next to Start sync)</label>
+        </div>
+      {/if}
       <details class="wb-detail" open={pendingCount <= 5}>
         <summary>What's changing ({pendingCount})</summary>
         <ul>
@@ -582,7 +622,7 @@
       {/if}
       {#each review.warnings as w}<p class="wb-fine">⚠ {w.message}</p>{/each}
       <p class="wb-fine">Your music on this computer is never changed. Every file is verified, then the index is written last.</p>
-      <div class="wb-modal-actions"><button class="quiet" on:click={() => (dialog = null)}>Back</button><button class="primary" on:click={confirmSync}>Confirm and start</button></div>
+      <div class="wb-modal-actions"><button class="quiet" data-autofocus={slowWarn ? '' : undefined} on:click={() => (dialog = null)}>Back</button><button class="primary" data-autofocus={slowWarn ? undefined : ''} on:click={confirmSync}>{slowWarn ? 'Sync anyway' : 'Confirm and start'}</button></div>
     {/if}
   </div>
 {/if}
@@ -613,37 +653,44 @@
           <div><button id="cover-choose" class="wb-covers-file" on:click={chooseCover}>{editCover ? 'Choose a different image…' : 'Choose image…'}</button>{#if editCover}<small>{editCover.split(/[\\/]/).pop()}</small>{/if}</div>
         </div>
         {#if editCoverError}<small role="alert">{editCoverError}</small>{/if}
-        <small>Covers must be baseline JPEG under 2 MiB; anything else is flagged before the sync starts.</small>
+        <small>Use a JPEG picture under 2 MB. If the Pocket can't show a picture, you'll be told before the sync starts.</small>
       </fieldset>
     {/if}
-    <div class="wb-modal-actions"><button class="quiet" on:click={() => (dialog = null)}>Cancel</button><button class="primary" on:click={stageEdit}>Add to Pending changes</button></div>
+    <div class="wb-modal-actions"><button class="quiet" on:click={() => (dialog = null)}>Cancel</button><button class="primary" on:click={stageEdit}>Save (applies when you sync)</button></div>
   </div>
 {/if}
 
-{#if run}
+{#if run && !run.finished}
   <div class="wb-veil" role="presentation"></div>
   <div class="wb-modal wb-run" role="dialog" aria-labelledby="run-t" aria-live="polite" use:modal>
-    <h2 id="run-t">{run.finished ? (run.error ? (run.cancelled ? 'Sync cancelled' : 'Sync didn’t finish') : 'Sync complete') : `Syncing to ${cardLabel}`}</h2>
-    {#if !run.finished}
-      <div class="wb-progress" class:indeterminate={!run.total} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={run.total ? Math.round((run.done / run.total) * 100) : undefined}><i style="width:{run.total ? (run.done / run.total) * 100 : 40}%"></i></div>
-      <dl class="wb-review">
-        <div><dt>Step</dt><dd>{run.phase}</dd></div>
-        {#if run.total}<div><dt>Copied</dt><dd>{size(run.done)} of {size(run.total)}</dd></div>{/if}
-        {#if run.speed > 0}<div><dt>Speed</dt><dd>{(run.speed / MB).toFixed(1)} MB/s</dd></div><div><dt>Time left</dt><dd>about {eta(run.total - run.done, run.speed)}</dd></div>{/if}
-      </dl>
-      {#if run.path}<p class="wb-fine wb-path" title={run.path}>{run.path}</p>{/if}
-      <p class="wb-fine wb-keep" role="note">Keep the Pocket connected until this finishes.</p>
-      {#if runSlowNote}<p class="wb-fine" role="note">This is slower than a card reader usually is. If you're plugged into the Pocket directly, that's expected.</p>{/if}
-      <div class="wb-modal-actions"><button class="quiet" on:click={cancelSync}>Cancel sync</button></div>
-    {:else if run.error}
-      <p role="alert">{run.error}</p>
-      <div class="wb-modal-actions"><button class="primary" on:click={closeRun}>Close</button></div>
-    {:else if run.report}
-      <p class="wb-ok">✓ {[run.report.copied && `${plural(run.report.copied, 'track')} copied`, run.report.deleted && `${plural(run.report.deleted, 'track')} removed`, run.report.edited && `${plural(run.report.edited, 'track')} edited`].filter(Boolean).join(', ') || 'Everything was already up to date'}. Index verified.</p>
-      {#if run.report.backup_dir}<p class="wb-fine">Removed files were backed up to {run.report.backup_dir}</p>{/if}
-      <p class="wb-fine wb-keep">You can disconnect the Pocket now.</p>
-      <div class="wb-modal-actions"><button class="primary" on:click={closeRun}>Done</button></div>
-    {/if}
+    <h2 id="run-t" tabindex="-1" data-autofocus>Syncing to {cardLabel}</h2>
+    <div class="wb-progress" class:indeterminate={!run.total} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={run.total ? Math.round((run.done / run.total) * 100) : undefined}><i style="width:{run.total ? (run.done / run.total) * 100 : 40}%"></i></div>
+    <dl class="wb-review">
+      <div><dt>Step</dt><dd>{run.phase}</dd></div>
+      {#if run.total}<div><dt>Copied</dt><dd>{size(run.done)} of {size(run.total)}</dd></div>{/if}
+      {#if run.speed > 0}<div><dt>Speed</dt><dd>{(run.speed / MB).toFixed(1)} MB/s</dd></div><div><dt>Time left</dt><dd>{eta(run.total - run.done, run.speed) === 'under a minute' ? 'under a minute' : `about ${eta(run.total - run.done, run.speed)}`}</dd></div>{/if}
+    </dl>
+    {#if run.path}<p class="wb-fine wb-path" title={run.path}>{run.path}</p>{/if}
+    <p class="wb-fine wb-keep" role="note">Keep the Pocket connected until this finishes.</p>
+    {#if runSlowNote}<p class="wb-fine" role="note">This is slower than a card reader usually is. If you're plugged into the Pocket directly, that's expected.</p>{/if}
+    <div class="wb-modal-actions"><button class="quiet" on:click={cancelSync}>Cancel sync</button></div>
+  </div>
+{:else if run && run.error}
+  <div class="wb-veil" role="presentation"></div>
+  <div class="wb-modal wb-run" role="alertdialog" aria-labelledby="run-t" aria-describedby="run-d" use:modal>
+    <h2 id="run-t">{run.cancelled ? 'Sync cancelled' : 'Sync didn\u2019t finish'}</h2>
+    <p id="run-d" role="alert">{run.error}</p>
+    {#if run.reassurance}<p class="wb-fine wb-safe">{run.reassurance}</p>{/if}
+    <div class="wb-modal-actions"><button class="quiet" on:click={closeRun}>Close</button><button class="primary" data-autofocus on:click={() => seeDetails(run?.journal ?? '')}>See what happened</button></div>
+  </div>
+{:else if run && run.report}
+  <div class="wb-veil" role="presentation"></div>
+  <div class="wb-modal wb-run" role="dialog" aria-labelledby="run-t" use:modal>
+    <h2 id="run-t">Sync complete</h2>
+    <p class="wb-ok">✓ {[run.report.copied && `${plural(run.report.copied, 'track')} copied`, run.report.deleted && `${plural(run.report.deleted, 'track')} removed`, run.report.edited && `${plural(run.report.edited, 'track')} edited`].filter(Boolean).join(', ') || 'Everything was already up to date'}. The Pocket's library list was updated and checked.</p>
+    {#if run.report.backup_dir}<p class="wb-fine">Removed files were backed up to {run.report.backup_dir}</p>{/if}
+    <p class="wb-fine wb-keep">You can disconnect the Pocket now.</p>
+    <div class="wb-modal-actions"><button class="quiet" on:click={() => seeDetails(run?.journal ?? '')}>View details</button><button class="primary" data-autofocus on:click={closeRun}>Done</button></div>
   </div>
 {/if}
 <style>
@@ -697,11 +744,12 @@
   .wb-pane-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#8c9c9b;margin-top:auto;padding-top:6px}
   .wb-empty{text-align:center;padding:40px 10px;color:#8c9c9b}.wb-empty b{color:#e8ecec}
   .wb-tray{flex-shrink:0;background:#161f20;border:1px solid #2c393a;border-radius:14px;padding:14px 16px}
-  .wb-tray-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
-  .wb-tray-head h2{margin:0;font-size:15px}.wb-tray-head p{margin:2px 0 0;font-size:12px;color:#8c9c9b}
-  .wb-tray-actions{display:flex;align-items:center;gap:10px}
+  .wb-tray{display:grid;grid-template-columns:1fr auto;grid-template-areas:"info actions" "chips chips";gap:10px 16px;align-items:center}
+  .wb-tray:focus{outline:2px solid #c1f0ad;outline-offset:2px}
+  .wb-tray-info{grid-area:info}.wb-tray-info h2{margin:0;font-size:15px}.wb-tray-info p{margin:2px 0 0;font-size:12px;color:#8c9c9b}
+  .wb-tray-actions{grid-area:actions;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
   .wb-slownote{font-size:12px;color:#f0d59a}.wb-slownote.bad{color:#ff9d8a;font-weight:650}
-  .wb-chips{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px;max-height:72px;overflow:auto}
+  .wb-chips{grid-area:chips;list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;max-height:72px;overflow:auto}
   .wb-chips li{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 10px;border-radius:99px;background:#1d2c22;border:1px solid #2f4a37;font-size:12px}
   .wb-chips li.remove{background:#2a1d1a;border-color:#5a352c}.wb-chips li.edit{background:#1f2836;border-color:#33465f}
   .wb-chips .k{font-weight:700}.wb-chips small{color:#8c9c9b}
@@ -744,4 +792,10 @@
   .wb-detail li{display:flex;gap:8px}.wb-detail small{color:#8c9c9b;margin-left:8px}.wb-detail .k{font-weight:700;width:14px;text-align:center}.wb-detail .k.add{color:#c1f0ad}.wb-detail .k.remove{color:#e8b59f}
   .wb-keep{color:#f0d59a!important}
   .wb-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wb-skip{position:absolute;left:12px;top:-40px;z-index:120;background:#c1f0ad;color:#142015;padding:8px 12px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none}.wb-skip:focus{top:8px}
+  .wb-fit{color:#c1f0ad}.wb-fit.bad{color:#ff9d8a;font-weight:650}.wb-fit-line{line-height:1.4}
+  .wb-was{color:#8c9c9b;font-weight:400;font-size:12px;margin-left:6px}
+  .wb-warn{margin:0 0 12px;padding:12px 14px;background:#3d3220;border:1px solid #6b5630;border-radius:10px;color:#f0d59a;font-size:13px}.wb-warn p{margin:6px 0 8px;color:#e5d2a6}.wb-warn .wb-check{margin:0}
+  .wb-banner-fail{background:#3d3220;border-color:#6b5630;color:#f0d59a}.wb-banner-actions{display:flex;gap:6px;flex-shrink:0}
+  .wb-safe{color:#c1f0ad!important}
 </style>

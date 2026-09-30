@@ -166,11 +166,18 @@ pub fn execute_core_move_to_journal(
 /// Executes a reviewed workbench change set (add/remove/edit) while recording
 /// its lifecycle in a host-side journal, like [`execute_to_journal`]. The
 /// journal is written before anything on the card changes.
+///
+/// `context` is caller-supplied, human-oriented detail (card and core names,
+/// the titles being added/removed/edited, how the card is connected) stored
+/// verbatim under `"context"` so a history screen can say *what* a sync did in
+/// words. A failed run records how far it got (`"partial"`) and the engine's
+/// stable `error_code`, so the failure can be explained accurately later.
 pub fn execute_changes_to_journal(
     plan: &changes::ChangePlan,
     confirmation: &str,
     backup_root: Option<&Path>,
     journal_path: &Path,
+    context: Option<serde_json::Value>,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<changes::ChangeReport, TauError> {
     if confirmation != plan.id {
@@ -180,57 +187,90 @@ pub fn execute_changes_to_journal(
         ));
     }
     validate_location(journal_path, &plan.destination)?;
-    write_change_state(plan, journal_path, "running", None, None)?;
-    match changes::execute_changes(plan, confirmation, backup_root, progress) {
-        Ok(report) => {
-            write_change_state(plan, journal_path, "completed", Some(&report), None)?;
+    let started = timestamp();
+    let ctx = ChangeJournal { plan, path: journal_path, context: context.as_ref(), started };
+    ctx.write("running", None, None)?;
+    let mut report = changes::ChangeReport::default();
+    match changes::execute_changes_with(plan, confirmation, backup_root, &mut report, progress) {
+        Ok(()) => {
+            ctx.write("completed", Some(&report), None)?;
             Ok(report)
         }
         Err(error) => {
-            let _ = write_change_state(plan, journal_path, "failed", None, Some(&error.to_string()));
+            let _ = ctx.write("failed", Some(&report), Some(&error));
             Err(error)
         }
     }
 }
 
-fn write_change_state(
-    plan: &changes::ChangePlan,
-    path: &Path,
-    state: &str,
-    report: Option<&changes::ChangeReport>,
-    error: Option<&str>,
-) -> Result<(), TauError> {
-    let value = json!({
-        "tool": "tau-omega",
-        "format": 1,
-        "kind": "library_changes",
-        "state": state,
-        "recorded_at_unix": timestamp(),
-        "plan": {
-            "id": plan.id,
-            "destination": plan.destination,
-            "files": plan.files_total,
-            "deletions": plan.removal.as_ref().map_or(0, |r| r.items.len()),
-            "bytes_to_write": plan.bytes_to_write,
-            "adds": plan.sync.as_ref().map_or(0, |s| s.items.len()),
-            "edits": plan.edit.as_ref().map_or(0, |e| e.items.len()),
-        },
-        "result": report.map(|r| json!({
-            "copied": r.copied,
-            "unchanged": r.unchanged,
-            "deleted": r.deleted,
-            "edited": r.edited,
-            "reapplied_edits": r.reapplied,
-            "playlists_updated": r.playlists_updated,
-            "bytes_written": r.bytes_written,
-            "backup_dir": r.backup_dir,
-            "index_path": r.index_path,
-        })),
-        "error": error,
-    });
-    let encoded = serde_json::to_vec_pretty(&value).map_err(|e| {
-        TauError::e(ErrorCode::Json, format!("journal encoding failed: {e}"))
-    })?;
+struct ChangeJournal<'a> {
+    plan: &'a changes::ChangePlan,
+    path: &'a Path,
+    context: Option<&'a serde_json::Value>,
+    started: u64,
+}
+
+impl ChangeJournal<'_> {
+    fn write(
+        &self,
+        state: &str,
+        report: Option<&changes::ChangeReport>,
+        error: Option<&TauError>,
+    ) -> Result<(), TauError> {
+        let plan = self.plan;
+        let now = timestamp();
+        let finished = state != "running";
+        let duration = now.saturating_sub(self.started);
+        let ok = state == "completed";
+        let value = json!({
+            "tool": "tau-omega",
+            "format": 2,
+            "kind": "library_changes",
+            "state": state,
+            "recorded_at_unix": now,
+            "started_at_unix": self.started,
+            "finished_at_unix": finished.then_some(now),
+            "duration_secs": finished.then_some(duration),
+            "context": self.context,
+            "plan": {
+                "id": plan.id,
+                "destination": plan.destination,
+                "files": plan.files_total,
+                "deletions": plan.removal.as_ref().map_or(0, |r| r.items.len()),
+                "bytes_to_write": plan.bytes_to_write,
+                "adds": plan.sync.as_ref().map_or(0, |s| s.items.len()),
+                "edits": plan.edit.as_ref().map_or(0, |e| e.items.len()),
+            },
+            "result": report.filter(|_| ok).map(|r| json!({
+                "copied": r.copied,
+                "unchanged": r.unchanged,
+                "deleted": r.deleted,
+                "edited": r.edited,
+                "reapplied_edits": r.reapplied,
+                "playlists_updated": r.playlists_updated,
+                "bytes_written": r.bytes_written,
+                "bytes_per_sec": (duration > 0).then(|| r.bytes_written / duration),
+                "phase": r.phase,
+                "backup_dir": r.backup_dir,
+                "index_path": r.index_path,
+            })),
+            "partial": report.filter(|_| state == "failed").map(|r| json!({
+                "phase": r.phase,
+                "copied": r.copied,
+                "edited": r.edited,
+                "deleted": r.deleted,
+                "bytes_written": r.bytes_written,
+            })),
+            "error": error.map(ToString::to_string),
+            "error_code": error.map(|e| e.code().as_u16()),
+        });
+        write_json_atomic(self.path, &value)
+    }
+}
+
+fn write_json_atomic(path: &Path, value: &serde_json::Value) -> Result<(), TauError> {
+    let encoded = serde_json::to_vec_pretty(value)
+        .map_err(|e| TauError::e(ErrorCode::Json, format!("journal encoding failed: {e}")))?;
     let temp = path.with_extension(format!("tau-journal-{}.tmp", std::process::id()));
     {
         use std::io::Write;
@@ -241,6 +281,64 @@ fn write_change_state(
     }
     fs::rename(temp, path)?;
     Ok(())
+}
+
+/// Deletes old Tau Omega journals in `dir`: everything beyond the newest
+/// `keep_last` entries and everything older than `keep_days` days. A limit of
+/// `0` means "no limit" for that rule. Only files that are recognisably
+/// Tau Omega journals are ever touched, and a journal still marked `running`
+/// that is under a day old is left alone. Returns how many were removed.
+pub fn prune_journals(dir: impl AsRef<Path>, keep_last: usize, keep_days: u64) -> Result<usize, TauError> {
+    prune_at(dir.as_ref(), keep_last, keep_days, timestamp())
+}
+
+fn prune_at(dir: &Path, keep_last: usize, keep_days: u64, now: u64) -> Result<usize, TauError> {
+    let mut ours = Vec::new();
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
+        }
+        if let Ok(value) = read_journal(&path)
+            && value.get("tool").and_then(serde_json::Value::as_str) == Some("tau-omega")
+            && let Some(at) = value.get("recorded_at_unix").and_then(serde_json::Value::as_u64)
+        {
+            let running = value.get("state").and_then(serde_json::Value::as_str) == Some("running");
+            ours.push((path, at, running));
+        }
+    }
+    ours.sort_by_key(|(_, at, _)| std::cmp::Reverse(*at));
+    let mut removed = 0;
+    for (index, (path, at, running)) in ours.into_iter().enumerate() {
+        if running && now.saturating_sub(at) < 86_400 {
+            continue;
+        }
+        let too_many = keep_last > 0 && index >= keep_last;
+        let too_old = keep_days > 0 && now.saturating_sub(at) > keep_days * 86_400;
+        if (too_many || too_old) && fs::remove_file(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+/// Deletes every Tau Omega journal in `dir` (the user's "clear history").
+pub fn clear_journals(dir: impl AsRef<Path>) -> Result<usize, TauError> {
+    let dir = dir.as_ref();
+    let mut removed = 0;
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
+        }
+        if let Ok(value) = read_journal(&path)
+            && value.get("tool").and_then(serde_json::Value::as_str) == Some("tau-omega")
+            && fs::remove_file(&path).is_ok()
+        {
+            removed += 1;
+        }
+    }
+    Ok(removed)
 }
 
 fn validate_location(path: &Path, media_root: &Path) -> Result<(), TauError> {
@@ -348,6 +446,17 @@ pub struct JournalSummary {
     pub copied: Option<u64>,
     pub deleted: Option<u64>,
     pub error: Option<String>,
+    /// The engine's stable error code for a failed run.
+    pub error_code: Option<u64>,
+    pub started_at_unix: Option<u64>,
+    pub duration_secs: Option<u64>,
+    pub edited: Option<u64>,
+    pub bytes_written: Option<u64>,
+    pub bytes_per_sec: Option<u64>,
+    /// Where a failed run stopped (`copy`, `edit`, `remove`) or `done`.
+    pub phase: Option<String>,
+    /// Caller-supplied human detail stored with the journal (titles, card, connection).
+    pub context: Option<serde_json::Value>,
 }
 
 /// Lists every journal (`*.json`, one level deep) in a configured reports
@@ -387,6 +496,18 @@ fn summary_from(path: &Path, value: &serde_json::Value) -> Option<JournalSummary
             .get("error")
             .and_then(serde_json::Value::as_str)
             .map(String::from),
+        error_code: value.get("error_code").and_then(serde_json::Value::as_u64),
+        started_at_unix: value.get("started_at_unix").and_then(serde_json::Value::as_u64),
+        duration_secs: value.get("duration_secs").and_then(serde_json::Value::as_u64),
+        edited: value.pointer("/result/edited").and_then(serde_json::Value::as_u64),
+        bytes_written: value.pointer("/result/bytes_written").and_then(serde_json::Value::as_u64),
+        bytes_per_sec: value.pointer("/result/bytes_per_sec").and_then(serde_json::Value::as_u64),
+        phase: value
+            .pointer("/result/phase")
+            .or_else(|| value.pointer("/partial/phase"))
+            .and_then(serde_json::Value::as_str)
+            .map(String::from),
+        context: value.get("context").filter(|c| !c.is_null()).cloned(),
     })
 }
 
@@ -438,17 +559,111 @@ mod tests {
         };
         let plan = changes::plan_changes(&common, &request, &mut None).unwrap();
         // inside the card is refused before anything is written
-        assert!(execute_changes_to_journal(&plan, &plan.id, None, &common.join("j.json"), &mut None).is_err());
+        assert!(execute_changes_to_journal(&plan, &plan.id, None, &common.join("j.json"), None, &mut None).is_err());
         assert!(!common.join("A").exists());
         let report = root.join("reports/changes.json");
         fs::create_dir_all(report.parent().unwrap()).unwrap();
-        execute_changes_to_journal(&plan, &plan.id, None, &report, &mut None).unwrap();
+        execute_changes_to_journal(&plan, &plan.id, None, &report, Some(json!({"card": "Pocket", "items": [{"kind": "add", "title": "One"}]})), &mut None).unwrap();
         let journal = read_journal(&report).unwrap();
         assert_eq!(journal["kind"], "library_changes");
         assert_eq!(journal["state"], "completed");
         assert_eq!(journal["result"]["copied"], 1);
-        assert_eq!(list_journals(root.join("reports")).unwrap().len(), 1);
+        let listed = list_journals(root.join("reports")).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].context.as_ref().unwrap()["card"], "Pocket");
+        assert_eq!(listed[0].phase.as_deref(), Some("done"));
+        assert!(listed[0].duration_secs.is_some() && listed[0].started_at_unix.is_some());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_failed_change_set_is_journalled_with_how_far_it_got() {
+        let root = std::env::temp_dir().join(format!("tau-journal-failed-{}", timestamp()));
+        let lib = root.join("lib");
+        let common = root.join("card/Assets/tau/common");
+        fs::create_dir_all(lib.join("A/One")).unwrap();
+        fs::create_dir_all(lib.join("B/Two")).unwrap();
+        fs::create_dir_all(common.join("B/Two")).unwrap();
+        fs::write(lib.join("A/One/01.mp3"), b"one").unwrap();
+        fs::write(common.join("B/Two/01.mp3"), b"two").unwrap();
+        let request = changes::ChangeRequest {
+            library_root: Some(lib),
+            add_albums: vec!["A/One".into()],
+            remove_albums: vec!["B/Two".into()],
+            ..Default::default()
+        };
+        let plan = changes::plan_changes(&common, &request, &mut None).unwrap();
+        let report = root.join("reports/failed.json");
+        fs::create_dir_all(report.parent().unwrap()).unwrap();
+        // a backup folder inside the card makes the removal step fail after the add finished
+        assert!(execute_changes_to_journal(&plan, &plan.id, Some(&common.join("bak")), &report, None, &mut None).is_err());
+        let entry = &list_journals(root.join("reports")).unwrap()[0];
+        assert_eq!(entry.state, "failed");
+        assert_eq!(entry.phase.as_deref(), Some("remove"));
+        assert_eq!(entry.error_code, Some(36));
+        assert!(entry.error.is_some());
+        let raw = read_journal(&report).unwrap();
+        assert_eq!(raw["partial"]["copied"], 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn fake_journal(dir: &Path, name: &str, at: u64, state: &str, tool: &str) {
+        fs::write(
+            dir.join(name),
+            serde_json::to_vec(&json!({
+                "tool": tool, "kind": "library_changes", "state": state, "recorded_at_unix": at,
+                "plan": {"id": name, "destination": "/x", "files": 1}
+            })).unwrap(),
+        ).unwrap();
+    }
+
+    #[test]
+    fn pruning_keeps_the_newest_and_the_recent_and_never_touches_foreign_files() {
+        let dir = std::env::temp_dir().join(format!("tau-prune-{}", timestamp()));
+        fs::create_dir_all(&dir).unwrap();
+        let now = 1_800_000_000u64;
+        let day = 86_400u64;
+        for (i, age_days) in [0u64, 1, 2, 3, 40, 400].iter().enumerate() {
+            fake_journal(&dir, &format!("j{i}.json"), now - age_days * day, "completed", "tau-omega");
+        }
+        fs::write(dir.join("notes.json"), br#"{"hello": "world"}"#).unwrap();
+        fake_journal(&dir, "other-tool.json", now - 900 * day, "completed", "someone-else");
+        // keep the newest 4 and nothing older than 30 days: drops the 40- and 400-day-old entries
+        assert_eq!(prune_at(&dir, 4, 30, now).unwrap(), 2);
+        assert!(dir.join("j3.json").exists() && !dir.join("j4.json").exists() && !dir.join("j5.json").exists());
+        // by count only
+        assert_eq!(prune_at(&dir, 2, 0, now).unwrap(), 2);
+        assert!(dir.join("j1.json").exists() && !dir.join("j2.json").exists());
+        // 0 and 0 means keep everything
+        assert_eq!(prune_at(&dir, 0, 0, now).unwrap(), 0);
+        // foreign json files survive every rule
+        assert!(dir.join("notes.json").exists() && dir.join("other-tool.json").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_fresh_running_journal_is_not_pruned_but_a_stale_one_is() {
+        let dir = std::env::temp_dir().join(format!("tau-prune-running-{}", timestamp()));
+        fs::create_dir_all(&dir).unwrap();
+        let now = 1_800_000_000u64;
+        fake_journal(&dir, "fresh.json", now - 60, "running", "tau-omega");
+        fake_journal(&dir, "newest.json", now, "completed", "tau-omega");
+        fake_journal(&dir, "stale.json", now - 3 * 86_400, "running", "tau-omega");
+        assert_eq!(prune_at(&dir, 1, 0, now).unwrap(), 1);
+        assert!(dir.join("fresh.json").exists() && dir.join("newest.json").exists() && !dir.join("stale.json").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn clearing_history_removes_only_our_journals() {
+        let dir = std::env::temp_dir().join(format!("tau-clear-{}", timestamp()));
+        fs::create_dir_all(&dir).unwrap();
+        fake_journal(&dir, "a.json", 5, "completed", "tau-omega");
+        fake_journal(&dir, "b.json", 6, "failed", "tau-omega");
+        fs::write(dir.join("keep.json"), b"{}").unwrap();
+        assert_eq!(clear_journals(&dir).unwrap(), 2);
+        assert!(dir.join("keep.json").exists());
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

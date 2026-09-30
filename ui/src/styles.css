@@ -98,3 +98,13 @@ nav button{padding:10px 12px;border-radius:8px;color:#a4b0b0;font-size:14px;text
 .settings-stack{min-width:0}.lib-page{padding-bottom:0}
 .switcher-pending{margin-left:auto;font-size:11px;color:#f0d59a;background:#3d3220;border-radius:99px;padding:2px 7px}.switcher-dot+.switcher-pending{margin-left:6px}.switcher-pending+.switcher-dot{margin-left:8px}
 .ctx-pending{color:#f0d59a!important}
+
+button:disabled{opacity:.45;cursor:not-allowed}
+.nav-toggle,.nav-backdrop{display:none}
+@media(max-width:720px){
+  .nav-toggle{display:flex;position:fixed;top:10px;left:10px;z-index:95;align-items:center;justify-content:center;width:40px;height:40px;background:#161f20;border:1px solid #2c393a;border-radius:10px;color:#e8ecec;padding:0}
+  .nav-backdrop{display:block;position:fixed;inset:0;background:rgba(5,9,10,.6);z-index:96}
+  aside.open{display:flex;position:fixed;top:0;left:0;bottom:0;width:min(300px,86vw);height:100vh;z-index:97;box-shadow:12px 0 40px rgba(0,0,0,.5)}
+  .page{padding-top:64px}
+  .wb{padding-top:60px}
+}
