@@ -1,4 +1,6 @@
-use serde::Serialize;
+mod device;
+
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -147,6 +149,7 @@ impl ProgressObserver for JobObserver<'_> {
                     tau_core::Stage::BuildingIndex => "building_index",
                     tau_core::Stage::Verifying => "verifying",
                     tau_core::Stage::Deleting => "deleting",
+                    tau_core::Stage::Editing => "editing",
                 },
                 done: progress.done,
                 total: progress.total,
@@ -279,33 +282,110 @@ fn record_recent_card(app: tauri::AppHandle, path: String) -> Result<(), TauErro
 }
 
 /// Looks for mounted volumes that look like an Analogue Pocket card (a
-/// top-level folder with both `Cores` and `Assets` -- the same shape
-/// `tau_core::inspect_card` checks, done cheaply here as a plain directory
-/// check rather than a full inspection, since this only decides what to
-/// offer, not what to trust). macOS only for now (this app only ships a
-/// macOS bundle today, per `docs/DEPENDENCIES.md`); returns an empty list on
-/// every other OS rather than guessing at unverified mount conventions.
+/// top-level folder with both `Cores` and `Assets`). A cheap directory check
+/// on the platform's usual mount locations (see `device::mounted_cards`), so
+/// the front-end can poll it to notice a card or the Pocket being connected.
 #[tauri::command]
 fn list_mounted_cards() -> Result<Vec<String>, TauError> {
-    #[cfg(target_os = "macos")]
-    {
-        let mut found = Vec::new();
-        let volumes = Path::new("/Volumes");
-        if let Ok(entries) = std::fs::read_dir(volumes) {
-            for entry in entries.flatten() {
-                let candidate = entry.path();
-                if candidate.join("Cores").is_dir() && candidate.join("Assets").is_dir() {
-                    found.push(candidate.to_string_lossy().into_owned());
-                }
-            }
+    Ok(device::mounted_cards())
+}
+
+/// How a card is connected: the Pocket's own (slow) USB mode, a card reader,
+/// or unknown when the OS will not say.
+#[tauri::command]
+fn detect_connection(path: String) -> device::ConnectionInfo {
+    device::detect_connection(Path::new(&path))
+}
+
+const PREFS_FILE: &str = "workbench_prefs.json";
+
+/// Library-workbench preferences, kept as one small JSON file in the app's
+/// config directory (same convention as the other settings files).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
+struct Prefs {
+    /// `"backup"` (copy removed files to `backup_dir` first), `"ask"` (ask
+    /// each time) or `"none"` (just remove).
+    remove_mode: String,
+    /// User-chosen backup folder; `None` means the app's default folder.
+    backup_dir: Option<String>,
+    /// Whether the one-time "removals are staged and backed up" note was shown.
+    remove_explained: bool,
+    /// The user ticked "don't ask again" on the slow direct-connection alert.
+    slow_alert_suppressed: bool,
+    /// Last measured write speed per card name, in bytes per second.
+    speeds: std::collections::BTreeMap<String, f64>,
+    /// Manual "how is this card connected" override per card name.
+    connections: std::collections::BTreeMap<String, String>,
+}
+impl Default for Prefs {
+    fn default() -> Self {
+        Self {
+            remove_mode: "backup".into(),
+            backup_dir: None,
+            remove_explained: false,
+            slow_alert_suppressed: false,
+            speeds: Default::default(),
+            connections: Default::default(),
         }
-        found.sort();
-        Ok(found)
     }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(Vec::new())
+}
+
+/// `Prefs` as the front-end sees them: the same fields plus the resolved
+/// default folders, so the UI can always show a real path.
+#[derive(Serialize)]
+struct PrefsView {
+    #[serde(flatten)]
+    prefs: Prefs,
+    default_backup_dir: String,
+    reports_dir: String,
+}
+
+fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
+    app.path().app_config_dir().map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })
+}
+fn data_dir(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
+    app.path().app_data_dir().map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })
+}
+fn read_prefs(app: &tauri::AppHandle) -> Result<Prefs, TauError> {
+    match std::fs::read(config_dir(app)?.join(PREFS_FILE)) {
+        Ok(bytes) => Ok(serde_json::from_slice(&bytes).unwrap_or_default()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Prefs::default()),
+        Err(error) => Err(TauError::from(error)),
     }
+}
+/// The folder journals go in: the user's chosen reports directory if they set
+/// one on the Jobs page, otherwise a folder in the app's own data directory.
+fn resolved_reports_dir(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
+    if let Ok(Some(dir)) = get_reports_dir(app.clone()) {
+        if !dir.is_empty() {
+            return Ok(PathBuf::from(dir));
+        }
+    }
+    Ok(data_dir(app)?.join("reports"))
+}
+fn prefs_view(app: &tauri::AppHandle) -> Result<PrefsView, TauError> {
+    Ok(PrefsView {
+        prefs: read_prefs(app)?,
+        default_backup_dir: data_dir(app)?.join("removed-backups").to_string_lossy().into_owned(),
+        reports_dir: resolved_reports_dir(app)?.to_string_lossy().into_owned(),
+    })
+}
+
+#[tauri::command]
+fn get_prefs(app: tauri::AppHandle) -> Result<PrefsView, TauError> {
+    prefs_view(&app)
+}
+
+#[tauri::command]
+fn set_prefs(app: tauri::AppHandle, prefs: Prefs) -> Result<PrefsView, TauError> {
+    if !matches!(prefs.remove_mode.as_str(), "backup" | "ask" | "none") {
+        return Err(TauError { code: ErrorCode::InvalidPathReference, message: "remove_mode must be backup, ask or none".into() });
+    }
+    let dir = config_dir(&app)?;
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(PREFS_FILE), serde_json::to_vec_pretty(&prefs).map_err(|e| TauError { code: ErrorCode::Json, message: e.to_string() })?)?;
+    prefs_view(&app)
 }
 
 const MANUAL_PLAYERS_FILE: &str = "manual_players.txt";
@@ -736,11 +816,77 @@ fn execute_core_move(source: String, destination: String, confirmation: String, 
     })
 }
 
+/// The workbench's album/track/playlist listing of a media root (a local
+/// library folder or a card's media root).
+#[tauri::command]
+fn list_library(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::workbench::LibraryListing, TauError> {
+    with_job(&window, &jobs, job_id, |progress| tau_core::workbench::list_library(Path::new(&path), progress))
+}
+
+/// What a reviewed change set will do, in counts (the full per-file plan
+/// stays in the engine and is re-derived at execute time).
+#[derive(Serialize)]
+struct ChangePlanView {
+    id: String,
+    new_files: usize,
+    updated_files: usize,
+    unchanged_files: usize,
+    bytes_to_write: u64,
+    removed_files: usize,
+    bytes_to_remove: u64,
+    edited_files: usize,
+    playlists_updated: usize,
+    warnings: Vec<tau_core::Warning>,
+}
+
+fn change_plan_view(plan: &tau_core::changes::ChangePlan) -> ChangePlanView {
+    use tau_core::sync::CopyState;
+    let count = |state: CopyState| plan.sync.as_ref().map_or(0, |s| s.items.iter().filter(|i| i.state == state).count());
+    ChangePlanView {
+        id: plan.id.clone(),
+        new_files: count(CopyState::New),
+        updated_files: count(CopyState::Update),
+        unchanged_files: count(CopyState::Same),
+        bytes_to_write: plan.bytes_to_write,
+        removed_files: plan.removal.as_ref().map_or(0, |r| r.items.len()),
+        bytes_to_remove: plan.bytes_to_remove,
+        edited_files: plan.edit.as_ref().map_or(0, |e| e.items.len()),
+        playlists_updated: plan.removal.as_ref().map_or(0, |r| r.playlist_updates.len()),
+        warnings: plan.sync.as_ref().map(|s| s.warnings.clone()).unwrap_or_default(),
+    }
+}
+
+#[tauri::command]
+fn plan_changes(request: tau_core::changes::ChangeRequest, destination: String) -> Result<ChangePlanView, TauError> {
+    let plan = tau_core::changes::plan_changes(Path::new(&destination), &request, &mut None)?;
+    Ok(change_plan_view(&plan))
+}
+
+/// Applies a reviewed change set. `backup` is the folder removed files are
+/// copied to first (`None` = the user chose to remove without a backup). The
+/// journal is written to the reports directory before anything changes.
+#[tauri::command]
+fn execute_changes(app: tauri::AppHandle, request: tau_core::changes::ChangeRequest, destination: String, confirmation: String, backup: Option<String>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::changes::ChangeReport, TauError> {
+    let dest = PathBuf::from(&destination);
+    let plan = tau_core::changes::plan_changes(&dest, &request, &mut None)?;
+    let reports = resolved_reports_dir(&app)?;
+    std::fs::create_dir_all(&reports)?;
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or_default();
+    let journal = reports.join(format!("{stamp}-library-changes.json"));
+    let backup = backup.filter(|b| !b.trim().is_empty()).map(PathBuf::from);
+    if let Some(dir) = &backup {
+        std::fs::create_dir_all(dir)?;
+    }
+    with_job(&window, &jobs, job_id, |progress| {
+        tau_core::journal::execute_changes_to_journal(&plan, &confirmation, backup.as_deref(), &journal, progress)
+    })
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, get_prefs, set_prefs, list_library, plan_changes, execute_changes])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
