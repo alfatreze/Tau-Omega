@@ -321,7 +321,21 @@
   function closeRun() { run = null; }
   $: runSlowNote = run && !run.finished && connKind !== 'direct_usb' && run.speed > 0 && run.speed < 3 * MB && run.total > SLOW_LIMIT;
 
-  const inFlight = (a: AlbumInfo) => queuedIds.has(a.id);
+  /** Dialog behaviour: focus moves in when it opens, Tab stays inside, and focus returns to where it was when it closes. */
+  function modal(node: HTMLElement) {
+    const previous = document.activeElement as HTMLElement | null;
+    const focusable = () => [...node.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [href], select, textarea, [tabindex]:not([tabindex="-1"])')];
+    (node.querySelector<HTMLElement>('input:not([type=checkbox])') ?? node.querySelector<HTMLElement>('button.primary') ?? focusable()[0])?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const items = focusable(); if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    node.addEventListener('keydown', onKey);
+    return { destroy() { node.removeEventListener('keydown', onKey); previous?.isConnected && previous.focus(); } };
+  }
   function key(e: KeyboardEvent) { if (e.key === 'Escape') { if (dialog) dialog = null; connMenu = false; } }
   async function setOverride(value: string) {
     connMenu = false;
@@ -416,8 +430,10 @@
       {:else if cardError}
         <div class="wb-empty" role="alert"><b>Couldn't read this core's music folder</b><p>{cardError}</p><button class="quiet" on:click={reloadCard}>Try again</button></div>
       {:else if card}
-        <div class="wb-tabs" role="tablist">
-          {#each ['albums', 'artists', 'tracks', 'playlists'] as t}<button role="tab" aria-selected={view === t} class:on={view === t} on:click={() => { view = t as typeof view; pocketPicked = new Set(); }}>{t[0].toUpperCase() + t.slice(1)}</button>{/each}
+        <div class="wb-tabs">
+          <div class="wb-tablist" role="tablist" aria-label="View">
+            {#each ['albums', 'artists', 'tracks', 'playlists'] as t}<button role="tab" aria-selected={view === t} class:on={view === t} on:click={() => { view = t as typeof view; pocketPicked = new Set(); }}>{t[0].toUpperCase() + t.slice(1)}</button>{/each}
+          </div>
           <input class="wb-search inline" bind:value={pocketSearch} placeholder="Search" aria-label="Search the Pocket" />
         </div>
         {#if pocketPicked.size && (view === 'albums' || view === 'tracks')}
@@ -494,7 +510,7 @@
 
 {#if dialog === 'slow'}
   <div class="wb-veil" role="presentation" on:click={() => (dialog = null)}></div>
-  <div class="wb-modal" role="alertdialog" aria-labelledby="slow-t" aria-describedby="slow-d">
+  <div class="wb-modal" role="alertdialog" aria-labelledby="slow-t" aria-describedby="slow-d" use:modal>
     <h2 id="slow-t">You're connected to the Pocket directly</h2>
     <p id="slow-d">Transfers over this connection are slow and this may take a long time{lastEta ? ` (about ${lastEta} at your last speed)` : ''}. The Pocket's USB mode is meant for transfers under 10 MB; a card reader is much faster for larger syncs. Are you sure?</p>
     <label class="wb-check"><input type="checkbox" bind:checked={slowDontAsk} /> Don't ask again (you'll still see a small note next to Start sync)</label>
@@ -504,7 +520,7 @@
 
 {#if dialog === 'review'}
   <div class="wb-veil" role="presentation" on:click={() => (dialog = null)}></div>
-  <div class="wb-modal" role="dialog" aria-labelledby="rev-t">
+  <div class="wb-modal" role="dialog" aria-labelledby="rev-t" use:modal>
     {#if reviewError}
       <h2 id="rev-t">This can't be synced yet</h2>
       <p role="alert">{reviewError}</p>
@@ -536,7 +552,7 @@
 
 {#if dialog === 'first-remove'}
   <div class="wb-veil" role="presentation" on:click={() => (dialog = null)}></div>
-  <div class="wb-modal" role="alertdialog" aria-labelledby="fr-t">
+  <div class="wb-modal" role="alertdialog" aria-labelledby="fr-t" use:modal>
     <h2 id="fr-t">Remove from the Pocket?</h2>
     <p>Removals are only <b>marked</b> now. Nothing is deleted until you press Start sync, and you can undo until then. By default the files are copied to a backup folder on this computer before they're deleted.</p>
     <p class="wb-fine">You can change this any time in <b>Settings → Library → Removing from the Pocket</b> (ask every time, back up then remove, or just remove).</p>
@@ -546,7 +562,7 @@
 
 {#if dialog === 'edit' && (editAlbum || editTrack)}
   <div class="wb-veil" role="presentation" on:click={() => (dialog = null)}></div>
-  <aside class="wb-drawer" aria-labelledby="ed-t">
+  <div class="wb-drawer" aria-labelledby="ed-t" role="dialog" aria-modal="true" use:modal>
     <div class="wb-drawer-head"><h2 id="ed-t">{editTrack ? 'Rename track' : 'Edit album'}</h2><button class="quiet" aria-label="Close" on:click={() => (dialog = null)}>✕</button></div>
     <p class="wb-fine">Changes apply to the copy on the Pocket only. Your files on this computer stay as they are, and your edits are re-applied on future syncs.</p>
     <label>{editTrack ? 'Track title' : 'Album title'}<input id="edit-title" bind:value={editForm.title} /></label>
@@ -564,12 +580,12 @@
       </fieldset>
     {/if}
     <div class="wb-modal-actions"><button class="quiet" on:click={() => (dialog = null)}>Cancel</button><button class="primary" on:click={stageEdit}>Add to Pending changes</button></div>
-  </aside>
+  </div>
 {/if}
 
 {#if run}
   <div class="wb-veil" role="presentation"></div>
-  <div class="wb-modal wb-run" role="dialog" aria-labelledby="run-t" aria-live="polite">
+  <div class="wb-modal wb-run" role="dialog" aria-labelledby="run-t" aria-live="polite" use:modal>
     <h2 id="run-t">{run.finished ? (run.error ? (run.cancelled ? 'Sync cancelled' : 'Sync didn’t finish') : 'Sync complete') : `Syncing to ${cardLabel}`}</h2>
     {#if !run.finished}
       <div class="wb-progress" class:indeterminate={!run.total} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={run.total ? Math.round((run.done / run.total) * 100) : undefined}><i style="width:{run.total ? (run.done / run.total) * 100 : 40}%"></i></div>
@@ -620,7 +636,7 @@
   .wb-link{background:transparent;color:#8fd6f2;font-size:12px;padding:0}
   .wb-search{width:100%;padding:8px 10px;border-radius:8px;border:1px solid #2c393a;background:#111617;color:#e8ecec;font-size:13px}
   .wb-search.inline{width:auto;flex:1 1 80px;min-width:0;margin-left:auto;max-width:180px}
-  .wb-tabs{display:flex;gap:4px;align-items:center}
+  .wb-tabs{display:flex;gap:4px;align-items:center}.wb-tablist{display:flex;gap:4px}
   .wb-tabs button{background:transparent;color:#95a5a4;padding:6px 10px;border-radius:7px;font-size:13px}
   .wb-tabs button.on{background:#202b2d;color:#eff5f4}
   .wb-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:#1d2c22;border-radius:9px;font-size:12px;color:#c1f0ad}
@@ -628,9 +644,9 @@
   .wb-actions button:disabled{opacity:.4}.wb-actions .danger{background:#5a352c;color:#f4cfc4;margin-left:auto}
   .wb-list{display:flex;flex-direction:column;gap:2px;overflow:auto;flex:1;min-height:0}
   .wb-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:1px solid transparent;cursor:default}
-  .wb-row:hover{background:#1c2729}.wb-row.sel{background:#1d2c22;border-color:#2f4a37}.wb-row.dim{opacity:.55}
+  .wb-row:hover{background:#1c2729}.wb-row.sel{background:#1d2c22;border-color:#2f4a37}.wb-row.dim .wb-art{opacity:.45}.wb-row.dim .wb-meta strong{color:#a6b3b2}
   .wb-row[draggable=true]{cursor:grab}
-  .wb-row.removing{opacity:.6}.wb-row.removing .wb-meta strong{text-decoration:line-through}
+  .wb-row.removing .wb-art{opacity:.45}.wb-row.removing .wb-meta strong{text-decoration:line-through;color:#a6b3b2}
   .wb-row.incoming{background:#182619;border:1px dashed #3a5a41}
   .wb-plus{width:16px;text-align:center;color:#c1f0ad;font-weight:700}
   .wb-art{flex-shrink:0;width:38px;height:38px;border-radius:7px;background:#273638;display:grid;place-items:center;color:#5c716f}
