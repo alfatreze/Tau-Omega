@@ -1,7 +1,7 @@
 //! Host-side, durable job reports. A journal is always outside a card's media
 //! root, so recovery information remains available if a card is removed.
 
-use crate::{ErrorCode, ProgressObserver, TauError, Warning, sync};
+use crate::{ErrorCode, ProgressObserver, TauError, Warning, changes, sync};
 use serde_json::json;
 use std::{
     fs,
@@ -161,6 +161,86 @@ pub fn execute_core_move_to_journal(
             Err(error)
         }
     }
+}
+
+/// Executes a reviewed workbench change set (add/remove/edit) while recording
+/// its lifecycle in a host-side journal, like [`execute_to_journal`]. The
+/// journal is written before anything on the card changes.
+pub fn execute_changes_to_journal(
+    plan: &changes::ChangePlan,
+    confirmation: &str,
+    backup_root: Option<&Path>,
+    journal_path: &Path,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<changes::ChangeReport, TauError> {
+    if confirmation != plan.id {
+        return Err(TauError::e(
+            ErrorCode::ConfirmationMismatch,
+            "confirmation token does not match the current plan",
+        ));
+    }
+    validate_location(journal_path, &plan.destination)?;
+    write_change_state(plan, journal_path, "running", None, None)?;
+    match changes::execute_changes(plan, confirmation, backup_root, progress) {
+        Ok(report) => {
+            write_change_state(plan, journal_path, "completed", Some(&report), None)?;
+            Ok(report)
+        }
+        Err(error) => {
+            let _ = write_change_state(plan, journal_path, "failed", None, Some(&error.to_string()));
+            Err(error)
+        }
+    }
+}
+
+fn write_change_state(
+    plan: &changes::ChangePlan,
+    path: &Path,
+    state: &str,
+    report: Option<&changes::ChangeReport>,
+    error: Option<&str>,
+) -> Result<(), TauError> {
+    let value = json!({
+        "tool": "tau-omega",
+        "format": 1,
+        "kind": "library_changes",
+        "state": state,
+        "recorded_at_unix": timestamp(),
+        "plan": {
+            "id": plan.id,
+            "destination": plan.destination,
+            "files": plan.files_total,
+            "deletions": plan.removal.as_ref().map_or(0, |r| r.items.len()),
+            "bytes_to_write": plan.bytes_to_write,
+            "adds": plan.sync.as_ref().map_or(0, |s| s.items.len()),
+            "edits": plan.edit.as_ref().map_or(0, |e| e.items.len()),
+        },
+        "result": report.map(|r| json!({
+            "copied": r.copied,
+            "unchanged": r.unchanged,
+            "deleted": r.deleted,
+            "edited": r.edited,
+            "reapplied_edits": r.reapplied,
+            "playlists_updated": r.playlists_updated,
+            "bytes_written": r.bytes_written,
+            "backup_dir": r.backup_dir,
+            "index_path": r.index_path,
+        })),
+        "error": error,
+    });
+    let encoded = serde_json::to_vec_pretty(&value).map_err(|e| {
+        TauError::e(ErrorCode::Json, format!("journal encoding failed: {e}"))
+    })?;
+    let temp = path.with_extension(format!("tau-journal-{}.tmp", std::process::id()));
+    {
+        use std::io::Write;
+        let mut file = fs::File::create(&temp)?;
+        file.write_all(&encoded)?;
+        file.write_all(b"\n")?;
+        file.sync_all()?;
+    }
+    fs::rename(temp, path)?;
+    Ok(())
 }
 
 fn validate_location(path: &Path, media_root: &Path) -> Result<(), TauError> {
@@ -340,6 +420,34 @@ mod tests {
         assert_eq!(journal["state"], "completed");
         assert_eq!(journal["kind"], "sync");
         assert_eq!(journal["result"]["copied"], 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn change_sets_are_journalled_outside_the_card() {
+        let root = std::env::temp_dir().join(format!("tau-journal-changes-{}", timestamp()));
+        let lib = root.join("lib/A/One");
+        let common = root.join("card/Assets/tau/common");
+        fs::create_dir_all(&lib).unwrap();
+        fs::create_dir_all(&common).unwrap();
+        fs::write(lib.join("01.mp3"), b"music").unwrap();
+        let request = changes::ChangeRequest {
+            library_root: Some(root.join("lib")),
+            add_albums: vec!["A/One".into()],
+            ..Default::default()
+        };
+        let plan = changes::plan_changes(&common, &request, &mut None).unwrap();
+        // inside the card is refused before anything is written
+        assert!(execute_changes_to_journal(&plan, &plan.id, None, &common.join("j.json"), &mut None).is_err());
+        assert!(!common.join("A").exists());
+        let report = root.join("reports/changes.json");
+        fs::create_dir_all(report.parent().unwrap()).unwrap();
+        execute_changes_to_journal(&plan, &plan.id, None, &report, &mut None).unwrap();
+        let journal = read_journal(&report).unwrap();
+        assert_eq!(journal["kind"], "library_changes");
+        assert_eq!(journal["state"], "completed");
+        assert_eq!(journal["result"]["copied"], 1);
+        assert_eq!(list_journals(root.join("reports")).unwrap().len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 

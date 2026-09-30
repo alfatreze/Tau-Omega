@@ -4,6 +4,7 @@
 //! card and build, parse and verify the Tau v1 index from a folder or fixture.
 
 pub mod backup;
+pub mod changes;
 pub mod compare;
 pub mod cover;
 pub mod diag;
@@ -18,6 +19,7 @@ pub mod remove;
 pub mod screenshots;
 pub mod storage;
 pub mod sync;
+pub mod tagedit;
 pub mod taud;
 pub mod workbench;
 
@@ -87,6 +89,7 @@ pub enum ErrorCode {
     InvalidTaudRecord = 47,
     NoQrCodeFound = 48,
     InvalidTim1Container = 49,
+    UnsupportedTags = 50,
 }
 
 impl ErrorCode {
@@ -133,6 +136,7 @@ impl TryFrom<u16> for ErrorCode {
             47 => Self::InvalidTaudRecord,
             48 => Self::NoQrCodeFound,
             49 => Self::InvalidTim1Container,
+            50 => Self::UnsupportedTags,
             _ => return Err(()),
         })
     }
@@ -253,6 +257,7 @@ pub enum Stage {
     BuildingIndex,
     Verifying,
     Deleting,
+    Editing,
 }
 
 /// One progress report from a long-running scan/plan/execute call. `done` and
@@ -861,7 +866,7 @@ fn scan_playlists(
     Ok(output)
 }
 
-fn read_tags(path: &Path) -> Result<(BTreeMap<String, String>, u16, u8), TauError> {
+pub(crate) fn read_tags(path: &Path) -> Result<(BTreeMap<String, String>, u16, u8), TauError> {
     let mut f = fs::File::open(path)?;
     let size = f.metadata()?.len();
     if path
