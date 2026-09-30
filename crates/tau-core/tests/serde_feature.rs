@@ -123,7 +123,9 @@ fn library_listing_serialises_the_fields_the_ui_reads() {
     for key in ["id", "dest_id", "title", "artist", "year", "tracks", "bytes", "has_cover"] {
         assert!(value["albums"][0].get(key).is_some(), "missing {key}");
     }
-    for key in ["albums", "tracks", "playlists", "warnings"] {
+    for key in ["albums", "tracks", "playlists", "warnings", "limits"] {
         assert!(value.get(key).is_some(), "missing {key}");
     }
+    assert_eq!(value["limits"]["max_tracks"], 16_384);
+    assert_eq!(value["limits"]["max_albums"], 2_048);
 }

@@ -82,7 +82,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await text(p.getByRole('dialog', { name: /Syncing/ })), /Copying/); ok('progress shows the current step');
   assert.match(await text(p.getByRole('dialog', { name: /Syncing/ })), /MB of 402 MB/); ok('progress shows bytes copied');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 });
-  assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /9 files copied/); ok('result summarises what happened');
+  assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /9 tracks copied/); ok('result summarises what happened');
   await p.getByRole('button', { name: 'Done' }).click();
   assert.match(await text(pk()), /Mingus Ah Um/); assert.doesNotMatch(await text(pk()), /Will be added/); ok('card list refreshes after the sync');
   assert.match(await text(p.getByRole('region', { name: 'Pending changes' })), /Nothing yet/); ok('pending list is cleared after the sync');
@@ -137,6 +137,75 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('button', { name: /Tools & settings/ }).click(); await p.getByRole('button', { name: 'Settings', exact: true }).click();
   await p.getByLabel(/Just remove/).check(); await p.waitForTimeout(300);
   assert.match(await text(p.locator('main')), /Saved\./); ok('removal preference saves from Settings → Library');
+
+  // --- P0 review fixes ---------------------------------------------------------
+  const stage = async (...titles) => { for (const t of titles) await pc().getByLabel(`Select ${t}`).check(); await p.getByRole('button', { name: /^Add \d+ to Pocket/ }).click(); };
+  const tray = () => p.getByRole('region', { name: 'Pending changes' });
+
+  // 1. unplugging while the Library screen is open
+  await fresh('?connection=card_reader'); await openLibrary(); await chooseFolder();
+  await stage('Mingus Ah Um');
+  await p.evaluate(() => window.__tauMock.setMounted(false)); await p.waitForTimeout(3600);
+  assert.match(await text(p.getByRole('alert').first()), /card is disconnected/i); ok('Library shows a banner when the card is unplugged');
+  assert.equal(await p.getByRole('button', { name: 'Start sync' }).isDisabled(), true); ok('Start sync is disabled while disconnected');
+  assert.match(await text(tray()), /Mingus Ah Um/); ok('pending changes are kept while disconnected');
+  await p.evaluate(() => window.__tauMock.setMounted(true)); await p.waitForTimeout(3600);
+  assert.equal(await p.getByRole('button', { name: 'Start sync' }).isDisabled(), false); ok('Start sync works again after reconnecting');
+
+  // 2. the Pocket library's hard limits
+  await fresh('?connection=card_reader'); await openLibrary(); await chooseFolder();
+  assert.match(await text(p.getByRole('group', { name: 'Storage on the Pocket' })), /21 of 16,384 tracks/); ok('shows how full the Pocket library is');
+  await p.evaluate(() => window.__tauMock.setMaxTracks(25)); await p.getByRole('button', { name: 'Refresh this card' }).click(); await p.waitForTimeout(900);
+  await stage('Mingus Ah Um');
+  assert.match(await text(p.getByRole('group', { name: 'Storage on the Pocket' })), /30 of 25 tracks/); assert.match(await text(tray()), /Over the Pocket's library limit/); ok('flags an over-limit selection');
+  assert.equal(await p.getByRole('button', { name: 'Start sync' }).isDisabled(), true); ok('and blocks Start sync');
+  await p.getByRole('button', { name: 'Clear all' }).click(); await stage('A Love Supreme');
+  assert.equal(await p.getByRole('button', { name: 'Start sync' }).isDisabled(), false); ok('a selection that exactly fits is allowed');
+  await p.getByRole('button', { name: 'Clear all' }).click();
+  await p.evaluate(() => window.__tauMock.setMaxTracks(16384)); await p.getByRole('button', { name: 'Refresh this card' }).click(); await p.waitForTimeout(900);
+
+  // 3 + 4. review lists what is changing; keep-connected messages
+  await stage('Mingus Ah Um', 'Head Hunters');
+  await p.getByRole('button', { name: 'Start sync' }).click();
+  const review = p.getByRole('dialog', { name: /Ready to sync/ });
+  if (await p.getByRole('alertdialog').count()) await p.getByRole('button', { name: 'Sync anyway' }).click();
+  assert.match(await text(review), /What's changing \(2\)/); assert.match(await text(review), /Mingus Ah Um/); assert.match(await text(review), /Head Hunters/); ok('the review sheet lists the albums that will change');
+  await p.getByRole('button', { name: 'Confirm and start' }).click(); await p.waitForTimeout(600);
+  assert.match(await text(p.getByRole('dialog', { name: /Syncing/ })), /Keep the Pocket connected/); ok('progress tells you to keep the Pocket connected');
+  await p.waitForSelector('text=Sync complete', { timeout: 20000 });
+  assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /disconnect the Pocket now/); ok('completion says when it is safe to disconnect');
+  await p.getByRole('button', { name: 'Done' }).click();
+
+  // 5. plain-language errors
+  await stage('Moanin');
+  await p.evaluate(() => window.__tauMock.failNext(42, 'No such file or directory (os error 2)'));
+  await p.getByRole('button', { name: 'Start sync' }).click(); await p.getByRole('button', { name: 'Confirm and start' }).click();
+  await p.waitForSelector('text=Sync didn', { timeout: 10000 });
+  const failed = await text(p.getByRole('dialog', { name: /Sync didn/ }));
+  assert.match(failed, /couldn.t be reached/); assert.doesNotMatch(failed, /os error/); ok('a disconnected-card failure is explained in plain words');
+  await p.getByRole('button', { name: 'Close' }).click();
+  assert.match(await text(tray()), /Moanin/); ok('pending changes survive a failed sync');
+  await p.evaluate(() => window.__tauMock.failNext(44, 'cancelled'));
+  await p.getByRole('button', { name: 'Start sync' }).click(); await p.getByRole('button', { name: 'Confirm and start' }).click();
+  await p.waitForSelector('text=Sync cancelled', { timeout: 10000 }); ok('a cancelled sync is reported as cancelled, not as a failure');
+  await p.getByRole('button', { name: 'Close' }).click();
+  await p.evaluate(() => window.__tauMock.setMaxTracks(10));
+  await p.getByRole('button', { name: 'Start sync' }).click();
+  assert.match(await text(p.getByRole('dialog', { name: /can.t be synced/ })), /library holds at most 10/); ok('a plan the engine refuses says why, before anything is copied');
+  await p.getByRole('button', { name: 'Back' }).click();
+  await p.evaluate(() => window.__tauMock.setMaxTracks(16384));
+  await p.getByRole('button', { name: 'Clear all' }).click();
+
+  // 6. Delete key and the sidebar pending badge
+  await pk().getByLabel('Select Time Out').check(); await p.keyboard.press('Delete');
+  assert.equal(await p.getByRole('alertdialog').count(), 1); ok('the Delete key starts removing the selected album');
+  await p.getByRole('button', { name: 'Mark for removal' }).click();
+  assert.match(await text(pk()), /Will be removed/);
+  await p.getByRole('button', { name: 'Cards', exact: true }).click();
+  assert.match(await text(p.locator('.active-context')), /1 pending/); ok('the sidebar card shows how many changes are pending');
+  await p.locator('.active-context-btn').click();
+  assert.match(await text(p.locator('.switcher-panel')), /1 pending/); ok('and so does the card switcher');
+  await p.keyboard.press('Escape');
 
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();

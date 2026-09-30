@@ -96,3 +96,5 @@ nav button{padding:10px 12px;border-radius:8px;color:#a4b0b0;font-size:14px;text
 .nav-group.has-active{color:#c1f0ad}
 .nav-sub{display:grid;gap:3px;padding-left:10px;border-left:1px solid #2c393a;margin-left:12px}
 .settings-stack{min-width:0}.lib-page{padding-bottom:0}
+.switcher-pending{margin-left:auto;font-size:11px;color:#f0d59a;background:#3d3220;border-radius:99px;padding:2px 7px}.switcher-dot+.switcher-pending{margin-left:6px}.switcher-pending+.switcher-dot{margin-left:8px}
+.ctx-pending{color:#f0d59a!important}

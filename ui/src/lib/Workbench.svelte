@@ -7,7 +7,7 @@
   // card and core so switching cards switches the list.
   import { onDestroy, onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { cancelJob, checkStorageCapacity, detectConnection, errorMessage, executeChanges, getPrefs, listLibrary, newJobId, onProgress, planChanges, readImageDataUrl, setPrefs } from './tau-api';
+  import { cancelJob, checkStorageCapacity, detectConnection, explainError, executeChanges, getPrefs, listLibrary, newJobId, onProgress, planChanges, readImageDataUrl, setPrefs } from './tau-api';
   import type { AlbumInfo, ChangePlanView, ChangeReport, ChangeRequest, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
 
   /** Root folder of the open card (used to detect how it is connected). */
@@ -21,6 +21,8 @@
   export let refresh: () => void | Promise<void> = () => {};
   export let refreshedAt = '';
   export let openSettings: () => void = () => {};
+  /** Whether the app still sees the card as mounted (`false` = unplugged, `null` = not a removable volume). */
+  export let connected: boolean | null = null;
 
   type Pending =
     | { key: string; kind: 'add'; id: string; destId: string; title: string; artist: string; tracks: number; bytes: number }
@@ -106,14 +108,14 @@
       const here = new Set(card.albums.map((a) => a.id));
       const kept = pending.filter((p) => p.kind === 'add' || here.has(p.id));
       if (kept.length !== pending.length) pending = kept;
-    } catch (error) { card = null; cardError = errorMessage(error); }
+    } catch (error) { card = null; cardError = explainError(error); }
     finally { cardBusy = false; }
   }
   async function scanSource() {
     if (!sourcePath) return;
     sourceBusy = true; sourceError = ''; sourceJob = newJobId(); sourceProgress = '';
     try { source = await listLibrary(sourcePath, sourceJob); }
-    catch (error) { source = null; sourceError = errorMessage(error); }
+    catch (error) { source = null; sourceError = explainError(error); }
     finally { sourceBusy = false; }
   }
   async function chooseSource() {
@@ -124,7 +126,12 @@
   }
   async function doRefresh() { spinning = true; try { await refresh(); } finally { setTimeout(() => (spinning = false), 700); } }
   $: save_pending(pending);
-  function save_pending(p: Pending[]) { if (loadedFor === mediaRoot && mediaRoot) save('pending', p); }
+  function save_pending(p: Pending[]) {
+    if (loadedFor !== mediaRoot || !mediaRoot) return;
+    save('pending', p);
+    // lets the sidebar show a "N pending" badge for this card
+    window.dispatchEvent(new CustomEvent('tau-pending'));
+  }
   $: if (mediaRoot && loadedFor === mediaRoot) save('embed', embedCovers);
 
   // ---- derived numbers -------------------------------------------------------
@@ -147,7 +154,16 @@
   $: lastSpeed = prefs?.speeds?.[cardLabel] ?? 0;
   $: slowApplies = connKind === 'direct_usb' && addBytes > SLOW_LIMIT;
   $: pendingCount = pending.length;
-  $: canStart = pendingCount > 0 && !overCapacity && !run && !!card;
+  $: disconnected = connected === false;
+  // The Pocket's index has hard limits; show how full it is and stop before an over-limit sync.
+  $: limits = card?.limits ?? null;
+  $: tracksNow = card?.tracks.length ?? 0;
+  $: albumsNow = card?.albums.length ?? 0;
+  $: tracksAfter = tracksNow + adds.reduce((n, p) => n + p.tracks - (cardByDest.get(p.destId)?.tracks ?? 0), 0) - removes.reduce((n, p) => n + p.tracks, 0);
+  $: albumsAfter = albumsNow + adds.filter((p) => !cardByDest.has(p.destId)).length - removes.length;
+  $: overLimit = !!limits && (tracksAfter > limits.max_tracks || albumsAfter > limits.max_albums);
+  $: nearLimit = !!limits && !overLimit && tracksAfter > limits.max_tracks * 0.9;
+  $: canStart = pendingCount > 0 && !overCapacity && !overLimit && !disconnected && !run && !!card;
   $: pocketAlbums = (card?.albums ?? []).filter((a) => match(`${a.title} ${a.artist}`, pocketSearch));
   $: sourceAlbums = (source?.albums ?? []).filter((a) => match(`${a.title} ${a.artist}`, sourceSearch));
   $: artists = [...pocketAlbums.reduce((m, a) => m.set(a.artist || 'Unknown artist', [...(m.get(a.artist || 'Unknown artist') ?? []), a]), new Map<string, AlbumInfo[]>())];
@@ -270,14 +286,14 @@
     if (!canStart) return;
     reviewError = ''; review = null;
     try { review = await planChanges(buildRequest(), mediaRoot); }
-    catch (error) { reviewError = errorMessage(error); dialog = 'review'; return; }
+    catch (error) { reviewError = explainError(error); dialog = 'review'; return; }
     const needsAlert = connKind === 'direct_usb' && review.bytes_to_write > SLOW_LIMIT && !(prefs?.slow_alert_suppressed);
     dialog = needsAlert ? 'slow' : 'review';
   }
   /** The plan (and its confirmation token) depends on the options, so changing one in the review sheet re-plans. */
   async function replan() {
     try { review = await planChanges(buildRequest(), mediaRoot); reviewError = ''; }
-    catch (error) { review = null; reviewError = errorMessage(error); }
+    catch (error) { review = null; reviewError = explainError(error); }
   }
   async function slowContinue() {
     if (slowDontAsk && prefs) { try { prefs = await setPrefs({ ...prefs, slow_alert_suppressed: true }); } catch { /* the alert simply shows again */ } }
@@ -302,8 +318,8 @@
       pending = []; picked = new Set(); pocketPicked = new Set();
       await reloadCard();
     } catch (error) {
-      const message = errorMessage(error);
-      run = { ...run!, finished: true, cancelled: /cancel/i.test(message), error: message };
+      const message = explainError(error);
+      run = { ...run!, finished: true, cancelled: (error as { code?: number })?.code === 44, error: message };
       await reloadCard();
     }
   }
@@ -336,7 +352,14 @@
     node.addEventListener('keydown', onKey);
     return { destroy() { node.removeEventListener('keydown', onKey); previous?.isConnected && previous.focus(); } };
   }
-  function key(e: KeyboardEvent) { if (e.key === 'Escape') { if (dialog) dialog = null; connMenu = false; } }
+  function key(e: KeyboardEvent) {
+    if (e.key === 'Escape') { if (dialog) dialog = null; connMenu = false; return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !dialog && !run && view === 'albums' && pocketPicked.size) {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || (t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'checkbox'));
+      if (!typing) { e.preventDefault(); requestRemove(); }
+    }
+  }
   async function setOverride(value: string) {
     connMenu = false;
     if (!prefs) return;
@@ -372,6 +395,9 @@
     </button>
   </header>
 
+  {#if disconnected}
+    <div class="wb-banner" role="alert"><span>This card is disconnected. Your pending changes are kept; reconnect it to continue.</span><button class="quiet" on:click={doRefresh}>Check again</button></div>
+  {/if}
   {#if noCard}
     <section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Connect your Pocket or a card reader, or choose a card on the Cards screen. It will appear here automatically.</p></section>
   {:else}
@@ -381,6 +407,7 @@
         <span><b>{size(used)}</b> on Pocket</span>
         {#if addBytes}<span class="add">+ {size(addBytes)} queued</span>{/if}
         {#if removeBytes}<span class="rm">− {size(removeBytes)} removing</span>{/if}
+        {#if limits}<span class="wb-limit" class:bad={overLimit} class:warn={nearLimit} title="The Pocket's library can hold at most {limits.max_tracks.toLocaleString()} tracks and {limits.max_albums.toLocaleString()} albums">{tracksAfter.toLocaleString()} of {limits.max_tracks.toLocaleString()} tracks</span>{/if}
         <span class="wb-cap-free" class:bad={overCapacity}>{overCapacity ? `${size(Math.max(0, (space.margin_bytes ?? 0) - free))} too much for this card` : `${size(free)} free of ${size(total)}`}</span>
       </div>
       <div class="wb-bar" role="img" aria-label={`${size(used)} used, ${size(addBytes)} queued, ${size(Math.max(free, 0))} free`}>
@@ -491,6 +518,8 @@
       <div class="wb-tray-actions">
         {#if slowApplies && (prefs?.slow_alert_suppressed)}<span class="wb-slownote" role="note">Direct connection: slow{lastEta ? ` · about ${lastEta}` : ''}</span>{/if}
         {#if overCapacity}<span class="wb-slownote bad" role="alert">Won't fit on this card</span>{/if}
+        {#if overLimit && limits}<span class="wb-slownote bad" role="alert">Over the Pocket's library limit ({limits.max_tracks.toLocaleString()} tracks)</span>{/if}
+        {#if disconnected}<span class="wb-slownote bad" role="alert">Card disconnected</span>{/if}
         <button class="quiet" disabled={!pendingCount} on:click={clearAll}>Clear all</button>
         <button class="primary" disabled={!canStart} on:click={start}>Start sync</button>
       </div>
@@ -528,11 +557,19 @@
     {:else if review}
       <h2 id="rev-t">Ready to sync to {cardLabel}?</h2>
       <dl class="wb-review">
-        {#if adds.length}<div><dt>Add / update</dt><dd>{plural(review.new_files + review.updated_files, 'file')} · {size(review.bytes_to_write)}{review.unchanged_files ? ` (${review.unchanged_files} already up to date)` : ''}</dd></div>{/if}
-        {#if review.removed_files}<div><dt>Remove</dt><dd>{plural(review.removed_files, 'file')} · {size(review.bytes_to_remove)}{review.playlists_updated ? ` · ${plural(review.playlists_updated, 'playlist')} updated` : ''}</dd></div>{/if}
-        {#if review.edited_files}<div><dt>Edit</dt><dd>{plural(review.edited_files, 'file')} (Pocket copies only)</dd></div>{/if}
+        {#if adds.length}<div><dt>Add</dt><dd>{plural(review.new_files + review.updated_files, 'track')} · {size(review.bytes_to_write)}{review.unchanged_files ? ` (${review.unchanged_files} already up to date)` : ''}</dd></div>{/if}
+        {#if review.removed_files}<div><dt>Remove</dt><dd>{plural(review.removed_files, 'track')} · {size(review.bytes_to_remove)}{review.playlists_updated ? ` · ${plural(review.playlists_updated, 'playlist')} updated` : ''}</dd></div>{/if}
+        {#if review.edited_files}<div><dt>Edit</dt><dd>{plural(review.edited_files, 'track')} (Pocket copies only)</dd></div>{/if}
         <div><dt>Free after</dt><dd>{size(free)} of {size(total)}</dd></div>
       </dl>
+      <details class="wb-detail" open={pendingCount <= 5}>
+        <summary>What's changing ({pendingCount})</summary>
+        <ul>
+          {#each pending as p (p.key)}
+            <li><span class="k {p.kind}">{p.kind === 'add' ? '+' : p.kind === 'remove' ? '−' : '✎'}</span><span class="t"><b>{p.title}</b>{#if p.kind === 'edit'} <small>({p.note})</small>{:else} <small>{p.artist || 'Unknown artist'} · {plural(p.tracks, 'track')} · {size(p.bytes)}</small>{/if}</span></li>
+          {/each}
+        </ul>
+      </details>
       {#if adds.length}<label class="wb-check"><input type="checkbox" bind:checked={embedCovers} on:change={replan} /> Embed each folder's cover art into the copies</label>{/if}
       {#if review.removed_files}
         {#if prefs?.remove_mode === 'ask'}
@@ -595,14 +632,16 @@
         {#if run.speed > 0}<div><dt>Speed</dt><dd>{(run.speed / MB).toFixed(1)} MB/s</dd></div><div><dt>Time left</dt><dd>about {eta(run.total - run.done, run.speed)}</dd></div>{/if}
       </dl>
       {#if run.path}<p class="wb-fine wb-path" title={run.path}>{run.path}</p>{/if}
+      <p class="wb-fine wb-keep" role="note">Keep the Pocket connected until this finishes.</p>
       {#if runSlowNote}<p class="wb-fine" role="note">This is slower than a card reader usually is. If you're plugged into the Pocket directly, that's expected.</p>{/if}
       <div class="wb-modal-actions"><button class="quiet" on:click={cancelSync}>Cancel sync</button></div>
     {:else if run.error}
-      <p role="alert">{run.cancelled ? 'Stopped. Files already copied were kept and verified; the index was not changed until the end of a run, so the card still works.' : run.error}</p>
+      <p role="alert">{run.error}</p>
       <div class="wb-modal-actions"><button class="primary" on:click={closeRun}>Close</button></div>
     {:else if run.report}
-      <p class="wb-ok">✓ {[run.report.copied && `${plural(run.report.copied, 'file')} copied`, run.report.deleted && `${plural(run.report.deleted, 'file')} removed`, run.report.edited && `${plural(run.report.edited, 'file')} edited`].filter(Boolean).join(', ') || 'Everything was already up to date'}. Index verified.</p>
+      <p class="wb-ok">✓ {[run.report.copied && `${plural(run.report.copied, 'track')} copied`, run.report.deleted && `${plural(run.report.deleted, 'track')} removed`, run.report.edited && `${plural(run.report.edited, 'track')} edited`].filter(Boolean).join(', ') || 'Everything was already up to date'}. Index verified.</p>
       {#if run.report.backup_dir}<p class="wb-fine">Removed files were backed up to {run.report.backup_dir}</p>{/if}
+      <p class="wb-fine wb-keep">You can disconnect the Pocket now.</p>
       <div class="wb-modal-actions"><button class="primary" on:click={closeRun}>Done</button></div>
     {/if}
   </div>
@@ -698,5 +737,11 @@
   .wb-badge.edit{background:#1f2836;color:#a9c3ea}
   .wb-cover-pick{display:flex;gap:12px;align-items:center}.wb-cover-pick img{width:72px;height:72px;object-fit:cover;border-radius:8px}
   .wb-art.big{width:72px;height:72px}
+  .wb-banner{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 16px;background:#3a2420;border:1px solid #6b3a30;border-radius:10px;color:#f4cfc4;font-size:13px;flex-shrink:0}
+  .wb-limit{color:#8c9c9b}.wb-limit.warn{color:#f0d59a}.wb-limit.bad{color:#ff9d8a;font-weight:700}
+  .wb-detail{margin:0 0 10px;font-size:13px}.wb-detail summary{cursor:pointer;color:#b7c3c2;padding:4px 0}
+  .wb-detail ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;max-height:160px;overflow:auto}
+  .wb-detail li{display:flex;gap:8px}.wb-detail small{color:#8c9c9b;margin-left:8px}.wb-detail .k{font-weight:700;width:14px;text-align:center}.wb-detail .k.add{color:#c1f0ad}.wb-detail .k.remove{color:#e8b59f}
+  .wb-keep{color:#f0d59a!important}
   .wb-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>

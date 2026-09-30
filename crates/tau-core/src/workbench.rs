@@ -57,9 +57,29 @@ pub struct PlaylistInfo {
     pub tracks: usize,
 }
 
+/// The Pocket index's hard capacity limits, so a front-end can show how full
+/// the library is and stop before an over-limit sync.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct IndexLimits {
+    pub max_tracks: usize,
+    pub max_albums: usize,
+    pub max_artists: usize,
+}
+impl Default for IndexLimits {
+    fn default() -> Self {
+        Self {
+            max_tracks: crate::MAX_TRACKS,
+            max_albums: crate::MAX_ALBUMS,
+            max_artists: crate::MAX_ARTISTS,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LibraryListing {
+    pub limits: IndexLimits,
     pub albums: Vec<AlbumInfo>,
     pub tracks: Vec<TrackInfo>,
     pub playlists: Vec<PlaylistInfo>,
@@ -186,6 +206,41 @@ pub fn list_library(
         })
         .collect();
     Ok(listing)
+}
+
+/// Counts the audio files under a media root and the folders that hold them,
+/// without reading any tags (cheap enough to run on every plan).
+pub(crate) fn count_audio(root: &Path) -> Result<(usize, std::collections::BTreeSet<String>), TauError> {
+    fn walk(
+        root: &Path,
+        at: &Path,
+        tracks: &mut usize,
+        dirs: &mut std::collections::BTreeSet<String>,
+    ) -> Result<(), TauError> {
+        for child in fs::read_dir(at)? {
+            let path = child?.path();
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            if name.starts_with("._") {
+                continue;
+            }
+            if path.is_dir() {
+                walk(root, &path, tracks, dirs)?;
+            } else if sync::audio_file(&path) {
+                *tracks += 1;
+                let dir = path
+                    .parent()
+                    .and_then(|p| p.strip_prefix(root).ok())
+                    .map(|p| p.to_string_lossy().replace('\\', "/"))
+                    .unwrap_or_default();
+                dirs.insert(dir);
+            }
+        }
+        Ok(())
+    }
+    let mut tracks = 0;
+    let mut dirs = std::collections::BTreeSet::new();
+    walk(root, root, &mut tracks, &mut dirs)?;
+    Ok((tracks, dirs))
 }
 
 /// Rejects an album id that could leave `root` (absolute, `..`, prefixes).

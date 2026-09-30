@@ -85,7 +85,8 @@ export type ScreenshotEntry = { path: string; filename: string; bytes: number; c
 export type AlbumInfo = { id: string; dest_id: string; title: string; artist: string; year: string | null; tracks: number; bytes: number; has_cover: boolean };
 export type TrackInfo = { rel: string; album_id: string; title: string; artist: string; album: string; secs: number; bytes: number; format: string };
 export type PlaylistInfo = { name: string; file: string; tracks: number };
-export type LibraryListing = { albums: AlbumInfo[]; tracks: TrackInfo[]; playlists: PlaylistInfo[]; warnings: Warning[] };
+export type IndexLimits = { max_tracks: number; max_albums: number; max_artists: number };
+export type LibraryListing = { limits: IndexLimits; albums: AlbumInfo[]; tracks: TrackInfo[]; playlists: PlaylistInfo[]; warnings: Warning[] };
 /** Mirrors `tau_core::tagedit::{FieldEdits, EditRequest}`. `null` leaves a field alone; `''` clears it. */
 export type FieldEdits = { title: string | null; artist: string | null; album: string | null; album_artist: string | null; year: string | null };
 export type EditRequest = { album_id: string; track: string | null; fields: FieldEdits; cover: string | null };
