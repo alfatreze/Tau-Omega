@@ -75,3 +75,55 @@ fn pathbuf_serialises_as_a_plain_string_like_display() {
         serde_json::to_string(&path.display().to_string()).unwrap()
     );
 }
+
+/// The library workbench UI (ui/src/lib/types.ts) sends this exact JSON to
+/// `plan_changes` / `execute_changes`. If the engine's shape drifts, the real
+/// app would fail at run time in a way no browser-mock test can see.
+#[test]
+fn change_request_accepts_exactly_what_the_ui_sends() {
+    let json = r#"{
+        "library_root": "/Users/me/Music",
+        "add_albums": ["Miles Davis/Kind of Blue"],
+        "remove_albums": ["Charles Mingus/Ah Um"],
+        "edits": [
+            {"album_id": "John Coltrane/Blue Train", "track": null,
+             "fields": {"title": null, "artist": null, "album": "Blue Train (Remaster)", "album_artist": null, "year": "1958"},
+             "cover": "/Users/me/cover.jpg"},
+            {"album_id": "A/B", "track": "A/B/01.mp3",
+             "fields": {"title": "Better", "artist": null, "album": null, "album_artist": null, "year": null},
+             "cover": null}
+        ],
+        "options": {"mirror": false, "embed_covers": true, "art_sidecar_pal256": false}
+    }"#;
+    let request: tau_core::changes::ChangeRequest = serde_json::from_str(json).unwrap();
+    assert_eq!(request.add_albums, ["Miles Davis/Kind of Blue"]);
+    assert_eq!(request.edits.len(), 2);
+    assert_eq!(request.edits[0].fields.album.as_deref(), Some("Blue Train (Remaster)"));
+    assert_eq!(request.edits[0].cover.as_deref().map(|p| p.to_str().unwrap()), Some("/Users/me/cover.jpg"));
+    assert_eq!(request.edits[1].track.as_deref(), Some("A/B/01.mp3"));
+    assert!(request.options.embed_covers && !request.options.mirror);
+}
+
+#[test]
+fn library_listing_serialises_the_fields_the_ui_reads() {
+    let listing = tau_core::workbench::LibraryListing {
+        albums: vec![tau_core::workbench::AlbumInfo {
+            id: "A/B".into(),
+            dest_id: "A/B".into(),
+            title: "B".into(),
+            artist: "A".into(),
+            year: Some("1959".into()),
+            tracks: 5,
+            bytes: 10,
+            has_cover: true,
+        }],
+        ..Default::default()
+    };
+    let value: serde_json::Value = serde_json::to_value(&listing).unwrap();
+    for key in ["id", "dest_id", "title", "artist", "year", "tracks", "bytes", "has_cover"] {
+        assert!(value["albums"][0].get(key).is_some(), "missing {key}");
+    }
+    for key in ["albums", "tracks", "playlists", "warnings"] {
+        assert!(value.get(key).is_some(), "missing {key}");
+    }
+}

@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport } from './types';
+import type { BackupPlan, ChangePlanView, ChangeReport, ChangeRequest, ConnectionInfo, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -43,3 +43,9 @@ export const readImageDataUrl = (path: string) => invoke<string>('read_image_dat
 export const readCoreIcon = (card: string, coreId: string) => invoke<string | null>('read_core_icon', { card, coreId });
 export const readPlatformImage = (card: string, platform: string) => invoke<string | null>('read_platform_image', { card, platform });
 export { cancelJob, newJobId, onProgress, errorMessage } from './backend';
+export const listLibrary = (path: string, jobId: string) => invoke<LibraryListing>('list_library', { path, jobId });
+export const planChanges = (request: ChangeRequest, destination: string) => invoke<ChangePlanView>('plan_changes', { request, destination });
+export const executeChanges = (request: ChangeRequest, destination: string, confirmation: string, backup: string | null, jobId: string) => invoke<ChangeReport>('execute_changes', { request, destination, confirmation, backup, jobId });
+export const detectConnection = (path: string) => invoke<ConnectionInfo>('detect_connection', { path });
+export const getPrefs = () => invoke<PrefsView>('get_prefs');
+export const setPrefs = (prefs: Prefs) => invoke<PrefsView>('set_prefs', { prefs });

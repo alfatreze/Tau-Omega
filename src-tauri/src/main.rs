@@ -890,3 +890,27 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The UI reads `PrefsView` (prefs plus resolved folders) and sends the
+    /// whole object back to `set_prefs`; the extra fields must be ignored and
+    /// a missing field must fall back to its default.
+    #[test]
+    fn prefs_round_trip_through_the_view_the_ui_sends_back() {
+        let view = PrefsView {
+            prefs: Prefs { remove_mode: "ask".into(), ..Prefs::default() },
+            default_backup_dir: "/data/removed-backups".into(),
+            reports_dir: "/data/reports".into(),
+        };
+        let json = serde_json::to_string(&view).unwrap();
+        assert!(json.contains("\"remove_mode\":\"ask\"") && json.contains("\"default_backup_dir\""));
+        let back: Prefs = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.remove_mode, "ask");
+        let sparse: Prefs = serde_json::from_str(r#"{"slow_alert_suppressed": true}"#).unwrap();
+        assert_eq!(sparse.remove_mode, "backup");
+        assert!(sparse.slow_alert_suppressed && !sparse.remove_explained);
+    }
+}

@@ -1,22 +1,99 @@
 /** Browser-only stand-in for the Tauri backend, so the UI can be run and
  * screenshotted with `npm run dev` without the desktop shell or a real card.
- * Installed by main.ts only in dev builds when Tauri is absent; never shipped. */
+ * Installed by main.ts only in dev builds when Tauri is absent; never shipped.
+ *
+ * The library workbench commands are stateful: adding, removing and editing
+ * albums through `execute_changes` changes what the next `list_library`
+ * returns, and progress events are emitted like the real engine's. */
 import { mockIPC } from '@tauri-apps/api/mocks';
+import { emit } from '@tauri-apps/api/event';
 
-const CARD = '/mock/Pocket';
+const CARD = '/Volumes/Pocket';
+const MEDIA = `${CARD}/Assets/tau/common`;
+const LIBRARY = '/Users/me/Music';
+const MB = 1e6;
+const GB = 1e9;
+
 const cores = [
   { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'ok', tracks: 7180 },
-  { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
+  { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
   { id: 'agg23.SNES', author: 'agg23', shortname: 'SNES', version: '1.4.0', platform: 'snes', platform_category: 'Console', library_capable: false, index_status: 'n/a', tracks: null },
 ];
-const tracks = Array.from({ length: 60 }, (_, i) => ({ rel: `Music/Artist ${i % 6}/Album ${i % 4}/${String(i + 1).padStart(2, '0')} Track ${i + 1}.${i % 3 ? 'mp3' : 'flac'}`, title: `Track ${i + 1}`, artist: `Artist ${i % 6}`, album: `Album ${i % 4}`, secs: 150 + i * 3, format: i % 3 ? 'mp3' : 'flac' }));
-const plan = { id: 'mock-plan-1', new_files: 42, updates: 5, unchanged: 7133, bytes_to_write: 412_000_000, art_sidecars: 3, art_sidecar_previews: [], warnings: [] };
-const report = { plan_id: 'mock-plan-1', copied: 47, deleted: 0, verified: 47, skipped: 0, errors: [] };
+
+type Album = { id: string; dest_id: string; title: string; artist: string; year: string | null; tracks: number; bytes: number; has_cover: boolean };
+const album = (artist: string, title: string, tracks: number, mb: number, year: number): Album => ({
+  id: `${artist}/${title}`, dest_id: `${artist}/${title}`, title, artist, year: String(year), tracks, bytes: mb * MB, has_cover: true,
+});
+const sourceAlbums: Album[] = [
+  album('Miles Davis', 'Kind of Blue', 5, 310, 1959), album('John Coltrane', 'A Love Supreme', 4, 268, 1965),
+  album('John Coltrane', 'Blue Train', 5, 290, 1958), album('Charles Mingus', 'Mingus Ah Um', 9, 402, 1959),
+  album('Dave Brubeck Quartet', 'Time Out', 7, 344, 1959), album('Herbie Hancock', 'Head Hunters', 4, 380, 1973),
+  album('Art Blakey', 'Moanin', 6, 322, 1958), album('Sonny Rollins', 'Saxophone Colossus', 5, 296, 1956),
+  album('Charles Mingus', 'The Black Saint', 4, 712, 1963), album('Miles Davis', 'Bitches Brew', 7, 1380, 1970),
+  album('Herbie Hancock', 'Maiden Voyage', 5, 330, 1965),
+];
+// The card starts with four albums; Blue Train is short a track ("changed").
+let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voyage'].map((t) => {
+  const a = { ...sourceAlbums.find((s) => s.title === t)! };
+  if (t === 'Blue Train') { a.tracks = 4; a.bytes -= 60 * MB; }
+  return a;
+});
+let mounted = true;
+let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
+let prefs = { remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, speeds: {} as Record<string, number>, connections: {} as Record<string, string> };
+const CAPACITY = 8 * GB;
+const OTHER_USED = 3.1 * GB;
+
+const listing = (albums: Album[]) => ({
+  albums,
+  tracks: albums.flatMap((a) => Array.from({ length: a.tracks }, (_, i) => ({
+    rel: `${a.dest_id}/${String(i + 1).padStart(2, '0')} Track ${i + 1}.mp3`, album_id: a.id, title: `Track ${i + 1}`, artist: a.artist, album: a.title,
+    secs: 180 + i * 17, bytes: Math.round(a.bytes / a.tracks), format: i % 3 ? 'MP3' : 'FLAC',
+  }))),
+  playlists: [{ name: 'Favourites', file: 'Favourites.m3u', tracks: 12 }],
+  warnings: [],
+});
+
+const plan = (request: any) => {
+  const adds = (request.add_albums as string[]).map((id) => sourceAlbums.find((a) => a.id === id)!).filter(Boolean);
+  const removes = (request.remove_albums as string[]).map((id) => cardAlbums.find((a) => a.id === id)!).filter(Boolean);
+  const files = (list: Album[]) => list.reduce((n, a) => n + a.tracks, 0);
+  return {
+    id: `mock-${adds.length}-${removes.length}-${request.edits.length}`,
+    new_files: files(adds), updated_files: 0, unchanged_files: 0,
+    bytes_to_write: adds.reduce((n, a) => n + a.bytes, 0),
+    removed_files: files(removes), bytes_to_remove: removes.reduce((n, a) => n + a.bytes, 0),
+    edited_files: request.edits.length * 5, playlists_updated: removes.length ? 1 : 0, warnings: [],
+  };
+};
+
+/** Emits copy progress over a few seconds, then applies the change set. */
+async function runChanges(request: any, jobId: string) {
+  const p = plan(request);
+  const total = p.bytes_to_write;
+  const steps = 24;
+  for (let i = 0; i <= steps && total > 0; i++) {
+    await emit('tau://progress', { job_id: jobId, stage: 'copying', done: Math.round((total * i) / steps), total, path: `Assets/tau/common/file-${i}.mp3` });
+    await new Promise((r) => setTimeout(r, 120));
+  }
+  await emit('tau://progress', { job_id: jobId, stage: 'building_index', done: 1, total: 1, path: null });
+  await new Promise((r) => setTimeout(r, 300));
+  const removing = new Set<string>(request.remove_albums);
+  cardAlbums = cardAlbums.filter((a) => !removing.has(a.id));
+  for (const id of request.add_albums as string[]) {
+    const src = sourceAlbums.find((a) => a.id === id);
+    if (src) cardAlbums = [...cardAlbums.filter((a) => a.id !== id), { ...src }];
+  }
+  for (const e of request.edits as any[]) {
+    cardAlbums = cardAlbums.map((a) => (a.id === e.album_id ? { ...a, title: e.fields.album ?? a.title, artist: e.fields.artist ?? a.artist, year: e.fields.year ?? a.year, has_cover: e.cover ? true : a.has_cover } : a));
+  }
+  return { plan_id: p.id, copied: p.new_files, unchanged: 0, bytes_written: total, edited: p.edited_files, reapplied: 0, deleted: p.removed_files, playlists_updated: p.playlists_updated, backup_dir: null, index_path: `${MEDIA}/tau-library.tdb` };
+}
 
 const handlers: Record<string, (args: any) => unknown> = {
   get_reports_dir: () => null,
   get_recent_cards: () => [CARD],
-  list_mounted_cards: () => [CARD],
+  list_mounted_cards: () => (mounted ? [CARD] : []),
   get_manual_players: () => [],
   inspect_card: () => cores,
   read_persisted_settings: () => [],
@@ -25,14 +102,22 @@ const handlers: Record<string, (args: any) => unknown> = {
   list_screenshots: () => [],
   read_core_icon: () => null,
   read_platform_image: () => null,
-  read_image_data_url: () => '',
+  // A 1x1 grey PNG, so cover previews have something to show.
+  read_image_data_url: () => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   list_journals: () => [],
-  scan_library: () => ({ tracks, playlists: [{ name: 'Favourites', tracks: 12 }], warnings: [] }),
-  scan_media: () => ({ playlists: [{ name: 'Favourites', file: 'Favourites.m3u8', tracks: tracks.slice(0, 12).map((t) => t.rel) }], warnings: [] }),
-  find_problems: () => [{ kind: 'missing_tag', files: [tracks[3].rel], message: 'No artist tag' }],
-  check_storage_capacity: () => ({ free_bytes: 20e9, needed_bytes: 412e6, fits: true }),
-  plan_sync: () => plan,
-  execute_sync: () => report,
+  list_library: (a) => listing(String(a.path).startsWith(LIBRARY) ? sourceAlbums : cardAlbums),
+  scan_media: () => ({ playlists: [{ name: 'Favourites', file: 'Favourites.m3u8', tracks: ['Music/a.mp3'] }], warnings: [] }),
+  find_problems: () => [{ kind: 'missing_tag', files: ['Music/x.mp3'], message: 'No artist tag' }],
+  check_storage_capacity: (a) => {
+    const used = OTHER_USED + cardAlbums.reduce((n, x) => n + x.bytes, 0);
+    return { space: { total_bytes: CAPACITY, available_bytes: CAPACITY - used }, bytes_needed: a.bytesNeeded, margin_bytes: 16 * MB, fits: CAPACITY - used >= a.bytesNeeded };
+  },
+  plan_changes: (a) => plan(a.request),
+  execute_changes: (a) => runChanges(a.request, a.jobId),
+  detect_connection: () => ({ kind: connection, detail: connection === 'direct_usb' ? 'Analogue Pocket (USB)' : 'Generic card reader (USB)' }),
+  get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
+  set_prefs: (a) => { prefs = { ...a.prefs }; return { ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }; },
+  plan_sync: () => ({ id: 'mock-plan-1', new_files: 42, updates: 5, unchanged: 7133, bytes_to_write: 412_000_000, art_sidecars: 3, art_sidecar_previews: [], warnings: [] }),
   compare_media: () => ({ left: '/mock/a', right: '/mock/b', only_left: 2, only_right: 1, different: 1, identical: 10, differences: [{ relative: 'Music/x.mp3', state: 'only_left', left_bytes: 4e6, right_bytes: null }] }),
   cancel_job: () => null,
   set_manual_player: () => null,
@@ -41,8 +126,18 @@ const handlers: Record<string, (args: any) => unknown> = {
 };
 
 export function installDevMock() {
+  // Test hooks (dev only): simulate plugging the card in/out, changing its
+  // contents behind the app's back, and switching how it is connected.
+  (window as any).__tauMock = {
+    setMounted: (value: boolean) => { mounted = value; },
+    addCardAlbum: (title: string) => { cardAlbums = [...cardAlbums, { ...album('Test Artist', title, 3, 100, 2001) }]; },
+    setConnection: (value: typeof connection) => { connection = value; },
+  };
+  // Test hook: `?connection=card_reader` or `?connection=unknown` in the URL.
+  const wanted = new URLSearchParams(location.search).get('connection');
+  if (wanted === 'card_reader' || wanted === 'unknown') connection = wanted;
   mockIPC((cmd, args) => {
-    if (cmd.startsWith('plugin:dialog|')) return '/mock/picked';
+    if (cmd.startsWith('plugin:dialog|')) return (args as any)?.options?.directory ? LIBRARY : '/mock/cover.jpg';
     const h = handlers[cmd];
     if (!h) { console.warn(`[dev-mock] unmocked command: ${cmd}`); throw { code: 'E_MOCK', message: `No mock for ${cmd}` }; }
     return h(args);

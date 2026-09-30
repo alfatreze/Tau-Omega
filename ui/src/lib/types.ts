@@ -80,3 +80,19 @@ export type TaudReport = { format: number; profile: string; tests: TaudTest[]; e
 /** Mirrors `tau_core::screenshots::ScreenshotEntry`: one screenshot found
  * under a card's `Memories/Screenshots/` folder. */
 export type ScreenshotEntry = { path: string; filename: string; bytes: number; captured_at: string | null };
+
+/** Mirrors `tau_core::workbench::{AlbumInfo, TrackInfo, PlaylistInfo, LibraryListing}`. */
+export type AlbumInfo = { id: string; dest_id: string; title: string; artist: string; year: string | null; tracks: number; bytes: number; has_cover: boolean };
+export type TrackInfo = { rel: string; album_id: string; title: string; artist: string; album: string; secs: number; bytes: number; format: string };
+export type PlaylistInfo = { name: string; file: string; tracks: number };
+export type LibraryListing = { albums: AlbumInfo[]; tracks: TrackInfo[]; playlists: PlaylistInfo[]; warnings: Warning[] };
+/** Mirrors `tau_core::tagedit::{FieldEdits, EditRequest}`. `null` leaves a field alone; `''` clears it. */
+export type FieldEdits = { title: string | null; artist: string | null; album: string | null; album_artist: string | null; year: string | null };
+export type EditRequest = { album_id: string; track: string | null; fields: FieldEdits; cover: string | null };
+export type ChangeRequest = { library_root: string | null; add_albums: string[]; remove_albums: string[]; edits: EditRequest[]; options: { mirror: boolean; embed_covers: boolean; art_sidecar_pal256: boolean } };
+export type ChangePlanView = { id: string; new_files: number; updated_files: number; unchanged_files: number; bytes_to_write: number; removed_files: number; bytes_to_remove: number; edited_files: number; playlists_updated: number; warnings: Warning[] };
+export type ChangeReport = { plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string };
+export type ConnectionKind = 'direct_usb' | 'card_reader' | 'unknown';
+export type ConnectionInfo = { kind: ConnectionKind; detail: string };
+export type Prefs = { remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; speeds: Record<string, number>; connections: Record<string, string> };
+export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };

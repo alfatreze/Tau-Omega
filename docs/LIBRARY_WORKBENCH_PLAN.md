@@ -140,6 +140,27 @@ Suggested order of value: P0, P1, P2 gives you what you described first (browse,
 * **D6. Playlists:** stay on the Playlists page; paths are rewritten automatically on rename/remove.
 * **Added: auto-detect and refresh.** Omega detects a card or the Pocket being connected or removed and refreshes on its own (polls the mounted-volume list every 3 s, in addition to the existing refresh on window focus). A subtle refresh icon at the top right forces a re-read. Implemented in P0 in `App.svelte`; verify on real hardware (Pocket USB mode may appear differently from a card reader).
 
-## 12. P0 status
-Prototype implemented in `ui/src/lib/Workbench.svelte` (fixture data, simulated actions, nothing calls the engine). Covers: capacity bar, two panes, add by tick or drag, Pending changes tray (per-row remove, undo, Clear all), first-time removal explanation, edit drawer (rename, info, cover), slow-connection alert and contextual note, over-capacity state, review sheet, progress, result. Not yet in P0: Tracks tab, per-card pending persistence, Settings > Library preference UI (P1/P3).
-Regenerate screenshots: `cd ui && npm run dev` then `node scripts/workbench-states.cjs`.
+## 12. Status (P0 to P5 built; hardware not yet exercised)
+
+| Phase | State | Where |
+|---|---|---|
+| P0 prototype | Done, superseded by the real screen | |
+| P1 browse and stage | Done: card and local listings, Albums/Artists/Tracks/Playlists, capacity from the real volume, pending list saved per card and core, drag or button | `ui/src/lib/Workbench.svelte`, `crates/tau-core/src/workbench.rs` |
+| P2 sync and progress | Done: album-level plan, one confirmation for adds/removals/edits, journal, live progress with measured speed, cancel, slow-connection alert and note, Sync library and old Library screens retired | `changes.rs`, `journal.rs`, `src-tauri/src/main.rs` |
+| P3 remove from Pocket | Done: staged, undoable, backup per preference, playlists rewritten, index rebuilt | `workbench::plan_removal`/`execute_removal`, Settings > Library |
+| P4 rename, edit info, cover | Done: album title/artist/album artist/year, track title, cover; ID3v2.3/2.4 and FLAC; edits recorded on the card and re-applied after a re-sync | `crates/tau-core/src/tagedit.rs` |
+| P5 polish | Partly done: keyboard-reachable controls, states and empty states, docs and tests. Not done: automated accessibility audit (axe), cross-card copy as a source | |
+| Auto-detect | Done in code for macOS, Linux and Windows (polls mounted volumes every 3 s, refreshes on window focus, refresh button); not verified on hardware | `ui/src/App.svelte`, `src-tauri/src/device.rs` |
+| Tools and settings menu | Done: Compare cores, Backup, Packages, Problems, Recent jobs and Settings sit in a collapsible section; Library preferences live in Settings | `ui/src/App.svelte`, `LibrarySettings.svelte` |
+
+**Decisions taken while building (worth a look):**
+* *Album = a folder that directly contains audio.* A multi-disc release with `Disc 1`/`Disc 2` sub-folders shows as two albums.
+* *Rename = tag edit.* Renaming an album, artist or track changes its tags on the card copy; file and folder names are not changed, so playlists keep working.
+* *"On Pocket" vs "Changed"* compares the number of tracks in the matching folder, not file contents (cover embedding changes bytes). The review sheet shows the exact new/updated/unchanged counts from the real plan.
+* *An album cannot be added and edited or removed in the same run;* the engine refuses it and the UI blocks it. Sync first, then edit.
+* *The 10 MB rule* is taken from the Pocket's own USB screen. Speed estimates are never invented: the app shows time only from the last measured transfer on that card.
+* *Tag writing refuses tags it cannot rewrite safely* (ID3 unsynchronisation, extended headers, footers) rather than risk damaging a file, and the file is left untouched.
+* *Existing reader limitation:* the index reader stops UTF-16 text at its first zero byte, so UTF-16 ID3 tags read as blank. Not changed here, because the index must match the Python reference byte for byte; edits that need Unicode in an old v2.3 tag upgrade that tag to v2.4 (UTF-8), which the reader handles.
+* *Safety rule 4* now records your D2 decision, with backup as the default (see `SAFETY_RULES.md`).
+
+**Run and verify:** `cargo test --workspace`, `cargo test -p tau-core --features serde`, `cd ui && npm run check`, and with `npm run dev` running: `NODE_PATH=$(npm root -g) node scripts/workbench-test.cjs` (42 checks) and `scripts/workbench-states.cjs` for screenshots. Hardware checks are in `TEST_PLAN.md` (Owner acceptance runs, item 5).
