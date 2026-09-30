@@ -5,8 +5,8 @@ import { mockIPC } from '@tauri-apps/api/mocks';
 
 const CARD = '/mock/Pocket';
 const cores = [
-  { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platform_category: 'Music', library_capable: true, index_status: 'ok', tracks: 7180 },
-  { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau', platform_category: 'Music', library_capable: true, index_status: 'missing', tracks: null },
+  { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'ok', tracks: 7180 },
+  { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
   { id: 'agg23.SNES', author: 'agg23', shortname: 'SNES', version: '1.4.0', platform: 'snes', platform_category: 'Console', library_capable: false, index_status: 'n/a', tracks: null },
 ];
 const tracks = Array.from({ length: 60 }, (_, i) => ({ rel: `Music/Artist ${i % 6}/Album ${i % 4}/${String(i + 1).padStart(2, '0')} Track ${i + 1}.${i % 3 ? 'mp3' : 'flac'}`, title: `Track ${i + 1}`, artist: `Artist ${i % 6}`, album: `Album ${i % 4}`, secs: 150 + i * 3, format: i % 3 ? 'mp3' : 'flac' }));

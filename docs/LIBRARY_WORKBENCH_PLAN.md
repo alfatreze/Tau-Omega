@@ -131,10 +131,15 @@ Path to keep `tau-core` clean: all rules stay in the engine (TP0 boundary), the 
 
 Suggested order of value: P0, P1, P2 gives you what you described first (browse, add, capacity, sync with progress, slow alert). P3 and P4 follow.
 
-## 11. Decisions needed from you
-* **D1. Tag editing scope:** allow editing tags and covers on the card copy only (recommended), or never edit anything. If allowed, `SPEC.md` gets an explicit line.
-* **D2. Removal safety:** (a) staged and undoable until sync, then permanent (simplest), (b) also copy removed files to a backup folder on the computer first (recommended; you set the folder once, reusing the existing Reports directory idea).
-* **D3. Edits vs re-sync:** re-apply your edits on later syncs (recommended) or let the source win.
-* **D4. Old screens:** retire Library and Sync library once P2 lands (recommended) or keep them behind an "Advanced" entry until P5.
-* **D5. Slow warning:** always ask, or offer "don't ask again for this card".
-* **D6. Playlists:** are they part of "what I sync" (selected with albums), or managed only on the Playlists page as today? Recommended: keep on the Playlists page, and rewrite paths automatically when tracks are renamed or removed.
+## 11. Decisions (approved 2026-09-30)
+* **D1. Tag/cover editing:** allowed on the **card copy only**. `SPEC.md` to state this explicitly (P4).
+* **D2. Removal safety:** a **user preference in Settings** (Settings > Library > Removing from the Pocket: ask each time / back up then remove / just remove). The **first** removal shows a one-time explanation, including where to change the preference later. Default: back up to a computer folder, then remove.
+* **D3. Edits vs re-sync:** edits are **re-applied** on later syncs (per-card edit manifest).
+* **D4. Old screens:** Library and Sync library are **retired** when P2 lands. Until then they remain, and the new screen is "Library workbench".
+* **D5. Slow-connection alert:** shown the **first time** with a "Don't ask again" checkbox. After that, only a **small contextual note next to Start sync** ("Direct connection: about 5 min"). The note shows whenever the rule applies, even before the checkbox is ticked.
+* **D6. Playlists:** stay on the Playlists page; paths are rewritten automatically on rename/remove.
+* **Added: auto-detect and refresh.** Omega detects a card or the Pocket being connected or removed and refreshes on its own (polls the mounted-volume list every 3 s, in addition to the existing refresh on window focus). A subtle refresh icon at the top right forces a re-read. Implemented in P0 in `App.svelte`; verify on real hardware (Pocket USB mode may appear differently from a card reader).
+
+## 12. P0 status
+Prototype implemented in `ui/src/lib/Workbench.svelte` (fixture data, simulated actions, nothing calls the engine). Covers: capacity bar, two panes, add by tick or drag, Pending changes tray (per-row remove, undo, Clear all), first-time removal explanation, edit drawer (rename, info, cover), slow-connection alert and contextual note, over-capacity state, review sheet, progress, result. Not yet in P0: Tracks tab, per-card pending persistence, Settings > Library preference UI (P1/P3).
+Regenerate screenshots: `cd ui && npm run dev` then `node scripts/workbench-states.cjs`.
