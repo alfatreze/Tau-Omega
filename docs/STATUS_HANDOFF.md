@@ -1,13 +1,17 @@
 # Tau Omega — status handoff
 
+**Updated 2026-10-02: two parallel sessions were integrated — read "Library workbench, and the integration of two parallel sessions" first.** Sections dated before that describe the earlier session's work and may name files (`CardsView`, `SyncView`, `connection_kind`) that the integration did not carry over; each such section carries an integration note.
+
 Updated 2026-09-26 (core removal, the full TAUD1 QR decoder, real hardware write validation,
 screenshot discovery, a UX/UI review with two real bug fixes and a screenshot gallery, fixes for
 `cargo tauri dev` and a missing event capability found running the real app for the first time,
 known/mounted-card auto-open, a Cards-screen redesign — player-core cards, a platform-category
 signal, "Set as player", a detail side panel, and a help panel replacing the old read-only text —
 a sidebar active-card/-core switcher, real per-core icon.bin decoding, `TIM1` cover-image
-decode/encode, cover-sidecar writing wired into Sync, and a lazy cover preview in the Sync plan
-review, added in sequence). All implementation work is contained in `Tau Omega/`.
+decode/encode, cover-sidecar writing wired into Sync, a lazy cover preview in the Sync plan review,
+playlist path pickers, extracting the last three inline pages, a Meters UI-structure scaffold against
+a synthetic schema, and real USB connection detection (Pocket vs. plain USB storage) driving a
+connection-aware card icon, added in sequence). All implementation work is contained in `Tau Omega/`.
 
 ## Read these first
 
@@ -17,6 +21,8 @@ review, added in sequence). All implementation work is contained in `Tau Omega/`
 3. `PORTABILITY_AUDIT.md` — every P0/P1/P2 item, all done as of 2026-09-22.
 4. `FIRMWARE_SYNC.md` — what we assume about tau-alpha, last verified 2026-09-26 against its working
    tree (post-B-294; no new tagged release since v0.4.0).
+5. `LIBRARY_WORKBENCH_PLAN.md` (with `LIBRARY_UX_REVIEW.md` and `usability/SYNTHESIS.md`) — the Library
+   workbench, the main screen of the app.
 
 This folder is a Git repository, pushed to **github.com/alfatreze/Tau-Omega** (public), branch
 `main`, with branch protection (PRs required, admin can bypass) and a GitHub Actions CI workflow
@@ -193,10 +199,29 @@ zero effect on the main build) for real coverage-guided fuzzing — not run in t
 
 ## Known issues and incomplete wiring
 
-- Playlist export currently requires typing an output file path; a save-dialog picker is still pending.
-- Some UI pages remain in `App.svelte`; extracted component work should continue before adding large new flows.
-- Playlist create/import destination filenames are typed by hand rather than picked from a directory
-  listing of existing `.m3u` files, same limitation as playlist export above.
+- **Open, 2026-09-29 (cross-project, from Tau-Alpha):** Tau Omega running (even just open, not
+  actively syncing) appears to hold the Pocket's mounted SD card in a way that blocks other
+  processes from touching it — observed directly in the sibling Tau-Alpha session: `ls /Volumes/`
+  (and other basic filesystem calls) failed there with no card listed while Tau Omega was open, and
+  the mount appeared immediately once the owner closed Tau Omega. Not yet root-caused on this side —
+  candidates worth checking: a held file handle from a background watcher/poll (e.g. a
+  `fs::read_dir`/tokio task left scanning the card path), a Tauri asset-protocol scope keeping the
+  volume referenced, or a lock file Tau Omega writes and never releases while the window is open. A
+  fix should let the OS unmount/eject the card cleanly whenever Tau Omega has no operation actually
+  in flight against it, not just when the app is fully quit. Needs someone to reproduce with Tau
+  Omega open + idle, then narrow with `lsof`/Activity Monitor's "Open Files" against the mounted
+  volume path before touching any code.
+- **Fixed 2026-09-26:** playlist export now has a native save-dialog picker (filtered to `.m3u`); the
+  rename/create/import destination fields gained a `<datalist>` of the media root's own already-known
+  `.m3u` filenames (from the existing scan result, no new backend command) so an existing file can be
+  picked instead of retyped, while free typing for a new name still works. See "Playlist path pickers
+  and page extraction" below.
+- **Fixed 2026-09-26:** Cards, Sync and Compare Cores are now extracted components (`CardsView.svelte`,
+  `SyncView.svelte`, `CompareView.svelte`), matching the `BackupView`/`PackageView`/etc. pattern —
+  `App.svelte`'s own template shrank from ~110 to ~25 lines across these three pages. See "Playlist
+  path pickers and page extraction" below. *Integration note 2026-10-02: this extraction was not
+  carried onto the Library workbench base; Cards and Compare are inline in `App.svelte` there and the
+  Sync page no longer exists.*
 - **Fixed 2026-09-22 (P0-1/P0-2/P0-3/P1-1/P1-2/P1-3/P2):** every item in `PORTABILITY_AUDIT.md` is
   now done — the three P0 boundary defects (duplicated root-prefix/index-status logic,
   English-only warnings and errors, no progress/cancellation), P1-1 (optional `serde` feature; DTO
@@ -674,8 +699,8 @@ through the same decoder against a real source JPEG (`testdata/images/cover455.j
 
 **Honestly unfinished at the time:** no UI wiring, no Sync-plan option to write the sidecar, no
 thumbnail shown anywhere. — carried over from tau-alpha's own status, not something this side
-controls — no firmware reader exists for this format yet and its data-slot number is still
-unassigned, so writing these files to a real card today has no effect on the Pocket itself.
+controls — *(superseded 2026-09-27: tau-alpha v0.5.0 ships the firmware reader, cover data slot 7; the
+fast cover is hardware-confirmed)*. Originally: no firmware reader existed and no slot was assigned.
 
 ## Cover-sidecar writing wired into Sync (2026-09-26)
 
@@ -692,8 +717,7 @@ every other write path here follows. New `SyncReport::art_sidecars_written` fiel
 
 Wired end to end: `tau-cli` gained `--art-sidecar`; the Tauri `plan_sync`/`execute_sync` commands and
 `SyncPlanView` carry the count through; the Sync screen has a second checkbox next to "Add folder
-cover art", with the same honest caveat inline ("no firmware reader exists yet, so this has no effect
-on the Pocket today"), and the plan-review line shows "· N art sidecar(s)" when non-zero. Verified
+cover art", with an inline note (originally "no firmware reader exists yet"; updated 2026-09-27 to say v0.5.0+ cores show it), and the plan-review line shows "· N art sidecar(s)" when non-zero. Verified
 live in a browser against a mocked Tauri backend (checkbox toggle changes the mocked `plan_sync`
 response, plan card renders the count and correct singular/plural). New engine test
 (`art_sidecar_is_planned_once_per_album_and_written_verifiably`, against a real source JPEG) confirms
@@ -705,6 +729,8 @@ for every file this touched (collapsed three new nested-`if`s into `if`-let-chai
 **Still open at the time:** no thumbnail is decoded and shown anywhere in the UI yet (Library/Cards).
 
 ## Cover preview: decode-and-show in the Sync plan review (2026-09-26)
+
+*Integration note 2026-10-02: the Sync page this preview lived on was retired by the Library workbench. The engine pieces (`image::*`, `preview_art_sidecar`, `SyncPlanView.art_sidecar_previews`) are intact; the preview button has no surface until the Library review sheet gets one.*
 
 Closed the "decode and show" half of the original plan. Rather than a Library/Cards thumbnail grid
 (the Library screen is a flat, virtualised 12,000+-row track table with no album grouping at all —
@@ -739,6 +765,199 @@ directly for the first time this session — found 2 pre-existing `too_many_argu
 `execute_sync`/`execute_core_move`, unrelated to this change: both already exceeded the default
 7-argument threshold before today, `src-tauri` was simply never part of the workspace's own
 documented "clean" claim. Not fixed here, flagged for whoever picks up that cleanup.)
+
+## Playlist path pickers and page extraction (2026-09-26)
+
+*Integration note 2026-10-02: the pickers were ported; the page extraction (`CardsView`/`SyncView`/`CompareView`) was deliberately not. See the integration section.*
+
+Closed both remaining "Known issues" wiring gaps in one pass.
+
+**Playlist pickers.** `output` (the export destination) is a real host filesystem path, so it got a
+native save-dialog `Choose` button (`@tauri-apps/plugin-dialog`'s `save()`, filtered to `.m3u`,
+mirroring `chooseFolder`'s existing cancel-returns-null precedent). `renameNewFile`/`createFile`/
+`importDestFile` are filenames *within* the already-chosen media root, not arbitrary host paths — a
+save dialog rooted anywhere would let a mistaken pick land outside it — so those three instead got a
+shared `<datalist>` populated from the folder's own already-scanned `result.playlists`, no new backend
+command needed (the cheaper path the scoping pass identified: the data was already there). Free typing
+for a brand-new name still works alongside the suggestions.
+
+**Page extraction.** Cards, Sync and Compare Cores were the last three inline pages in `App.svelte`,
+per its own "Known issues" note. Extracted as `CardsView.svelte`, `SyncView.svelte`,
+`CompareView.svelte`, following the exact `BackupView.svelte` pattern (props in, callback props out,
+no internal Tauri calls) already used by seven other views. Behaviour-neutral by construction — same
+markup, same bindings, same handlers, just moved. One real thing found and fixed doing this: Compare's
+locally-scoped `<style>` rules (`.comparison`, `.copy-plan`, `.move-review`, …) had to move to
+`CompareView.svelte` too — Svelte's per-component CSS scoping never applies a `<style>` block's rules
+to another component's markup (the exact class of mistake `App.svelte`'s own comment already warns
+about for `.jobs-panel`/`.settings-card`/etc.), caught immediately by `svelte-check`'s
+`css_unused_selector` warnings rather than shipped silently unstyled.
+
+**A real, pre-existing UI redundancy found while verifying this live, not fixed (out of scope for a
+behaviour-neutral extraction):** reviewing a core copy shows *two* confirmation surfaces at once —
+an inline `.copy-plan` card inside the Compare page itself, and a separate full-screen `.move-review`
+modal layered on top of it (both gated on the same `coreCopyPlan`). The modal visually covers the
+inline card, so this isn't a live bug (nothing is double-clickable), but the inline card's own
+"Confirm and copy" button is dead markup the instant a plan exists, since the modal always appears at
+the same time. Confirmed by screenshot during live verification. Worth deleting the inline `.copy-plan`
+card in a future pass — the modal is the one real confirmation flow (it's the only one offering the
+move option) — but that's a product decision, not a mechanical refactor, so left as-is here.
+
+Verified live in a browser against a mocked Tauri backend: Cards (player-core grid, other-cores list,
+detail panel), Sync (plan review including the art-sidecar preview built two commits ago), and Compare
+(comparison result, the copy-plan card, and the move-review modal) all render and behave identically to
+before extraction. Playlist datalist suggestions confirmed populated from real scanned filenames via a
+direct DOM query, not just visual inspection. `cargo test --workspace`: 75 passing (unchanged, this was
+a frontend-only pass). `npm run check`: 0 errors, 0 warnings.
+
+## Meters: UI-structure scaffold, synthetic schema (2026-09-26)
+
+*Integration note 2026-10-02: the Meters entry now sits under Tools & settings in the workbench's menu.*
+
+Owner decision on how to start meter work given tau-alpha's instability (active hardware bug-hunting
+that same day, M0 built but uncommitted on their side, no tagged release containing a real
+`meters_schema.json`): **scaffold the UI structure and preview plumbing against a synthetic schema
+now; swap in the real one once tau-alpha tags a release.** Zero dependency on their churn, zero rework
+risk — this is pure frontend, no Tauri command, no engine code, nothing written anywhere.
+
+New `ui/src/lib/meters/schema.ts`: `MeterSchema`/`MeterParam`/`MeterPreset` types mirroring
+`docs/METER_MODULE_SPEC.md` section 4's real manifest shape field-for-field, so swapping in the real
+`meters_schema.json` later is a data change, not a UI rewrite. Three synthetic meters (`winamp_bars`,
+`winamp_scope`, `chladni`) — not arbitrary placeholders: their parameter shapes are drawn from
+tau-alpha's own real, hardware-shipped `wviz_bars_cfg_t`/`wviz_scope_cfg_t` fields per that project's
+audit trail, so the editor and preview exercise a realistic shape. Every placeholder is labelled as
+such, loudly, in both the code comments and the on-screen UI copy — this is a scaffold, not a feature.
+
+New `ui/src/lib/MetersView.svelte`: a meter list (cost-class chip per meter), a generated parameter
+editor (range/checkbox/select per `param.type`, honouring `when` clauses to show/hide, e.g. "Peak fall
+style"/"Peak hold" only when "Peak cap" is on), a preset dropdown that snaps to `CUSTOM` the instant any
+value is hand-edited, and a Reset-to-template action. New `ui/src/lib/meters/MeterPreview.svelte`: a
+`<canvas>` animation loop driven by synthetic (not real) audio-level data, dispatching by which
+parameters a meter declares (`bands` → bar meter with attack/release easing and an optional peak dot;
+`smooth`/`trail` → scrolling scope with fade; otherwise → a generic reactive placeholder) — explicitly
+not tau-alpha's real preview stack (`METER_MODULE_SPEC.md` section 7's `tau_fb.js`/`tau_theme.js`/
+`tau_audio.js`/`tau_ballistics.js`, which doesn't exist to vendor yet), captioned as such on screen, but
+real enough that the editor and preview are genuinely live and interactive.
+
+New "Meters" nav entry. Verified live in a browser: switching meters preserves each one's own
+independent parameter state, toggling "Peak cap" off correctly hides its two dependent params and
+removes the peak dot from the animating preview, and all three meters' distinct preview shapes (bars,
+scope, rings) render and animate correctly. `npm run check`: 0 errors, 0 warnings.
+
+## Firmware/app update feature: design, then connection detection + card icon (2026-09-26)
+
+*Integration note 2026-10-02: the detection described here (`connection_kind`, `pocket`/`usb_storage`/`other`) was merged into the workbench's `device.rs` `detect_connection` (`direct_usb`/`card_reader`/`unknown`); the hardware-verified USB-descriptor match is kept, the duplicate command is gone. The icon swap is on the sidebar card only.*
+
+Owner asked for a firmware upgrade feature (both a Tau Omega self-update check and browsing/
+installing Tau Alpha core releases by channel/build), a transfer-safety warning for USB-connected
+Pocket writes, and a connection-aware card icon — designed first with the `design-system` skill
+(new pattern extending the existing dark-workbench system, not a new visual language) before any
+code: [`docs/FIRMWARE_UPDATE_SPEC.md`](FIRMWARE_UPDATE_SPEC.md). Real research grounded the design
+rather than guessing: Analogue's own cached developer docs give a hard ~700 KB/s–1 MB/s figure for
+USB SD Access mode, and the Pocket's own on-device screen (read directly, with it connected) states
+"<10MB suggested" — the spec's warning threshold. Scope and data-source decisions (two separate
+update targets; GitHub releases API, a first network capability for this app) were confirmed with
+the owner before writing anything.
+
+**Built and hardware-verified this pass: USB connection detection + the card icon swap** — the
+smallest, most self-contained piece, no network access, chosen deliberately as the starting point.
+New `src-tauri` command `connection_kind(path)`: resolves a path's whole-disk BSD identifier via
+`diskutil info`, and if its protocol is USB, walks `ioreg -l -w0`'s registry tree to the disk's
+ancestor USB device and matches its `idVendor`/`USB Product Name` against the real Analogue Pocket
+descriptor. That descriptor isn't published anywhere by Analogue — found empirically by reading
+`ioreg` directly against the owner's actual mounted Pocket (idVendor `0x04D8`/Microchip Technology,
+product name `"Analogue Pocket"`), with a real contrasting device (a CalDigit USB3 card reader, also
+attached at that moment) confirming the match is discriminating, not just "any USB device."
+
+**A real parsing bug was found and fixed by testing against the real device, not by inspection:**
+the first implementation matched `ioreg` lines with `.trim()` then exact-string equality — but
+`ioreg`'s own tree-drawing `|` characters aren't whitespace, so `.trim()` left a leading `|` on every
+property line and the equality check silently matched nothing, on every single property, the entire
+time. Caught immediately because the real-hardware test failed while the synthetic unit test (whose
+fixture happened not to trigger the bug) passed — exactly the class of gap real-artifact testing
+exists to catch. Fixed with `.contains`/`.split_once` instead of exact equality. Two `#[ignore]`d
+regression tests lock in both real cases (`cargo test --features tau-core/serde -- --ignored`, needs
+real hardware attached): the genuine Pocket detected correctly, and a real, differently-branded USB
+storage device (a Raspberry Pi Pico in mass-storage mode) correctly *not* misdetected as one.
+
+New `CardIcon.svelte` (Pocket glyph / a new generic SD-card glyph / the existing fallback for
+unknown — still no Analogue logo, same trademark-avoidance constraint as before), wired into both
+the sidebar active-card widget and the known-card tiles, fetched lazily and cached per path like
+`coreIcons`/`platformImages` already are. Verified live in a browser against a mocked backend: two
+known cards with different mocked connection kinds render visibly different icons.
+
+`cargo test --workspace`: 75 passing (unchanged, this was `src-tauri`-only). `src-tauri`'s own test
+suite (not previously run standalone this session): 3 passing including both hardware-gated tests.
+`npm run check`: 0 errors, 0 warnings. `cargo clippy` clean for every file this touched (2
+pre-existing, unrelated `too_many_arguments` findings in `src-tauri` noted, not fixed, same as
+before).
+
+**Not built yet:** sections 3a (Tau Omega self-update), 3b (the Firmware screen: per-card version
+detection, channel/build picker, browsing GitHub releases), and 3c (the transfer-safety banner
+itself, threaded through Sync/Backup/Package/Core-copy) — all still design-only in the spec, next in
+line per the owner's own chosen build order.
+
+## Library workbench, and the integration of two parallel sessions (2026-09-30 / 2026-10-02)
+
+**Why this section exists.** Two sessions on two accounts worked from the same commit (`bd43af5`)
+without seeing each other. One built the **Library workbench** (19 commits, 2026-09-30, branches
+`claude/exciting-bell-emz8il` and `claude/jolly-meitner-jwdzwx`, identical). The other built the
+Cards/Sync/Compare page extraction, the Meters scaffold, playlist pickers and the firmware-update
+design with USB connection detection (3 commits, 2026-09-26, branch `omega-cards-meters-firmware`,
+also on local `main` until merged). The Library workbench is the key work and is the **base**; the
+other session's work was ported onto it as `integration/workbench-base`. Nothing was lost: every
+original commit is still on `origin`.
+
+**What the Library workbench is** (full design: [`LIBRARY_WORKBENCH_PLAN.md`](LIBRARY_WORKBENCH_PLAN.md);
+build status table in its section 12): one card-centred screen replacing the old *Sync library* and
+*Library* screens. The card's music on the right, a folder on this computer on the left, every add,
+removal and tag/cover edit staged in a single **Pending changes** list, nothing touching the card until
+**Start sync**, one review sheet (adds/updates/removals/edits, free space after, time estimate, the
+slow-connection warning), live progress with measured speed and cancel, then a result and a **Sync
+history** page. Engine: `tau-core` `workbench.rs` (album listing, selection planning, removal),
+`changes.rs` (combined change sets), `tagedit.rs` (ID3v2.3/2.4 and FLAC tag and cover editing on the
+card copy only, written to a temp name, read back, then renamed), `journal.rs` (change-set journal and
+history), `cover.rs` (`extract_embedded_cover` for thumbnails). Shell: `src-tauri/src/device.rs`
+(volume auto-detect, connection detection), workbench commands and preferences in `main.rs`.
+UI: `Workbench.svelte`, `HistoryView.svelte`, `LibrarySettings.svelte`, `VirtualList.svelte`, a
+dev-only Tauri mock (`dev-mock.ts`) and `ui/scripts/*.cjs` browser checks. Owner decisions D1
+(tag/cover edits on the card copy only) and D2 (removal preference: back up, ask, or just remove;
+default back up) are recorded in `SAFETY_RULES.md`. Review and usability material:
+[`LIBRARY_UX_REVIEW.md`](LIBRARY_UX_REVIEW.md), [`usability/`](usability/) (**simulated** personas, not
+real users, so treat their findings as a checklist, not evidence of demand).
+
+**What was ported onto the workbench from the other session** (each its own commit):
+
+| Ported | Notes |
+|---|---|
+| Backup/journal "outside the card" fix | Not from the other session: found while integrating. Four checks compared an unresolved path with the canonicalised card root, so on macOS (`/var` vs `/private/var`) a backup or journal could land inside the card. Shared helper `sync::backup_is_inside`; four `tau-core` tests that had been failing on macOS now pass. Linux CI had masked it. |
+| Pocket confirmed by its real USB descriptor (macOS) | Merged into the workbench's `device.rs` (`usb_disk_is_pocket`: vendor `0x04D8`, product name "Analogue Pocket", found empirically 2026-09-26). The workbench's name-based guess stays as the fallback and as the Windows/Linux path; a name match alone no longer produces a "direct USB" verdict on macOS if the descriptor disagrees. The two `#[ignore]`d live-hardware tests moved to `device.rs`. |
+| Card icon | `CardIcon.svelte` on the sidebar active card, driven by `detect_connection` (`direct_usb` → handheld, `card_reader` → SD card, `unknown` → handheld). |
+| Playlist export "Choose" and name suggestions | Unchanged from the earlier session. |
+| Meters scaffold | `MetersView.svelte` and `meters/`, now under **Tools & settings**. Still a synthetic schema, still waiting on a tau-alpha tagged release with a real `meters_schema.json`. |
+| Opt-in cover sidecar | New checkbox in the Library review sheet, remembered per card. The workbench had hardcoded `art_sidecar_pal256: false`; the engine already honoured it. |
+
+**Deliberately not ported:** the `CardsView`/`SyncView`/`CompareView` extraction. The workbench retired
+the Sync and Recent-jobs pages and keeps Cards and Compare inline in `App.svelte`, so the menu stays as
+the Library design has it. The `plan_sync`/`execute_sync` commands and `SyncPlanView` still exist in
+`src-tauri` (and the cover-preview command `preview_art_sidecar`) but no page calls them now; the
+cover preview in the Sync plan review therefore has no surface until the Library review sheet gains
+one (not built).
+
+**Known gaps and open items after integration**
+- `connection_kind` (the earlier session's `pocket`/`usb_storage`/`other` command) was **not** carried
+  over; `detect_connection` (`direct_usb`/`card_reader`/`unknown`) is the single detector.
+- The transfer-safety warning (spec section 3c) is built for the Library review sheet only (10 MB
+  threshold, same figure from the Pocket's own screen). Backup, Packages and Core-copy review cards
+  have none.
+- Tools & settings pages (Compare cores, Backup, Packages, Problems) keep their older wording.
+- The workbench's own behaviour script (`ui/scripts/workbench-test.cjs`, documented as 122 checks)
+  needs Playwright and was **not** run during integration; the integration was checked with
+  `cargo test --workspace`, `npm run check` and a live click-through against the dev mock.
+- Real hardware: the workbench's write paths (sync, removal, tag edits) and the new USB-descriptor path
+  in `device.rs` have not been exercised on a real card since integration. `TEST_PLAN.md` item 5 lists
+  the runs.
+- `cargo fmt --check` reports pre-existing formatting drift; `cargo clippy` has the two known
+  `too_many_arguments` findings in `src-tauri`.
 
 ## Safety and UX baseline
 

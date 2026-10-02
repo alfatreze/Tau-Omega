@@ -108,13 +108,13 @@ and height).
 default). Verified against a real `.timg` file from a real album, not invented from this section's
 prose (`Tau Omega/testdata/images/README.md`).
 
-> **Both open questions from the previous design are still open, just restated (`FIRMWARE_SYNC.md`
-> "Open conflicts"):**
-> 1. **The slot number is still unassigned and slot 6 is still double-booked** (Phase G's cold image
->    `tau-cold.bin` occupies it in the shipped core). Deciding the pixel format didn't resolve this.
-> 2. **The container itself is explicitly not frozen** (`IMAGE_FORMATS.md` D-I05) and **no firmware
->    reader exists yet**. Writing `.timg` sidecars today is real, tested forward-prep and a real
->    decode path for our own UI's previews — it does not yet do anything on the Pocket itself.
+> **Updated 2026-09-27 for tau-alpha v0.5.0 (both questions moved):**
+> 1. **Resolved.** Slot 6 stays the cold image; the cover image is data slot **7**, opened by name at run time
+>    (no filename in `data.json`), and `tau-assets.bin` is slot 8.
+> 2. **A firmware reader now exists** (on by default in v0.5.0, path `tau-art/cover_128.pal256.timg`), and the
+>    fast cover is hardware-confirmed for MP3 and FLAC albums (about 90 ms; E4 = album has no sidecar). The
+>    container is still formally unfrozen (D-I05, owner decision pending), so keep re-checking a real file
+>    from a card before a byte-layout change.
 >
 > The reserved index fields are unaffected either way: `art_id` stays at offset 44 and the album
 > record's `art` field stays `u16 = 0xFFFF` until a slot exists.
