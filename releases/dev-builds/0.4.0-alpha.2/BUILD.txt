@@ -1,0 +1,12 @@
+Tau Omega test build 0.4.0-alpha.2   (NOT a release)
+Release goal : 0.4.0
+Built        : 2026-10-02 19:13 WEST
+Branch       : integration/workbench-base
+Commit       : 9050448   feat: unified card space and sync bar with a Details side panel
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega_0.4.0-alpha.2_arm64.app.zip   (unsigned: right-click > Open the first time)
+SHA-256      : 2a8babfe8b91ca9da627df21c35f0628f2879e301e3f8a5c9c089004d3e0e2aa
+
+What is in it: the unified card space and sync bar (per-core segments, other data, projected change, Details side panel); album and artist names fixed for UTF-16 tagged files (266 of 341 albums in a real library had been blank); everything from 0.4.0-alpha.1.
+Not yet tested on a real card.
