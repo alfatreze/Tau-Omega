@@ -32,6 +32,7 @@ export function explainError(error: unknown): string {
     case 38: return `A copied file did not verify, so the sync stopped without finishing. Nothing was reported complete; run it again. (${message})`;
     case 36: return 'The backup folder must be outside the card. Choose a different one in Settings → Library.';
     case 40: return 'That cover image can’t be used. Use a baseline (not progressive) JPEG under 2 MiB.';
+    case 51: return `There isn’t enough room on the card for this, counting how the card stores files, so nothing was copied. Remove something or add less. (${message})`;
     case 50: return `This file’s tags can’t be rewritten safely, so it was left untouched. (${message})`;
     case 45: return `That folder can’t be found. It may have been moved, renamed or disconnected. (${message})`;
     case 42:
