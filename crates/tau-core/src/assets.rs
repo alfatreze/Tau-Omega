@@ -380,7 +380,9 @@ fn u32le(b: &[u8], at: usize) -> u32 {
 }
 
 /// Verifies the container and returns each section's tag and bytes (every CRC checked first).
-fn read_sections(blob: &[u8]) -> Result<Vec<([u8; 4], &[u8])>, TauError> {
+type Section<'a> = ([u8; 4], &'a [u8]);
+
+fn read_sections(blob: &[u8]) -> Result<Vec<Section<'_>>, TauError> {
     if blob.len() < 12 || &blob[..4] != MAGIC {
         return Err(bad_file("This is not a Tau assets file."));
     }
@@ -724,22 +726,22 @@ pub fn execute_install(
     let blob = pack_assets(themes)?;
     let live = media_root.join(FILE_NAME);
     let mut backup = None;
-    if live.is_file() {
-        if let Some(root) = backup_root {
-            let old = fs::read(&live)?;
-            let dest = root.join(&plan.id).join(FILE_NAME);
-            if let Some(parent) = dest.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            sync::write_durable(&dest, &old)?;
-            if sync::sha256_bytes(&fs::read(&dest)?) != sync::sha256_bytes(&old) {
-                return Err(TauError::e(
-                    ErrorCode::VerificationFailed,
-                    "the backup of the existing theme file did not read back the same, so nothing was changed",
-                ));
-            }
-            backup = Some(dest);
+    if live.is_file()
+        && let Some(root) = backup_root
+    {
+        let old = fs::read(&live)?;
+        let dest = root.join(&plan.id).join(FILE_NAME);
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
         }
+        sync::write_durable(&dest, &old)?;
+        if sync::sha256_bytes(&fs::read(&dest)?) != sync::sha256_bytes(&old) {
+            return Err(TauError::e(
+                ErrorCode::VerificationFailed,
+                "the backup of the existing theme file did not read back the same, so nothing was changed",
+            ));
+        }
+        backup = Some(dest);
     }
     let temp = media_root.join(TEMP_NAME);
     let result = (|| -> Result<(), TauError> {
