@@ -129,9 +129,75 @@ update**, never data loss, and rolling verification bounds how long a missed upd
 2. A real read-back cost with and without the no-cache read (security finding).
 3. Real stat-walk time on a 7,000-file card over both USB and a reader.
 
+## Architect review of the sync module (third pass, 2026-10-02)
+
+Scope: `sync.rs` (plan, copy, index, mirror), `changes.rs` (combined change sets), `workbench.rs`
+(removal), the ledger design, and how they behave on removable FAT/exFAT media, especially a Pocket in
+USB mode (about 0.7 MB/s, its own warning says not for large transfers). Findings are from reading the
+code unless marked otherwise; nothing here was run against a real card.
+
+**A regression I introduced, now fixed.** `sha256_file` kept a 1 MiB buffer on the stack. Moving
+commands to the thread pool put it on threads with much smaller stacks than the main thread. It is now a
+heap buffer.
+
+### Data-loss and corruption risks (ranked)
+
+| # | Risk | Why | Fix |
+|---|---|---|---|
+| D1 | Embedded-cover copies unverified (covered above) | `is_empty()` on a hex digest | return the bytes, verify the read-back against their hash |
+| D2 | **"Verified" may mean "read from memory"**, and there is **no safe-eject step** | read-back normally hits the page cache; `sync_all` per file does not flush the *directory entry* of a rename; nothing unmounts the volume; on a USB-mode Pocket the device itself may buffer | no-cache read-back (`F_NOCACHE`/`O_DIRECT`/no-buffering), a final flush, and a **"Safe to remove" state that unmounts (`diskutil unmount`/equivalent) before telling the user they can unplug**. This is the most likely real-world loss path: people unplug after "done" |
+| D3 | **Case-insensitive collisions overwrite silently** | the plan's collision check uses a case-sensitive set; FAT is case-insensitive, so `Song.mp3` and `song.mp3` in one folder both "copy" and the second replaces the first | fold case in the collision set; report as a collision |
+| D4 | **Removal order is interleaved** (back up file 1, delete file 1, back up file 2...) | a failure or cancel mid-album (host disk full, user cancel) leaves a half-deleted album; no check that the backup folder has room | two phases: back up and verify **all** files, check free space on the backup volume first, then delete; disable cancel during the delete phase or finish the current album |
+| D5 | **Index replace is not atomic on FAT, and a stale index is the firmware's truth** | `rename` over the existing index can leave neither file if the card drops mid-rename; an interrupted sync/removal leaves the old index listing deleted files or missing new ones | keep the old index as a `.prev` until the new one is verified (recover on next open), and detect staleness at open (see below) |
+| D6 | **Capacity check ignores cluster slack** | it compares free bytes with logical bytes; exFAT clusters can be 128 KB and each per-album sidecar rounds up, so "fits" can be false and the run hits no-space halfway, landing in D5 | round each file up to the volume's block size (`statvfs`) and keep a margin |
+| D7 | **Names FAT cannot hold** | `ascii_name` replaces `<>:"|?*\` but not trailing dots or spaces (Windows and some macOS FAT drivers drop them, so the planned path and the real path differ), nor reserved device names | normalise trailing dot/space and reserved names at plan time |
+| D8 | Art sidecars are written in place | a drop mid-write leaves a truncated `.timg` and destroys the previous good one | temp file + rename, like audio |
+| D9 | Leftover `*.tau-omega-<pid>.tmp` and `.tau-library-*.tmp` are never cleaned | nothing sweeps them; they eat space and clusters | list them in the next plan as warnings and remove them as part of a confirmed run |
+| D10 | Reads compete with a running write on the same slow link | listing, thumbnails and the focus/auto-refresh all run while a sync is writing | per-volume I/O governor: one heavy job per volume; background refresh and thumbnails pause during writes |
+
+### Performance issues beyond the first two passes
+
+| # | Issue | Evidence | Fix |
+|---|---|---|---|
+| P1 | **Removal reads each card file four times** | plan hash, execute pre-check hash, `copy_verified` source hash, `io::copy` | one streaming pass that hashes while copying to the backup and compares with the plan hash; with a ledger hash the plan-time read can go too. 1 GB removal at USB speed drops from about an hour to about 25 minutes |
+| P2 | **The index is rebuilt (full scan) up to three times in one change set** | `sync::execute`, again after `reapply_for`, again in `tagedit::execute_edit` and `execute_removal` | rebuild once, at the end of the whole change set |
+| P3 | **Cover embedding loads the whole file into RAM, twice** | `embed_*_copy` does `fs::read(source)` and builds a second `result` Vec; a 24-bit/96 kHz FLAC is 100-300 MB | stream: write the new tag, then `io::copy` the audio |
+| P4 | Source read twice per file at execute | hash pass, then copy pass | hash while copying (see finding 3 above) |
+| P5 | Copy buffer | `io::copy` between files uses a small buffer on macOS (estimate) | an explicit 1 MiB copy loop; matters on card readers, not on USB-mode Pocket |
+| P6 | Plan re-reads card files whose size matches | `Same` test hashes the card file | ledger provenance (above) |
+| P7 | Planning repeats on every checkbox toggle | `replan` | debounce and cancel the in-flight plan |
+
+### Opportunities
+
+1. **Stale-index detection at open, without reading file contents.** The index lists every track by
+   path but stores no size or time, so it cannot validate files on its own. Compare its path set with a
+   directory walk (names only). A mismatch (files not indexed, or indexed files missing, the signature
+   of an interrupted sync) becomes a banner plus a reviewed **Repair index** plan. The index is also a
+   cheap seed for the first listing (its text is ASCII-folded, so it cannot replace the ledger's raw tags).
+2. **A frozen plan artifact.** The plan carries per-file fingerprints (local sources: size, mtime,
+   ctime, inode) and hashes; execute re-checks the fingerprints, hashes while copying against the plan
+   hash, and aborts on a mismatch. That keeps the safety property and removes the second and third
+   planning passes.
+3. **A card session object in `tau-core`**: volume identity, the ledger, the I/O governor and one shared
+   scan, instead of each command rediscovering the card.
+4. **An intent journal on the host with recovery.** Today the journal records what happened. Writing
+   *intent* first (stage, verify, commit, index last) lets the next open say "an earlier sync was
+   interrupted at file 12 of 40" and offer a repair as a reviewed plan, instead of the user finding
+   out on the Pocket.
+5. **`tau-cli bench-card`**: measure sequential read, sequential write, stat-walk time, mtime behaviour
+   and read-back (cache vs no-cache) on a mounted card. It answers the three experiments in the
+   previous section and produces real numbers for time estimates (the app today shows a rough guess).
+6. **Optional, with the owner's approval:** write an empty `.metadata_never_index` at the volume root so
+   macOS Spotlight does not index the card after every sync (it competes for the same slow link). It is a
+   card write outside the media root, so it must be an explicit opt-in.
+
+### What I would not do
+Weaken any of the verification steps to save time; trust file size or mtime alone; write a manifest to
+the card outside a confirmed run; parallelise I/O on a direct-USB Pocket.
+
 ## Ranked next steps
 
-0. **Fix the embedded-cover verification gap first** (finding 1 of the red-team): it is a correctness hole in the default path, independent of any cache.
+0. **Correctness first, no cache needed:** D1 (cover verification), D3 (case collisions), D4 (two-phase removal), D5 (index atomicity), D6 (cluster-aware capacity), then D2 (no-cache verify and safe eject). Original item: **fix the embedded-cover verification gap** (finding 1 of the red-team): it is a correctness hole in the default path, independent of any cache.
 1. Ledger + incremental scan (items 1, 2 and 3 above), with the red-team mitigations (provenance, rolling verification, racy-timestamp handling, untrusted-mtime mode). Run the three experiments first.
 2. `rebuild_index` and `list_library` share one cached scan so a sync scans the card at most once.
 3. Coalesce `replan` (debounce, cancel the previous plan) and reuse source hashes by (path, size, mtime).

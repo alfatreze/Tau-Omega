@@ -828,7 +828,8 @@ pub(crate) fn ascii_file_name(name: &str) -> String {
 pub(crate) fn sha256_file(path: &Path) -> Result<String, TauError> {
     let mut file = fs::File::open(path)?;
     let mut h = Sha256::new();
-    let mut buf = [0u8; 1 << 20];
+    // On the heap: commands now run on thread-pool threads with small stacks.
+    let mut buf = vec![0u8; 1 << 20];
     loop {
         let n = file.read(&mut buf)?;
         if n == 0 {
