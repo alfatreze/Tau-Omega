@@ -16,7 +16,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const pk = () => p.getByRole('region', { name: 'On Pocket' });
   // The staged list lives in the Details panel now (there is no Pending changes area at the bottom).
   const dp = () => p.getByRole('dialog', { name: 'What will change' });
-  const openPending = async () => { await p.getByRole('button', { name: 'Details' }).click(); await p.waitForTimeout(150); return dp(); };
+  const openPending = async () => { await p.getByRole('button', { name: 'Details', exact: true }).click(); await p.waitForTimeout(150); return dp(); };
   const closePending = async () => { await p.keyboard.press('Escape'); await p.waitForTimeout(100); };
   const pending = async () => { const t = await dp().count() ? await text(dp()) : await text(await openPending()); await closePending(); return t; };
   const pc = () => p.getByRole('region', { name: 'This computer' });
@@ -30,6 +30,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
     const confirm = p.getByRole('button', { name: /^(Confirm and start|Sync anyway)$/ });
     try { await confirm.waitFor({ timeout: 1500 }); await confirm.click(); } catch { /* no dialog: it started */ }
   };
+  const done = async () => { const d = p.getByRole('button', { name: 'Dismiss' }); if (await d.count()) await d.click(); };
   const stage = async (...titles) => { for (const t of titles) await pc().getByLabel(`Select ${t}`).check(); await p.getByRole('button', { name: /^Add \d+ to Analogue Pocket/ }).click(); };
   // --- navigation ---------------------------------------------------------
   await fresh();
@@ -59,7 +60,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await text(cap()), /omega \d/); assert.match(await text(cap()), /player2 250 MB/); assert.match(await text(cap()), /Other data/); ok('the bar splits the card by core and other data');
   assert.match(await cap().getByRole('img').getAttribute('aria-label'), /will be added.*free after sync/); ok('the bar has a full text alternative');
   // details panel
-  const detailsBtn = cap().getByRole('button', { name: 'Details' });
+  const detailsBtn = cap().getByRole('button', { name: 'Details', exact: true });
   await detailsBtn.click(); await p.waitForTimeout(200);
   const panel = p.getByRole('dialog', { name: 'What will change' });
   assert.match(await text(panel), /782 MB will be added/); assert.match(await text(panel), /Mingus Ah Um/); assert.match(await text(panel), /estimates/); ok('the details panel lists what will change and says it is an estimate');
@@ -87,7 +88,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   for (const t of ['Bitches Brew', 'The Black Saint', 'Moanin', 'Saxophone Colossus', 'A Love Supreme', 'Mingus Ah Um', 'Head Hunters']) await pc().getByLabel(`Select ${t}`).check();
   await p.getByRole('button', { name: /^Add 7 to Analogue Pocket/ }).click();
   assert.equal(await p.getByRole('button', { name: 'Start sync' }).isDisabled(), true); ok('Start sync is disabled when it will not fit');
-  await p.getByRole('button', { name: 'Details' }).click(); await p.waitForTimeout(150);
+  await p.getByRole('button', { name: 'Details', exact: true }).click(); await p.waitForTimeout(150);
   const tight = p.getByRole('dialog', { name: 'What will change' });
   assert.equal(await tight.getByRole('button', { name: 'Start sync' }).isDisabled(), true); assert.match(await text(tight), /won't fit/); ok('the details panel refuses Start sync and says why when it will not fit');
   await p.keyboard.press('Escape'); await p.waitForTimeout(100);
@@ -110,20 +111,21 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.waitForTimeout(700);
   assert.match(await text(p.getByRole('region', { name: 'Sync progress' })), /Copying/); ok('progress shows the current step');
   assert.match(await text(p.getByRole('region', { name: 'Sync progress' })), /MB of 402 MB/); ok('progress shows bytes copied');
+  assert.equal(await pc().getByRole('progressbar', { name: /Copying Mingus Ah Um, \d+ percent/ }).count(), 1); ok('the album being copied shows a circular progress that fills');
+  assert.equal(await pk().getByRole('progressbar', { name: /Copying Mingus Ah Um/ }).count(), 1); ok('and so does its row on the Pocket side');
   assert.equal(await p.evaluate(() => document.activeElement?.textContent?.trim().startsWith('Cancel')), false); ok('focus is not on Cancel while syncing (Enter cannot cancel by accident)');
   assert.equal(await p.getByRole('dialog').count() + await p.getByRole('alertdialog').count(), 0); ok('progress is docked in the tray, not a blocking dialog');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 });
-  assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /9 tracks copied/); ok('result summarises what happened');
-  assert.equal(await p.evaluate(() => document.activeElement?.textContent?.trim()), 'Done'); ok('focus lands on Done when the sync completes');
-  await p.getByRole('button', { name: 'Done' }).click();
+  assert.match(await text(p.getByRole('status', { name: 'Sync complete' })), /9 tracks copied/); ok('result summarises what happened');
+  await done();
   assert.match(await text(pk()), /Mingus Ah Um/); assert.doesNotMatch(await text(pk()), /Will be added/); ok('card list refreshes after the sync');
   assert.match(await pending(), /Nothing is staged yet/); ok('pending list is cleared after the sync');
   await stage('Moanin');
   assert.match(await text(p.getByRole('group', { name: 'Storage on the Pocket' })), /Direct connection: slow · about/); ok('after "don\'t ask again", only a small note with an estimate shows by the button');
   await p.getByRole('button', { name: 'Start sync' }).click(); await p.waitForTimeout(300);
   assert.equal(await p.getByRole('alertdialog').count(), 0); assert.equal(await p.getByRole('dialog', { name: /Ready to sync/ }).count(), 0); ok('with the warning dismissed for good, Start sync just starts: no dialog');
-  assert.ok(await p.getByRole('region', { name: 'Sync progress' }).count() >= 1 || await p.getByRole('dialog', { name: /Sync complete/ }).count() >= 1); ok('the sync is running straight away');
-  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await p.getByRole('button', { name: 'Done' }).click();
+  assert.ok(await p.getByRole('region', { name: 'Sync progress' }).count() >= 1 || await p.getByRole('status', { name: 'Sync complete' }).count() >= 1); ok('the sync is running straight away');
+  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await done();
 
   // --- removal ------------------------------------------------------------
   await pk().getByLabel('Select Time Out').check(); await p.getByRole('button', { name: 'Remove', exact: true }).click();
@@ -140,7 +142,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('button', { name: 'Start sync' }).click();
   assert.match(await text(p.getByRole('dialog', { name: /Ready to sync/ })), /copied to your backup folder first/); ok('review states that removals are backed up first');
   await p.getByRole('button', { name: 'Confirm and start' }).click();
-  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await p.getByRole('button', { name: 'Done' }).click();
+  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await done();
   assert.doesNotMatch(await text(pk()), /Time Out/); ok('removed album is gone after the sync');
 
   // --- editing ------------------------------------------------------------
@@ -152,7 +154,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await pending(), /Blue Train → Blue Train \(Remaster\)/); ok('an edit is staged with what it changes (old → new)');
   assert.match(await text(pk()), /Blue Train \(Remaster\)/); assert.match(await text(pk()), /was Blue Train/); ok('the new name shows in the list straight away, before the sync');
   await startSync();
-  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await p.getByRole('button', { name: 'Done' }).click();
+  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await done();
   assert.match(await text(pk()), /Blue Train \(Remaster\)/); ok('the edited title shows on the card after the sync');
 
   // --- refresh and auto-detect ---------------------------------------------
@@ -173,7 +175,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await text(p.getByRole('button', { name: /Card reader/ })), /fast/);
   await p.getByRole('button', { name: 'Start sync' }).click(); await p.waitForTimeout(300);
   assert.equal(await p.getByRole('alertdialog').count(), 0); ok('no slow alert over a card reader');
-  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await p.getByRole('button', { name: 'Done' }).click();
+  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await done();
   await fresh('?connection=unknown'); await openLibrary(); await chooseFolder();
   assert.match(await text(p.getByRole('button', { name: /Connection unknown/ })), /unknown/); ok('an unrecognised connection is reported as unknown, not guessed');
 
@@ -213,14 +215,15 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await startSync(); await p.waitForTimeout(600);
   assert.match(await text(p.getByRole('region', { name: 'Sync progress' })), /Keep the Pocket connected/); ok('progress tells you to keep the Pocket connected');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 });
-  const complete = p.getByRole('dialog', { name: /Sync complete/ });
+  const complete = p.getByRole('status', { name: 'Sync complete' });
   assert.doesNotMatch(await text(complete), /disconnect the Pocket now/); ok('completion no longer promises it is safe to unplug');
-  assert.match(await text(complete), /Before you unplug it, eject it/); ok('completion asks for a safe eject first');
-  assert.match(await text(complete), /read back from the card itself/); ok('completion says files were read back from the card');
+  assert.equal(await complete.getByRole('button', { name: 'Eject safely' }).count(), 1); ok('the completion toast offers a safe eject');
+  assert.match(await complete.getAttribute('title'), /read back from the card itself/); ok('the toast says (on hover) that files were read back from the card');
+  assert.ok((await text(complete)).length < 120); ok('and the toast itself stays short: one line of result and the next actions');
   await complete.getByRole('button', { name: 'Eject safely' }).click(); await p.waitForTimeout(300);
   assert.match(await text(complete), /Safe to remove/); ok('eject reports safe to remove only after the OS confirms');
   assert.equal(await complete.getByRole('button', { name: 'Eject safely' }).count(), 0); ok('the eject button goes away once ejected');
-  await p.getByRole('button', { name: 'Done' }).click();
+  await done();
   assert.match(await text(p.locator('.wb-banner').first()), /Safely ejected\. You can unplug it now/); ok('the library banner says safely ejected, not "disconnected"');
   assert.equal(await p.locator('.wb-banner[role="alert"]').count(), 0); ok('a deliberate eject raises no disconnect alert');
   await p.locator('.wb-banner').first().getByRole('button', { name: 'Check again' }).click(); await p.waitForTimeout(600);
@@ -398,7 +401,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await text(dock), /Syncing to Pocket/); assert.match(await text(dock), /keep looking around/); ok('progress sits in the tray with Cancel and a note that you can keep browsing');
   assert.equal(await p.getByRole('button', { name: /^Add \d* ?to Analogue Pocket/ }).isDisabled(), true); assert.equal(await p.getByRole('button', { name: 'Clear all' }).isDisabled(), true); ok('changing the queue is disabled while a sync runs');
   await pk().getByRole('tab', { name: 'Tracks' }).click(); assert.match(await text(pk()), /Track 1/); ok('but you can still browse the Pocket while it runs');
-  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await p.getByRole('button', { name: 'Done' }).click();
+  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await done();
   assert.equal(await p.getByRole('region', { name: 'Sync progress' }).count(), 0); ok('the dock goes away when the sync finishes');
 
   // --- Start sync only asks when there is something to decide; covers are always on ---------------
@@ -409,8 +412,8 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await p.getByRole('dialog', { name: /Ready to sync/ }).count() + await p.getByRole('alertdialog').count(), 0); ok('adds on a card reader start straight away: no "Ready to sync" dialog');
   assert.deepEqual(await p.evaluate(() => window.__tauMock.lastOptions()), { mirror: false, embed_covers: true, art_sidecar_pal256: true }); ok('covers are always put inside the songs and the fast cover file is always written');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 });
-  assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /1 thing to know about/); assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /the cover was not put inside the songs/); ok('a cover that could not be embedded is reported when the sync finishes, not asked about first');
-  await p.getByRole('button', { name: 'Done' }).click();
+  assert.match(await text(p.getByRole('status', { name: 'Sync complete' })), /./); assert.match(await text(p.getByRole('status', { name: 'Sync complete' })), /the cover was not put inside the songs/); ok('a cover that could not be embedded is reported when the sync finishes, not asked about first');
+  await done();
   assert.equal(await p.getByText("Put each album's cover picture").count(), 0); ok('there are no cover options to tick any more');
   await p.evaluate(() => window.__tauMock.setPlanWarnings([]));
   await pk().getByLabel('Select Time Out').check(); await p.getByRole('button', { name: 'Remove', exact: true }).click();
@@ -422,6 +425,21 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('button', { name: 'Start sync' }).click(); await p.waitForTimeout(300);
   assert.equal(await p.getByRole('dialog', { name: /Ready to sync/ }).count(), 1); ok('a removal still asks before it starts');
   await p.getByRole('button', { name: 'Back' }).click(); await p.getByRole('button', { name: 'Clear all' }).click();
+
+  // --- each album shows its own circular progress while it is copied --------------------
+  await fresh('?connection=card_reader'); await openLibrary(); await chooseFolder();
+  await stage('Saxophone Colossus', 'Head Hunters');
+  await p.getByRole('button', { name: 'Start sync' }).click();
+  const seen = new Set();
+  for (let i = 0; i < 40; i++) {
+    for (const l of await pc().locator('[aria-label^="Waiting to copy"], [aria-label^="Copying"], [aria-label^="Copied"]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))) seen.add(l.replace(/, \d+ percent/, ''));
+    if (await p.getByRole('status', { name: 'Sync complete' }).count()) break;
+    await p.waitForTimeout(100);
+  }
+  const labels = [...seen].join(' | ');
+  assert.match(labels, /Waiting to copy/); assert.match(labels, /Copying (Saxophone Colossus|Head Hunters)/); assert.match(labels, /Copied (Saxophone Colossus|Head Hunters)/); ok('albums go from waiting, to copying, to copied, one after another');
+  await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await done();
+  assert.equal(await pc().getByRole('progressbar').count(), 0); ok('the rings are gone when the sync is over');
 
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();

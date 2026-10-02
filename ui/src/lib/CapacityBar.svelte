@@ -2,7 +2,7 @@
   // The card's space and the effect of what is staged, in one place (docs/CAPACITY_BAR_SPEC.md):
   // a stacked bar of each Tau core's media, other data, what is being added or removed, and what
   // stays free, with a text legend (nothing depends on colour) and a Details button.
-  import type { CardBreakdown } from './types';
+  import type { CardBreakdown, SyncView } from './types';
   import { size } from './format';
 
   export let hasSpace = false;
@@ -38,6 +38,11 @@
   export let onClear: () => void = () => {};
   /** Short status lines that used to sit beside Start sync (slow link, will not fit, over the limit, disconnected). */
   export let notes: { text: string; bad: boolean }[] = [];
+
+  /** While a sync runs the same card carries its progress: text area, bar and action area are reused. */
+  export let sync: SyncView | null = null;
+  export let onCancel: () => void = () => {};
+  $: syncPercent = sync && sync.total ? Math.max(0, Math.min(100, (sync.done / sync.total) * 100)) : 0;
 
   let startButton: HTMLButtonElement;
   let detailsButton: HTMLButtonElement;
@@ -77,8 +82,23 @@
   })();
 </script>
 
-<div class="wb-cap" role="group" aria-label="Storage on the Pocket">
-  {#if hasSpace}
+<div class="wb-cap" role={sync ? 'region' : 'group'} aria-label={sync ? 'Sync progress' : 'Storage on the Pocket'}>
+  {#if sync}
+    <div class="wb-cap-text">
+      <span><b>{sync.title}</b></span>
+      <span class="muted">{sync.phase}</span>
+      <span class="wb-cap-free">{sync.line}</span>
+    </div>
+    <div class="wb-bar" role="progressbar" aria-label="Sync progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={sync.total ? Math.round(syncPercent) : undefined}>
+      <i class="seg k-add" class:indeterminate={!sync.total} style="width:{sync.total ? syncPercent : 40}%"></i>
+    </div>
+    <div class="wb-legend">
+      <span class="keep" role="note">{sync.note}</span>
+      {#if sync.slow}<span role="note">{sync.slow}</span>{/if}
+      <span class="wb-actions"><button class="quiet" on:click={onCancel}>Cancel sync</button></span>
+    </div>
+    <span class="sr-only" role="status">{sync.phase}</span>
+  {:else if hasSpace}
     <div class="wb-cap-text">
       <span><b>{size(used)}</b> on Pocket</span>
       {#if limitText}<span class="wb-limit" class:bad={overLimit} class:warn={nearLimit} title={limitTitle}>{limitText}</span>{/if}
@@ -145,6 +165,11 @@
   .wb-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:10px;font-size:12px;color:#a6b3b2}
   .wb-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
   .wb-legend .muted{color:#8c9c9b}
+  .keep{color:#f0d59a}
+  .indeterminate{animation:cap-slide 1.3s ease-in-out infinite alternate}
+  @keyframes cap-slide{from{margin-left:0}to{margin-left:60%}}
+  @media (prefers-reduced-motion:reduce){.indeterminate{animation:none}}
+  .wb-cap-text .muted{color:#8c9c9b}
   .wb-notes{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;font-size:12px;color:#f0d59a}
   .wb-notes .bad{color:#ff9d8a;font-weight:650}
   .wb-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
