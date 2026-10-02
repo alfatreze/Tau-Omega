@@ -12,7 +12,9 @@
   import VirtualList from './VirtualList.svelte';
   import CapacityBar from './CapacityBar.svelte';
   import DetailsPanel from './DetailsPanel.svelte';
-  import type { AlbumInfo, CardBreakdown, CoreRef, StagedItem, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
+  import SyncToast from './SyncToast.svelte';
+  import RingProgress from './RingProgress.svelte';
+  import type { AlbumInfo, CardBreakdown, CoreRef, StagedItem, SyncView, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
 
   /** Root folder of the open card (used to detect how it is connected). */
   export let cardPath = '';
@@ -95,6 +97,14 @@
 
   type Run = { journal: string; phase: string; done: number; total: number; path: string; startedAt: number; speed: number; samples: { t: number; done: number }[]; finished: boolean; error: string; report: ChangeResult | null; cancelled: boolean; reassurance: string; warnings: { code: string; message: string }[] };
   let run: Run | null = null;
+  // Per-album progress while a sync runs, keyed by the staged item's source album id. The engine reports the file
+  // it is about to copy and the bytes done before it; the album a file belongs to is its folder.
+  type AlbumRing = { state: 'queued' | 'syncing' | 'done'; pct: number };
+  let albumSync: Record<string, AlbumRing> = {};
+  let ringFinishedBytes = 0;
+  let ringCurrent = '';
+  // A finished sync is a toast, not a dialog; `run` is released as soon as it finishes so the UI is never blocked.
+  let syncResult: { report: ChangeResult; warnings: { code: string; message: string }[]; journal: string } | null = null;
   let runId = '';
   let unlisten: (() => void) | undefined;
 
@@ -464,6 +474,8 @@
     const backupOn = mode === 'backup' || (mode === 'ask' && askBackup);
     const backup = review.removed_files && backupOn ? (prefs?.backup_dir || prefs?.default_backup_dir || null) : null;
     const planWarnings = review.warnings;
+    albumSync = Object.fromEntries(adds.map((p) => [p.id, { state: 'queued', pct: 0 } as AlbumRing]));
+    ringFinishedBytes = 0; ringCurrent = '';
     runId = newJobId();
     run = { journal: '', reassurance: '', warnings: planWarnings, phase: 'Starting', done: 0, total: review.bytes_to_write, path: '', startedAt: Date.now(), speed: 0, samples: [], finished: false, error: '', report: null, cancelled: false };
     const startedAt = Date.now();
@@ -473,7 +485,9 @@
       if (prefs && report.bytes_written >= 5 * MB && seconds >= 2) {
         try { prefs = await setPrefs({ ...prefs, speeds: { ...prefs.speeds, [cardLabel]: report.bytes_written / seconds } }); } catch { /* speed memory is best-effort */ }
       }
-      run = { ...run!, phase: 'Done', finished: true, report, journal: report.journal };
+      syncResult = { report, warnings: planWarnings, journal: report.journal };
+      ejectMsg = ''; ejectOk = false;
+      run = null;
       lastFailed = false; save('lastfail', false);
       pending = []; picked = new Set(); pocketPicked = new Set();
       await reloadCard();
@@ -495,6 +509,22 @@
     return `${cancelled ? '' : 'Your existing music on the Pocket is safe: '}the Pocket's library list is only updated after every file is copied and checked, so it still plays what it played before. Files copied so far were kept.`;
   }
   function seeDetails(id: string) { closeRun(); openHistory(id || 'latest'); }
+  /** Moves each album's ring: the album being copied fills, the ones before it are done, the ones after wait. */
+  function updateRings(doneBytes: number, path: string) {
+    const parent = path.replace(/\\/g, '/').replace(/\/[^/]*$/, '');
+    // Longest matching folder wins, so an album folder nested inside another is not mistaken for its parent.
+    const album = adds.filter((p) => parent === p.destId || parent.endsWith(`/${p.destId}`)).sort((a, b) => b.destId.length - a.destId.length)[0];
+    if (!album) return;
+    const next = { ...albumSync };
+    if (ringCurrent && ringCurrent !== album.id && next[ringCurrent]) {
+      next[ringCurrent] = { state: 'done', pct: 100 };
+      ringFinishedBytes += adds.find((p) => p.id === ringCurrent)?.bytes ?? 0;
+    }
+    ringCurrent = album.id;
+    const share = album.bytes > 0 ? (doneBytes - ringFinishedBytes) / album.bytes : 0;
+    next[album.id] = { state: 'syncing', pct: Math.max(2, Math.min(98, share * 100)) };
+    albumSync = next;
+  }
   function handleRunProgress(stage: string, done: number, totalUnits: number, path: string) {
     if (!run) return;
     const now = Date.now();
@@ -503,10 +533,11 @@
       samples = [...samples.filter((s) => now - s.t < 4000), { t: now, done }];
       if (samples.length > 1) { const a = samples[0], b = samples[samples.length - 1]; if (b.t > a.t) speed = ((b.done - a.done) / (b.t - a.t)) * 1000; }
     }
+    if (stage === 'copying' && path) updateRings(done, path);
     run = { ...run, phase: STAGES[stage] ?? stage, done: stage === 'copying' ? done : run.done, total: stage === 'copying' ? totalUnits : run.total, path, samples, speed };
   }
   async function cancelSync() { if (runId) await cancelJob(runId); }
-  function closeRun() { run = null; ejectMsg = ''; ejectOk = false; }
+  function closeRun() { run = null; syncResult = null; ejectMsg = ''; ejectOk = false; }
   // Safe eject: unmount so the OS writes out anything it still holds. "You can unplug it" is only
   // ever said after the OS confirms the volume is unmounted.
   let ejecting = false; let ejectMsg = ''; let ejectOk = false;
@@ -523,6 +554,12 @@
     finally { ejecting = false; }
   }
   function dismissFailure() { lastFailed = false; save('lastfail', false); }
+  $: syncView = run && !run.finished ? {
+    title: `Syncing to ${cardLabel}`, phase: run.phase, done: run.done, total: run.total,
+    line: [run.total ? `${size(run.done)} of ${size(run.total)}` : '', run.speed > 0 ? `${(run.speed / MB).toFixed(1)} MB/s · ${eta(run.total - run.done, run.speed) === 'under a minute' ? 'under a minute' : `about ${eta(run.total - run.done, run.speed)}`} left` : ''].filter(Boolean).join(' · '),
+    note: 'Keep the Pocket connected until this finishes. You can keep looking around while it runs.',
+    slow: runSlowNote ? "This is slower than a card reader usually is. If you're plugged into the Pocket directly, that's expected." : '',
+  } : null;
   $: runSlowNote = run && !run.finished && connKind !== 'direct_usb' && run.speed > 0 && run.speed < 3 * MB && run.total > SLOW_LIMIT;
 
   function key(e: KeyboardEvent) {
@@ -590,7 +627,7 @@
     {breakdown} measuring={breakdownBusy} {activePlatform}
     limitText={limits ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (Pocket limit)` : ''}
     limitTitle={limits ? `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums` : ''}
-    {overLimit} {nearLimit} onDetails={() => (detailsOpen = true)} {canStart} {startReason} pendingSummary={pendingSummary} onStart={start}
+    {overLimit} {nearLimit} sync={syncView} onCancel={cancelSync} onDetails={() => (detailsOpen = true)} {canStart} {startReason} pendingSummary={pendingSummary} onStart={start}
     hasPending={pendingCount > 0} clearDisabled={busy} onClear={clearAll} {notes} />
 
   <div class="wb-panes">
@@ -625,7 +662,7 @@
               <input type="checkbox" aria-label={`Select ${a.title}`} disabled={busy || st === 'on' || st === 'queued'} checked={picked.has(a.id)} on:click|stopPropagation={(e) => pickSrc(a, e)} />
               <div class="wb-art" aria-hidden="true">{#if art}<img src={art} alt="" />{:else}♪{/if}</div>
               <div class="wb-meta"><strong>{a.title}</strong><small>{a.artist || 'Unknown artist'} · {plural(a.tracks, 'track')} · {size(a.bytes)}{#if st === 'changed' && onPk}{' · '}Pocket has {plural(onPk.tracks, 'track')}{/if}</small></div>
-              <span class="wb-badge {st}" title={st === 'changed' ? `The Pocket's copy has a different number of tracks (${onPk?.tracks}) than this folder (${a.tracks}).` : undefined}>{stateLabel[st]}</span>
+              {#if busy && albumSync[a.id]}<RingProgress state={albumSync[a.id].state} pct={albumSync[a.id].pct} name={a.title} />{:else}<span class="wb-badge {st}" title={st === 'changed' ? `The Pocket's copy has a different number of tracks (${onPk?.tracks}) than this folder (${a.tracks}).` : undefined}>{stateLabel[st]}</span>{/if}
             </div>
           </VirtualList>
           {#if !sourceAlbums.length}<div class="wb-empty"><b>{source.albums.length ? 'No albums match' : 'No music found'}</b><p>{source.albums.length ? 'Try a different search or filter.' : 'This folder has no MP3 or FLAC files.'}</p></div>{/if}
@@ -682,7 +719,7 @@
                 </div>
               {:else}
                 {@const art = thumbs[`s:${x.p.id}`]}
-                <div class="wb-row incoming" role="listitem" aria-posinset={index + 1} aria-setsize={count}><span class="wb-plus" aria-hidden="true">+</span><div class="wb-art" aria-hidden="true">{#if art}<img src={art} alt="" />{:else}♪{/if}</div><div class="wb-meta"><strong>{x.p.title}</strong><small>{x.p.artist || 'Unknown artist'} · {plural(x.p.tracks, 'track')} · {size(x.p.bytes)}</small></div><span class="wb-badge queued">Will be added</span></div>
+                <div class="wb-row incoming" role="listitem" aria-posinset={index + 1} aria-setsize={count}><span class="wb-plus" aria-hidden="true">+</span><div class="wb-art" aria-hidden="true">{#if art}<img src={art} alt="" />{:else}♪{/if}</div><div class="wb-meta"><strong>{x.p.title}</strong><small>{x.p.artist || 'Unknown artist'} · {plural(x.p.tracks, 'track')} · {size(x.p.bytes)}</small></div>{#if busy && albumSync[x.p.id]}<RingProgress state={albumSync[x.p.id].state} pct={albumSync[x.p.id].pct} name={x.p.title} />{:else}<span class="wb-badge queued">Will be added</span>{/if}</div>
               {/if}
             </VirtualList>
             {#if !pocketItems.length}<div class="wb-empty"><b>{card.albums.length ? 'No albums match' : 'Nothing here yet'}</b><p>{card.albums.length ? 'Try a different search.' : 'Add albums from This computer to get started.'}</p></div>{/if}
@@ -714,16 +751,6 @@
     </section>
   </div>
 
-    {#if run && !run.finished}
-      <div class="wb-dock" role="region" aria-label="Sync progress">
-        <div class="wb-dock-head"><b>Syncing to {cardLabel}</b><span class="wb-dock-step">{run.phase}</span><button class="quiet" on:click={cancelSync}>Cancel sync</button></div>
-        <div class="wb-progress" class:indeterminate={!run.total} role="progressbar" aria-label="Sync progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={run.total ? Math.round((run.done / run.total) * 100) : undefined}><i style="width:{run.total ? (run.done / run.total) * 100 : 40}%"></i></div>
-        <p class="wb-dock-line">{#if run.total}{size(run.done)} of {size(run.total)}{/if}{#if run.speed > 0}{' · '}{(run.speed / MB).toFixed(1)} MB/s · {eta(run.total - run.done, run.speed) === 'under a minute' ? 'under a minute' : `about ${eta(run.total - run.done, run.speed)}`} left{/if}</p>
-        <p class="wb-fine wb-keep" role="note">Keep the Pocket connected until this finishes. You can keep looking around while it runs.</p>
-        {#if runSlowNote}<p class="wb-fine" role="note">This is slower than a card reader usually is. If you're plugged into the Pocket directly, that's expected.</p>{/if}
-        <span class="wb-sr" role="status">{run.phase}</span>
-      </div>
-    {/if}
   {/if}
 
   {#if toast}<div class="wb-toast" role="status">{toast}</div>{/if}
@@ -818,24 +845,13 @@
     {#if run.reassurance}<p class="wb-fine wb-safe">{run.reassurance}</p>{/if}
     <div class="wb-modal-actions"><button class="quiet" on:click={closeRun}>Close</button><button class="primary" data-autofocus on:click={() => seeDetails(run?.journal ?? '')}>See what happened</button></div>
   </div>
-{:else if run && run.report}
-  <div class="wb-veil" role="presentation"></div>
-  <div class="wb-modal wb-run" role="dialog" aria-labelledby="run-t" use:modal>
-    <h2 id="run-t">Sync complete</h2>
-    <p class="wb-ok">✓ {[run.report.copied && `${plural(run.report.copied, 'track')} copied`, run.report.deleted && `${plural(run.report.deleted, 'track')} removed`, run.report.edited && `${plural(run.report.edited, 'track')} edited`].filter(Boolean).join(', ') || 'Everything was already up to date'}. The Pocket's library list was updated and checked.</p>
-    {#if run.report.backup_dir}<p class="wb-fine">Removed files were backed up to {run.report.backup_dir}</p>{/if}
-    {#if run.warnings.length}
-      <div class="wb-warn" role="note">
-        <b>{plural(run.warnings.length, 'thing')} to know about</b>
-        <ul class="wb-warnlist">{#each run.warnings.slice(0, 5) as w}<li>{w.message}</li>{/each}</ul>
-        {#if run.warnings.length > 5}<p class="wb-fine">And {run.warnings.length - 5} more are in the details.</p>{/if}
-      </div>
-    {/if}
-    <p class="wb-fine">{verifiedOnDevice ? 'Every file was read back from the card itself and matched.' : 'Every file was checked after writing, but on this computer that check may have been answered from memory.'}</p>
-    {#if ejectMsg}<p class={ejectOk ? 'wb-ok' : 'wb-fine wb-keep'} role="status">{ejectOk ? '✓ ' : ''}{ejectMsg}</p>
-    {:else}<p class="wb-fine wb-keep">Before you unplug it, eject it so everything is written out.</p>{/if}
-    <div class="wb-modal-actions"><button class="quiet" on:click={() => seeDetails(run?.journal ?? '')}>View details</button>{#if !ejectOk}<button class="quiet" disabled={ejecting} on:click={eject}>{ejecting ? 'Ejecting…' : 'Eject safely'}</button>{/if}<button class="primary" data-autofocus on:click={closeRun}>Done</button></div>
-  </div>
+{/if}
+{#if syncResult}
+  <SyncToast
+    summary={[syncResult.report.copied && `${plural(syncResult.report.copied, 'track')} copied`, syncResult.report.deleted && `${plural(syncResult.report.deleted, 'track')} removed`, syncResult.report.edited && `${plural(syncResult.report.edited, 'track')} edited`].filter(Boolean).join(', ') || 'nothing needed copying'}
+    warning={syncResult.warnings.length ? `${syncResult.warnings[0].message}${syncResult.warnings.length > 1 ? ` (and ${syncResult.warnings.length - 1} more in the details)` : ''}` : ''}
+    {ejectMsg} {ejectOk} {ejecting} {verifiedOnDevice}
+    onEject={eject} onDetails={() => seeDetails(syncResult?.journal ?? '')} onDismiss={closeRun} />
 {/if}
 <DetailsPanel open={detailsOpen} items={stagedItems} {pendingLine} {addBytes} {removeBytes} {freeNow} freeAfter={free} {tracksAfter} maxTracks={limits?.max_tracks ?? 0}
   coreLabel={coreLabel} coreBytes={activeSegment ? activeSegment.bytes_on_disk : null} warnings={detailsWarnings} backupNote={detailsBackup} locked={busy}
@@ -897,8 +913,6 @@
   .danger-btn{background:#e8a58f!important;color:#2a120b!important}
   .wb-review{margin:0 0 10px;display:grid;gap:6px}.wb-review div{display:flex;justify-content:space-between;gap:12px;font-size:14px}
   .wb-review dt{color:#8c9c9b}.wb-review dd{margin:0;text-align:right}
-  .wb-progress{height:12px;background:#232e30;border-radius:99px;overflow:hidden;margin:6px 0 16px}.wb-progress i{display:block;height:100%;background:#c1f0ad;transition:width .1s}
-  .wb-progress.indeterminate i{animation:wb-slide 1.2s ease-in-out infinite alternate}
   @keyframes wb-slide{from{margin-left:0}to{margin-left:60%}}
   .wb-ok{color:#c1f0ad!important;font-size:15px!important}
   .wb-drawer{position:fixed;z-index:70;top:0;right:0;bottom:0;width:min(400px,94vw);background:#1a2325;border-left:1px solid #344244;padding:22px;display:flex;flex-direction:column;gap:12px;overflow:auto}
@@ -940,9 +954,6 @@
   .wb-filters button{background:#1a2325;color:#a6b3b2;border:1px solid #2c393a;border-radius:99px;padding:4px 10px;font-size:12px}
   .wb-filters button.on{background:#1d2c22;color:#c1f0ad;border-color:#2f4a37}
   .wb-selectall{display:flex;gap:8px;align-items:center;font-size:12px;color:#8c9c9b;padding:2px 4px;cursor:pointer}
-  .wb-dock{flex-shrink:0;background:#182320;border:1px solid #2f4a37;border-radius:11px;padding:12px 14px}
-  .wb-dock-head{display:flex;align-items:center;gap:12px;margin-bottom:8px}.wb-dock-head b{font-size:14px}.wb-dock-step{color:#8c9c9b;font-size:12px;margin-right:auto}
-  .wb-dock .wb-progress{margin:0 0 8px}.wb-dock-line{margin:0 0 4px;font-size:12px;color:#b7c3c2}.wb-dock .wb-fine{margin:4px 0 0}
   .wb-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .wb-cov{margin:0;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:#8c9c9b}.wb-newcov{width:72px;height:72px;object-fit:cover;border-radius:8px}
 </style>

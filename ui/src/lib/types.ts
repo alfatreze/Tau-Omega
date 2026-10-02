@@ -130,3 +130,16 @@ export type StagedItem = {
   /** Visible text of the row's button: Remove, Undo or Discard. */
   verb: string;
 };
+
+/** What the top bar shows while a sync runs: the same card, with the text area carrying the sync's progress. */
+export type SyncView = {
+  title: string;
+  phase: string;
+  /** Bytes copied so far and in total (total 0 = not known yet). */
+  done: number;
+  total: number;
+  /** "12 MB of 83 MB · 2.1 MB/s · about 2 min left". */
+  line: string;
+  note: string;
+  slow: string;
+};

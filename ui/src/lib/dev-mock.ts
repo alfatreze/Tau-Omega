@@ -111,8 +111,15 @@ async function runChanges(request: any, jobId: string) {
   }
   const total = p.bytes_to_write;
   const steps = 24;
+  const adding = (request.add_albums as string[]).map((id) => sourceAlbums.find((a) => a.id === id)!).filter(Boolean);
+  const folderAt = (offset: number) => {
+    let start = 0;
+    for (const a of adding) { if (offset < start + a.bytes) return a.dest_id; start += a.bytes; }
+    return adding[adding.length - 1]?.dest_id ?? 'misc';
+  };
   for (let i = 0; i <= steps && total > 0; i++) {
-    await emit('tau://progress', { job_id: jobId, stage: 'copying', done: Math.round((total * i) / steps), total, path: `Assets/tau/common/file-${i}.mp3` });
+    const offset = Math.min(total - 1, Math.round((total * i) / steps));
+    await emit('tau://progress', { job_id: jobId, stage: 'copying', done: Math.round((total * i) / steps), total, path: `/Volumes/Mock/Assets/tau/common/${folderAt(offset)}/${String(i).padStart(2, '0')}.mp3` });
     await new Promise((r) => setTimeout(r, 120));
   }
   await emit('tau://progress', { job_id: jobId, stage: 'building_index', done: 1, total: 1, path: null });
