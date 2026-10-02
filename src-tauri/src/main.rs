@@ -317,6 +317,29 @@ fn list_mounted_cards() -> Result<Vec<String>, TauError> {
 
 /// How a card is connected: the Pocket's own (slow) USB mode, a card reader,
 /// or unknown when the OS will not say.
+/// Unmounts and ejects a card so it is safe to unplug (flushes anything the OS
+/// still holds). Refused while a card write is running, and holds the write
+/// guard for its duration so none can start halfway through.
+#[tauri::command(async)]
+fn eject_card(path: String) -> Result<device::EjectResult, TauError> {
+    let _write = card_write_guard()?;
+    Ok(device::eject(Path::new(&path)))
+}
+
+/// Whether read-backs after a write are checked against the device itself (true
+/// where a cache evictor is registered) and how many evictions have failed.
+#[derive(Serialize)]
+struct ReadbackStatus {
+    checks_the_device: bool,
+    failed_evictions: u64,
+}
+
+#[tauri::command]
+fn readback_status() -> ReadbackStatus {
+    let (checks_the_device, failed_evictions) = tau_core::sync::readback_report();
+    ReadbackStatus { checks_the_device, failed_evictions }
+}
+
 #[tauri::command(async)]
 fn detect_connection(path: String) -> device::ConnectionInfo {
     device::detect_connection(Path::new(&path))
@@ -997,7 +1020,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
