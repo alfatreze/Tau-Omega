@@ -53,6 +53,14 @@ against three real fixtures.
 | `base64` (src-tauri only) | Encoding a screenshot's bytes as a `data:` URL for `read_image_data_url`, so the Settings screenshot gallery can show the real image inline | MIT OR Apache-2.0. Already resolved in the workspace lockfile via `tau-core`'s own `base64` dependency (`taud`), so this adds zero new transitive crates -- a presentation-only pass-through kept in the Tauri adapter rather than `tau-core`, since it has no domain logic (which file is valid is already `list_screenshots`'s decision). Deliberately not using Tauri's asset protocol (`convertFileSrc`), which would need broadening the webview's filesystem access via a capability/scope change for arbitrary card paths; this keeps that surface at zero. |
 | Svelte, Vite, TypeScript, `@tauri-apps/api` | UI build and Tauri bridge | MIT. |
 
+No new crate for connection detection (`detect_connection` in `src-tauri/src/device.rs`, `docs/FIRMWARE_UPDATE_SPEC.md` section 5; named `connection_kind` before the 2026-10-02 integration): it shells out to
+macOS's own always-present `diskutil`/`ioreg` (`std::process::Command`, `src-tauri` only) rather than
+add an IOKit-binding dependency for one host-specific detection. This is real host-specific I/O with
+no domain logic, matching the existing `list_mounted_cards` split (host-specific checks live in
+`src-tauri`, never `tau-core`, which stays free of any `process::Command` use as its own audited
+property already states); macOS-only, every other OS returns `Other` rather than guessing at an
+unverified detection method for that platform.
+
 `tau-cli` has no dependency beyond `tau-core`, which is the check that the engine really is
 front-end independent — if the CLI ever needs something the engine can't give it, that is a signal.
 
