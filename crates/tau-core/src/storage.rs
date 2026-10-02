@@ -65,7 +65,7 @@ pub fn check_capacity(
     })
 }
 
-fn nearest_existing_ancestor(path: &Path) -> Result<PathBuf, TauError> {
+pub(crate) fn nearest_existing_ancestor(path: &Path) -> Result<PathBuf, TauError> {
     let mut candidate = path.to_path_buf();
     loop {
         if candidate.as_os_str().is_empty() {
