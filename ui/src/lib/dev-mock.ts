@@ -151,6 +151,19 @@ const handlers: Record<string, (args: any) => unknown> = {
     const used = OTHER_USED + cardAlbums.reduce((n, x) => n + x.bytes, 0);
     return { space: { total_bytes: CAPACITY, available_bytes: CAPACITY - used }, bytes_needed: a.bytesNeeded, margin_bytes: 16 * MB, fits: CAPACITY - used >= a.bytesNeeded };
   },
+  card_breakdown: () => {
+    const albums = cardAlbums.reduce((n, x) => n + x.bytes, 0);
+    const player2 = 0.25 * GB;
+    const used = OTHER_USED + albums;
+    return {
+      total_bytes: CAPACITY, available_bytes: CAPACITY - used, unit: 32768,
+      segments: [
+        { platform: 'tau', core_ids: ['tau.omega'], shortnames: ['omega'], bytes_on_disk: albums, files: 400 },
+        { platform: 'tau2', core_ids: ['tau.player2'], shortnames: ['player2'], bytes_on_disk: player2, files: 60 },
+      ],
+      tau_bytes: albums + player2, other_bytes: used - albums - player2,
+    };
+  },
   plan_changes: (a) => plan(a.request),
   execute_changes: (a) => runChanges({ ...a.request, __context: a.context }, a.jobId),
   // A colourful placeholder "cover" per album (stable per id) so lists and the edit drawer have artwork to show.

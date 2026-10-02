@@ -95,6 +95,12 @@ export type ChangePlanView = { id: string; new_files: number; updated_files: num
 export type ChangeReport = { phase: string; plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string };
 export type ConnectionKind = 'direct_usb' | 'card_reader' | 'unknown';
 export type ConnectionInfo = { kind: ConnectionKind; detail: string };
+/** What the app tells the engine about a core, so the card breakdown does not re-read every index. */
+export type CoreRef = { id: string; shortname: string; platform: string; library_capable: boolean };
+/** One Tau platform folder's share of the card (cores sharing a platform share a segment). */
+export type MediaSegment = { platform: string; core_ids: string[]; shortnames: string[]; bytes_on_disk: number; files: number };
+/** Where the card's space goes: Tau media per platform versus everything else (sizes on disk). */
+export type CardBreakdown = { total_bytes: number; available_bytes: number; unit: number; segments: MediaSegment[]; tau_bytes: number; other_bytes: number };
 /** The OS's answer to "unmount and eject this card". `ok` is true only when it is safe to unplug. */
 export type EjectResult = { ok: boolean; message: string };
 /** Whether read-backs after a write are checked against the card itself, not memory. */
