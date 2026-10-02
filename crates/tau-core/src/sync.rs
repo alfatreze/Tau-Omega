@@ -3,7 +3,7 @@
 
 use crate::{
     ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, WarningCode, ascii_name,
-    build_index, cover, image, parse, scan_dir_with_progress, tick, verify,
+    build_index, cover, image, ledger, parse, scan_dir_with_progress, tick, verify,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -210,6 +210,8 @@ pub(crate) fn plan_candidates(
     let mut seen = std::collections::BTreeSet::new();
     let mut seen_art_folders = std::collections::BTreeSet::new();
     let mut warned_covers = std::collections::BTreeSet::new();
+    let mut ledger = ledger::Session::open(&destination);
+    let mut proven: Vec<Proven> = Vec::new();
     let mut items = Vec::new();
     let mut art_sidecars = Vec::new();
     let mut warnings = Vec::new();
@@ -295,7 +297,22 @@ pub(crate) fn plan_candidates(
                 cover_source,
             });
         }
-        let mut state = if target.is_file()
+        // The ledger remembers files this tool wrote and verified itself: made from this exact source and
+        // cover by this embed version, and still exactly as it left them (size and time). That makes
+        // "already on the card" a statement we can prove without reading the card file, including for
+        // cover-embedded copies, which can never equal their source and so used to be rewritten on every
+        // re-sync. A small canary below re-hashes a few of these to catch anything that drifted.
+        let rel_key = relative.to_string_lossy().replace('\\', "/");
+        let cover_sha = cover.as_ref().map(|c| c.sha256.clone()).unwrap_or_default();
+        let remembered = match (ledger.as_ref(), fs::metadata(&target).ok().and_then(|m| ledger::fingerprint(&m))) {
+            (Some(session), Some(print)) => session
+                .provenance(&rel_key, &print)
+                .filter(|(p, _)| p.source_sha == sha256 && p.cover_sha == cover_sha),
+            _ => None,
+        };
+        let mut state = if remembered.is_some() {
+            CopyState::Same
+        } else if target.is_file()
             && fs::metadata(&target)?.len() == bytes
             && sha256_file(&target).ok().as_deref() == Some(&sha256)
         {
@@ -306,9 +323,13 @@ pub(crate) fn plan_candidates(
             CopyState::New
         };
         // Artwork changes the resulting bytes, so an existing raw source copy
-        // must be explicitly updated when a cover is requested.
-        if cover.is_some() && state == CopyState::Same {
+        // must be explicitly updated when a cover is requested (unless the ledger proves this very
+        // copy was made from these inputs).
+        if cover.is_some() && state == CopyState::Same && remembered.is_none() {
             state = CopyState::Update;
+        }
+        if let Some((prov, verified_ms)) = remembered {
+            proven.push(Proven { index: items.len(), rel: rel_key, output_sha: prov.output_sha, verified_ms });
         }
         if state != CopyState::Same {
             bytes_to_write += bytes;
@@ -321,6 +342,10 @@ pub(crate) fn plan_candidates(
             cover,
             state,
         });
+    }
+    run_canary(&mut items, &mut proven, &mut ledger, &mut bytes_to_write, &mut warnings);
+    if let Some(session) = ledger.take() {
+        session.finish();
     }
     if items.is_empty() {
         warnings.push(Warning::new(
@@ -408,6 +433,7 @@ pub fn execute_with_mirror(
     let mut copied = 0;
     let mut unchanged = 0;
     let mut bytes_written = 0;
+    let mut remembered = ledger::Session::open(&plan.destination);
     let copy_total = plan.bytes_to_write;
     let mut copy_done = 0;
     for item in &plan.items {
@@ -423,12 +449,33 @@ pub fn execute_with_mirror(
                         path: Some(item.destination.to_string_lossy().into_owned()),
                     },
                 )?;
-                copy_verified(item)?;
+                let output_sha = copy_verified(item)?;
+                // Remember what was just written and verified (the read-back bypassed the cache), keyed by the
+                // file as it stands after the final rename.
+                if let Some(session) = remembered.as_mut()
+                    && let Ok(meta) = fs::metadata(&item.destination)
+                    && let Some(print) = ledger::fingerprint(&meta)
+                    && let Ok(rel) = item.destination.strip_prefix(&plan.destination)
+                {
+                    session.record_verified(
+                        &rel.to_string_lossy().replace('\\', "/"),
+                        print,
+                        ledger::Provenance {
+                            source_sha: item.sha256.clone(),
+                            cover_sha: item.cover.as_ref().map(|c| c.sha256.clone()).unwrap_or_default(),
+                            embed_version: ledger::EMBED_VERSION,
+                            output_sha,
+                        },
+                    );
+                }
                 copied += 1;
                 bytes_written += item.bytes;
                 copy_done += item.bytes;
             }
         }
+    }
+    if let Some(session) = remembered.take() {
+        session.finish();
     }
     let mut art_sidecars_written = 0;
     for item in &plan.art_sidecars {
@@ -1157,7 +1204,57 @@ fn verify_written(written: &Path, expected: &str, source: &Path) -> Result<(), T
     Ok(())
 }
 
-fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
+/// One file the ledger says is already on the card exactly as this tool wrote it.
+struct Proven {
+    index: usize,
+    rel: String,
+    output_sha: String,
+    verified_ms: i64,
+}
+
+/// How much card data a plan re-reads, at most, to check the ledger's claims (oldest-verified first).
+const CANARY_BUDGET_BYTES: i64 = 64 * 1024 * 1024;
+
+/// The ledger may only ever cause a *missed update*, never a loss, and this bounds how long a missed
+/// update can last: each plan re-hashes the least recently verified remembered files, up to a byte budget.
+/// If one is not what the ledger said, that file and every remembered file not yet re-checked is copied
+/// again (distrust everything unchecked), and the ledger forgets them.
+fn run_canary(
+    items: &mut [CopyItem],
+    proven: &mut [Proven],
+    ledger: &mut Option<ledger::Session>,
+    bytes_to_write: &mut u64,
+    warnings: &mut Vec<Warning>,
+) {
+    let Some(session) = ledger.as_mut() else { return };
+    proven.sort_by_key(|p| p.verified_ms);
+    let mut budget = CANARY_BUDGET_BYTES;
+    let mut drift = false;
+    for p in proven.iter() {
+        let item = &mut items[p.index];
+        if !drift {
+            if budget <= 0 {
+                break; // checked enough for this plan; the rest stay trusted
+            }
+            budget -= i64::try_from(fs::metadata(&item.destination).map_or(0, |m| m.len())).unwrap_or(i64::MAX);
+            evict_cache(&item.destination);
+            if sha256_file(&item.destination).ok().as_deref() == Some(p.output_sha.as_str()) {
+                session.touch_verified(&p.rel);
+                continue;
+            }
+            drift = true;
+            warnings.push(Warning::new(
+                WarningCode::CardFileChanged,
+                format!("{}: this file on the card is not what Tau Omega wrote there, so it and any earlier files that could not be re-checked will be copied again", p.rel),
+            ));
+        }
+        item.state = if item.destination.exists() { CopyState::Update } else { CopyState::New };
+        *bytes_to_write += item.bytes;
+        session.invalidate(&p.rel);
+    }
+}
+
+fn copy_verified(item: &CopyItem) -> Result<String, TauError> {
     if let Some(parent) = item.destination.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -1173,6 +1270,7 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
             ),
         ));
     }
+    let output_sha;
     if let Some(cover) = &item.cover {
         if sha256_file(&cover.source)? != cover.sha256 {
             return Err(TauError::e(
@@ -1203,6 +1301,7 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
         })?;
         drop(embedded);
         verify_written(&temp, &expected, &item.source)?;
+        output_sha = expected;
     } else {
         {
             let mut source = fs::File::open(&item.source)?;
@@ -1211,9 +1310,10 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
             target.sync_all()?;
         }
         verify_written(&temp, &item.sha256, &item.source)?;
+        output_sha = item.sha256.clone();
     }
     fs::rename(temp, &item.destination)?;
-    Ok(())
+    Ok(output_sha)
 }
 
 #[cfg(test)]
@@ -1336,6 +1436,73 @@ mod tests {
         assert!(!index_temp.exists(), "an old leftover index temp is removed");
         assert!(fresh_temp.exists(), "a recent temp may belong to a run in progress");
         assert!(foreign.exists(), "files that are not ours are never touched");
+    }
+
+    fn opts(embed: bool) -> PlanOptions {
+        PlanOptions { mirror: false, embed_covers: embed, art_sidecar_pal256: false }
+    }
+
+    /// The ledger remembers what this tool wrote and verified, so re-adding an album that is already on the
+    /// card is recognised as "already there" without reading the card (an embedded copy can never equal its
+    /// source, so it used to be rewritten on every re-sync). Anything that no longer matches is copied again,
+    /// and a card file altered behind its back (same size, same time) is caught by the canary.
+    #[test]
+    fn a_resync_of_an_embedded_album_is_recognised_and_every_change_is_still_noticed() {
+        crate::ledger::register_test_locator();
+        let base = std::env::temp_dir().join(format!("tau-ledger-it-sync-{}", std::process::id() as u128 + crate::test_uniq()));
+        let (album, common) = (base.join("lib/Album"), base.join("card/Assets/tau/common"));
+        for dir in [&album, &common] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        fs::write(album.join("01.mp3"), b"audio one, long enough").unwrap();
+        fs::write(album.join("02.mp3"), b"audio two, also long").unwrap();
+        fs::write(album.join("cover.jpg"), [0xff, 0xd8, 0xff, 0xd9]).unwrap();
+        let sources = [album.clone()];
+        let make = || plan(&sources, &common, "/Assets/tau/common/", opts(true), &mut None).unwrap();
+
+        let first = make();
+        assert!(first.items.iter().all(|i| i.state == CopyState::New));
+        execute(&first, &first.id, &mut None).unwrap();
+
+        // Nothing changed anywhere: both files are provably already there, so nothing is planned.
+        let again = make();
+        assert!(again.items.iter().all(|i| i.state == CopyState::Same), "{:?}", again.items.iter().map(|i| i.state).collect::<Vec<_>>());
+        assert_eq!(again.bytes_to_write, 0, "no rewriting of an album that is already on the card");
+
+        // A source changes: that file is copied again, the other is still recognised.
+        fs::write(album.join("02.mp3"), b"audio two, REVISED and longer").unwrap();
+        let revised = make();
+        let states: Vec<_> = revised.items.iter().map(|i| i.state).collect();
+        assert_eq!(states, [CopyState::Same, CopyState::Update]);
+        fs::write(album.join("02.mp3"), b"audio two, also long").unwrap(); // put it back
+
+        // The cover changes: every embedded copy is stale.
+        fs::write(album.join("cover.jpg"), [0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9]).unwrap();
+        assert!(make().items.iter().all(|i| i.state == CopyState::Update), "a different cover means different bytes");
+        fs::write(album.join("cover.jpg"), [0xff, 0xd8, 0xff, 0xd9]).unwrap();
+        assert!(make().items.iter().all(|i| i.state == CopyState::Same));
+
+        // Someone alters a card file but keeps its size and its time: the ledger cannot see that, the
+        // canary does, and it distrusts everything it could not re-check.
+        let victim = common.join("Album/01.mp3");
+        let kept_time = fs::metadata(&victim).unwrap().modified().unwrap();
+        let mut bytes = fs::read(&victim).unwrap();
+        let mid = bytes.len() / 2;
+        bytes[mid] ^= 0xff;
+        fs::write(&victim, &bytes).unwrap();
+        fs::File::options().write(true).open(&victim).unwrap().set_modified(kept_time).unwrap();
+        let caught = make();
+        assert!(caught.items.iter().all(|i| i.state == CopyState::Update), "the altered file and the unchecked one are copied again");
+        assert!(caught.warnings.iter().any(|w| w.code == WarningCode::CardFileChanged));
+        let repaired = caught.bytes_to_write;
+        assert!(repaired > 0);
+        execute(&caught, &caught.id, &mut None).unwrap();
+        assert!(make().items.iter().all(|i| i.state == CopyState::Same), "after the repair the ledger trusts the card again");
+
+        // Forgetting the card costs nothing but time: the same plan falls back to reading and hashing.
+        assert!(crate::ledger::clear(&common));
+        assert!(make().items.iter().all(|i| i.state == CopyState::Update), "without the ledger an embedded copy cannot be proven, so it is rewritten (the old behaviour)");
+        fs::remove_dir_all(base).unwrap();
     }
 
     /// Always embedding covers must never make a whole sync fail because one album's

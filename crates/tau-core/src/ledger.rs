@@ -187,7 +187,9 @@ impl Session {
         match self.files.get_mut(rel) {
             Some(record) if record.fp == fp => {
                 record.tags = Some(tags);
-                record.recorded_ms = now;
+                // Never move the recording time backwards: a record this tool wrote and verified is trusted
+                // because of that verification, and the scan that follows a sync must not make it look racy.
+                record.recorded_ms = record.recorded_ms.max(now);
             }
             _ => {
                 self.files.insert(rel.to_string(), Record { fp, recorded_ms: now, tags: Some(tags), provenance: None, verified_ms: 0 });
@@ -291,6 +293,17 @@ pub fn mtimes_are_meaningful(prints: &[Fingerprint]) -> bool {
     }
     let most = counts.values().copied().max().unwrap_or(0);
     most * 10 < prints.len() * 9 && epoch * 2 < prints.len()
+}
+
+/// Test-only: one locator for the whole test process (the registration is first-wins). Any media root whose
+/// path contains `tau-ledger-it` keeps its ledger beside it; every other test runs with no ledger at all.
+#[cfg(test)]
+pub(crate) fn register_test_locator() {
+    fn locate(root: &Path) -> Option<PathBuf> {
+        let name = root.file_name()?.to_string_lossy().into_owned();
+        root.to_string_lossy().contains("tau-ledger-it").then(|| root.with_file_name(format!("{name}.ledger")))
+    }
+    register_locator(locate);
 }
 
 fn load(path: &Path) -> Option<BTreeMap<String, Record>> {
@@ -420,6 +433,16 @@ mod tests {
     }
 
     #[test]
+    fn reading_tags_later_does_not_make_verified_provenance_look_racy() {
+        let mut s = session("keep-trust");
+        let prov = Provenance { source_sha: "s".into(), cover_sha: String::new(), embed_version: EMBED_VERSION, output_sha: "o".into() };
+        let just_now = now_ms() - 40; // the file was written 40 ms ago
+        s.record_verified("a.mp3", fp(100, just_now), prov);
+        s.put_tags("a.mp3", fp(100, just_now), tags("A")); // the scan after the sync
+        assert!(s.provenance("a.mp3", &fp(100, just_now)).is_some(), "still provable straight after the scan");
+    }
+
+    #[test]
     fn a_card_whose_times_say_nothing_gets_no_reuse() {
         let same: Vec<_> = (0..100).map(|n| fp(n, OLD)).collect();
         assert!(!mtimes_are_meaningful(&same), "all one timestamp");
@@ -462,13 +485,6 @@ mod tests {
 
     // ---- through the real scanner -------------------------------------------------------------
 
-    /// One locator for the whole test process (the registration is first-wins): any media root whose
-    /// path contains `tau-ledger-it` keeps its ledger beside it.
-    fn test_locator(root: &Path) -> Option<PathBuf> {
-        let name = root.file_name()?.to_string_lossy().into_owned();
-        root.to_string_lossy().contains("tau-ledger-it").then(|| root.with_file_name(format!("{name}.ledger")))
-    }
-
     fn mp3(title: &str, pad: usize) -> Vec<u8> {
         let mut body = vec![0u8];
         body.extend(title.as_bytes());
@@ -492,7 +508,7 @@ mod tests {
 
     #[test]
     fn the_scanner_reads_each_file_once_and_only_again_when_it_changes() {
-        register_locator(test_locator);
+        register_test_locator();
         let base = std::env::temp_dir().join(format!("tau-ledger-it-{}", std::process::id() as u128 + crate::test_uniq()));
         let root = base.join("common");
         fs::create_dir_all(root.join("Artist/Album")).unwrap();

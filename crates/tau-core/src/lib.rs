@@ -227,6 +227,9 @@ pub enum WarningCode {
     /// An album's cover could not be put inside its songs (not a baseline JPEG, or over the
     /// firmware's size limit). The songs are still copied, just without that embedded picture.
     CoverNotEmbedded,
+    /// A file on the card is not what this tool wrote there, so it (and the files from earlier syncs that
+    /// could not be re-checked) will be copied again.
+    CardFileChanged,
 }
 
 impl WarningCode {
@@ -241,6 +244,7 @@ impl WarningCode {
             Self::PlaylistTruncated => "playlist_truncated",
             Self::NoMediaFound => "no_media_found",
             Self::CoverNotEmbedded => "cover_not_embedded",
+            Self::CardFileChanged => "card_file_changed",
         }
     }
 }
