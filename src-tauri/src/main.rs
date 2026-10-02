@@ -1,5 +1,6 @@
 mod cacheflush;
 mod device;
+mod ledger_host;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -346,6 +347,13 @@ struct ReadbackStatus {
 fn readback_status() -> ReadbackStatus {
     let (checks_the_device, failed_evictions) = tau_core::sync::readback_report();
     ReadbackStatus { checks_the_device, failed_evictions }
+}
+
+/// Forgets what the app remembers about the card holding this media root. Always safe: the next scan
+/// simply reads the files again.
+#[tauri::command(async)]
+fn ledger_forget(media_root: String) -> bool {
+    tau_core::ledger::clear(Path::new(&media_root))
 }
 
 #[tauri::command(async)]
@@ -1028,7 +1036,14 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
+        .setup(|app| {
+            // What the app remembers about each card lives in its own cache folder, never on the card.
+            if let Ok(dir) = app.path().app_cache_dir() {
+                ledger_host::init(dir);
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
