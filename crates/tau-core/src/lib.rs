@@ -14,6 +14,7 @@ pub(crate) fn test_uniq() -> u128 {
     u128::from(NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)) << 50
 }
 
+pub mod breakdown;
 pub mod changes;
 pub mod compare;
 pub mod cover;
