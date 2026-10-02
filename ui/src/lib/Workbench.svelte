@@ -57,6 +57,8 @@
   let prefs: PrefsView | null = null;
   let connection: ConnectionInfo = { kind: 'unknown', detail: '' };
   let embedCovers = true;
+  // Opt-in: also write each album's small TIM1 cover file for Tau Alpha 0.5 or newer (loads faster than the embedded picture).
+  let artSidecar = false;
 
   let sourceSearch = '', pocketSearch = '';
   let picked = new Set<string>();       // ticked albums in "This computer"
@@ -102,6 +104,7 @@
     pending = mediaRoot ? load<Pending[]>('pending', []) : [];
     sourcePath = mediaRoot ? load<string>('source', '') : '';
     embedCovers = mediaRoot ? load<boolean>('embed', true) : true;
+    artSidecar = mediaRoot ? load<boolean>('artsidecar', false) : false;
     lastFailed = mediaRoot ? load<boolean>('lastfail', false) : false;
     picked = new Set(); pocketPicked = new Set(); source = null; card = null; space = null; resetThumbs('s'); resetThumbs('c'); stateFilter = 'all';
     if (sourcePath) scanSource();
@@ -143,6 +146,7 @@
     window.dispatchEvent(new CustomEvent('tau-pending'));
   }
   $: if (mediaRoot && loadedFor === mediaRoot) save('embed', embedCovers);
+  $: if (mediaRoot && loadedFor === mediaRoot) save('artsidecar', artSidecar);
 
   // ---- derived numbers -------------------------------------------------------
   $: adds = pending.filter((p): p is Extract<Pending, { kind: 'add' }> => p.kind === 'add');
@@ -387,7 +391,7 @@
   // ---- sync ------------------------------------------------------------------
   function buildRequest(): ChangeRequest {
     const editRequests: EditRequest[] = edits.map((p) => ({ album_id: p.id, track: p.track, fields: p.fields, cover: p.cover }));
-    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: embedCovers, art_sidecar_pal256: false } };
+    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: embedCovers, art_sidecar_pal256: artSidecar } };
   }
   async function start() {
     if (!canStart) return;
@@ -716,7 +720,8 @@
           {/each}
         </ul>
       </details>
-      {#if adds.length}<label class="wb-check"><input type="checkbox" bind:checked={embedCovers} on:change={replan} /> Put each album's cover picture inside the copied songs, so the Pocket can show it</label>{/if}
+      {#if adds.length}<label class="wb-check"><input type="checkbox" bind:checked={embedCovers} on:change={replan} /> Put each album's cover picture inside the copied songs, so the Pocket can show it</label>
+        <label class="wb-check"><input type="checkbox" bind:checked={artSidecar} on:change={replan} /> Also add a small fast-loading cover file for each album (Tau Alpha 0.5 or newer)</label>{/if}
       {#if review.removed_files}
         {#if prefs?.remove_mode === 'ask'}
           <label class="wb-check"><input type="checkbox" bind:checked={askBackup} /> Copy removed files to my backup folder first</label>
