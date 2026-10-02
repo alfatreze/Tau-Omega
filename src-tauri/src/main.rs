@@ -1,3 +1,4 @@
+mod cacheflush;
 mod device;
 
 use serde::{Deserialize, Serialize};
@@ -992,6 +993,7 @@ fn clear_history(app: tauri::AppHandle) -> Result<usize, TauError> {
 }
 
 fn main() {
+    cacheflush::register();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobRegistry::default())
