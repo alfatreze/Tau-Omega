@@ -79,7 +79,10 @@ const listing = (albums: Album[]) => ({
   warnings: [],
 });
 
+let planWarnings: { code: string; message: string }[] = [];
+let lastOptions: unknown = null;
 const plan = (request: any) => {
+  lastOptions = request.options;
   const trackCount = (list: Album[]) => list.reduce((n, a) => n + a.tracks, 0);
   const addList = (request.add_albums as string[]).map((id) => sourceAlbums.find((a) => a.id === id)!).filter(Boolean);
   const rmList = (request.remove_albums as string[]).map((id) => cardAlbums.find((a) => a.id === id)!).filter(Boolean);
@@ -93,7 +96,7 @@ const plan = (request: any) => {
     new_files: files(adds), updated_files: 0, unchanged_files: 0,
     bytes_to_write: adds.reduce((n, a) => n + a.bytes, 0),
     removed_files: files(removes), bytes_to_remove: removes.reduce((n, a) => n + a.bytes, 0),
-    edited_files: request.edits.length * 5, playlists_updated: removes.length ? 1 : 0, warnings: [],
+    edited_files: request.edits.length * 5, playlists_updated: removes.length ? 1 : 0, warnings: planWarnings,
   };
 };
 
@@ -198,6 +201,8 @@ export function installDevMock() {
     addCardAlbum: (title: string) => { cardAlbums = [...cardAlbums, { ...album('Test Artist', title, 3, 100, 2001) }]; },
     setConnection: (value: typeof connection) => { connection = value; },
     setMaxTracks: (value: number) => { maxTracks = value; },
+    setPlanWarnings: (list: { code: string; message: string }[]) => { planWarnings = list; },
+    lastOptions: () => lastOptions,
     failNext: (code: number, message: string, phase = 'copy') => { failNext = { code, message, phase }; },
     seedHistory,
     addOldEntries: (n: number, daysAgo: number) => { for (let i = 0; i < n; i++) addEntry({ state: 'completed', context: { card: 'Pocket', items: [] } }, nowSecs() - daysAgo * 86400 - i); },

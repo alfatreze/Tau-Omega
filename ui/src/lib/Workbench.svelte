@@ -68,9 +68,11 @@
   let detailsOpen = false;
   let prefs: PrefsView | null = null;
   let connection: ConnectionInfo = { kind: 'unknown', detail: '' };
-  let embedCovers = true;
-  // Opt-in: also write each album's small TIM1 cover file for Tau Alpha 0.5 or newer (loads faster than the embedded picture).
-  let artSidecar = false;
+  // Covers are always put inside the copied songs and always get the small fast-loading cover file: they
+  // are what the Pocket shows, so there is nothing to ask. An album whose cover cannot be used is copied
+  // without it and the finished sync says so.
+  const EMBED_COVERS = true;
+  const ART_SIDECAR = true;
 
   let sourceSearch = '', pocketSearch = '';
   let picked = new Set<string>();       // ticked albums in "This computer"
@@ -91,7 +93,7 @@
   let slowDontAsk = false;
   let askBackup = true;
 
-  type Run = { journal: string; phase: string; done: number; total: number; path: string; startedAt: number; speed: number; samples: { t: number; done: number }[]; finished: boolean; error: string; report: ChangeResult | null; cancelled: boolean; reassurance: string };
+  type Run = { journal: string; phase: string; done: number; total: number; path: string; startedAt: number; speed: number; samples: { t: number; done: number }[]; finished: boolean; error: string; report: ChangeResult | null; cancelled: boolean; reassurance: string; warnings: { code: string; message: string }[] };
   let run: Run | null = null;
   let runId = '';
   let unlisten: (() => void) | undefined;
@@ -115,8 +117,6 @@
     loadedFor = mediaRoot;
     pending = mediaRoot ? load<Pending[]>('pending', []) : [];
     sourcePath = mediaRoot ? load<string>('source', '') : '';
-    embedCovers = mediaRoot ? load<boolean>('embed', true) : true;
-    artSidecar = mediaRoot ? load<boolean>('artsidecar', false) : false;
     lastFailed = mediaRoot ? load<boolean>('lastfail', false) : false;
     picked = new Set(); pocketPicked = new Set(); source = null; card = null; space = null; resetThumbs('s'); resetThumbs('c'); stateFilter = 'all';
     if (sourcePath) scanSource();
@@ -169,8 +169,6 @@
     // lets the sidebar show a "N pending" badge for this card
     window.dispatchEvent(new CustomEvent('tau-pending'));
   }
-  $: if (mediaRoot && loadedFor === mediaRoot) save('embed', embedCovers);
-  $: if (mediaRoot && loadedFor === mediaRoot) save('artsidecar', artSidecar);
 
   // ---- derived numbers -------------------------------------------------------
   $: adds = pending.filter((p): p is Extract<Pending, { kind: 'add' }> => p.kind === 'add');
@@ -444,7 +442,7 @@
   // ---- sync ------------------------------------------------------------------
   function buildRequest(): ChangeRequest {
     const editRequests: EditRequest[] = edits.map((p) => ({ album_id: p.id, track: p.track, fields: p.fields, cover: p.cover }));
-    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: embedCovers, art_sidecar_pal256: artSidecar } };
+    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR } };
   }
   async function start() {
     if (!canStart) return;
@@ -452,12 +450,11 @@
     try { review = await planChanges(buildRequest(), mediaRoot); }
     catch (error) { reviewError = explainError(error); dialog = 'review'; return; }
     slowDontAsk = false;
-    dialog = 'review';
-  }
-  /** The plan (and its confirmation token) depends on the options, so changing one in the review sheet re-plans. */
-  async function replan() {
-    try { review = await planChanges(buildRequest(), mediaRoot); reviewError = ''; }
-    catch (error) { review = null; reviewError = explainError(error); }
+    // Nothing to decide (no removals, no slow direct-USB warning to acknowledge): just do it. The staged
+    // list and the card space bar were the review; the engine still checks every file as it writes.
+    const slowNow = connKind === 'direct_usb' && review.bytes_to_write > SLOW_LIMIT && !prefs?.slow_alert_suppressed;
+    if (review.removed_files > 0 || slowNow) { dialog = 'review'; return; }
+    await confirmSync();
   }
   async function confirmSync() {
     if (!review) return;
@@ -466,8 +463,9 @@
     const mode = prefs?.remove_mode ?? 'backup';
     const backupOn = mode === 'backup' || (mode === 'ask' && askBackup);
     const backup = review.removed_files && backupOn ? (prefs?.backup_dir || prefs?.default_backup_dir || null) : null;
+    const planWarnings = review.warnings;
     runId = newJobId();
-    run = { journal: '', reassurance: '', phase: 'Starting', done: 0, total: review.bytes_to_write, path: '', startedAt: Date.now(), speed: 0, samples: [], finished: false, error: '', report: null, cancelled: false };
+    run = { journal: '', reassurance: '', warnings: planWarnings, phase: 'Starting', done: 0, total: review.bytes_to_write, path: '', startedAt: Date.now(), speed: 0, samples: [], finished: false, error: '', report: null, cancelled: false };
     const startedAt = Date.now();
     try {
       const report = await executeChanges(buildRequest(), mediaRoot, review.id, backup, historyContext(), runId);
@@ -762,8 +760,6 @@
           {/each}
         </ul>
       </details>
-      {#if adds.length}<label class="wb-check"><input type="checkbox" bind:checked={embedCovers} on:change={replan} /> Put each album's cover picture inside the copied songs, so the Pocket can show it</label>
-        <label class="wb-check"><input type="checkbox" bind:checked={artSidecar} on:change={replan} /> Also add a small fast-loading cover file for each album (Tau Alpha 0.5 or newer)</label>{/if}
       {#if review.removed_files}
         {#if prefs?.remove_mode === 'ask'}
           <label class="wb-check"><input type="checkbox" bind:checked={askBackup} /> Copy removed files to my backup folder first</label>
@@ -828,6 +824,13 @@
     <h2 id="run-t">Sync complete</h2>
     <p class="wb-ok">✓ {[run.report.copied && `${plural(run.report.copied, 'track')} copied`, run.report.deleted && `${plural(run.report.deleted, 'track')} removed`, run.report.edited && `${plural(run.report.edited, 'track')} edited`].filter(Boolean).join(', ') || 'Everything was already up to date'}. The Pocket's library list was updated and checked.</p>
     {#if run.report.backup_dir}<p class="wb-fine">Removed files were backed up to {run.report.backup_dir}</p>{/if}
+    {#if run.warnings.length}
+      <div class="wb-warn" role="note">
+        <b>{plural(run.warnings.length, 'thing')} to know about</b>
+        <ul class="wb-warnlist">{#each run.warnings.slice(0, 5) as w}<li>{w.message}</li>{/each}</ul>
+        {#if run.warnings.length > 5}<p class="wb-fine">And {run.warnings.length - 5} more are in the details.</p>{/if}
+      </div>
+    {/if}
     <p class="wb-fine">{verifiedOnDevice ? 'Every file was read back from the card itself and matched.' : 'Every file was checked after writing, but on this computer that check may have been answered from memory.'}</p>
     {#if ejectMsg}<p class={ejectOk ? 'wb-ok' : 'wb-fine wb-keep'} role="status">{ejectOk ? '✓ ' : ''}{ejectMsg}</p>
     {:else}<p class="wb-fine wb-keep">Before you unplug it, eject it so everything is written out.</p>{/if}
@@ -919,6 +922,7 @@
   .wb-detail{margin:0 0 10px;font-size:13px}.wb-detail summary{cursor:pointer;color:#b7c3c2;padding:4px 0}
   .wb-detail ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;max-height:160px;overflow:auto}
   .wb-detail li{display:flex;gap:8px}.wb-detail small{color:#8c9c9b;margin-left:8px}.wb-detail .k{font-weight:700;width:14px;text-align:center}.wb-detail .k.add{color:#c1f0ad}.wb-detail .k.remove{color:#e8b59f}
+  .wb-warnlist{margin:6px 0 0;padding-left:18px;font-size:12px}
   .wb-keep{color:#f0d59a!important}
   .wb-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .wb-skip{position:absolute;left:12px;top:-40px;z-index:120;background:#c1f0ad;color:#142015;padding:8px 12px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none}.wb-skip:focus{top:8px}
