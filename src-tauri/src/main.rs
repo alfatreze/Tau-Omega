@@ -118,6 +118,22 @@ struct ProgressEvent {
 /// Cancellation flags for running jobs, keyed by a caller-chosen job id. A
 /// front-end starts a job with a job id, then calls `cancel_job` with the same
 /// id to stop it; the flag is checked once per progress tick (P0-3).
+/// Commands now run off the window's main thread, so two could overlap. Card
+/// writes must never: one at a time, and a second request is refused with a
+/// clear message rather than queued silently behind a long copy.
+static CARD_WRITE: Mutex<()> = Mutex::new(());
+
+fn card_write_guard() -> Result<std::sync::MutexGuard<'static, ()>, TauError> {
+    match CARD_WRITE.try_lock() {
+        Ok(guard) => Ok(guard),
+        Err(std::sync::TryLockError::Poisoned(poisoned)) => Ok(poisoned.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => Err(TauError {
+            code: ErrorCode::Io,
+            message: "another change to a card is already running; wait for it to finish".into(),
+        }),
+    }
+}
+
 #[derive(Default)]
 struct JobRegistry(Mutex<HashMap<String, Arc<AtomicBool>>>);
 
@@ -177,7 +193,7 @@ fn with_job<T>(
     result
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn scan_library(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<LibraryScanView, TauError> {
     let scan = with_job(&window, &jobs, job_id, |progress| {
         tau_core::scan_dir_with_progress(Path::new(&path), true, progress)
@@ -193,12 +209,12 @@ fn scan_library(path: String, job_id: String, window: Window, jobs: State<JobReg
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn read_journal(path: String) -> Result<Value, TauError> {
     tau_core::journal::read_journal(path)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn list_journals(dir: String) -> Result<Vec<tau_core::journal::JournalSummary>, TauError> {
     tau_core::journal::list_journals(dir)
 }
@@ -226,12 +242,12 @@ fn configured_reports_dir(app: &tauri::AppHandle) -> Result<Option<String>, TauE
 /// The folder every journal goes in: the folder the user chose in Settings, or
 /// a default `reports` folder in the app's data directory. Always a real path,
 /// so sync history works without any setup.
-#[tauri::command]
+#[tauri::command(async)]
 fn get_reports_dir(app: tauri::AppHandle) -> Result<Option<String>, TauError> {
     Ok(Some(resolved_reports_dir(&app)?.to_string_lossy().into_owned()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_reports_dir(app: tauri::AppHandle, path: String) -> Result<(), TauError> {
     let dir = app
         .path()
@@ -251,7 +267,7 @@ const RECENT_CARDS_MAX: usize = 8;
 /// same convention as [`get_reports_dir`]. A card that no longer exists
 /// (ejected, renamed) stays listed; the frontend decides how to handle that
 /// when the user picks it, this command only remembers paths.
-#[tauri::command]
+#[tauri::command(async)]
 fn get_recent_cards(app: tauri::AppHandle) -> Result<Vec<String>, TauError> {
     let path = app
         .path()
@@ -268,7 +284,7 @@ fn get_recent_cards(app: tauri::AppHandle) -> Result<Vec<String>, TauError> {
 /// Records a successfully opened card: moves it to the front if already
 /// remembered, otherwise prepends it, and caps the list at
 /// [`RECENT_CARDS_MAX`] entries.
-#[tauri::command]
+#[tauri::command(async)]
 fn record_recent_card(app: tauri::AppHandle, path: String) -> Result<(), TauError> {
     let dir = app
         .path()
@@ -293,14 +309,14 @@ fn record_recent_card(app: tauri::AppHandle, path: String) -> Result<(), TauErro
 /// top-level folder with both `Cores` and `Assets`). A cheap directory check
 /// on the platform's usual mount locations (see `device::mounted_cards`), so
 /// the front-end can poll it to notice a card or the Pocket being connected.
-#[tauri::command]
+#[tauri::command(async)]
 fn list_mounted_cards() -> Result<Vec<String>, TauError> {
     Ok(device::mounted_cards())
 }
 
 /// How a card is connected: the Pocket's own (slow) USB mode, a card reader,
 /// or unknown when the OS will not say.
-#[tauri::command]
+#[tauri::command(async)]
 fn detect_connection(path: String) -> device::ConnectionInfo {
     device::detect_connection(Path::new(&path))
 }
@@ -384,12 +400,12 @@ fn prefs_view(app: &tauri::AppHandle) -> Result<PrefsView, TauError> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_prefs(app: tauri::AppHandle) -> Result<PrefsView, TauError> {
     prefs_view(&app)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_prefs(app: tauri::AppHandle, prefs: Prefs) -> Result<PrefsView, TauError> {
     if !matches!(prefs.remove_mode.as_str(), "backup" | "ask" | "none") {
         return Err(TauError { code: ErrorCode::InvalidPathReference, message: "remove_mode must be backup, ask or none".into() });
@@ -406,7 +422,7 @@ const MANUAL_PLAYERS_FILE: &str = "manual_players.txt";
 /// though their platform's own `category` isn't `"Media Players"` (or is
 /// unknown) -- an override list, not a replacement for the real signal.
 /// Same one-file-in-the-config-dir convention as recent cards.
-#[tauri::command]
+#[tauri::command(async)]
 fn get_manual_players(app: tauri::AppHandle) -> Result<Vec<String>, TauError> {
     let path = app
         .path()
@@ -421,7 +437,7 @@ fn get_manual_players(app: tauri::AppHandle) -> Result<Vec<String>, TauError> {
 }
 
 /// Adds or removes one core id from the manual-players override list.
-#[tauri::command]
+#[tauri::command(async)]
 fn set_manual_player(app: tauri::AppHandle, core_id: String, enabled: bool) -> Result<(), TauError> {
     let dir = app
         .path()
@@ -442,7 +458,7 @@ fn set_manual_player(app: tauri::AppHandle, core_id: String, enabled: bool) -> R
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn scan_media(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<MediaScanView, TauError> {
     let scan = with_job(&window, &jobs, job_id, |progress| {
         tau_core::scan_dir_with_progress(Path::new(&path), true, progress)
@@ -476,7 +492,7 @@ fn make_playlist_write_plan(
 /// Plans creating or reordering a playlist -- writing `tracks`, in order, to
 /// `file`. Reordering an existing playlist is the same call with a permuted
 /// `tracks`, so there is no separate "reorder" command.
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_playlist_write(
     path: String,
     file: String,
@@ -485,18 +501,19 @@ fn plan_playlist_write(
     make_playlist_write_plan(&path, &file, &tracks)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_playlist_write(
     path: String,
     file: String,
     tracks: Vec<String>,
     confirmation: String,
 ) -> Result<(), TauError> {
+    let _write = card_write_guard()?;
     let plan = make_playlist_write_plan(&path, &file, &tracks)?;
     tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_playlist_rename(
     path: String,
     old_file: String,
@@ -505,13 +522,14 @@ fn plan_playlist_rename(
     tau_core::playlist::plan_rename(Path::new(&path), &old_file, &new_file)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_playlist_rename(
     path: String,
     old_file: String,
     new_file: String,
     confirmation: String,
 ) -> Result<(), TauError> {
+    let _write = card_write_guard()?;
     let plan = tau_core::playlist::plan_rename(Path::new(&path), &old_file, &new_file)?;
     tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
 }
@@ -526,7 +544,7 @@ fn make_playlist_import_plan(
     tau_core::playlist::plan_import(common, Path::new(source), dest_file, &scan.entries)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_playlist_import(
     path: String,
     source: String,
@@ -535,18 +553,19 @@ fn plan_playlist_import(
     make_playlist_import_plan(&path, &source, &dest_file)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_playlist_import(
     path: String,
     source: String,
     dest_file: String,
     confirmation: String,
 ) -> Result<(), TauError> {
+    let _write = card_write_guard()?;
     let plan = make_playlist_import_plan(&path, &source, &dest_file)?;
     tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn export_playlist(media_root: String, playlist_name: String, output: String) -> Result<(), TauError> {
     let scan = tau_core::scan_dir(Path::new(&media_root), true)?;
     let playlist = scan
@@ -557,13 +576,13 @@ fn export_playlist(media_root: String, playlist_name: String, output: String) ->
     tau_core::playlist::export_m3u(Path::new(&output), playlist, &scan.entries)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn find_problems(path: String) -> Result<Vec<tau_core::problems::Problem>, TauError> {
     let scan = tau_core::scan_dir(Path::new(&path), false)?;
     tau_core::problems::find_problems(&path, &scan.entries)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn read_persisted_settings(path: String) -> Result<Vec<tau_core::diag::PersistedSetting>, TauError> {
     tau_core::diag::read_persisted_settings(path)
 }
@@ -572,7 +591,7 @@ fn read_persisted_settings(path: String) -> Result<Vec<tau_core::diag::Persisted
 /// the normal case (no Check has been run, or they're this core's legacy
 /// playlist state, per `docs/FIRMWARE_SYNC.md`'s overloaded-ids trap), not
 /// an error the front-end needs to display as one.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_check_summary(path: String) -> Result<Option<tau_core::diag::CheckSummary>, TauError> {
     match tau_core::diag::read_check_summary(path) {
         Ok(summary) => Ok(Some(summary)),
@@ -586,7 +605,7 @@ fn read_check_summary(path: String) -> Result<Option<tau_core::diag::CheckSummar
 /// real screenshot PNG, not a card path -- `None` when the image simply has
 /// no QR code in it (a normal screenshot of something else), an error for
 /// anything that looks like a QR but fails to decode as a valid report.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_qr_report(path: String) -> Result<Option<tau_core::taud::TaudReport>, TauError> {
     match tau_core::taud::read_qr_report(Path::new(&path)) {
         Ok(report) => Ok(Some(report)),
@@ -599,7 +618,7 @@ fn read_qr_report(path: String) -> Result<Option<tau_core::taud::TaudReport>, Ta
 /// (`Memories/Screenshots/`), newest first -- the "find it automatically"
 /// complement to `read_qr_report`, which decodes one the caller already has
 /// a path for.
-#[tauri::command]
+#[tauri::command(async)]
 fn list_screenshots(card: String) -> Result<Vec<tau_core::screenshots::ScreenshotEntry>, TauError> {
     tau_core::screenshots::list_screenshots(Path::new(&card))
 }
@@ -609,7 +628,7 @@ fn list_screenshots(card: String) -> Result<Vec<tau_core::screenshots::Screensho
 /// filename) without granting the webview broader filesystem access via
 /// Tauri's asset protocol -- this only ever serves a path `list_screenshots`
 /// or the user's own file picker already produced.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_image_data_url(path: String) -> Result<String, TauError> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     let bytes = std::fs::read(&path)?;
@@ -620,7 +639,7 @@ fn read_image_data_url(path: String) -> Result<String, TauError> {
 /// (`cover_source`, from a `plan_sync` result's `art_sidecar_previews`),
 /// without writing anything: runs the exact same quantizer `execute_sync`
 /// will use, so what's shown here matches what actually ends up on the card.
-#[tauri::command]
+#[tauri::command(async)]
 fn preview_art_sidecar(cover_source: String) -> Result<String, TauError> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     let bytes = std::fs::read(&cover_source)?;
@@ -631,7 +650,7 @@ fn preview_art_sidecar(cover_source: String) -> Result<String, TauError> {
 /// Decodes a core's `icon.bin` (`Cores/<core_id>/icon.bin`) into a PNG data
 /// URL. `None`, not an error, when the file simply doesn't exist -- not
 /// every core ships one.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_core_icon(card: String, core_id: String) -> Result<Option<String>, TauError> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     let path = Path::new(&card).join("Cores").join(&core_id).join("icon.bin");
@@ -651,7 +670,7 @@ fn read_core_icon(card: String, core_id: String) -> Result<Option<String>, TauEr
 /// PNG data URL -- the real per-platform artwork (521x165, shared by every
 /// core on that platform), distinct from a core's own small `icon.bin`.
 /// `None`, not an error, when the file doesn't exist.
-#[tauri::command]
+#[tauri::command(async)]
 fn read_platform_image(card: String, platform: String) -> Result<Option<String>, TauError> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     let path = Path::new(&card)
@@ -670,7 +689,7 @@ fn read_platform_image(card: String, platform: String) -> Result<Option<String>,
     )))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn inspect_card(path: String) -> Result<Vec<CoreView>, TauError> {
     Ok(tau_core::inspect_card(path)?.cores.into_iter().map(|core| {
         let (index_status, tracks) = match core.index_status {
@@ -682,7 +701,7 @@ fn inspect_card(path: String) -> Result<Vec<CoreView>, TauError> {
     }).collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn compare_media(left: String, right: String) -> Result<ComparisonView, TauError> {
     let comparison = tau_core::compare::media_roots(Path::new(&left), Path::new(&right))?;
     let only_left = comparison.count(tau_core::compare::DifferenceState::OnlyLeft);
@@ -710,7 +729,7 @@ fn make_core_copy_plan(source: String, destination: String) -> Result<tau_core::
     tau_core::sync::plan_core_copy(Path::new(&source), &destination_path, &root_prefix, &mut None)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_sync(sources: Vec<String>, destination: String, embed_covers: bool, art_sidecar_pal256: bool) -> Result<SyncPlanView, TauError> {
     let plan = make_plan(sources, destination, embed_covers, art_sidecar_pal256)?;
     Ok(sync_plan_view(plan))
@@ -734,7 +753,7 @@ fn sync_plan_view(plan: tau_core::sync::SyncPlan) -> SyncPlanView {
     SyncPlanView { id: plan.id, new_files: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::New).count(), updates: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Update).count(), unchanged: plan.items.iter().filter(|item| item.state == tau_core::sync::CopyState::Same).count(), bytes_to_write: plan.bytes_to_write, art_sidecars: plan.art_sidecars.len(), art_sidecar_previews, warnings: plan.warnings }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_core_copy(source: String, destination: String) -> Result<SyncPlanView, TauError> {
     let plan = make_core_copy_plan(source, destination)?;
     Ok(sync_plan_view(plan))
@@ -743,7 +762,7 @@ fn plan_core_copy(source: String, destination: String) -> Result<SyncPlanView, T
 /// Whether a plan's `bytes_needed` fits at `path`'s volume, with the
 /// engine's own default safety margin. Read-only: this never reserves
 /// space, so an executing plan still handles a full-disk failure itself.
-#[tauri::command]
+#[tauri::command(async)]
 fn check_storage_capacity(path: String, bytes_needed: u64) -> Result<tau_core::storage::CapacityCheck, TauError> {
     tau_core::storage::check_capacity(Path::new(&path), bytes_needed, tau_core::storage::DEFAULT_MARGIN_BYTES)
 }
@@ -751,27 +770,28 @@ fn check_storage_capacity(path: String, bytes_needed: u64) -> Result<tau_core::s
 /// Plans backing up an arbitrary folder onto another -- a dry-run preview
 /// only (`STATUS_HANDOFF.md` item 5); there is deliberately no
 /// `execute_backup` yet.
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_backup(source: String, destination: String) -> Result<tau_core::backup::BackupPlan, TauError> {
     tau_core::backup::plan(Path::new(&source), Path::new(&destination))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn inspect_package(path: String) -> Result<tau_core::package::PackageManifest, TauError> {
     tau_core::package::inspect(Path::new(&path))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_package_install(path: String, card: String) -> Result<tau_core::package::PackagePlan, TauError> {
     tau_core::package::plan_install(Path::new(&path), Path::new(&card))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_package_install(
     path: String,
     card: String,
     confirmation: String,
 ) -> Result<tau_core::package::PackageReport, TauError> {
+    let _write = card_write_guard()?;
     let zip_path = Path::new(&path);
     let card_root = Path::new(&card);
     let plan = tau_core::package::plan_install(zip_path, card_root)?;
@@ -782,25 +802,27 @@ fn execute_package_install(
 /// reflects every currently-installed core, not a snapshot the caller might
 /// be holding stale (the same "safe to re-derive, cheap to re-check" choice
 /// `execute_package_install` already makes for its own plan).
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_remove_core(card: String, core_id: String) -> Result<tau_core::remove::RemovePlan, TauError> {
     let card = tau_core::inspect_card(Path::new(&card))?;
     tau_core::remove::plan_remove(&card, &core_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_remove_core(
     card: String,
     core_id: String,
     confirmation: String,
 ) -> Result<tau_core::remove::RemoveReport, TauError> {
+    let _write = card_write_guard()?;
     let card = tau_core::inspect_card(Path::new(&card))?;
     let plan = tau_core::remove::plan_remove(&card, &core_id)?;
     tau_core::remove::execute_remove(&plan, &confirmation)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_sync(sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, art_sidecar_pal256: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
+    let _write = card_write_guard()?;
     let plan = make_plan(sources, destination, embed_covers, art_sidecar_pal256)?;
     let manifest = PathBuf::from(manifest_path);
     with_job(&window, &jobs, job_id, |progress| {
@@ -808,16 +830,18 @@ fn execute_sync(sources: Vec<String>, destination: String, confirmation: String,
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_core_copy(source: String, destination: String, confirmation: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
+    let _write = card_write_guard()?;
     let plan = make_core_copy_plan(source, destination)?;
     with_job(&window, &jobs, job_id, |progress| {
         tau_core::journal::execute_to_journal(&plan, &confirmation, "core_copy", Path::new(&manifest_path), progress)
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_core_move(source: String, destination: String, confirmation: String, delete_confirmation: String, backup_path: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
+    let _write = card_write_guard()?;
     let plan = make_core_copy_plan(source.clone(), destination)?;
     let source_path = PathBuf::from(&source);
     let source_root_prefix = tau_core::root_prefix(&source_path)?;
@@ -830,7 +854,7 @@ fn execute_core_move(source: String, destination: String, confirmation: String, 
 
 /// The workbench's album/track/playlist listing of a media root (a local
 /// library folder or a card's media root).
-#[tauri::command]
+#[tauri::command(async)]
 fn list_library(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::workbench::LibraryListing, TauError> {
     with_job(&window, &jobs, job_id, |progress| tau_core::workbench::list_library(Path::new(&path), progress))
 }
@@ -868,7 +892,7 @@ fn change_plan_view(plan: &tau_core::changes::ChangePlan) -> ChangePlanView {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn plan_changes(request: tau_core::changes::ChangeRequest, destination: String) -> Result<ChangePlanView, TauError> {
     let plan = tau_core::changes::plan_changes(Path::new(&destination), &request, &mut None)?;
     Ok(change_plan_view(&plan))
@@ -877,14 +901,14 @@ fn plan_changes(request: tau_core::changes::ChangeRequest, destination: String) 
 /// Small cover pictures for a batch of album folders under `path` (a local
 /// library or a card's media root). Albums with no readable picture come back
 /// with `png_base64: null` so the UI can show a placeholder.
-#[tauri::command]
+#[tauri::command(async)]
 fn album_thumbnails(path: String, ids: Vec<String>) -> Result<Vec<tau_core::workbench::Thumbnail>, TauError> {
     tau_core::workbench::album_thumbnails(Path::new(&path), &ids, 96)
 }
 
 /// A proper thumbnail (decoded, resized, re-encoded as PNG) of an image file the
 /// user picked, as a data URL; also proves the picture can be read at all.
-#[tauri::command]
+#[tauri::command(async)]
 fn image_thumbnail(path: String, long_side: u16) -> Result<String, TauError> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
     let bytes = std::fs::read(&path)?;
@@ -915,8 +939,9 @@ fn prune_history_best_effort(app: &tauri::AppHandle) {
 /// `context` is human-readable detail (titles, card, connection) stored in the
 /// journal so the sync history can describe the run in words. The journal is
 /// written to the reports directory before anything changes.
-#[tauri::command]
+#[tauri::command(async)]
 fn execute_changes(app: tauri::AppHandle, request: tau_core::changes::ChangeRequest, destination: String, confirmation: String, backup: Option<String>, context: Option<Value>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<ChangeResult, TauError> {
+    let _write = card_write_guard()?;
     let dest = PathBuf::from(&destination);
     let plan = tau_core::changes::plan_changes(&dest, &request, &mut None)?;
     let reports = resolved_reports_dir(&app)?;
@@ -936,7 +961,7 @@ fn execute_changes(app: tauri::AppHandle, request: tau_core::changes::ChangeRequ
 
 /// Every journal in the sync history folder, newest first. An absent folder
 /// (nothing synced yet) is an empty history, not an error.
-#[tauri::command]
+#[tauri::command(async)]
 fn list_history(app: tauri::AppHandle) -> Result<Vec<tau_core::journal::JournalSummary>, TauError> {
     let dir = resolved_reports_dir(&app)?;
     if !dir.is_dir() {
@@ -946,7 +971,7 @@ fn list_history(app: tauri::AppHandle) -> Result<Vec<tau_core::journal::JournalS
 }
 
 /// Applies the retention preferences now (also done after every sync).
-#[tauri::command]
+#[tauri::command(async)]
 fn prune_history(app: tauri::AppHandle) -> Result<usize, TauError> {
     let prefs = read_prefs(&app)?;
     let dir = resolved_reports_dir(&app)?;
@@ -957,7 +982,7 @@ fn prune_history(app: tauri::AppHandle) -> Result<usize, TauError> {
 }
 
 /// Deletes the whole sync history (the user's explicit "clear history").
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_history(app: tauri::AppHandle) -> Result<usize, TauError> {
     let dir = resolved_reports_dir(&app)?;
     if !dir.is_dir() {
