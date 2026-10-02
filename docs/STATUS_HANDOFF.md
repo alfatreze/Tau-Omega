@@ -1029,3 +1029,7 @@ walk of the whole card's `Assets` and `Cores` showed nothing else changed. **Rea
 the exFAT card (SAFETY_RULES 7 says remove them; the install did not). Fixed (the install now removes `._` siblings of the three names it used), the stray was
 removed from the card, and a second real run left nothing behind. The sync path has the same gap for the files it writes (`sync.rs` only skips `._*` when
 reading); not fixed yet. **Still to do:** boot the Pocket and confirm `Info > THEME FILE` reads `1 LOADED` and the theme is listed (owner).
+
+**Hardware confirmation, 2026-10-03 (owner-reported).** After the real write above, the Pocket loaded the theme: OMEGA TEST was available and `Info > THEME FILE` read
+`1 LOADED`. So the `THEM` section Omega writes (byte-identical to tau-alpha's tool) is accepted by the firmware reader on real hardware, the first time this has been
+shown. Not captured as an image; the installed file itself is `testdata`-worthy (144 bytes, sha 15c5d571...) and still sits on `tau_dev_67`.
