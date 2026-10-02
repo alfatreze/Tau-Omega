@@ -47,3 +47,21 @@ hardware screenshot fixtures found yet") needed. It unblocks two things, neither
 Every QR page here was cross-checked with tau-alpha's own `tools/decode_tau_suite.py --qr` before
 being copied in, so the expected decoded values are already known and documented on the tau-alpha
 side — a future Rust decoder here can be tested against these exact files with known-correct output.
+
+
+## Added 2026-10-02: captures for the newer QR tags (8 files)
+
+Copied byte-for-byte (`cmp`-verified) from the mounted Pocket's own `Memories/Screenshots`, read-only. All are QR pages from builds after
+the 2026-09-21 set above. Expected values in the `taud.rs` tests were cross-checked against tau-alpha's `tools/decode_tau_suite.py --qr --json`.
+
+| File | What it is | Firmware |
+|---|---|---|
+| `20260927_005032.png`, `20261002_191502.png` | Info-page export (`SR_T_INFOEXPORT`, tag 19; profile "none", no tests) | 0.4.0, 0.6.0 |
+| `20260927_165345.png` | Winamp Scope meter config (`SR_T_METERCFG`, tag 20) | 0.5.0 |
+| `20260927_232959.png` | Blit Test run with 20 recorded meter frames (`SR_T_METERTRACE`, tag 21; profile 8) | 0.5.0 |
+| `20260927_233104.png` | USER CHECK with a stack reading (`SR_T_STACK`, tag 16) | 0.5.0 |
+| `20260928_115822.png` | decode-stage split, **4-field** form (earliest, kept raw) | 0.5.0 |
+| `20260928_135722.png` | decode-stage split, **6-field** form (after B-361) | 0.5.0 |
+| `20260929_000253.png` | decode-stage split, **7-field** form (after B-381, adds worst LPC call) | 0.5.0 |
+
+No capture exists yet for tag 15 (Blit Test results), 17 (Winamp config export) or 18 (Meter Sweep); those stay "not decoded" until one does.

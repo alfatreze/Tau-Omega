@@ -18,7 +18,7 @@ use std::{fs::File, io::BufReader, path::Path};
 
 const FORMAT: u8 = 1;
 
-const PROFILES: [&str; 8] = [
+const PROFILES: [&str; 9] = [
     "none",
     "USER CHECK",
     "QUICK",
@@ -27,6 +27,7 @@ const PROFILES: [&str; 8] = [
     "ENDURANCE",
     "CUSTOM",
     "RESTART-SET",
+    "BLIT TEST",
 ];
 const VERDICTS: [&str; 4] = [
     "no result",
@@ -35,7 +36,7 @@ const VERDICTS: [&str; 4] = [
     "check incomplete",
 ];
 const RESULTS: [&str; 4] = ["PASS", "FAIL", "SKIPPED", "N/A"];
-const TESTS: [&str; 14] = [
+const TESTS: [&str; 15] = [
     "SDRAM window test",
     "SDRAM read/write cost",
     "PSRAM window test",
@@ -50,6 +51,7 @@ const TESTS: [&str; 14] = [
     "Track changes (10)",
     "Cold code x20",
     "Blit storm (30 s)",
+    "Cold frame (30 s)",
 ];
 
 fn test_name(id: u8) -> String {
@@ -149,6 +151,70 @@ pub struct TaudDecodeSweepEntry {
     pub title: String,
 }
 
+/// Stack high-water mark (entry tag 16, B-204): bytes used at the worst point and the stack's size.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudStack {
+    pub peak_bytes: u64,
+    pub stack_size: u64,
+    pub free_bytes: u64,
+}
+
+/// The finer decode-stage split (entry tag 22, `SR_T_DECPROF2`). Percent of a `CT_AUD` window's real time.
+/// MP3: `d_pct`/`a_pct`/`x_pct` (dequantize, anti-alias, hybrid transform). FLAC: `u_pct` (unary/CLZ share),
+/// `t_pct` (true total, both channels), `c1_pct` (channel 1 alone), and from the 7-field form `lpc_max_ms`
+/// (worst single LPC call; `None` on the older 6-field form). Firmware before B-361 sent 4 fields, which are
+/// kept raw in `decode_profile2_raw` rather than guessed at.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudDecodeProfile2 {
+    pub d_pct: u64,
+    pub a_pct: u64,
+    pub x_pct: u64,
+    pub u_pct: u64,
+    pub t_pct: u64,
+    pub c1_pct: u64,
+    pub lpc_max_ms: Option<u64>,
+}
+
+/// One-off export of the Info page (entry tag 19, `SR_T_INFOEXPORT`). Not part of a Check run, so its report
+/// has profile "none" and no tests.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudInfoExport {
+    pub firmware: String,
+    pub fpga_rev: String,
+    pub window_read_cyc: u64,
+    pub free_ram: u64,
+    pub underruns: u64,
+    pub draw_stall_ms: u64,
+    pub load_ms: u64,
+    pub cpu_pct: u8,
+}
+
+/// A meter's configuration (entry tag 20, `SR_T_METERCFG`). The parameter values are carried as raw bytes: their
+/// widths and meanings come from the firmware's meter registry (`meters_schema.json`), which this decoder does
+/// not have, so it never guesses. `preset` is `None` for "no preset" (0xFF on the wire).
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudMeterConfig {
+    pub meter_id: u8,
+    pub schema: u8,
+    pub preset: Option<u8>,
+    pub param_count: u8,
+    pub raw_hex: String,
+}
+
+/// One recorded meter frame (entry tag 21, `SR_T_METERTRACE`, repeatable): 16 spectrum levels and 64 signed
+/// waveform samples, `dt_ms` after the previous frame.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudTraceFrame {
+    pub dt_ms: u16,
+    pub spec: Vec<u8>,
+    pub wave: Vec<i8>,
+}
+
 /// Everything outside the per-test `tests` list, keyed the same way as
 /// `tau-alpha`'s own `entries` dict. A tag whose value doesn't match one of
 /// the known structured shapes falls back to its raw little-endian values
@@ -174,6 +240,13 @@ pub struct TaudEntries {
     pub decode_profile: Option<TaudDecodeProfile>,
     pub decode_profile_raw: Vec<u64>,
     pub decode_sweep: Vec<TaudDecodeSweepEntry>,
+    pub stack: Option<TaudStack>,
+    pub stack_raw: Vec<u64>,
+    pub decode_profile2: Option<TaudDecodeProfile2>,
+    pub decode_profile2_raw: Vec<u64>,
+    pub info_export: Option<TaudInfoExport>,
+    pub meter_config: Option<TaudMeterConfig>,
+    pub meter_trace: Vec<TaudTraceFrame>,
 }
 
 /// An entry whose tag this decoder does not recognise -- kept, not dropped,
@@ -221,8 +294,8 @@ fn le_to_u64(chunk: &[u8]) -> u64 {
 
 fn tag_width(tag: u8) -> usize {
     match tag {
-        2 | 4 | 5 | 6 | 8 => 2,
-        7 | 9 => 4,
+        2 | 4 | 5 | 6 | 8 | 22 => 2,
+        7 | 9 | 16 => 4,
         _ => 1,
     }
 }
@@ -297,6 +370,35 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
                     title: String::from_utf8_lossy(&value[10..n]).into_owned(),
                 });
             }
+            19 if n == 20 => {
+                let le = |a: usize, b: usize| le_to_u64(&value[a..b]);
+                entries.info_export = Some(TaudInfoExport {
+                    firmware: format!("{}.{}.{}", value[0], value[1], value[2]),
+                    fpga_rev: format!("{:08X}", le(3, 7)),
+                    window_read_cyc: le(7, 9),
+                    free_ram: le(9, 13),
+                    underruns: le(13, 15),
+                    draw_stall_ms: le(15, 17),
+                    load_ms: le(17, 19),
+                    cpu_pct: value[19],
+                });
+            }
+            20 if n >= 4 => {
+                entries.meter_config = Some(TaudMeterConfig {
+                    meter_id: value[0],
+                    schema: value[1],
+                    preset: (value[2] != 0xFF).then_some(value[2]),
+                    param_count: value[3],
+                    raw_hex: hex_encode(&value[4..]),
+                });
+            }
+            21 if n == 82 => {
+                entries.meter_trace.push(TaudTraceFrame {
+                    dt_ms: u16::from_le_bytes([value[0], value[1]]),
+                    spec: value[2..18].to_vec(),
+                    wave: value[18..82].iter().map(|b| *b as i8).collect(),
+                });
+            }
             1 => {
                 if n < 16 {
                     return Err(bad_record("truncated build entry"));
@@ -317,7 +419,7 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
                     heap_gap,
                 });
             }
-            2 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 => {
+            2 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 16 | 22 => {
                 let width = tag_width(tag);
                 let values: Vec<u64> = value.chunks_exact(width).map(le_to_u64).collect();
                 match tag {
@@ -381,6 +483,42 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
                             entries.decode_profile_raw = values;
                         }
                     }
+                    16 => {
+                        if let [peak, size] = values.as_slice() {
+                            entries.stack = Some(TaudStack {
+                                peak_bytes: *peak,
+                                stack_size: *size,
+                                free_bytes: size.saturating_sub(*peak),
+                            });
+                        } else {
+                            entries.stack_raw = values;
+                        }
+                    }
+                    22 => match values.as_slice() {
+                        [d, a, x, u, t, c1, lpc] => {
+                            entries.decode_profile2 = Some(TaudDecodeProfile2 {
+                                d_pct: *d,
+                                a_pct: *a,
+                                x_pct: *x,
+                                u_pct: *u,
+                                t_pct: *t,
+                                c1_pct: *c1,
+                                lpc_max_ms: Some(*lpc),
+                            });
+                        }
+                        [d, a, x, u, t, c1] => {
+                            entries.decode_profile2 = Some(TaudDecodeProfile2 {
+                                d_pct: *d,
+                                a_pct: *a,
+                                x_pct: *x,
+                                u_pct: *u,
+                                t_pct: *t,
+                                c1_pct: *c1,
+                                lpc_max_ms: None,
+                            });
+                        }
+                        _ => entries.decode_profile2_raw = values,
+                    },
                     2 => entries.memory = values,
                     6 => entries.cold = values,
                     7 => entries.time = values,
@@ -597,5 +735,119 @@ mod tests {
         let mut record = b"TD\x01\x01".to_vec();
         record.extend_from_slice(&[0, 0, 0, 0]);
         assert!(parse_record(&record).is_err());
+    }
+
+    // ---- tags 16, 19-22: decoded from real captures on the Pocket's own screenshot folder (2026-09-27 to
+    // 2026-10-02), expected values cross-checked against tau-alpha's tools/decode_tau_suite.py --qr --json.
+
+    #[test]
+    fn decodes_a_real_stack_reading() {
+        let r = read_qr_report(fixture("20260927_233104.png")).unwrap();
+        assert_eq!(r.profile, "USER CHECK");
+        let s = r.entries.stack.unwrap();
+        assert_eq!(
+            (s.peak_bytes, s.stack_size, s.free_bytes),
+            (1528, 8192, 6664)
+        );
+        assert_eq!(r.entries.build.unwrap().firmware, "0.5.0");
+        assert!(r.unknown.is_empty());
+    }
+
+    #[test]
+    fn decodes_the_three_shapes_of_the_decode_stage_split() {
+        // Four fields (earliest firmware): kept raw, never guessed.
+        let r = read_qr_report(fixture("20260928_115822.png")).unwrap();
+        assert!(r.entries.decode_profile2.is_none());
+        assert_eq!(r.entries.decode_profile2_raw, vec![5, 1, 6, 0]);
+        // Six fields (after B-361): no worst-LPC figure.
+        let r = read_qr_report(fixture("20260928_135722.png")).unwrap();
+        let d = r.entries.decode_profile2.unwrap();
+        assert_eq!(
+            (d.u_pct, d.t_pct, d.c1_pct, d.lpc_max_ms),
+            (8, 99, 65, None)
+        );
+        // Seven fields (after B-381): the worst LPC call in milliseconds (65535 = the field's ceiling).
+        let r = read_qr_report(fixture("20260929_000253.png")).unwrap();
+        let d = r.entries.decode_profile2.unwrap();
+        assert_eq!(
+            (d.d_pct, d.a_pct, d.x_pct, d.u_pct, d.t_pct, d.c1_pct),
+            (0, 0, 0, 7, 99, 64)
+        );
+        assert_eq!(d.lpc_max_ms, Some(65535));
+    }
+
+    #[test]
+    fn decodes_two_real_info_exports_from_different_firmware() {
+        let r = read_qr_report(fixture("20260927_005032.png")).unwrap();
+        assert_eq!(r.profile, "none");
+        assert!(r.tests.is_empty());
+        let i = r.entries.info_export.unwrap();
+        assert_eq!(
+            (i.firmware.as_str(), i.fpga_rev.as_str()),
+            ("0.4.0", "4D503317")
+        );
+        assert_eq!(
+            (
+                i.window_read_cyc,
+                i.free_ram,
+                i.underruns,
+                i.draw_stall_ms,
+                i.load_ms,
+                i.cpu_pct
+            ),
+            (43, 41696, 1, 66, 146, 0)
+        );
+        let r = read_qr_report(fixture("20261002_191502.png")).unwrap();
+        let i = r.entries.info_export.unwrap();
+        assert_eq!(
+            (i.firmware.as_str(), i.fpga_rev.as_str()),
+            ("0.6.0", "4D50331A")
+        );
+        assert_eq!(
+            (
+                i.window_read_cyc,
+                i.free_ram,
+                i.underruns,
+                i.draw_stall_ms,
+                i.load_ms,
+                i.cpu_pct
+            ),
+            (246, 5552, 2, 5, 414, 89)
+        );
+    }
+
+    #[test]
+    fn decodes_a_real_meter_config_without_guessing_value_widths() {
+        let r = read_qr_report(fixture("20260927_165345.png")).unwrap();
+        let m = r.entries.meter_config.unwrap();
+        assert_eq!(
+            (m.meter_id, m.schema, m.preset, m.param_count),
+            (13, 1, None, 2)
+        );
+        // scope_smooth = 60, scope_trail = 80 (two one-byte parameters, as tau-alpha's own decoder resolves them).
+        assert_eq!(m.raw_hex, "3c50");
+    }
+
+    #[test]
+    fn decodes_a_real_meter_trace() {
+        let r = read_qr_report(fixture("20260927_232959.png")).unwrap();
+        assert_eq!(r.profile, "BLIT TEST");
+        assert_eq!(r.entries.meter_trace.len(), 20);
+        let f = &r.entries.meter_trace[0];
+        assert_eq!(f.dt_ms, 0);
+        assert_eq!(
+            f.spec,
+            vec![0, 0, 0, 0, 0, 0, 0, 7, 0, 15, 15, 20, 22, 24, 29, 17]
+        );
+        assert_eq!(f.wave.len(), 64);
+        assert_eq!(&f.wave[..10], &[1, 13, 19, 18, 12, 11, 14, 15, 11, 0]);
+        assert_eq!(f.wave[10], -7);
+        assert_eq!(f.wave[63], -20);
+        assert!(
+            r.entries
+                .meter_trace
+                .iter()
+                .all(|f| f.spec.len() == 16 && f.wave.len() == 64)
+        );
     }
 }
