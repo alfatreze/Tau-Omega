@@ -209,6 +209,7 @@ pub(crate) fn plan_candidates(
     candidates.sort_by(|a, b| a.1.cmp(&b.1));
     let mut seen = std::collections::BTreeSet::new();
     let mut seen_art_folders = std::collections::BTreeSet::new();
+    let mut warned_covers = std::collections::BTreeSet::new();
     let mut items = Vec::new();
     let mut art_sidecars = Vec::new();
     let mut warnings = Vec::new();
@@ -246,13 +247,30 @@ pub(crate) fn plan_candidates(
         let sha256 = sha256_file(&source)?;
         let cover = if embed_covers && audio_file(&source) {
             match source.parent().and_then(cover::find_cover) {
-                Some(path) => {
-                    cover::validate_jpeg_cover(&path)?;
-                    Some(CoverItem {
+                Some(path) => match cover::validate_jpeg_cover(&path) {
+                    Ok(()) => Some(CoverItem {
                         sha256: sha256_file(&path)?,
                         source: path,
-                    })
-                }
+                    }),
+                    // A cover that cannot be embedded must not stop the whole sync: copy the
+                    // songs without it, and say so once per album.
+                    Err(error) if error.code() == ErrorCode::UnsupportedCover => {
+                        if warned_covers.insert(path.clone()) {
+                            warnings.push(Warning::new(
+                                WarningCode::CoverNotEmbedded,
+                                format!(
+                                    "{}: the cover was not put inside the songs ({})",
+                                    path.parent()
+                                        .and_then(|p| p.file_name())
+                                        .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned()),
+                                    error.message
+                                ),
+                            ));
+                        }
+                        None
+                    }
+                    Err(error) => return Err(error),
+                },
                 None => None,
             }
         } else {
@@ -1318,6 +1336,44 @@ mod tests {
         assert!(!index_temp.exists(), "an old leftover index temp is removed");
         assert!(fresh_temp.exists(), "a recent temp may belong to a run in progress");
         assert!(foreign.exists(), "files that are not ours are never touched");
+    }
+
+    /// Always embedding covers must never make a whole sync fail because one album's
+    /// cover is not a baseline JPEG: the songs are copied without it and a warning
+    /// names the album, once, however many tracks it has.
+    #[test]
+    fn an_unusable_cover_warns_instead_of_failing_the_sync() {
+        let base = root("bad-cover");
+        let (album, other) = (base.join("lib/Bad Cover Album"), base.join("lib/Good Album"));
+        let common = base.join("card/Assets/tau/common");
+        for dir in [&album, &other, &common] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        for n in 1..=3 {
+            fs::write(album.join(format!("0{n}.mp3")), format!("audio {n}")).unwrap();
+        }
+        fs::write(other.join("01.mp3"), b"audio good").unwrap();
+        fs::write(album.join("cover.jpg"), b"this is not a jpeg at all").unwrap();
+        fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata/images/cover455.jpg"),
+            other.join("cover.jpg"),
+        )
+        .unwrap();
+        let sync_plan = plan(
+            &[album.clone(), other.clone()],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions { mirror: false, embed_covers: true, art_sidecar_pal256: false },
+            &mut None,
+        )
+        .expect("an unusable cover must not fail the plan");
+        let covers: Vec<_> = sync_plan.warnings.iter().filter(|w| w.code == WarningCode::CoverNotEmbedded).collect();
+        assert_eq!(covers.len(), 1, "one warning for the album, not one per track: {:?}", sync_plan.warnings);
+        assert!(covers[0].message.contains("Bad Cover Album"));
+        let with_cover = sync_plan.items.iter().filter(|i| i.cover.is_some()).count();
+        assert_eq!(with_cover, 1, "only the album with a usable cover gets one embedded");
+        execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
+        assert!(common.join("Bad Cover Album/03.mp3").is_file(), "the songs are still copied");
     }
 
     /// The card's file system ignores letter case, so two sources that differ only

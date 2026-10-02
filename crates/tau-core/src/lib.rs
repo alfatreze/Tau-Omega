@@ -223,6 +223,9 @@ pub enum WarningCode {
     PlaylistEntriesDropped,
     PlaylistTruncated,
     NoMediaFound,
+    /// An album's cover could not be put inside its songs (not a baseline JPEG, or over the
+    /// firmware's size limit). The songs are still copied, just without that embedded picture.
+    CoverNotEmbedded,
 }
 
 impl WarningCode {
@@ -236,6 +239,7 @@ impl WarningCode {
             Self::PlaylistEntriesDropped => "playlist_entries_dropped",
             Self::PlaylistTruncated => "playlist_truncated",
             Self::NoMediaFound => "no_media_found",
+            Self::CoverNotEmbedded => "cover_not_embedded",
         }
     }
 }
