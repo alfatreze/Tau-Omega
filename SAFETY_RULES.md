@@ -11,6 +11,13 @@ and from the owner's working rules. They apply to Tau Omega exactly as they appl
 2. **No write to an SD card without an explicit confirmation of a shown plan.** The flow is always: scan, build a plan (what will be
    created, replaced, deleted, how many bytes), show it, wait for a clear yes, then write. A `--dry-run` / "Plan only" mode exists
    everywhere and is the default in the CLI. Approval is per action and per session; it is never remembered across runs.
+   *Owner decision D3 (2026-10-02), Library workbench:* in the app the confirmation is **pressing Start sync on the staged list**,
+   which is always visible (the Details panel lists every album and its effect, and the card space bar shows the free space
+   after) and nothing is written before that press. A second "Ready to sync" dialog is shown only when there is something to
+   decide: a **removal** (rule 4 stands, with its backup choice) or the **slow direct-USB warning**; a plan the engine refuses
+   still stops with the reason. The engine still builds the exact plan and verifies every file (rule 3). Covers are always put
+   inside the copied songs and always get the small cover file, since they are what the Pocket shows; an album whose cover cannot
+   be used is copied without it and the finished sync names it. The CLI keeps plan-only as its default.
 3. **Verify every write.** Each file copied to the card is re-read and compared by SHA-256 (or a byte compare) with its source.
    The index is written last, to a temporary name, re-parsed with the reference loader logic, then renamed. A failed verify stops the run
    and is reported; nothing is left half-installed without saying so.
