@@ -71,7 +71,12 @@ export type TaudCycles = { read_min: number | null; read_avg: number; read_max: 
 export type TaudAudio = { late_underruns: number; audio_full: boolean; stall_ms: number; window_s: number };
 export type TaudDecodeProfile = { h_pct: number; i_pct: number; s_pct: number; r_pct: number };
 export type TaudDecodeSweepEntry = { track: number; speed_pct: number; h_pct: number; i_pct: number; s_pct: number; r_pct: number; title: string };
-export type TaudEntries = { build: TaudBuild | null; memory: number[]; sdram: TaudCycles | null; sdram_raw: number[]; psram: TaudCycles | null; psram_raw: number[]; cold: number[]; time: number[]; audio: TaudAudio | null; audio_raw: number[]; library: number[]; settings: number[]; errors: number[]; notes: number[]; decode_profile: TaudDecodeProfile | null; decode_profile_raw: number[]; decode_sweep: TaudDecodeSweepEntry[] };
+export type TaudEntries = { build: TaudBuild | null; memory: number[]; sdram: TaudCycles | null; sdram_raw: number[]; psram: TaudCycles | null; psram_raw: number[]; cold: number[]; time: number[]; audio: TaudAudio | null; audio_raw: number[]; library: number[]; settings: number[]; errors: number[]; notes: number[]; decode_profile: TaudDecodeProfile | null; decode_profile_raw: number[]; decode_sweep: TaudDecodeSweepEntry[]; stack: TaudStack | null; stack_raw: number[]; decode_profile2: TaudDecodeProfile2 | null; decode_profile2_raw: number[]; info_export: TaudInfoExport | null; meter_config: TaudMeterConfig | null; meter_trace: TaudTraceFrame[] };
+export type TaudStack = { peak_bytes: number; stack_size: number; free_bytes: number };
+export type TaudDecodeProfile2 = { d_pct: number; a_pct: number; x_pct: number; u_pct: number; t_pct: number; c1_pct: number; lpc_max_ms: number | null };
+export type TaudInfoExport = { firmware: string; fpga_rev: string; window_read_cyc: number; free_ram: number; underruns: number; draw_stall_ms: number; load_ms: number; cpu_pct: number };
+export type TaudMeterConfig = { meter_id: number; schema: number; preset: number | null; param_count: number; raw_hex: string };
+export type TaudTraceFrame = { dt_ms: number; spec: number[]; wave: number[] };
 export type TaudUnknownEntry = { tag: number; hex: string };
 /** Mirrors `tau_core::taud::TaudReport`: the full Check report decoded from
  * a `TAUD1:` QR code (or its text payload directly), as opposed to

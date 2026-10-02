@@ -13,7 +13,7 @@ Status per row: DONE (built, tested), NEXT (ready), GATED (needs a real artefact
 ## Next
 | # | Item | Gate |
 |---|---|---|
-| 4 | Decode Check QR tags 20-22 (then 15-19) | Real captured screenshots of a Meter Sweep, an Info export and a Check with DECPROF2 |
+| 4 | Decode Check QR tags | **DONE for 16, 19, 20, 21, 22 (2026-10-02, from real captures).** Left: 15, 17, 18 (Blit Test, Winamp config export, Meter Sweep), gated on one real screenshot of each |
 | 5 | Appearance: install a theme file to a card (plan, review, confirm) | One real card run: `Info > THEME FILE` reads `1 LOADED`; capture the file as a fixture |
 | 6 | Send diagnostics (`DIAGNOSTICS_COLLECTOR.md`) | Owner confirms its order against item 5 |
 | 7 | Meter Lab on the real `meters_schema.json`, plus a `METR` writer | A real `tau-assets.bin` with a `METR` section from a card |

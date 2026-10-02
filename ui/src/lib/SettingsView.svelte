@@ -92,6 +92,27 @@
                   {#if qrReport.entries.build}
                     <div><span>Build</span><strong>firmware {qrReport.entries.build.firmware} · bitstream {qrReport.entries.build.bitstream}</strong></div>
                   {/if}
+                  {#if qrReport.entries.info_export}
+                    {@const i = qrReport.entries.info_export}
+                    <div><span>Info page</span><strong>firmware {i.firmware} · bitstream {i.fpga_rev} · free RAM {i.free_ram} B · {i.underruns} underruns · load {i.load_ms} ms · CPU {i.cpu_pct}%</strong></div>
+                  {/if}
+                  {#if qrReport.entries.stack}
+                    <div><span>Stack</span><strong>peak {qrReport.entries.stack.peak_bytes} of {qrReport.entries.stack.stack_size} B ({qrReport.entries.stack.free_bytes} B free)</strong></div>
+                  {/if}
+                  {#if qrReport.entries.decode_profile2}
+                    {@const d = qrReport.entries.decode_profile2}
+                    <div><span>Decode cost</span><strong>FLAC {d.t_pct}% of real time (channel 1 {d.c1_pct}%){d.lpc_max_ms === null ? '' : ` · worst LPC call ${d.lpc_max_ms >= 65535 ? '65 s or more' : `${d.lpc_max_ms} ms`}`} · MP3 dequantize {d.d_pct}%, anti-alias {d.a_pct}%, transform {d.x_pct}%</strong></div>
+                  {/if}
+                  {#if qrReport.entries.meter_config}
+                    {@const m = qrReport.entries.meter_config}
+                    <div><span>Meter settings</span><strong>meter {m.meter_id} · {m.preset === null ? 'no preset' : `preset ${m.preset}`} · {m.param_count} values (raw {m.raw_hex})</strong></div>
+                  {/if}
+                  {#if qrReport.entries.meter_trace.length}
+                    <div><span>Meter trace</span><strong>{qrReport.entries.meter_trace.length} frames recorded</strong></div>
+                  {/if}
+                  {#if qrReport.unknown.length}
+                    <div><span>Not decoded</span><strong>{qrReport.unknown.length} entr{qrReport.unknown.length === 1 ? 'y' : 'ies'} of a kind this version doesn't read yet (tag {[...new Set(qrReport.unknown.map((u) => u.tag))].join(', ')})</strong></div>
+                  {/if}
                 </div>
                 <ul class="qr-test-list">
                   {#each qrReport.tests as test}
