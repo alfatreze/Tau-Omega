@@ -765,6 +765,11 @@ pub fn execute_install(
     if result.is_err() {
         let _ = fs::remove_file(&temp);
     }
+    // macOS writes an AppleDouble `._<name>` beside what it renames on exFAT/FAT (SAFETY_RULES 7). Remove only the
+    // ones that belong to the three names this install used.
+    for name in [FILE_NAME, TEMP_NAME, PREVIOUS_NAME] {
+        let _ = fs::remove_file(media_root.join(format!("._{name}")));
+    }
     result?;
     Ok(AssetsInstallReport {
         destination: live,
@@ -1157,5 +1162,73 @@ mod tests {
         }
         out.sort();
         out
+    }
+
+    /// A real, approved write. Only runs when both variables are set:
+    /// `TAU_REAL_WRITE_MEDIA=/Volumes/Pock/Assets/<platform>/common TAU_REAL_WRITE_BACKUP=<folder outside the card>`.
+    /// Installs a theme called OMEGA TEST through the same plan/execute path the app uses, then checks that the only
+    /// change on the whole card is that one file, that the replaced file is in the backup, and that no temp file is left.
+    #[test]
+    #[ignore]
+    fn real_card_install_changes_only_the_theme_file() {
+        let (Ok(media), Ok(backup)) = (
+            std::env::var("TAU_REAL_WRITE_MEDIA"),
+            std::env::var("TAU_REAL_WRITE_BACKUP"),
+        ) else {
+            return;
+        };
+        let media = PathBuf::from(media);
+        let card = media
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let snapshot = |card: &Path| -> Vec<(PathBuf, u64)> {
+            let mut all = walk(card.join("Assets"));
+            all.extend(walk(card.join("Cores")));
+            all
+        };
+        let before = snapshot(&card);
+        let old = fs::read(media.join(FILE_NAME)).ok();
+        let mut theme = sunset();
+        theme.name = "OMEGA TEST".into();
+        let plan = plan_install(&[theme.clone()], &media).unwrap();
+        println!(
+            "plan: existing={:?} readers={:?} warnings={:?}",
+            plan.existing, plan.readers, plan.warnings
+        );
+        let report = execute_install(
+            &[theme.clone()],
+            &media,
+            &plan,
+            &plan.id,
+            Some(Path::new(&backup)),
+        )
+        .unwrap();
+        println!("report: {report:?}");
+        let after = snapshot(&card);
+        let live = media.join(FILE_NAME);
+        let changed: Vec<_> = after
+            .iter()
+            .filter(|e| !before.contains(e))
+            .chain(before.iter().filter(|e| !after.contains(e)))
+            .collect();
+        println!("changed entries: {changed:?}");
+        assert!(
+            changed.iter().all(|(p, _)| *p == live),
+            "something other than the theme file changed"
+        );
+        assert_eq!(fs::read(&live).unwrap(), pack_assets(&[theme]).unwrap());
+        if let (Some(old), Some(b)) = (old, report.backup.as_ref()) {
+            assert_eq!(
+                fs::read(b).unwrap(),
+                old,
+                "the backup is not the file that was replaced"
+            );
+        }
+        assert!(!media.join(TEMP_NAME).exists() && !media.join(PREVIOUS_NAME).exists());
     }
 }
