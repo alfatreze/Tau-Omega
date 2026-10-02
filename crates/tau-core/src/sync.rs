@@ -384,6 +384,9 @@ pub fn execute_with_mirror(
     }
     validate_media_root(&plan.destination)?;
     preflight_space(plan)?;
+    // Repair what an earlier interrupted run left behind before adding to it.
+    recover_index(&plan.destination)?;
+    sweep_stale_temps(&plan.destination, plan.items.iter().map(|i| i.destination.as_path()));
     let mut copied = 0;
     let mut unchanged = 0;
     let mut bytes_written = 0;
@@ -424,10 +427,24 @@ pub fn execute_with_mirror(
         if let Some(parent) = item.destination.parent() {
             fs::create_dir_all(parent)?;
         }
-        write_durable(&item.destination, &packed)?;
-        // Read the just-written file back and decode it, the same
-        // write-then-verify discipline every other write path here follows.
-        image::decode_tim1(&fs::read(&item.destination)?)?;
+        // Temp file, verify, then rename: a card pulled mid-write must not leave a
+        // truncated sidecar in place of a previous good one.
+        let temp = item
+            .destination
+            .with_extension(format!("tau-omega-{}.tmp", std::process::id()));
+        write_durable(&temp, &packed)?;
+        // Read the just-written file back and require it to be exactly what was
+        // meant (and a valid TIM1), the same write-then-verify discipline as
+        // every other write path here.
+        let read_back = fs::read(&temp)?;
+        if read_back != packed || image::decode_tim1(&read_back).is_err() {
+            let _ = fs::remove_file(&temp);
+            return Err(TauError::e(
+                ErrorCode::VerificationFailed,
+                format!("cover file verification failed: {}", item.destination.display()),
+            ));
+        }
+        fs::rename(&temp, &item.destination)?;
         art_sidecars_written += 1;
     }
     let mut deleted = 0;
@@ -504,7 +521,7 @@ pub fn execute_with_mirror(
             "index write verification failed",
         ));
     }
-    fs::rename(&temp, &index_path)?;
+    swap_in_index(&temp, &index_path)?;
     Ok(SyncReport {
         plan_id: plan.id.clone(),
         copied,
@@ -662,7 +679,7 @@ pub(crate) fn rebuild_index(
         ));
     }
     parse(&fs::read(&temp)?)?;
-    fs::rename(temp, media_root.join("tau-library.tdb"))?;
+    swap_in_index(&temp, &media_root.join("tau-library.tdb"))?;
     Ok(())
 }
 fn collect_files(root: &Path, at: &Path, out: &mut Vec<PathBuf>) -> Result<(), TauError> {
@@ -851,6 +868,107 @@ pub(crate) fn write_durable(path: &Path, data: &[u8]) -> Result<(), TauError> {
     file.sync_all()?;
     Ok(())
 }
+const LIVE_INDEX: &str = "tau-library.tdb";
+const PREVIOUS_INDEX: &str = ".tau-library.tdb.prev";
+/// A temp file this old cannot belong to a run that is still going.
+const STALE_TEMP_AGE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// Replaces the live index with the already-verified `temp` while keeping the
+/// old one as `.tau-library.tdb.prev` until the new one is in place. FAT cannot
+/// rename over an existing file atomically: a card pulled mid-swap used to be
+/// able to end with **no** index (and the Pocket trusts the index). Now an
+/// interrupted swap always leaves a complete index to recover (`recover_index`).
+pub(crate) fn swap_in_index(temp: &Path, live: &Path) -> Result<(), TauError> {
+    let previous = live.with_file_name(PREVIOUS_INDEX);
+    if live.is_file() {
+        if previous.exists() {
+            fs::remove_file(&previous)?;
+        }
+        fs::rename(live, &previous)?;
+    }
+    fs::rename(temp, live)?;
+    let _ = fs::remove_file(previous);
+    Ok(())
+}
+
+/// What `recover_index` did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexRecovery {
+    /// Nothing to repair.
+    Clean,
+    /// The live index was missing or unreadable; the previous complete one was put back.
+    Restored,
+}
+
+/// Repairs an index swap that was interrupted (see [`swap_in_index`]). Only ever
+/// puts back a previous index that parses; never invents one. Called at the
+/// start of a confirmed run, and cheap enough for a UI to call read-only first
+/// via [`index_needs_recovery`].
+pub fn recover_index(media_root: &Path) -> Result<IndexRecovery, TauError> {
+    let live = media_root.join(LIVE_INDEX);
+    let previous = media_root.join(PREVIOUS_INDEX);
+    if !previous.is_file() {
+        return Ok(IndexRecovery::Clean);
+    }
+    let live_ok = fs::read(&live).ok().is_some_and(|b| parse(&b).is_ok());
+    if live_ok {
+        // The swap finished; only the cleanup was missed.
+        let _ = fs::remove_file(&previous);
+        return Ok(IndexRecovery::Clean);
+    }
+    if fs::read(&previous).ok().is_some_and(|b| parse(&b).is_ok()) {
+        if live.exists() {
+            fs::remove_file(&live)?;
+        }
+        fs::rename(&previous, &live)?;
+        return Ok(IndexRecovery::Restored);
+    }
+    Ok(IndexRecovery::Clean)
+}
+
+/// Read-only: whether `recover_index` would change anything.
+pub fn index_needs_recovery(media_root: &Path) -> bool {
+    let previous = media_root.join(PREVIOUS_INDEX);
+    previous.is_file()
+        && !fs::read(media_root.join(LIVE_INDEX))
+            .ok()
+            .is_some_and(|b| parse(&b).is_ok())
+}
+
+/// Removes this tool's own leftover temp files (`*.tau-omega-<pid>.tmp`,
+/// `.tau-library*.tmp`) older than an hour from the media root and from the
+/// folders a run is about to write into. They only exist after a crash or an
+/// ejected card, are never read by the scan, and otherwise eat clusters forever.
+pub(crate) fn sweep_stale_temps<'a>(media_root: &Path, written: impl Iterator<Item = &'a Path>) {
+    let mut dirs: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
+    dirs.insert(media_root.to_path_buf());
+    for path in written {
+        if let Some(parent) = path.parent() {
+            dirs.insert(parent.to_path_buf());
+        }
+    }
+    for dir in dirs {
+        let Ok(entries) = fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let ours = (name.contains(".tau-omega-") && name.ends_with(".tmp"))
+                || (name.starts_with(".tau-library") && name.ends_with(".tmp"));
+            if !ours {
+                continue;
+            }
+            let old = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.elapsed().ok())
+                .is_some_and(|age| age >= STALE_TEMP_AGE);
+            if old {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
 /// Sizes a sidecar `.timg` at most (a 128 px palette cover is about 17 KB).
 const ART_SIDECAR_MAX_BYTES: u64 = 24 * 1024;
 
@@ -1033,6 +1151,85 @@ mod tests {
         assert_eq!(ensure_space(10, 1_000, 0).unwrap_err().code(), ErrorCode::InsufficientSpace);
         assert_eq!(ensure_space(1_000, 1_000, 1).unwrap_err().code(), ErrorCode::InsufficientSpace);
         ensure_space(2_000, 1_000, 1_000).unwrap();
+    }
+
+    fn synced_card(name: &str) -> PathBuf {
+        let source = root(&format!("{name}-source"));
+        let card = root(&format!("{name}-card"));
+        let common = card.join("Assets/tau/common");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&common).unwrap();
+        fs::write(source.join("01 Track.mp3"), b"audio one").unwrap();
+        let sync_plan = plan(
+            &[source],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions { mirror: false, embed_covers: false, art_sidecar_pal256: false },
+            &mut None,
+        )
+        .unwrap();
+        execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
+        common
+    }
+
+    /// An index swap cut short must always leave a complete index to recover,
+    /// never "no index" (FAT cannot rename over an existing file atomically).
+    #[test]
+    fn an_interrupted_index_swap_is_recovered_and_a_finished_one_leaves_nothing_behind() {
+        let common = synced_card("index-swap");
+        let live = common.join("tau-library.tdb");
+        let good = fs::read(&live).unwrap();
+        assert!(!common.join(".tau-library.tdb.prev").exists(), "a finished swap leaves no .prev");
+        assert_eq!(recover_index(&common).unwrap(), IndexRecovery::Clean);
+
+        // Card pulled between "move old aside" and "move new into place".
+        fs::rename(&live, common.join(".tau-library.tdb.prev")).unwrap();
+        assert!(index_needs_recovery(&common));
+        assert_eq!(recover_index(&common).unwrap(), IndexRecovery::Restored);
+        assert_eq!(fs::read(&live).unwrap(), good);
+        assert!(!index_needs_recovery(&common));
+
+        // A live index that is truncated garbage next to a good .prev.
+        fs::write(common.join(".tau-library.tdb.prev"), &good).unwrap();
+        fs::write(&live, b"TLIB truncated").unwrap();
+        assert_eq!(recover_index(&common).unwrap(), IndexRecovery::Restored);
+        assert_eq!(fs::read(&live).unwrap(), good);
+
+        // Swap finished, cleanup missed: the stale .prev just goes away.
+        fs::write(common.join(".tau-library.tdb.prev"), b"old").unwrap();
+        assert_eq!(recover_index(&common).unwrap(), IndexRecovery::Clean);
+        assert!(!common.join(".tau-library.tdb.prev").exists());
+        assert_eq!(fs::read(&live).unwrap(), good);
+
+        // Never invents an index: a bad .prev with no live index is left alone.
+        fs::remove_file(&live).unwrap();
+        fs::write(common.join(".tau-library.tdb.prev"), b"junk").unwrap();
+        assert_eq!(recover_index(&common).unwrap(), IndexRecovery::Clean);
+        assert!(!live.exists());
+    }
+
+    #[test]
+    fn only_old_leftover_temp_files_of_this_tool_are_swept() {
+        let common = synced_card("sweep");
+        let album = common.join("Album");
+        fs::create_dir_all(&album).unwrap();
+        let old_temp = album.join("Song.tau-omega-4242.tmp");
+        let fresh_temp = album.join("Other.tau-omega-4242.tmp");
+        let foreign = album.join("keep.tmp");
+        let index_temp = common.join(".tau-library-abc.tmp");
+        for f in [&old_temp, &fresh_temp, &foreign, &index_temp] {
+            fs::write(f, b"x").unwrap();
+        }
+        let two_hours_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 3600);
+        for f in [&old_temp, &foreign, &index_temp] {
+            fs::File::options().write(true).open(f).unwrap().set_modified(two_hours_ago).unwrap();
+        }
+        let written = [album.join("Song.mp3")];
+        sweep_stale_temps(&common, written.iter().map(|p| p.as_path()));
+        assert!(!old_temp.exists(), "an old leftover of ours is removed");
+        assert!(!index_temp.exists(), "an old leftover index temp is removed");
+        assert!(fresh_temp.exists(), "a recent temp may belong to a run in progress");
+        assert!(foreign.exists(), "files that are not ours are never touched");
     }
 
     /// The card's file system ignores letter case, so two sources that differ only
