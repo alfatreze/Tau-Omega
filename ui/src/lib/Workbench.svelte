@@ -7,7 +7,7 @@
   // card and core so switching cards switches the list.
   import { onDestroy, onMount, tick } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { cancelJob, cardBreakdown, checkStorageCapacity, detectConnection, ejectCard, readbackStatus, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
+  import { cancelJob, cardBreakdown, ledgerForget, checkStorageCapacity, detectConnection, ejectCard, readbackStatus, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
   import { modal } from './a11y';
   import VirtualList from './VirtualList.svelte';
   import CapacityBar from './CapacityBar.svelte';
@@ -573,6 +573,13 @@
       if (!typing) { e.preventDefault(); requestRemove(); }
     }
   }
+  /** Forgets what the app remembers about this card (always safe: the next look just reads the files again). */
+  async function forgetCard() {
+    connMenu = false;
+    try { await ledgerForget(mediaRoot); } catch { /* nothing to forget is fine */ }
+    say('Forgot what was remembered about this card. The next refresh reads every file again.');
+    await reloadCard();
+  }
   async function setOverride(value: string) {
     connMenu = false;
     if (!prefs) return;
@@ -595,6 +602,7 @@
             <button class="wb-conn" class:slow={connKind === 'direct_usb'} aria-haspopup="menu" aria-expanded={connMenu} title={connection.detail ? `Detected: ${connection.detail}` : 'How this card is connected'} on:click={() => (connMenu = !connMenu)}>{connLabel}</button>
             {#if connMenu}
               <div class="wb-menu" role="menu">
+                <button role="menuitem" on:click={forgetCard} title="Throws away the app's notes about which files it has already read and written on this card. Nothing on the card changes.">Forget what the app remembers about this card</button>
                 <button role="menuitem" on:click={() => setOverride('auto')}>Detect automatically{connection.detail ? ` (${connection.detail})` : ''}</button>
                 <button role="menuitem" on:click={() => setOverride('direct_usb')}>The Pocket itself (plugged in with its USB cable)</button>
                 <button role="menuitem" on:click={() => setOverride('card_reader')}>A card reader</button>
@@ -605,7 +613,7 @@
         {/if}
       </div>
     </div>
-    <button class="wb-refresh" class:spin={spinning} aria-label="Refresh this card" title={refreshedAt ? `Refresh · updated ${refreshedAt}` : 'Refresh'} on:click={doRefresh}>
+    <button class="wb-refresh" class:spin={spinning} aria-label="Refresh this card" title={`${refreshedAt ? `Refresh · updated ${refreshedAt}` : 'Refresh'}${card && (card.files_reused || card.files_read) ? ` · ${(card.files_reused ?? 0) + (card.files_read ?? 0)} files checked, ${card.files_read ?? 0} read` : ''}`} on:click={doRefresh}>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>
     </button>
   </header>

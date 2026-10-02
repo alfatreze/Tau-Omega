@@ -441,6 +441,12 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.waitForSelector('text=Sync complete', { timeout: 20000 }); await done();
   assert.equal(await pc().getByRole('progressbar').count(), 0); ok('the rings are gone when the sync is over');
 
+  // --- the card's memory can be forgotten from the connection menu ---------------------------
+  await p.getByRole('button', { name: /Card reader/ }).click();
+  assert.equal(await p.getByRole('menuitem', { name: /Forget what the app remembers about this card/ }).count(), 1); ok('the connection menu offers to forget what the app remembers about the card');
+  await p.getByRole('menuitem', { name: /Forget what the app remembers about this card/ }).click(); await p.waitForTimeout(600);
+  assert.equal(await p.getByRole('menuitem').count(), 0); assert.match(await text(pk()), /albums?/); ok('forgetting closes the menu and reloads the card');
+
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();
   console.log(`\n${passed} checks passed`);
