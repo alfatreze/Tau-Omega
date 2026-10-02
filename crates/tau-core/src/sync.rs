@@ -224,10 +224,12 @@ pub(crate) fn plan_candidates(
                 path: Some(relative.to_string_lossy().into_owned()),
             },
         )?;
-        if !seen.insert(relative.clone()) {
+        // FAT/exFAT ignore case, so `Song.mp3` and `song.mp3` are the same file on
+        // the card: the second copy would silently replace the first.
+        if !seen.insert(relative.to_string_lossy().to_lowercase()) {
             return Err(TauError::e(
                 ErrorCode::NameCollision,
-                format!("ASCII name collision: {}", relative.display()),
+                format!("name collision (the card ignores letter case): {}", relative.display()),
             ));
         }
         let target = destination.join(&relative);
@@ -925,6 +927,30 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// The card's file system ignores letter case, so two sources that differ only
+    /// by case must be refused at plan time instead of the second silently
+    /// replacing the first on the card.
+    #[test]
+    fn names_that_differ_only_by_case_collide() {
+        let base = root("case-collision");
+        let (upper, lower) = (base.join("x/Rock"), base.join("y/rock"));
+        let common = base.join("card/Assets/tau/common");
+        for dir in [&upper, &lower, &common] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        fs::write(upper.join("01.mp3"), b"first").unwrap();
+        fs::write(lower.join("01.mp3"), b"second").unwrap();
+        let error = plan(
+            &[upper, lower],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions { mirror: false, embed_covers: false, art_sidecar_pal256: false },
+            &mut None,
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::NameCollision);
+    }
 
     /// The check every write ends with must actually fail on wrong bytes (the
     /// cover-embedding path used to end in a test that could never fail).
