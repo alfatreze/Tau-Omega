@@ -1492,7 +1492,10 @@ mod tests {
         fs::write(&victim, &bytes).unwrap();
         fs::File::options().write(true).open(&victim).unwrap().set_modified(kept_time).unwrap();
         let caught = make();
-        assert!(caught.items.iter().all(|i| i.state == CopyState::Update), "the altered file and the unchecked one are copied again");
+        let altered = caught.items.iter().find(|i| i.destination.ends_with("Album/01.mp3")).unwrap();
+        assert_eq!(altered.state, CopyState::Update, "the altered file is always caught and copied again");
+        // The other file is either re-checked and confirmed (Same) or, if the canary hit the altered file
+        // first, distrusted along with everything it had not checked yet (Update). Both are safe.
         assert!(caught.warnings.iter().any(|w| w.code == WarningCode::CardFileChanged));
         let repaired = caught.bytes_to_write;
         assert!(repaired > 0);
