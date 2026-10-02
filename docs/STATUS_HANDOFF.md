@@ -1007,3 +1007,17 @@ opens an existing `tau-assets.bin` (every CRC verified) and saves one to a file 
   section (opening a file with one drops it on save, and the page says so), Figma import (no real `Tau Theme` variable
   collection exists to check an importer against), accent colour and live Pocket mode/theme selection (those are on the device).
 - **Firmware status:** the container is documented as not yet read by a Pocket in its own doc; an installed file's `Info > THEME FILE` row is the proof to capture.
+
+### Appearance install to a card (2026-10-02)
+`tau_core::assets::{plan_install, execute_install}` and host commands `appearance_plan_install` / `appearance_install`; Appearance page button
+"Install on <card>…" opens a review (themes, destination, what it replaces, which cores read it) and nothing is written until Install.
+Order: confirmation token, refuse a backup inside the card, recover an interrupted install, re-plan and compare (card changed since review is refused),
+back up the file it replaces (unless backups are off in Settings > Library), write `.tau-assets.bin.tmp`, read back through the cache-bypassing path and
+require it to parse to the same bytes, swap in keeping the old file until the new one is in place (`sync::swap_in_file`, shared with the index swap),
+read the result back. Holds the card write lock. 9 engine tests (install, replace with backup, unreadable existing file, wrong token / changed card /
+unsafe backup, interrupted install, bad folder, no core asks for the file) and 4 browser checks.
+- **Real-card read-only run** (ignored test `real_card_plan_is_read_only_and_finds_the_readers`, asserts the card is unchanged): found the three Tau cores
+  (`tau`, `tau_diagnostic`, `tau_dev_67`) each already hold a 351-byte `tau-assets.bin` with one theme (SUNSET) **and a METR section**, which an install replaces
+  without carrying METR over; the plan warns about exactly that. Cores that do not declare the slot (all non-Tau cores) are reported as ignoring it.
+- **Not done:** an approved real write to a card and the Pocket reading it. Until then the format is as unproven on hardware as `THEME_FILE_FORMAT.md` says.
+- **Limits:** writes `THEM` only (METR is dropped, with a warning); no "remove theme file" action yet.

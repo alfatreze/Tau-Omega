@@ -1066,7 +1066,13 @@ const STALE_TEMP_AGE: std::time::Duration = std::time::Duration::from_secs(60 * 
 /// able to end with **no** index (and the Pocket trusts the index). Now an
 /// interrupted swap always leaves a complete index to recover (`recover_index`).
 pub(crate) fn swap_in_index(temp: &Path, live: &Path) -> Result<(), TauError> {
-    let previous = live.with_file_name(PREVIOUS_INDEX);
+    swap_in_file(temp, live, PREVIOUS_INDEX)
+}
+
+/// The same recoverable swap for any single file: the old one is kept as `previous_name`
+/// (beside it) until the new one is in place.
+pub(crate) fn swap_in_file(temp: &Path, live: &Path, previous_name: &str) -> Result<(), TauError> {
+    let previous = live.with_file_name(previous_name);
     if live.is_file() {
         if previous.exists() {
             fs::remove_file(&previous)?;

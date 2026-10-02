@@ -81,6 +81,7 @@ const listing = (albums: Album[]) => ({
 
 let planWarnings: { code: string; message: string }[] = [];
 let planDelayMs = 0;
+let mockAssetsOnCard = false;
 let lastOptions: unknown = null;
 const plan = (request: any) => {
   lastOptions = request.options;
@@ -194,6 +195,13 @@ const handlers: Record<string, (args: any) => unknown> = {
   appearance_check: (a) => appearanceCheckMock(a.theme),
   appearance_open: () => [],
   appearance_export: () => 144,
+  appearance_plan_install: (a) => ({
+    id: 'mock-plan', destination: `${a.mediaRoot}/tau-assets.bin`, bytes: 144, sha256: 'x', themes: (a.themes as { name: string }[]).map((t) => t.name),
+    existing: mockAssetsOnCard ? { bytes: 144, sha256: 'y', themes: ['OLDER'], other_sections: ['METR'], readable: true } : null,
+    readers: [{ core_id: 'alfatreze.TAU', version: '0.6.0', declares_slot: true }], interrupted_install: false,
+    warnings: mockAssetsOnCard ? ['The file already there also holds METR, which is not carried over: it will be gone after this install (the backup keeps it).'] : [],
+  }),
+  appearance_install: (a) => { mockAssetsOnCard = true; return { destination: `${a.mediaRoot}/tau-assets.bin`, bytes_written: 144, replaced: false, backup: a.backup ?? null }; },
   eject_card: () => ({ ok: true, message: 'Safe to remove. The card is unmounted; you can unplug the reader or leave USB mode on the Pocket.' }),
   readback_status: () => ({ checks_the_device: true, failed_evictions: 0 }),
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
