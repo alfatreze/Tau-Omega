@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport } from './types';
+import type { BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -58,3 +58,6 @@ export const getPrefs = () => invoke<PrefsView>('get_prefs');
 export const setPrefs = (prefs: Prefs) => invoke<PrefsView>('set_prefs', { prefs });
 export const albumThumbnails = (path: string, ids: string[]) => invoke<Thumbnail[]>('album_thumbnails', { path, ids });
 export const imageThumbnail = (path: string, longSide: number) => invoke<string>('image_thumbnail', { path, longSide });
+export const appearanceCheck = (theme: ThemeInput) => invoke<ThemeReport>('appearance_check', { theme });
+export const appearanceOpen = (path: string) => invoke<ThemeInput[]>('appearance_open', { path });
+export const appearanceExport = (themes: ThemeInput[], path: string) => invoke<number>('appearance_export', { themes, path });

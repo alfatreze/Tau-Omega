@@ -145,3 +145,9 @@ export type SyncView = {
   /** Planning, before any copying: only the bar and a status line are shown, with no Cancel. */
   preparing?: boolean;
 };
+
+// ---- Appearance (theme file) ----------------------------------------------------------------------
+export type PolarityInput = { bg_luma: number; colors: Record<string, string> };
+export type ThemeInput = { name: string; dark: PolarityInput; light: PolarityInput };
+export type ContrastCheck = { polarity: 'dark' | 'light'; text: string; against: string; worst: number; needed: number; ok: boolean };
+export type ThemeReport = { problems: string[]; checks: ContrastCheck[]; dark_snapped: Record<string, string>; light_snapped: Record<string, string> };

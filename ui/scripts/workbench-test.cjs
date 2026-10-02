@@ -456,6 +456,19 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await prep.count(), 1); assert.match(await text(prep), /Preparing sync/); assert.equal(await prep.getByRole('button', { name: 'Cancel sync' }).count(), 0); ok('Start sync shows "Preparing sync" with the bar straight away, with nothing to cancel yet');
   await p.waitForTimeout(2500); await p.evaluate(() => window.__tauMock.setPlanDelay(0)); await done();
 
+  // --- Appearance: a new theme can be edited, and a faint one is refused with a reason ---------------
+  await fresh();
+  await p.getByRole('button', { name: 'Appearance', exact: true }).click(); await p.waitForTimeout(400);
+  const ap = p.getByRole('region', { name: 'Appearance' });
+  assert.equal(await ap.count(), 1); assert.match(await text(ap), /MY THEME/); ok('Appearance opens with a starter theme');
+  await p.waitForTimeout(300);
+  assert.match(await text(ap), /passes every readability check/); assert.equal(await ap.getByRole('button', { name: /Save tau-assets/ }).isEnabled(), true); ok('the starter theme passes and can be saved');
+  await ap.getByLabel('Main text colour').fill('#292829'); await p.waitForTimeout(500);
+  assert.match(await text(ap), /text primary on surface is too faint/); assert.equal(await ap.getByRole('button', { name: /Save tau-assets/ }).isDisabled(), true); ok('faint text is refused with a plain reason and saving is blocked');
+  await ap.getByRole('textbox', { name: /Name/ }).fill('tau'); await p.waitForTimeout(400);
+  assert.match(await text(ap), /already a built-in theme/); ok('a built-in name is refused');
+  await ap.getByRole('tab', { name: 'Light' }).click(); assert.equal(await ap.getByRole('tab', { name: 'Light' }).getAttribute('aria-selected'), 'true'); ok('the Light version can be switched to');
+
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();
   console.log(`\n${passed} checks passed`);
