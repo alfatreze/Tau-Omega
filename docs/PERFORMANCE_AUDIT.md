@@ -5,6 +5,27 @@ mode (about 0.7 MB/s). This audit lists what was fixed, what the evidence says i
 for a cache that makes everything after the first scan cheap without ever trusting a stale answer
 about the card.
 
+## Status of the architect-review items (updated after the correctness pass)
+
+| Item | State |
+|---|---|
+| D1 cover-embedded copies unverified | **Fixed**: bytes are hashed before writing and the read-back must match (`verify_written`, shared by plain and embedded copies; test proves it rejects wrong bytes) |
+| D3 case-insensitive collisions | **Fixed**: the collision set folds case; test |
+| D4 interleaved removal | **Fixed**: backup-volume space check, phase 1 backs up and verifies everything in one streaming pass over the card, phase 2 deletes, cancel ignored during the quick delete phase; test that a failed backup of file 2 leaves both files on the card. Card reads per removed file: 4 -> 2 (plan + one pass). The mirror and core-move routes still use the old per-file `backup_then_delete`; the destination copy is already verified there, so the exposure is lower, but they should move to the same helper |
+| D5 index swap | **Fixed**: `.tau-library.tdb.prev` kept until the new index is in place, `recover_index` runs at the start of every confirmed sync, `index_needs_recovery` is ready for a UI banner; tests for every crash point |
+| D6 capacity | **Fixed in the engine**: execute refuses before writing anything, counting whole clusters (`fs4::allocation_granularity`), embedded covers, sidecars and the index twice, plus the 16 MiB margin; new `ErrorCode::InsufficientSpace` (51) and message. **Not yet done:** the Library screen's fit bar still uses logical bytes, so it can say "fits" and then be refused |
+| D8 sidecars written in place | **Fixed**: temp, verify against the intended bytes, rename |
+| D9 leftover temp files | **Fixed**: `sweep_stale_temps` removes this tool's own temp files older than an hour from the folders a run writes to |
+| D7 names FAT cannot hold | **Deferred on purpose**: `ascii_name` is held byte-for-byte to the Python reference by the conformance tests, so it cannot change here alone. Needs a decision with tau-alpha (trailing dots, reserved device names), or a plan-time warning that does not alter names |
+| D2 no-cache read-back and safe eject | Not started (next) |
+| D10 per-volume I/O governor | Not started |
+| P2, P3, P4, P5, P7 and the ledger | Not started |
+
+Known limit of D1: the embedded copy is built from a second read of the source, a few milliseconds
+after the source hash check; a source rewritten in that window would be embedded as it is then. The
+read-back check still proves what reached the card is what was built. Closing it needs the streaming
+embed (P3).
+
 ## Fixed in this pass
 
 | # | Problem | Fix | Evidence |
