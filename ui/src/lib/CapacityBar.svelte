@@ -26,6 +26,12 @@
   export let overLimit = false;
   export let nearLimit = false;
   export let onDetails: () => void = () => {};
+  /** Start sync lives here, at the top, next to the numbers it affects. It only opens the review; nothing is written until the review is confirmed. */
+  export let canStart = false;
+  export let startReason = '';
+  /** One line naming what is staged, read out with the button so a keyboard or screen-reader user hears what Start sync will review. */
+  export let pendingSummary = '';
+  export let onStart: () => void = () => {};
 
   const RAMP = ['#5b7f8f', '#6f9f9a', '#7f8fbf', '#9a86b8'];
   const pct = (n: number) => `${Math.max(0, Math.min(100, total ? (n / total) * 100 : 0))}%`;
@@ -90,7 +96,11 @@
       {/if}
       {#if removeBytes}<span><i class="sw k-rm"></i>Removing about {size(removeBytes)}</span>{/if}
       {#if addBytes}<span><i class="sw k-add" class:over={overCapacity}></i>Adding about {size(addBytes)}</span>{/if}
-      <button class="quiet wb-details" aria-haspopup="dialog" on:click={onDetails}>Details</button>
+      <span class="wb-actions">
+        <button class="quiet" aria-haspopup="dialog" on:click={onDetails}>Details</button>
+        <button class="primary" disabled={!canStart} title={canStart ? '' : startReason} aria-describedby="cap-start-desc" on:click={onStart}>Start sync</button>
+        <span id="cap-start-desc" class="sr-only">{canStart ? `Opens the review of: ${pendingSummary}. Nothing is written until you confirm.` : startReason}</span>
+      </span>
     </div>
   {:else}
     <div class="wb-cap-text"><span>{busy ? 'Reading the card…' : 'Storage information is not available for this card.'}</span></div>
@@ -114,5 +124,7 @@
   .wb-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:10px;font-size:12px;color:#a6b3b2}
   .wb-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
   .wb-legend .muted{color:#8c9c9b}
-  .wb-details{margin-left:auto;font-size:12px;padding:4px 12px}
+  .wb-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .wb-actions button{font-size:12px;padding:5px 14px}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 </style>

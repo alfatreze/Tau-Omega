@@ -218,6 +218,7 @@
   $: pickTooMany = !!limits && tracksAfter + pickedNetTracks > limits.max_tracks;
   $: canStart = pendingCount > 0 && !overCapacity && !overLimit && !disconnected && !run && !!card;
   $: startReason = !pendingCount ? 'Nothing is staged yet.' : overCapacity ? "This won't fit on the card." : overLimit ? "This is over the Pocket's library limit." : disconnected ? 'The card is not connected.' : run ? 'A sync is already running.' : !card ? 'The card is still being read.' : '';
+  $: pendingSummary = [adds.length && `${plural(adds.length, 'album')} to add`, removes.length && `${removes.length} to remove`, edits.length && `${plural(edits.length, 'edit')}`].filter(Boolean).join(', ');
   $: detailsWarnings = [
     overCapacity ? "This won't fit on the card: remove something or add less." : '',
     overLimit && limits ? `Over the Pocket's library limit (${limits.max_tracks.toLocaleString()} tracks, ${limits.max_albums.toLocaleString()} albums).` : '',
@@ -575,7 +576,7 @@
     {breakdown} measuring={breakdownBusy} {activePlatform}
     limitText={limits ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (Pocket limit)` : ''}
     limitTitle={limits ? `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums` : ''}
-    {overLimit} {nearLimit} onDetails={() => (detailsOpen = true)} />
+    {overLimit} {nearLimit} onDetails={() => (detailsOpen = true)} {canStart} {startReason} pendingSummary={pendingSummary} onStart={start} />
 
   <div class="wb-panes">
     <section class="wb-pane" data-pane="source" aria-labelledby="src-title">
@@ -726,7 +727,6 @@
       {#if overLimit && limits}<span class="wb-slownote bad" role="alert">Over the Pocket's library limit ({limits.max_tracks.toLocaleString()} tracks)</span>{/if}
       {#if disconnected}<span class="wb-slownote bad" role="alert">{ejectedSafely ? 'Card ejected' : 'Card disconnected'}</span>{/if}
       <button class="quiet" disabled={busy || !pendingCount} on:click={clearAll}>Clear all</button>
-      <button class="primary" disabled={!canStart} on:click={start}>Start sync</button>
     </div>
   </section>
   {/if}
