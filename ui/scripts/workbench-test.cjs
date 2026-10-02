@@ -178,8 +178,18 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('button', { name: 'Confirm and start' }).click(); await p.waitForTimeout(600);
   assert.match(await text(p.getByRole('region', { name: 'Sync progress' })), /Keep the Pocket connected/); ok('progress tells you to keep the Pocket connected');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 });
-  assert.match(await text(p.getByRole('dialog', { name: /Sync complete/ })), /disconnect the Pocket now/); ok('completion says when it is safe to disconnect');
+  const complete = p.getByRole('dialog', { name: /Sync complete/ });
+  assert.doesNotMatch(await text(complete), /disconnect the Pocket now/); ok('completion no longer promises it is safe to unplug');
+  assert.match(await text(complete), /Before you unplug it, eject it/); ok('completion asks for a safe eject first');
+  assert.match(await text(complete), /read back from the card itself/); ok('completion says files were read back from the card');
+  await complete.getByRole('button', { name: 'Eject safely' }).click(); await p.waitForTimeout(300);
+  assert.match(await text(complete), /Safe to remove/); ok('eject reports safe to remove only after the OS confirms');
+  assert.equal(await complete.getByRole('button', { name: 'Eject safely' }).count(), 0); ok('the eject button goes away once ejected');
   await p.getByRole('button', { name: 'Done' }).click();
+  assert.match(await text(p.locator('.wb-banner').first()), /Safely ejected\. You can unplug it now/); ok('the library banner says safely ejected, not "disconnected"');
+  assert.equal(await p.locator('.wb-banner[role="alert"]').count(), 0); ok('a deliberate eject raises no disconnect alert');
+  await p.locator('.wb-banner').first().getByRole('button', { name: 'Check again' }).click(); await p.waitForTimeout(600);
+  assert.equal(await p.locator('.wb-banner').count(), 0); ok('plugging the card back in clears the banner');
 
   // 5. plain-language errors
   await stage('Moanin');

@@ -53,6 +53,10 @@ against three real fixtures.
 | `base64` (src-tauri only) | Encoding a screenshot's bytes as a `data:` URL for `read_image_data_url`, so the Settings screenshot gallery can show the real image inline | MIT OR Apache-2.0. Already resolved in the workspace lockfile via `tau-core`'s own `base64` dependency (`taud`), so this adds zero new transitive crates -- a presentation-only pass-through kept in the Tauri adapter rather than `tau-core`, since it has no domain logic (which file is valid is already `list_screenshots`'s decision). Deliberately not using Tauri's asset protocol (`convertFileSrc`), which would need broadening the webview's filesystem access via a capability/scope change for arbitrary card paths; this keeps that surface at zero. |
 | Svelte, Vite, TypeScript, `@tauri-apps/api` | UI build and Tauri bridge | MIT. |
 
+`libc` (src-tauri only, `cfg(unix)`): already compiled through `sha2` (cpufeatures), `rustix` and `errno`, so no new
+compile cost. Used only by `src-tauri/src/cacheflush.rs` for the call that drops a file's cached pages
+(`docs/PERFORMANCE_AUDIT.md`, "Cache experiment"). `tau-core` still forbids `unsafe` and has no `libc`.
+
 No new crate for connection detection (`detect_connection` in `src-tauri/src/device.rs`, `docs/FIRMWARE_UPDATE_SPEC.md` section 5; named `connection_kind` before the 2026-10-02 integration): it shells out to
 macOS's own always-present `diskutil`/`ioreg` (`std::process::Command`, `src-tauri` only) rather than
 add an IOKit-binding dependency for one host-specific detection. This is real host-specific I/O with

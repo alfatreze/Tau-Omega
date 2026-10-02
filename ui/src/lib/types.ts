@@ -95,6 +95,10 @@ export type ChangePlanView = { id: string; new_files: number; updated_files: num
 export type ChangeReport = { phase: string; plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string };
 export type ConnectionKind = 'direct_usb' | 'card_reader' | 'unknown';
 export type ConnectionInfo = { kind: ConnectionKind; detail: string };
+/** The OS's answer to "unmount and eject this card". `ok` is true only when it is safe to unplug. */
+export type EjectResult = { ok: boolean; message: string };
+/** Whether read-backs after a write are checked against the card itself, not memory. */
+export type ReadbackStatus = { checks_the_device: boolean; failed_evictions: number };
 export type Prefs = { history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 

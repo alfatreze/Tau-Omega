@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport } from './types';
+import type { BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -50,6 +50,8 @@ export const listHistory = () => invoke<HistoryEntry[]>('list_history');
 export const pruneHistory = () => invoke<number>('prune_history');
 export const clearHistory = () => invoke<number>('clear_history');
 export const detectConnection = (path: string) => invoke<ConnectionInfo>('detect_connection', { path });
+export const ejectCard = (path: string) => invoke<EjectResult>('eject_card', { path });
+export const readbackStatus = () => invoke<ReadbackStatus>('readback_status');
 export const getPrefs = () => invoke<PrefsView>('get_prefs');
 export const setPrefs = (prefs: Prefs) => invoke<PrefsView>('set_prefs', { prefs });
 export const albumThumbnails = (path: string, ids: string[]) => invoke<Thumbnail[]>('album_thumbnails', { path, ids });

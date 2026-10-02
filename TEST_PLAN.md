@@ -33,6 +33,8 @@ Anything that writes to `/Volumes/*` or a drive letter fails the build. Hardware
    * Add an album, sync, verify the Pocket plays it and the index loads (`Info` track count).
    * Remove an album with each removal preference; confirm the backup folder contents and that playlists lose the removed tracks.
    * Edit an album title/artist/year and change a cover; confirm the Pocket shows them, then re-sync from the unchanged source and confirm the edit is still there.
+   * Safe eject: after a sync press **Eject safely** with the Pocket in USB mode and again with a card reader; confirm the volume disappears and the dialog says "Safe to remove". Then keep a Finder window open on the card and try again: it must refuse with "Something on this computer is still using the card" and not unplug anything.
+   * Read-back: after a large sync over direct USB, note the time the verification pass adds (it now reads from the card, not memory) and whether any `failed_evictions` appear (`readback_status`).
    * Interrupt a sync (cancel, and pull the card) and confirm the card still boots, the next sync completes, and the sync history shows the interrupted run with an accurate "what is safe" message.
    * Sync history: confirm entries are written to the default history folder without any setup, that changing the folder and the retention limits behaves, and that a run left `running` by a crash is shown as interrupted.
    * Timing: note real transfer speeds for direct USB (with and without firmware 2.7) and for a card reader, to replace the placeholder speeds used for the time estimate.
