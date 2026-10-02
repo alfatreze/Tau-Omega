@@ -3,6 +3,7 @@
 use crate::{ErrorCode, TauError};
 use std::{
     fs,
+    io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
 };
 
@@ -52,7 +53,9 @@ pub fn validate_jpeg_cover(cover: &Path) -> Result<(), TauError> {
 /// error for anything unreadable or malformed, since a broken tag is a
 /// separate, already-reported problem.
 pub fn has_embedded_cover(path: &Path) -> Result<bool, TauError> {
-    let data = fs::read(path)?;
+    let Some(data) = read_tag_region(path)? else {
+        return Ok(false);
+    };
     if data.starts_with(b"ID3") {
         return Ok(id3_has_apic(&data).unwrap_or(false));
     }
@@ -138,7 +141,7 @@ fn flac_has_picture(data: &[u8]) -> Option<bool> {
 /// or the tag is not one this can read. Read-only and forgiving: a malformed
 /// tag is "no picture", never an error, because this only feeds a preview.
 pub fn extract_embedded_cover(path: &Path) -> Option<Vec<u8>> {
-    let data = fs::read(path).ok()?;
+    let data = read_tag_region(path).ok()??;
     if data.starts_with(b"ID3") {
         return id3_picture(&data);
     }
@@ -146,6 +149,54 @@ pub fn extract_embedded_cover(path: &Path) -> Option<Vec<u8>> {
         return flac_picture(&data);
     }
     None
+}
+
+/// The most a tag/metadata region may be before it is treated as junk.
+const MAX_TAG_REGION: u64 = 16 * 1024 * 1024;
+
+/// Reads only the leading tag region of an audio file: an ID3v2 tag (its own
+/// declared size) or a FLAC file's metadata blocks (walked by header, bodies
+/// skipped with a seek). The audio itself is never read, so a cover preview
+/// costs kilobytes instead of a whole 5-40 MB track. This matters most on a
+/// slow link: over the Pocket's USB mode (about 0.7 MB/s) reading whole files
+/// for every album froze the window for over a minute. `Ok(None)` means the
+/// file has no ID3 or FLAC tag region; an `Err` is a real read failure.
+fn read_tag_region(path: &Path) -> Result<Option<Vec<u8>>, std::io::Error> {
+    let mut file = fs::File::open(path)?;
+    let mut head = [0u8; 10];
+    if file.read_exact(&mut head).is_err() {
+        return Ok(None);
+    }
+    if head.starts_with(b"ID3") {
+        let total = (10 + u64::from(syncsafe(&head[6..10]))).min(MAX_TAG_REGION);
+        let mut buffer = head.to_vec();
+        file.take(total - 10).read_to_end(&mut buffer)?;
+        return Ok(Some(buffer));
+    }
+    if head.starts_with(b"fLaC") {
+        // Block headers start right after the 4-byte marker.
+        let mut position = 4u64;
+        file.seek(SeekFrom::Start(position))?;
+        for _ in 0..1024 {
+            let mut block = [0u8; 4];
+            if file.read_exact(&mut block).is_err() {
+                return Ok(None);
+            }
+            let length = (u64::from(block[1]) << 16) | (u64::from(block[2]) << 8) | u64::from(block[3]);
+            position += 4 + length;
+            if position > MAX_TAG_REGION {
+                return Ok(None);
+            }
+            if block[0] & 0x80 != 0 {
+                file.seek(SeekFrom::Start(0))?;
+                let mut buffer = Vec::with_capacity(position as usize);
+                file.take(position).read_to_end(&mut buffer)?;
+                return Ok(Some(buffer));
+            }
+            file.seek(SeekFrom::Start(position))?;
+        }
+    }
+    Ok(None)
 }
 
 /// Skips a text field ended by a terminator suitable for `encoding`, returning the index after it.
@@ -489,6 +540,61 @@ fn to_syncsafe(value: u32) -> [u8; 4] {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+    /// A FLAC file: STREAMINFO, then a PICTURE block, then lots of "audio".
+    fn flac_with_picture(picture: &[u8], audio_bytes: usize) -> Vec<u8> {
+        let mut body = Vec::new();
+        for value in [3u32, 9] {
+            body.extend(value.to_be_bytes());
+            if value == 9 {
+                body.extend(b"image/jpg");
+            }
+        }
+        body.extend(0u32.to_be_bytes()); // empty description
+        for _ in 0..4 {
+            body.extend(0u32.to_be_bytes()); // width, height, depth, colours
+        }
+        body.extend((picture.len() as u32).to_be_bytes());
+        body.extend(picture);
+        let mut file = b"fLaC".to_vec();
+        file.extend([0x00, 0, 0, 34]);
+        file.extend([0u8; 34]);
+        file.extend([0x80 | 6, (body.len() >> 16) as u8, (body.len() >> 8) as u8, body.len() as u8]);
+        file.extend(body);
+        file.extend(vec![0xAA; audio_bytes]);
+        file
+    }
+    #[test]
+    fn extracts_an_embedded_cover_from_the_tag_region_only() {
+        let root = std::env::temp_dir().join(format!("tau-tagregion-{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
+        fs::create_dir_all(&root).unwrap();
+        let picture = [0xff, 0xd8, 0xff, 0xd9];
+        // MP3: a real embedded cover followed by 3 MB of audio.
+        let (source, cover, output) = (root.join("s.mp3"), root.join("c.jpg"), root.join("o.mp3"));
+        fs::write(&source, vec![0x55u8; 3 << 20]).unwrap();
+        fs::write(&cover, picture).unwrap();
+        embed_mp3_copy(&source, &cover, &output).unwrap();
+        assert_eq!(extract_embedded_cover(&output).as_deref(), Some(&picture[..]));
+        assert!(has_embedded_cover(&output).unwrap());
+        // FLAC, same shape.
+        let flac = root.join("t.flac");
+        fs::write(&flac, flac_with_picture(&picture, 3 << 20)).unwrap();
+        assert_eq!(extract_embedded_cover(&flac).as_deref(), Some(&picture[..]));
+        assert!(has_embedded_cover(&flac).unwrap());
+        // The tag region of both is tiny compared with the files.
+        assert!(read_tag_region(&output).unwrap().unwrap().len() < 1024);
+        assert!(read_tag_region(&flac).unwrap().unwrap().len() < 1024);
+        // Plain audio without a tag, and a too-short file, are "no cover", not errors.
+        let plain = root.join("plain.mp3");
+        fs::write(&plain, vec![0u8; 4096]).unwrap();
+        assert_eq!(extract_embedded_cover(&plain), None);
+        assert!(!has_embedded_cover(&plain).unwrap());
+        let tiny = root.join("tiny.mp3");
+        fs::write(&tiny, b"ID3").unwrap();
+        assert_eq!(extract_embedded_cover(&tiny), None);
+        // A missing file is still a real error for has_embedded_cover.
+        assert!(has_embedded_cover(&root.join("missing.mp3")).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn embeds_only_in_copy() {
         let root = std::env::temp_dir().join(format!(
