@@ -436,7 +436,7 @@ pub fn execute_with_mirror(
         // Read the just-written file back and require it to be exactly what was
         // meant (and a valid TIM1), the same write-then-verify discipline as
         // every other write path here.
-        let read_back = fs::read(&temp)?;
+        let read_back = read_back_bytes(&temp)?;
         if read_back != packed || image::decode_tim1(&read_back).is_err() {
             let _ = fs::remove_file(&temp);
             return Err(TauError::e(
@@ -513,7 +513,7 @@ pub fn execute_with_mirror(
         .destination
         .join(format!(".tau-library-{}.tmp", plan.id));
     write_durable(&temp, &index)?;
-    let reparse = fs::read(&temp)?;
+    let reparse = read_back_bytes(&temp)?;
     parse(&reparse)?;
     if reparse != index {
         return Err(TauError::e(
@@ -672,13 +672,14 @@ pub(crate) fn rebuild_index(
     parse(&index)?;
     let temp = media_root.join(format!(".tau-library-source-{plan_id}.tmp"));
     write_durable(&temp, &index)?;
-    if fs::read(&temp)? != index {
+    let reparse = read_back_bytes(&temp)?;
+    if reparse != index {
         return Err(TauError::e(
             ErrorCode::VerificationFailed,
             "source index write verification failed",
         ));
     }
-    parse(&fs::read(&temp)?)?;
+    parse(&reparse)?;
     swap_in_index(&temp, &media_root.join("tau-library.tdb"))?;
     Ok(())
 }
@@ -905,6 +906,46 @@ pub(crate) fn sha256_file(path: &Path) -> Result<String, TauError> {
     }
     Ok(format!("{:x}", h.finalize()))
 }
+/// Host hook that drops the operating system's cached copy of a file so the next
+/// read comes from the device. Without it a read-back right after a write is
+/// served from memory: measured on macOS against a disk image whose content was
+/// changed underneath (a plain read returned the stale bytes; `F_NOCACHE` on the
+/// reading side did not help; invalidating the file's pages did). `tau-core`
+/// forbids `unsafe`, so the platform call lives in the host and is registered here.
+pub type CacheEvictor = fn(&Path) -> bool;
+static CACHE_EVICTOR: std::sync::OnceLock<CacheEvictor> = std::sync::OnceLock::new();
+static EVICTIONS_FAILED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Registers the host's cache evictor (first registration wins).
+pub fn register_cache_evictor(evictor: CacheEvictor) {
+    let _ = CACHE_EVICTOR.set(evictor);
+}
+
+/// Whether read-backs are checked against the device (an evictor is registered)
+/// and how many evictions have failed since start. A failure means that one
+/// read-back may have been served from cache.
+pub fn readback_report() -> (bool, u64) {
+    (
+        CACHE_EVICTOR.get().is_some(),
+        EVICTIONS_FAILED.load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
+
+/// Drops the cached copy of `path`, if the host can; counts a failure otherwise.
+pub(crate) fn evict_cache(path: &Path) {
+    if let Some(evictor) = CACHE_EVICTOR.get()
+        && !evictor(path)
+    {
+        EVICTIONS_FAILED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// A read-back of something just written: evict, then read.
+pub(crate) fn read_back_bytes(path: &Path) -> std::io::Result<Vec<u8>> {
+    evict_cache(path);
+    fs::read(path)
+}
+
 pub(crate) fn sha256_bytes(data: &[u8]) -> String {
     format!("{:x}", Sha256::digest(data))
 }
@@ -1087,6 +1128,7 @@ fn preflight_space(plan: &SyncPlan) -> Result<(), TauError> {
 /// mismatch the temporary file is removed so nothing unverified can be renamed
 /// into place. Every write path (plain copy and cover-embedded copy) ends here.
 fn verify_written(written: &Path, expected: &str, source: &Path) -> Result<(), TauError> {
+    evict_cache(written);
     if sha256_file(written)? != expected {
         let _ = fs::remove_file(written);
         return Err(TauError::e(
@@ -1300,6 +1342,32 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.code(), ErrorCode::NameCollision);
+    }
+
+    /// The read-back must go through the host's cache evictor before it reads.
+    #[test]
+    fn read_backs_evict_the_cache_first() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static CALLS: AtomicU64 = AtomicU64::new(0);
+        fn counting(_: &Path) -> bool {
+            CALLS.fetch_add(1, Ordering::SeqCst);
+            true
+        }
+        register_cache_evictor(counting);
+        let dir = std::env::temp_dir().join(format!(
+            "tau-evict-{}",
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("w.bin");
+        fs::write(&file, b"payload").unwrap();
+        let before = CALLS.load(Ordering::SeqCst);
+        verify_written(&file, &sha256_bytes(b"payload"), Path::new("s")).unwrap();
+        assert_eq!(read_back_bytes(&file).unwrap(), b"payload");
+        // Other tests in this process may also evict, so only a lower bound is exact.
+        assert!(CALLS.load(Ordering::SeqCst) >= before + 2);
+        assert!(readback_report().0, "an evictor is registered");
+        fs::remove_dir_all(dir).unwrap();
     }
 
     /// The check every write ends with must actually fail on wrong bytes (the

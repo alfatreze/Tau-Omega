@@ -196,8 +196,8 @@ pub fn execute_install(
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(&destination, &data)?;
-        let written_back = fs::read(&destination)?;
+        crate::sync::write_durable(&destination, &data)?;
+        let written_back = crate::sync::read_back_bytes(&destination)?;
         if sha256_bytes(&written_back) != entry.sha256 {
             return Err(TauError::e(
                 ErrorCode::VerificationFailed,
