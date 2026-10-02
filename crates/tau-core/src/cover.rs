@@ -278,6 +278,13 @@ fn flac_picture(data: &[u8]) -> Option<Vec<u8>> {
 /// Embeds a baseline JPEG as the only MP3 APIC frame in a copied file.
 /// Existing non-art ID3 frames and audio bytes are retained verbatim.
 pub fn embed_mp3_copy(source: &Path, cover: &Path, output: &Path) -> Result<(), TauError> {
+    fs::write(output, embed_mp3_bytes(source, cover)?)?;
+    Ok(())
+}
+
+/// The bytes `embed_mp3_copy` would write, so a caller can hash them first and
+/// prove that what reached the card is exactly what was intended.
+pub fn embed_mp3_bytes(source: &Path, cover: &Path) -> Result<Vec<u8>, TauError> {
     let image = fs::read(cover)?;
     validate_jpeg(&image)?;
     let data = fs::read(source)?;
@@ -349,12 +356,17 @@ pub fn embed_mp3_copy(source: &Path, cover: &Path, output: &Path) -> Result<(), 
     result.extend_from_slice(&to_syncsafe(tag.len() as u32));
     result.extend_from_slice(&tag);
     result.extend_from_slice(&audio);
-    fs::write(output, result)?;
-    Ok(())
+    Ok(result)
 }
 /// Writes a JPEG PICTURE block into a FLAC copy, retaining audio and all
 /// metadata except old PICTURE and PADDING blocks.
 pub fn embed_flac_copy(source: &Path, cover: &Path, output: &Path) -> Result<(), TauError> {
+    fs::write(output, embed_flac_bytes(source, cover)?)?;
+    Ok(())
+}
+
+/// The bytes `embed_flac_copy` would write (see [`embed_mp3_bytes`]).
+pub fn embed_flac_bytes(source: &Path, cover: &Path) -> Result<Vec<u8>, TauError> {
     let image = fs::read(cover)?;
     validate_jpeg(&image)?;
     let (width, height) = jpeg_dimensions(&image).ok_or_else(|| {
@@ -416,8 +428,7 @@ pub fn embed_flac_copy(source: &Path, cover: &Path, output: &Path) -> Result<(),
         result.extend_from_slice(body);
     }
     result.extend_from_slice(&data[position..]);
-    fs::write(output, result)?;
-    Ok(())
+    Ok(result)
 }
 fn validate_jpeg(data: &[u8]) -> Result<(), TauError> {
     if data.len() > MAX_COVER_BYTES {

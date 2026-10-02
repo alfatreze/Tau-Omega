@@ -848,6 +848,20 @@ pub(crate) fn write_durable(path: &Path, data: &[u8]) -> Result<(), TauError> {
     file.sync_all()?;
     Ok(())
 }
+/// Reads `written` back and requires its SHA-256 to equal `expected`; on a
+/// mismatch the temporary file is removed so nothing unverified can be renamed
+/// into place. Every write path (plain copy and cover-embedded copy) ends here.
+fn verify_written(written: &Path, expected: &str, source: &Path) -> Result<(), TauError> {
+    if sha256_file(written)? != expected {
+        let _ = fs::remove_file(written);
+        return Err(TauError::e(
+            ErrorCode::VerificationFailed,
+            format!("verification failed: {}", source.display()),
+        ));
+    }
+    Ok(())
+}
+
 fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
     if let Some(parent) = item.destination.parent() {
         fs::create_dir_all(parent)?;
@@ -874,30 +888,26 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
                 ),
             ));
         }
-        let embed_result = match item
+        let embedded = match item
             .source
             .extension()
             .and_then(|extension| extension.to_str())
             .map(|extension| extension.to_ascii_lowercase())
             .as_deref()
         {
-            Some("mp3") => cover::embed_mp3_copy(&item.source, &cover.source, &temp),
-            Some("flac") => cover::embed_flac_copy(&item.source, &cover.source, &temp),
+            Some("mp3") => cover::embed_mp3_bytes(&item.source, &cover.source),
+            Some("flac") => cover::embed_flac_bytes(&item.source, &cover.source),
             _ => unreachable!("only audio files receive cover plans"),
-        };
-        if let Err(error) = embed_result {
+        }?;
+        // The copy's bytes intentionally differ from the source, so there is no
+        // plan hash to compare with. Hash exactly what is about to be written,
+        // write it durably, then require the read-back to match it.
+        let expected = sha256_bytes(&embedded);
+        write_durable(&temp, &embedded).inspect_err(|_| {
             let _ = fs::remove_file(&temp);
-            return Err(error);
-        }
-        fs::OpenOptions::new().write(true).open(&temp)?.sync_all()?;
-        // Read a content hash after the durable write before the atomic rename.
-        // Unlike ordinary copies its bytes intentionally differ from the source.
-        if sha256_file(&temp)?.is_empty() {
-            return Err(TauError::e(
-                ErrorCode::VerificationFailed,
-                "cover copy verification failed",
-            ));
-        }
+        })?;
+        drop(embedded);
+        verify_written(&temp, &expected, &item.source)?;
     } else {
         {
             let mut source = fs::File::open(&item.source)?;
@@ -905,14 +915,7 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
             io::copy(&mut source, &mut target)?;
             target.sync_all()?;
         }
-        let actual = sha256_file(&temp)?;
-        if actual != item.sha256 {
-            let _ = fs::remove_file(&temp);
-            return Err(TauError::e(
-                ErrorCode::VerificationFailed,
-                format!("verification failed: {}", item.source.display()),
-            ));
-        }
+        verify_written(&temp, &item.sha256, &item.source)?;
     }
     fs::rename(temp, &item.destination)?;
     Ok(())
@@ -922,6 +925,27 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// The check every write ends with must actually fail on wrong bytes (the
+    /// cover-embedding path used to end in a test that could never fail).
+    #[test]
+    fn verify_written_rejects_wrong_bytes_and_removes_the_temp_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "tau-verify-{}",
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("x.tmp");
+        fs::write(&file, b"what actually reached the card").unwrap();
+        let intended = sha256_bytes(b"what we meant to write");
+        let error = verify_written(&file, &intended, Path::new("src.mp3")).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::VerificationFailed);
+        assert!(!file.exists(), "a failed verification must not leave the temp file");
+        fs::write(&file, b"exact").unwrap();
+        verify_written(&file, &sha256_bytes(b"exact"), Path::new("src.mp3")).unwrap();
+        assert!(file.exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     /// P1-2: `sources: &[PathBuf]` is a public parameter to `plan`/
     /// `plan_with_features`; a path with no derivable file name (`/`, `.`)
