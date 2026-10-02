@@ -4,6 +4,16 @@
 //! card and build, parse and verify the Tau v1 index from a folder or fixture.
 
 pub mod backup;
+/// Test-only: a number no two calls in this process ever share, added to the
+/// clock when building scratch folder names. The clock alone is not unique enough:
+/// parallel tests that asked for the same folder name in the same clock tick shared
+/// a directory and failed about 4 percent of full runs (8 of 200).
+#[cfg(test)]
+pub(crate) fn test_uniq() -> u128 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    u128::from(NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)) << 50
+}
+
 pub mod changes;
 pub mod compare;
 pub mod cover;

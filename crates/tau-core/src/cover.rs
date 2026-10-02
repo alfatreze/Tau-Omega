@@ -576,7 +576,7 @@ mod tests {
     }
     #[test]
     fn extracts_an_embedded_cover_from_the_tag_region_only() {
-        let root = std::env::temp_dir().join(format!("tau-tagregion-{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
+        let root = std::env::temp_dir().join(format!("tau-tagregion-{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()));
         fs::create_dir_all(&root).unwrap();
         let picture = [0xff, 0xd8, 0xff, 0xd9];
         // MP3: a real embedded cover followed by 3 MB of audio.
@@ -613,7 +613,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         let source = root.join("source.mp3");
@@ -636,7 +636,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         let source = root.join("source.flac");
@@ -667,7 +667,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         let source = root.join("source.mp3");

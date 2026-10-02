@@ -104,7 +104,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(root.join("Memories/Screenshots")).unwrap();
         root
@@ -123,7 +123,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(&card).unwrap();
         assert_eq!(list_screenshots(&card).unwrap(), Vec::new());
