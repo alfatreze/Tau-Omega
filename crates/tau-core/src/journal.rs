@@ -348,7 +348,7 @@ fn validate_location(path: &Path, media_root: &Path) -> Result<(), TauError> {
             "journal must name a host report file",
         ));
     }
-    if path.starts_with(media_root) {
+    if crate::sync::backup_is_inside(path, media_root) {
         return Err(TauError::e(
             ErrorCode::InvalidJournalLocation,
             "journal must be outside the card media root",

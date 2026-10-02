@@ -441,7 +441,7 @@ pub fn execute_with_mirror(
                 "mirror deletions need a visible backup folder",
             )
         })?;
-        if backup_root.starts_with(&plan.destination) {
+        if backup_is_inside(backup_root, &plan.destination) {
             return Err(TauError::e(
                 ErrorCode::UnsafeBackupLocation,
                 "backup folder must be outside the card media root",
@@ -542,10 +542,7 @@ pub fn execute_core_move(
         ));
     }
     let source_common = source_common.canonicalize()?;
-    let backup_root = backup_root
-        .canonicalize()
-        .unwrap_or_else(|_| backup_root.to_path_buf());
-    if backup_root.starts_with(&source_common) || backup_root.starts_with(&plan.destination) {
+    if backup_is_inside(backup_root, &source_common) || backup_is_inside(backup_root, &plan.destination) {
         return Err(TauError::e(
             ErrorCode::UnsafeBackupLocation,
             "move backup folder must be outside both core media roots",
@@ -702,6 +699,34 @@ pub(crate) fn backup_then_delete(
     }
     fs::remove_file(&item.destination)?;
     Ok(())
+}
+
+/// Resolves `path` for "is it inside that folder" comparisons even when it
+/// does not exist yet: the nearest existing ancestor is canonicalised (so
+/// symlinked temp/volume roots such as macOS `/var` -> `/private/var` compare
+/// equal) and the not-yet-created remainder is appended unchanged.
+pub(crate) fn resolve_for_compare(path: &Path) -> PathBuf {
+    if let Ok(real) = path.canonicalize() {
+        return real;
+    }
+    let mut tail = Vec::new();
+    let mut cursor = path;
+    while let Some(parent) = cursor.parent() {
+        if let Some(name) = cursor.file_name() {
+            tail.push(name.to_os_string());
+        }
+        if let Ok(real) = parent.canonicalize() {
+            return tail.iter().rev().fold(real, |acc, part| acc.join(part));
+        }
+        cursor = parent;
+    }
+    path.to_path_buf()
+}
+
+/// Whether a backup folder lies inside `root` (the card media root), compared
+/// after resolving symlinks on both sides.
+pub(crate) fn backup_is_inside(backup: &Path, root: &Path) -> bool {
+    resolve_for_compare(backup).starts_with(resolve_for_compare(root))
 }
 
 pub(crate) fn validate_media_root(common: &Path) -> Result<(), TauError> {

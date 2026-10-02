@@ -488,7 +488,7 @@ pub fn execute_removal(
     }
     sync::validate_media_root(&plan.destination)?;
     if let Some(backup) = backup_root {
-        if backup.as_os_str().is_empty() || backup.starts_with(&plan.destination) {
+        if backup.as_os_str().is_empty() || sync::backup_is_inside(backup, &plan.destination) {
             return Err(TauError::e(
                 ErrorCode::UnsafeBackupLocation,
                 "backup folder must be outside the card media root",
