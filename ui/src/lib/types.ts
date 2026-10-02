@@ -116,3 +116,17 @@ export type ChangeResult = ChangeReport & { journal: string };
 
 /** One album's cover thumbnail: a base64 PNG, or null when it has no readable picture. */
 export type Thumbnail = { id: string; png_base64: string | null; /** Only the dev mock sets this; the engine always returns PNG. */ mime?: string };
+
+/** One staged change as the Library's Details panel lists it. */
+export type StagedItem = {
+  key: string;
+  kind: 'add' | 'remove' | 'edit';
+  label: string;
+  artist?: string;
+  tracks?: number;
+  bytes?: number;
+  /** Accessible name of the row's button, e.g. "Remove Moanin from pending changes". */
+  action: string;
+  /** Visible text of the row's button: Remove, Undo or Discard. */
+  verb: string;
+};

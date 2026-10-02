@@ -32,6 +32,19 @@
   /** One line naming what is staged, read out with the button so a keyboard or screen-reader user hears what Start sync will review. */
   export let pendingSummary = '';
   export let onStart: () => void = () => {};
+  /** Clear all lives next to Start sync, since the staged list itself is in the Details panel. */
+  export let hasPending = false;
+  export let clearDisabled = false;
+  export let onClear: () => void = () => {};
+  /** Short status lines that used to sit beside Start sync (slow link, will not fit, over the limit, disconnected). */
+  export let notes: { text: string; bad: boolean }[] = [];
+
+  let startButton: HTMLButtonElement;
+  let detailsButton: HTMLButtonElement;
+  /** After staging something, keyboard focus goes here: Start sync when it is allowed, else Details. */
+  export function focusPrimary() {
+    (startButton && !startButton.disabled ? startButton : detailsButton)?.focus();
+  }
 
   const RAMP = ['#5b7f8f', '#6f9f9a', '#7f8fbf', '#9a86b8'];
   const pct = (n: number) => `${Math.max(0, Math.min(100, total ? (n / total) * 100 : 0))}%`;
@@ -97,11 +110,15 @@
       {#if removeBytes}<span><i class="sw k-rm"></i>Removing about {size(removeBytes)}</span>{/if}
       {#if addBytes}<span><i class="sw k-add" class:over={overCapacity}></i>Adding about {size(addBytes)}</span>{/if}
       <span class="wb-actions">
-        <button class="quiet" aria-haspopup="dialog" on:click={onDetails}>Details</button>
-        <button class="primary" disabled={!canStart} title={canStart ? '' : startReason} aria-describedby="cap-start-desc" on:click={onStart}>Start sync</button>
+        <button class="quiet" aria-haspopup="dialog" bind:this={detailsButton} on:click={onDetails}>Details</button>
+        <button class="quiet" disabled={clearDisabled || !hasPending} on:click={onClear}>Clear all</button>
+        <button class="primary" disabled={!canStart} title={canStart ? '' : startReason} aria-describedby="cap-start-desc" bind:this={startButton} on:click={onStart}>Start sync</button>
         <span id="cap-start-desc" class="sr-only">{canStart ? `Opens the review of: ${pendingSummary}. Nothing is written until you confirm.` : startReason}</span>
       </span>
     </div>
+    {#if notes.length}
+      <div class="wb-notes">{#each notes as n}<span class:bad={n.bad} role={n.bad ? 'alert' : 'note'}>{n.text}</span>{/each}</div>
+    {/if}
   {:else}
     <div class="wb-cap-text"><span>{busy ? 'Reading the card…' : 'Storage information is not available for this card.'}</span></div>
   {/if}
@@ -124,6 +141,8 @@
   .wb-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:10px;font-size:12px;color:#a6b3b2}
   .wb-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
   .wb-legend .muted{color:#8c9c9b}
+  .wb-notes{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;font-size:12px;color:#f0d59a}
+  .wb-notes .bad{color:#ff9d8a;font-weight:650}
   .wb-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
   .wb-actions button{font-size:12px;padding:5px 14px}
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
