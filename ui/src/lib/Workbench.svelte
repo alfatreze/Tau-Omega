@@ -454,16 +454,19 @@
     const editRequests: EditRequest[] = edits.map((p) => ({ album_id: p.id, track: p.track, fields: p.fields, cover: p.cover }));
     return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR } };
   }
+  let preparing = false;
   async function start() {
     if (!canStart) return;
     reviewError = ''; review = null;
+    // Show something the instant the button is pressed: planning reads the card and can take a moment.
+    preparing = true;
     try { review = await planChanges(buildRequest(), mediaRoot); }
-    catch (error) { reviewError = explainError(error); dialog = 'review'; return; }
+    catch (error) { preparing = false; reviewError = explainError(error); dialog = 'review'; return; }
     slowDontAsk = false;
     // Nothing to decide (no removals, no slow direct-USB warning to acknowledge): just do it. The staged
     // list and the card space bar were the review; the engine still checks every file as it writes.
     const slowNow = connKind === 'direct_usb' && review.bytes_to_write > SLOW_LIMIT && !prefs?.slow_alert_suppressed;
-    if (review.removed_files > 0 || slowNow) { dialog = 'review'; return; }
+    if (review.removed_files > 0 || slowNow) { preparing = false; dialog = 'review'; return; }
     await confirmSync();
   }
   async function confirmSync() {
@@ -478,6 +481,7 @@
     ringFinishedBytes = 0; ringCurrent = '';
     runId = newJobId();
     run = { journal: '', reassurance: '', warnings: planWarnings, phase: 'Starting', done: 0, total: review.bytes_to_write, path: '', startedAt: Date.now(), speed: 0, samples: [], finished: false, error: '', report: null, cancelled: false };
+    preparing = false;
     const startedAt = Date.now();
     try {
       const report = await executeChanges(buildRequest(), mediaRoot, review.id, backup, historyContext(), runId);
@@ -554,8 +558,10 @@
     finally { ejecting = false; }
   }
   function dismissFailure() { lastFailed = false; save('lastfail', false); }
-  $: syncView = run && !run.finished ? {
-    title: `Syncing to ${cardLabel}`, phase: run.phase, done: run.done, total: run.total,
+  $: syncView = preparing && !run ? {
+    title: `Preparing sync to ${cardLabel}`, phase: 'Checking what needs to be copied…', done: 0, total: 0, line: '', note: '', slow: '', preparing: true,
+  } : run && !run.finished ? {
+    title: `Syncing to ${cardLabel}`, phase: run.phase, done: run.done, total: run.phase === 'Starting' ? 0 : run.total,
     line: [run.total ? `${size(run.done)} of ${size(run.total)}` : '', run.speed > 0 ? `${(run.speed / MB).toFixed(1)} MB/s · ${eta(run.total - run.done, run.speed) === 'under a minute' ? 'under a minute' : `about ${eta(run.total - run.done, run.speed)}`} left` : ''].filter(Boolean).join(' · '),
     note: 'Keep the Pocket connected until this finishes. You can keep looking around while it runs.',
     slow: runSlowNote ? "This is slower than a card reader usually is. If you're plugged into the Pocket directly, that's expected." : '',

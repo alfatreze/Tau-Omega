@@ -80,6 +80,7 @@ const listing = (albums: Album[]) => ({
 });
 
 let planWarnings: { code: string; message: string }[] = [];
+let planDelayMs = 0;
 let lastOptions: unknown = null;
 const plan = (request: any) => {
   lastOptions = request.options;
@@ -174,7 +175,7 @@ const handlers: Record<string, (args: any) => unknown> = {
       tau_bytes: albums + player2, other_bytes: used - albums - player2,
     };
   },
-  plan_changes: (a) => plan(a.request),
+  plan_changes: async (a) => { if (planDelayMs) await new Promise((r) => setTimeout(r, planDelayMs)); return plan(a.request); },
   execute_changes: (a) => runChanges({ ...a.request, __context: a.context }, a.jobId),
   // A colourful placeholder "cover" per album (stable per id) so lists and the edit drawer have artwork to show.
   album_thumbnails: (a) => (a.ids as string[]).map((id) => {
@@ -205,6 +206,7 @@ export function installDevMock() {
   // Test hooks (dev only): simulate plugging the card in/out, changing its
   // contents behind the app's back, and switching how it is connected.
   (window as any).__tauMock = {
+    setPlanDelay: (ms: number) => { planDelayMs = ms; },
     setMounted: (value: boolean) => { mounted = value; },
     addCardAlbum: (title: string) => { cardAlbums = [...cardAlbums, { ...album('Test Artist', title, 3, 100, 2001) }]; },
     setConnection: (value: typeof connection) => { connection = value; },
