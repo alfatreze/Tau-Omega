@@ -204,6 +204,71 @@ pub fn detect_connection(path: &Path) -> ConnectionInfo {
     detect(path)
 }
 
+/// The outcome of asking the OS to unmount and eject a card.
+#[derive(Serialize, Clone, Debug)]
+pub struct EjectResult {
+    /// `true` only when the OS confirmed the volume is unmounted: then, and only
+    /// then, it is safe to unplug the card reader or leave the Pocket's USB mode.
+    pub ok: bool,
+    pub message: String,
+}
+
+/// Turns the OS tool's own output into a sentence a person can act on. A busy
+/// volume (something is still reading it) is the common refusal, and the right
+/// reaction is to wait or close that program, never to pull the card.
+#[allow(dead_code)] // only called on macOS and Linux; unit-tested everywhere
+pub fn eject_message(success: bool, tool_output: &str) -> String {
+    let text = tool_output.to_ascii_lowercase();
+    if success {
+        "Safe to remove. The card is unmounted; you can unplug the reader or leave USB mode on the Pocket.".into()
+    } else if text.contains("dissented") || text.contains("busy") || text.contains("in use") || text.contains("target is busy") {
+        "Something on this computer is still using the card, so it was not ejected. Close any window or program showing it and try again. Do not unplug it yet.".into()
+    } else if text.contains("not mounted") || text.contains("no such") || text.contains("could not find") {
+        "The card is not mounted any more (it was already ejected or removed).".into()
+    } else {
+        format!("The card could not be ejected, so do not unplug it yet. ({})", tool_output.trim())
+    }
+}
+
+/// Unmounts and ejects the volume at `path`, which flushes everything the OS was
+/// still holding for it. Never forces: a refusal is reported, not overridden.
+#[cfg(target_os = "macos")]
+pub fn eject(path: &Path) -> EjectResult {
+    match std::process::Command::new("diskutil").arg("eject").arg(path).output() {
+        Ok(out) => {
+            let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            EjectResult { ok: out.status.success(), message: eject_message(out.status.success(), &text) }
+        }
+        Err(error) => EjectResult { ok: false, message: format!("The card could not be ejected, so do not unplug it yet. (diskutil: {error})") },
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn eject(path: &Path) -> EjectResult {
+    let Ok(mounts) = std::fs::read_to_string("/proc/mounts") else {
+        return EjectResult { ok: false, message: "The card could not be ejected, so do not unplug it yet. (no /proc/mounts)".into() };
+    };
+    let Some(device) = linux_device_for(&mounts, path) else {
+        return EjectResult { ok: false, message: eject_message(false, "not mounted") };
+    };
+    match std::process::Command::new("udisksctl").args(["unmount", "-b", &device]).output() {
+        Ok(out) => {
+            let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            if out.status.success() {
+                // Powering the device off is a courtesy; the unmount is what makes it safe.
+                let _ = std::process::Command::new("udisksctl").args(["power-off", "-b", &device]).output();
+            }
+            EjectResult { ok: out.status.success(), message: eject_message(out.status.success(), &text) }
+        }
+        Err(error) => EjectResult { ok: false, message: format!("The card could not be ejected, so do not unplug it yet. (udisksctl: {error})") },
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn eject(_path: &Path) -> EjectResult {
+    EjectResult { ok: false, message: "Tau Omega cannot eject on this system yet. Use your system's Safe Remove (the tray icon on Windows) before unplugging.".into() }
+}
+
 /// Mounted volumes that look like a Pocket card: a top-level folder holding
 /// both `Cores` and `Assets`. A plain directory check, not a full inspection.
 pub fn mounted_cards() -> Vec<String> {
@@ -236,6 +301,16 @@ pub fn mounted_cards() -> Vec<String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn eject_messages_tell_a_person_what_to_do() {
+        assert!(eject_message(true, "").starts_with("Safe to remove"));
+        let busy = eject_message(false, "Volume Pock on disk6s1 failed to unmount: dissented by PID 412 (/usr/libexec/mds)");
+        assert!(busy.contains("still using the card") && busy.contains("Do not unplug"));
+        assert!(eject_message(false, "target is busy").contains("still using"));
+        assert!(eject_message(false, "Volume is not mounted").contains("not mounted any more"));
+        let other = eject_message(false, "weird failure");
+        assert!(other.contains("do not unplug it yet") && other.contains("weird failure"));
+    }
     #[test]
     fn the_pocket_itself_is_direct_usb() {
         let text = "   Device / Media Name:       Analogue Pocket\n   Volume Name:               POCKET\n   Protocol:                  USB\n";
@@ -332,5 +407,30 @@ mod real_hardware_checks {
     #[ignore]
     fn a_different_real_usb_device_is_not_detected_as_pocket() {
         assert_ne!(detect_connection(Path::new("/Volumes/DSPICO")).kind, ConnectionKind::DirectUsb);
+    }
+}
+
+/// `#[ignore]`d: mounts and ejects a throwaway disk image (never a real card).
+#[cfg(all(test, target_os = "macos"))]
+mod real_eject_check {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn ejecting_a_mounted_volume_unmounts_it_and_a_second_eject_says_so() {
+        let dir = std::env::temp_dir().join(format!("tau-eject-dmg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let image = dir.join("e.dmg");
+        let ok = |c: &mut std::process::Command| c.output().map(|o| o.status.success()).unwrap_or(false);
+        assert!(ok(std::process::Command::new("hdiutil").args(["create", "-size", "16m", "-fs", "MS-DOS", "-volname", "TAUEJECT", "-type", "UDIF"]).arg(&image)));
+        assert!(ok(std::process::Command::new("hdiutil").args(["attach", "-nobrowse"]).arg(&image)));
+        let volume = Path::new("/Volumes/TAUEJECT");
+        assert!(volume.is_dir());
+        let first = eject(volume);
+        assert!(first.ok, "{}", first.message);
+        assert!(!volume.exists(), "the volume must be gone after a successful eject");
+        let second = eject(volume);
+        assert!(!second.ok);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
