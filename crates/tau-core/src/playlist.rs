@@ -320,7 +320,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         export_m3u(&path, &playlist, &entries).unwrap();
         assert_eq!(
@@ -336,7 +336,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         root
@@ -437,7 +437,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::write(
             &source,

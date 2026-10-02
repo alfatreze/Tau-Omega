@@ -1356,7 +1356,7 @@ mod tests {
         register_cache_evictor(counting);
         let dir = std::env::temp_dir().join(format!(
             "tau-evict-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("w.bin");
@@ -1376,7 +1376,7 @@ mod tests {
     fn verify_written_rejects_wrong_bytes_and_removes_the_temp_file() {
         let dir = std::env::temp_dir().join(format!(
             "tau-verify-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("x.tmp");
@@ -1411,7 +1411,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ))
     }
     /// P2-1: the token used to be a 32-bit-truncated hash formatted `T2-xxxxxxxx`,

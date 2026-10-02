@@ -191,7 +191,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         let left = root.join("left/Assets/tau/common");
         let right = root.join("right/Assets/tau-test/common");

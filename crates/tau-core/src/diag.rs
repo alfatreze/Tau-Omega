@@ -198,7 +198,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::write(
             &path,
@@ -225,7 +225,7 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos() + crate::test_uniq()
         ));
         fs::write(
             &path,

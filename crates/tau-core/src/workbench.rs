@@ -595,7 +595,7 @@ mod tests {
     fn tmp(name: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!(
             "tau-wb-{name}-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()
         ));
         fs::create_dir_all(&p).unwrap();
         p
