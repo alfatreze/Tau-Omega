@@ -1,0 +1,11 @@
+Tau Omega test build 0.4.0-alpha.5   (NOT a release)
+Release goal : 0.4.0
+Built        : 2026-10-02 22:23 WEST
+Branch       : integration/workbench-base
+Commit       : 2dcb6d9   Ledger: expose scan stats, add Forget menu item, browser checks, docs
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : a85a0780dc49bd03fac81b6bdf60d8dcec47266eaafb1b50d65d0236ca852ea9  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
