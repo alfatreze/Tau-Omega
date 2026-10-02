@@ -13,5 +13,10 @@ base64 = "0.23"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+[target.'cfg(unix)'.dependencies]
+# Already in the tree through sha2/rustix/errno (no new compile cost); used only by
+# cacheflush.rs for the platform call that drops a file's cached pages.
+libc = "0.2"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
