@@ -190,6 +190,10 @@ const handlers: Record<string, (args: any) => unknown> = {
   clear_history: () => { const n = history.length; history = []; return n; },
   detect_connection: () => ({ kind: connection, detail: connection === 'direct_usb' ? 'Analogue Pocket (USB)' : 'Generic card reader (USB)' }),
   ledger_forget: () => true,
+  // The real checks live in the engine (tau_core::assets, tested against the firmware's own tool); the mock only needs the same shape.
+  appearance_check: (a) => appearanceCheckMock(a.theme),
+  appearance_open: () => [],
+  appearance_export: () => 144,
   eject_card: () => ({ ok: true, message: 'Safe to remove. The card is unmounted; you can unplug the reader or leave USB mode on the Pocket.' }),
   readback_status: () => ({ checks_the_device: true, failed_evictions: 0 }),
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
@@ -231,4 +235,26 @@ export function installDevMock() {
     if (!h) { console.warn(`[dev-mock] unmocked command: ${cmd}`); throw { code: 'E_MOCK', message: `No mock for ${cmd}` }; }
     return h(args);
   }, { shouldMockEvents: true });
+}
+
+
+function lumOf(hex: string) {
+  const f = (x: number) => { const v = x / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const n = parseInt(hex.slice(1), 16);
+  return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+}
+function appearanceCheckMock(t: { name: string; dark: any; light: any }) {
+  const problems: string[] = []; const checks: any[] = [];
+  if (!/^[A-Z0-9 _-]{1,15}$/.test(t.name)) problems.push('The name must be 1 to 15 characters: capital letters, digits, space, _ or - (the Pocket\'s font is capitals only).');
+  if (['TAU', 'OCEAN'].includes(t.name)) problems.push(`“${t.name}” is already a built-in theme; pick another name.`);
+  for (const pol of ['dark', 'light'] as const) {
+    const c = t[pol].colors;
+    for (const [text, back, need] of [['text_primary', 'surface', 4.5], ['text_secondary', 'surface', 3.0]] as const) {
+      const a = lumOf(c[text]), b = lumOf(c[back]);
+      const worst = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      checks.push({ polarity: pol, text, against: back, worst, needed: need, ok: worst >= need });
+      if (worst < need) problems.push(`${pol === 'dark' ? 'Dark' : 'Light'}: ${text.replace('_', ' ')} on ${back} is too faint (${worst.toFixed(2)}, needs ${need}).`);
+    }
+  }
+  return { problems, checks, dark_snapped: { ...t.dark.colors }, light_snapped: { ...t.light.colors } };
 }

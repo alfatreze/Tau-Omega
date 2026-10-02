@@ -3,6 +3,7 @@
 //! This crate deliberately has no card-writing API in T0/T1. It can inspect a
 //! card and build, parse and verify the Tau v1 index from a folder or fixture.
 
+pub mod assets;
 pub mod backup;
 /// Test-only: a number no two calls in this process ever share, added to the
 /// clock when building scratch folder names. The clock alone is not unique enough:
@@ -106,6 +107,8 @@ pub enum ErrorCode {
     InvalidTim1Container = 49,
     UnsupportedTags = 50,
     InsufficientSpace = 51,
+    InvalidTheme = 52,
+    InvalidAssetsFile = 53,
 }
 
 impl ErrorCode {
@@ -154,6 +157,8 @@ impl TryFrom<u16> for ErrorCode {
             49 => Self::InvalidTim1Container,
             50 => Self::UnsupportedTags,
             51 => Self::InsufficientSpace,
+            52 => Self::InvalidTheme,
+            53 => Self::InvalidAssetsFile,
             _ => return Err(()),
         })
     }

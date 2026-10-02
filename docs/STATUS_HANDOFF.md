@@ -993,3 +993,17 @@ Found while integrating: a macOS hang report (a 71 s freeze) led to a performanc
 - Use GPT-5.6 Luna at low reasoning for contained UI, docs, simple tests, and small adapters.
 - Use GPT-5.6 Terra at low reasoning for cross-cutting Rust/UI safety workflows, multi-file refactors, and feature integration.
 - Escalate reasoning only for failed attempts, ambiguous firmware formats, or high-risk card-write logic.
+
+
+## Appearance scaffold (2026-10-02)
+New **Appearance** page (nav, under Meter Lab) and engine `crates/tau-core/src/assets.rs`: edits up to 4 extra themes
+(Dark + Light, 18 colour roles, background brightness), checks them with the firmware's own contrast rules (text on every
+panel and on the background ramp behind all 19 device accents; Light accent on panel), shows each colour as RGB565-snapped,
+opens an existing `tau-assets.bin` (every CRC verified) and saves one to a file the user picks, then reads it back.
+- **Verified against a real artefact:** the writer's output is byte-identical to `tools/tau_assets.py pack` for the
+  `sunset` example (fixtures in `crates/tau-core/testdata/assets/`, produced by that tool); contrast ratios match its report
+  to 0.01; every byte flip and truncation of the file is refused. New error codes 52 (invalid theme) and 53 (bad file).
+- **Not built:** installing to a card (needs the reviewed card-write flow and your approval), the `METR` meter-preset
+  section (opening a file with one drops it on save, and the page says so), Figma import (no real `Tau Theme` variable
+  collection exists to check an importer against), accent colour and live Pocket mode/theme selection (those are on the device).
+- **Firmware status:** the container is documented as not yet read by a Pocket in its own doc; an installed file's `Info > THEME FILE` row is the proof to capture.

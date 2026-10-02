@@ -675,6 +675,32 @@ fn read_image_data_url(path: String) -> Result<String, TauError> {
     Ok(format!("data:image/png;base64,{}", STANDARD.encode(bytes)))
 }
 
+/// Appearance: checks a theme (names, ranges, contrast on every surface) and shows each colour as the Pocket will
+/// show it. Writes nothing.
+#[tauri::command(async)]
+fn appearance_check(theme: tau_core::assets::ThemeInput) -> tau_core::assets::ThemeReport {
+    tau_core::assets::check_theme(&theme)
+}
+
+/// Appearance: opens a `tau-assets.bin` for editing. Every checksum is verified before anything is shown.
+#[tauri::command(async)]
+fn appearance_open(path: String) -> Result<Vec<tau_core::assets::ThemeInput>, TauError> {
+    tau_core::assets::parse_assets(&std::fs::read(&path)?)
+}
+
+/// Appearance: writes `tau-assets.bin` to a file the user chose (not to the card), then reads it back and checks it
+/// parses to the same themes. Returns the file's size in bytes.
+#[tauri::command(async)]
+fn appearance_export(themes: Vec<tau_core::assets::ThemeInput>, path: String) -> Result<u64, TauError> {
+    let bytes = tau_core::assets::pack_assets(&themes)?;
+    std::fs::write(&path, &bytes)?;
+    let back = tau_core::assets::parse_assets(&std::fs::read(&path)?)?;
+    if tau_core::assets::pack_assets(&back)? != bytes {
+        return Err(TauError { code: ErrorCode::VerificationFailed, message: "The saved file did not read back the same, so it should not be used.".into() });
+    }
+    Ok(bytes.len() as u64)
+}
+
 /// Previews what `art_sidecar_pal256` will encode for one album's cover
 /// (`cover_source`, from a `plan_sync` result's `art_sidecar_previews`),
 /// without writing anything: runs the exact same quantizer `execute_sync`
@@ -1043,7 +1069,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, appearance_check, appearance_open, appearance_export, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }
