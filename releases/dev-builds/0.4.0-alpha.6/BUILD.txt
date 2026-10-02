@@ -1,0 +1,11 @@
+Tau Omega test build 0.4.0-alpha.6   (NOT a release)
+Release goal : 0.4.0
+Built        : 2026-10-02 22:30 WEST
+Branch       : integration/workbench-base
+Commit       : 986f585   Show 'Preparing sync' in the card bar the instant Start sync is pressed; indeterminate bar until copying starts
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 5110b3ca5ec9ac24574f675a3c0321e41807bcac71b2ffc0c5376d5cde3bc565  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)

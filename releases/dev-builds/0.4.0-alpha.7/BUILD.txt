@@ -1,0 +1,11 @@
+Tau Omega test build 0.4.0-alpha.7   (NOT a release)
+Release goal : 0.4.0
+Built        : 2026-10-02 23:28 WEST
+Branch       : integration/workbench-base
+Commit       : 8f6aae3   Appearance: theme file engine (byte-exact with the firmware tool), editor page, checks and export
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 8f1609923cb11da9eb45cf9a4b0397edfb18682efe3e346a79737538fd6bc507  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
