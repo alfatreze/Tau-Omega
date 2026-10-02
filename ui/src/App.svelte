@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import type { BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport, HistoryEntry } from './lib/types';
+  import type { ConnectionKind, BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport, HistoryEntry } from './lib/types';
   import { invoke } from './lib/backend';
-  import { checkStorageCapacity, compareMedia, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanMedia, setManualPlayer, listHistory, pruneHistory } from './lib/tau-api';
+  import { checkStorageCapacity, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanMedia, setManualPlayer, listHistory, pruneHistory } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import HistoryView from './lib/HistoryView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
   import ProblemsView from './lib/ProblemsView.svelte';
   import BackupView from './lib/BackupView.svelte';
   import Workbench from './lib/Workbench.svelte';
+  import CardIcon from './lib/CardIcon.svelte';
   import LibrarySettings from './lib/LibrarySettings.svelte';
   import { modal, trap } from './lib/a11y';
   import { tick } from 'svelte';
@@ -55,6 +56,13 @@
   try { moreOpen = localStorage.getItem('tau.nav.more') === '1'; } catch { /* per-viewer convenience */ }
   function toggleMore() { moreOpen = !moreOpen; try { localStorage.setItem('tau.nav.more', moreOpen ? '1' : '0'); } catch { /* ignore */ } }
   // The selected core's media root: what the Library screen lists and writes.
+  // What each opened card is plugged in as (the Pocket itself or a reader), for the sidebar icon.
+  let connectionKinds: Record<string, ConnectionKind> = {};
+  function ensureConnectionKind(card: string) {
+    if (!card || connectionKinds[card]) return;
+    detectConnection(card).then((c) => (connectionKinds = { ...connectionKinds, [card]: c.kind })).catch(() => {});
+  }
+  $: ensureConnectionKind(path);
   $: mediaRoot = path && activeCore?.platform ? `${path.replace(/\/+$/, '')}/Assets/${activeCore.platform}/common` : '';
   // Below 720 px the sidebar is a menu opened with the button at the top left (it used to disappear
   // completely, which at 200% zoom removed all navigation).
@@ -267,7 +275,7 @@
   <aside id="sidebar" class:open={navOpen} aria-label="Primary navigation" use:trap={navOpen}><div class="brand"><span class="mark">τ</span><span>Tau Omega<small>Library companion</small></span></div>
   <div class="active-context">
     <button class="active-context-btn" on:click={() => showSwitcher = !showSwitcher} aria-expanded={showSwitcher} aria-label="Switch card or core">
-      <span class="active-context-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="5" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="16.5" r="1.1" fill="currentColor"/><circle cx="15" cy="16.5" r="1.1" fill="currentColor"/><circle cx="12" cy="19.2" r="1.1" fill="currentColor"/></svg></span>
+      <span class="active-context-icon" aria-hidden="true"><CardIcon kind={connectionKinds[path]} /></span>
       <span class="active-context-text">
         <strong>{path ? cardName(path) : 'No card open'}</strong>
         <small>{activeCore ? (activeCore.shortname || activeCore.id) : (cores.length ? 'Choose a core' : 'Open a card to begin')}</small>
