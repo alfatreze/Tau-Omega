@@ -1021,3 +1021,11 @@ unsafe backup, interrupted install, bad folder, no core asks for the file) and 4
   without carrying METR over; the plan warns about exactly that. Cores that do not declare the slot (all non-Tau cores) are reported as ignoring it.
 - **Not done:** an approved real write to a card and the Pocket reading it. Until then the format is as unproven on hardware as `THEME_FILE_FORMAT.md` says.
 - **Limits:** writes `THEM` only (METR is dropped, with a warning); no "remove theme file" action yet.
+
+**Real write, 2026-10-03 (owner-approved, `tau_dev_67` only).** Ran the real install path (ignored test `real_card_install_changes_only_the_theme_file`) against
+`/Volumes/Pock/Assets/tau_dev_67/common`, theme OMEGA TEST, backup to `~/Downloads/tau-omega-card-backups/<plan id>/`. Result: the 351-byte SUNSET+METR file
+(sha 9ac429e1...) was backed up byte-identical, the 144-byte file (sha 15c5d571...) was written and read back, no temp or `.prev` file left, and a before/after
+walk of the whole card's `Assets` and `Cores` showed nothing else changed. **Real bug found:** macOS left a 4 KB AppleDouble `._tau-assets.bin` beside the file on
+the exFAT card (SAFETY_RULES 7 says remove them; the install did not). Fixed (the install now removes `._` siblings of the three names it used), the stray was
+removed from the card, and a second real run left nothing behind. The sync path has the same gap for the files it writes (`sync.rs` only skips `._*` when
+reading); not fixed yet. **Still to do:** boot the Pocket and confirm `Info > THEME FILE` reads `1 LOADED` and the theme is listed (owner).
