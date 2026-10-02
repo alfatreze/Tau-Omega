@@ -460,6 +460,88 @@ mod tests {
         assert!(load(&s.path).is_none(), "a version this build does not know is ignored, not guessed at");
     }
 
+    // ---- through the real scanner -------------------------------------------------------------
+
+    /// One locator for the whole test process (the registration is first-wins): any media root whose
+    /// path contains `tau-ledger-it` keeps its ledger beside it.
+    fn test_locator(root: &Path) -> Option<PathBuf> {
+        let name = root.file_name()?.to_string_lossy().into_owned();
+        root.to_string_lossy().contains("tau-ledger-it").then(|| root.with_file_name(format!("{name}.ledger")))
+    }
+
+    fn mp3(title: &str, pad: usize) -> Vec<u8> {
+        let mut body = vec![0u8];
+        body.extend(title.as_bytes());
+        let mut frame = b"TIT2".to_vec();
+        frame.extend((body.len() as u32).to_be_bytes());
+        frame.extend([0, 0]);
+        frame.extend(body);
+        let size = frame.len();
+        let mut file = b"ID3\x03\x00\x00".to_vec();
+        file.extend([(size >> 21 & 0x7f) as u8, (size >> 14 & 0x7f) as u8, (size >> 7 & 0x7f) as u8, (size & 0x7f) as u8]);
+        file.extend(frame);
+        file.extend(vec![0u8; pad]);
+        file
+    }
+
+    fn write_old(path: &Path, bytes: &[u8]) {
+        fs::write(path, bytes).unwrap();
+        let hour_ago = SystemTime::now() - std::time::Duration::from_secs(3_600);
+        fs::File::options().write(true).open(path).unwrap().set_modified(hour_ago).unwrap();
+    }
+
+    #[test]
+    fn the_scanner_reads_each_file_once_and_only_again_when_it_changes() {
+        register_locator(test_locator);
+        let base = std::env::temp_dir().join(format!("tau-ledger-it-{}", std::process::id() as u128 + crate::test_uniq()));
+        let root = base.join("common");
+        fs::create_dir_all(root.join("Artist/Album")).unwrap();
+        for (n, title) in ["One", "Two", "Three"].iter().enumerate() {
+            write_old(&root.join(format!("Artist/Album/0{}.mp3", n + 1)), &mp3(title, 2048));
+        }
+        let titles = |scan: &crate::Scan| scan.entries.iter().map(|e| e.tags.get("TIT2").cloned().unwrap_or_default()).collect::<Vec<_>>();
+
+        let cold = crate::scan_dir(&root, false).unwrap();
+        assert_eq!((cold.reused, cold.read), (0, 3), "first look reads everything");
+        let warm = crate::scan_dir(&root, false).unwrap();
+        assert_eq!((warm.reused, warm.read), (3, 0), "second look reads nothing");
+        assert_eq!(titles(&warm), titles(&cold), "and returns exactly the same answer");
+
+        // one file changes (size and time): only it is read again, and the new title shows
+        write_old(&root.join("Artist/Album/02.mp3"), &mp3("Two, remastered", 4096));
+        let changed = crate::scan_dir(&root, false).unwrap();
+        assert_eq!((changed.reused, changed.read), (2, 1));
+        assert!(titles(&changed).contains(&"Two, remastered".to_string()));
+
+        // a file is deleted: the ledger forgets it
+        fs::remove_file(root.join("Artist/Album/03.mp3")).unwrap();
+        let fewer = crate::scan_dir(&root, false).unwrap();
+        assert_eq!((fewer.reused, fewer.read, fewer.entries.len()), (2, 0, 2));
+        assert_eq!(Session::open(&root).unwrap().len(), 2, "no entry is kept for a file that is gone");
+
+        // a damaged ledger is just an empty one
+        let ledger_file = base.join("common.ledger");
+        let mut bytes = fs::read(&ledger_file).unwrap();
+        let last = bytes.len() - 2;
+        bytes[last] ^= 0xff;
+        fs::write(&ledger_file, bytes).unwrap();
+        let healed = crate::scan_dir(&root, false).unwrap();
+        assert_eq!((healed.reused, healed.read), (0, 2), "a corrupt ledger is ignored and rebuilt");
+        assert_eq!(titles(&healed), titles(&fewer));
+        assert_eq!(crate::scan_dir(&root, false).unwrap().reused, 2, "and it works again afterwards");
+
+        // a file written a moment ago is racy: it is read again rather than trusted
+        fs::write(root.join("Artist/Album/04.mp3"), mp3("Four", 1024)).unwrap();
+        let _ = crate::scan_dir(&root, false).unwrap();
+        let again = crate::scan_dir(&root, false).unwrap();
+        assert_eq!(again.read, 1, "the brand new file is not trusted yet, the two old ones are");
+        assert_eq!(again.reused, 2);
+
+        assert!(clear(&root), "forgetting the card deletes the ledger");
+        assert_eq!(crate::scan_dir(&root, false).unwrap().reused, 0);
+        fs::remove_dir_all(base).unwrap();
+    }
+
     #[test]
     fn finishing_a_complete_scan_forgets_files_that_are_gone() {
         let mut s = session("gc");
