@@ -247,6 +247,26 @@ heap buffer.
 Weaken any of the verification steps to save time; trust file size or mtime alone; write a manifest to
 the card outside a confirmed run; parallelise I/O on a direct-USB Pocket.
 
+## First real-card measurements (2026-10-02, read-only)
+
+Taken on a 126 GB exFAT Pocket card (128 KB clusters) mounted over the Pocket's USB mode, 4,647 files:
+
+| Measurement | Result |
+|---|---|
+| Full-card stat walk (names, sizes, modified times) | **0.63 s** |
+| `card_breakdown` (Tau media per platform) | **18 ms**, and a second run gave an identical result |
+| Engine vs an independent walk | identical to the megabyte and file count (tau 298.1 MB / 57 files, tau_dev_63 444.7 MB / 75, tau_diagnostic 444.7 MB / 76) |
+| Modified times on Tau files | real and fine-grained (10 ms resolution, 11 to 23 distinct values per core, all within the last two weeks) |
+| Modified times elsewhere | 967 distinct values; **1,646 files share one 1996 timestamp** and some are the 1980 exFAT epoch (other cores' game files stamped by whoever packaged them) |
+| Sequential read speed, random-read latency | **not measured** (the card was unplugged before the test ran) |
+
+What this settles for the ledger:
+- **H1 (does the Pocket stamp meaningless times?) is mostly moot in USB mode.** The Pocket only exposes a block device; the Mac's own exFAT driver writes the file system, so media written from the Mac get real Mac timestamps, as seen. Only files the Pocket itself creates (saves, screenshots) could be stamped by its own system, and those are not media. The degenerate-mtime guard stays as a cheap safety net, because other tools' files clearly share timestamps.
+- **A stat-walk is cheap on this card** (about 0.1 s per 700 files), so the incremental scan's directory walk will not be the bottleneck; reading file contents is. That favours the ledger's design (skip contents when size and time match) over any attempt to skip the walk.
+- The shared 1996 timestamp shows why "size plus time" must never be trusted alone for skip-copy decisions on files this tool did not write itself.
+
+Also seen: `HarpMudd.Mp3Player` (86 MB of media in `Assets/mp3player`) is not a Tau core by the breakdown's rule (it has no library slot), so its media counts as "Other data".
+
 ## Ranked next steps
 
 0. **Correctness first, no cache needed:** D1 (cover verification), D3 (case collisions), D4 (two-phase removal), D5 (index atomicity), D6 (cluster-aware capacity), then D2 (no-cache verify and safe eject). Original item: **fix the embedded-cover verification gap** (finding 1 of the red-team): it is a correctness hole in the default path, independent of any cache.
