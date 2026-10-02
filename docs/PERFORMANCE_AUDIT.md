@@ -71,9 +71,68 @@ hashing. Cost: one more thing on the card that a stale copy could mislead, so it
 size+mtime rule as the ledger) and the app never writes it outside a reviewed run. I would not build
 this until the host ledger has proven itself.
 
+## Ledger red-team (second pass, 2026-10-02)
+
+The first design above trusted "size + mtime match". Checked against the code and against how FAT
+cards behave, that is not enough on its own. Findings, worst first.
+
+**Findings in the existing copy code that the ledger design must not inherit**
+1. **Embedded-cover copies are never verified.** `copy_verified` (cover branch) ends with
+   `if sha256_file(&temp)?.is_empty()`: a SHA-256 hex string is never empty, so the check is always
+   false and verifies nothing. `embed_mp3_copy`/`embed_flac_copy` build the bytes in memory and
+   `fs::write` them; only a successful `write`+`sync_all` stands behind the file. Embedding is the
+   Library workbench's default, so this is the common path. Fix: have the embed functions return the
+   bytes, write them durably, read back (no-cache, see the security finding) and compare against
+   `sha256_bytes(bytes)`.
+2. **Re-syncing an album always rewrites it when covers are embedded.** "Same" means card hash ==
+   source hash, but an embedded copy differs from its source by design, so every existing file is
+   `Update` and is copied again at card speed. This is also why the Library shows "Changed" so readily.
+3. **The source is read twice per file at execute** (hash, then `io::copy`), and the card file is read
+   back once. One streaming pass that hashes while copying, then the read-back, gives the same safety
+   with one fewer full read. (A source that changes between the two reads is caught today only because
+   the read-back is compared with the plan hash; that property must be kept.)
+
+**Holes in the first ledger design**
+| # | Hole | Severity | Mitigation |
+|---|---|---|---|
+| H1 | **mtime may mean nothing on the Pocket.** In USB mode the Pocket's own FAT driver may stamp a constant or zero date. Then "mtime matches" degrades to "size matches". Not measured. | high until measured | Measure first: write a file twice over USB and compare. Detect degenerate mtimes at runtime (many entries share one value, or it is before 1990 or in the future) and switch the card to "mtime untrusted": no skip-copy decisions, tags still cached with a head+tail probe. |
+| H2 | **Same size and same mtime, different content.** Tools that preserve timestamps (`cp -p`, `touch -r`, re-taggers), and FAT's 2-second resolution make this possible. | medium | Strengthen the fingerprint where the file system allows (local sources: dev, inode, size, mtime **and ctime**, which user code cannot set). For FAT: add a rolling canary (H3) and never use the ledger for safety decisions (invariant below). |
+| H3 | **No way to notice slow drift.** | medium | **Rolling verification:** each run fully re-hashes the least-recently-verified card files up to a byte budget (for example 32 MB on direct USB, 256 MB on a reader). A mismatch marks the ledger untrusted for that card and rebuilds it. A "Verify card" button ignores the ledger entirely. |
+| H4 | **Racy timestamps** (the git "racily clean" problem): a file modified in the same timestamp tick as its entry was recorded cannot be told apart. | medium | Record the stat taken **before** reading, re-stat after; if it changed, store nothing. Treat any entry whose mtime is within 2 s (plus margin) of the record time as unverified. |
+| H5 | **Time zone and DST.** FAT stores local time with no zone; a DST change or travel shifts every mtime on the card by the same amount, invalidating the whole ledger (safe, but a cliff). | low, perf only | If at least 95 percent of entries differ by the same multiple of 30 minutes, rebase the ledger by that constant instead of discarding it. |
+| H6 | **Wrong card, same key.** A path key collides for two cards both mounted as `/Volumes/Pock`; a volume UUID is shared by cloned cards. | medium | Key by volume UUID **plus** capacity and FAT serial; with no reliable id (some Linux and Windows cases) use no skip-copy decisions at all and cache tags only. Never key by path. |
+| H7 | **Crash between card write and ledger write.** | medium | Record a hash only **after** that file's verified write; flush at the end and on cancel. The bad order (ledger first) is forbidden. A crash then costs a re-hash, never a false "Same". |
+| H8 | **Provenance is missing**, which is what makes finding 2 above unsolvable. | design gap | Store, per card file, `(source sha, cover sha, embed version) -> output sha`. A re-sync is "Same" when the destination fingerprint is unchanged **and** the provenance matches. The embed and tag-parser versions are part of the key, so changing the algorithm invalidates correctly. |
+| H9 | Stale entries for removed, renamed or case-changed files; FAT is case-insensitive. | low | Garbage-collect on each stat-walk; match on the as-listed path; two entries that collide case-insensitively are dropped. |
+| H10 | Corrupt, partial or concurrently written ledger file; two app instances. | low | Temp file + atomic rename, a file lock, version + CRC; a write failure (disk full) is ignored, never fatal. |
+| H11 | Poisoned ledger (someone edits the cache file). | out of scope | Same user, same trust boundary as the app itself; the invariant below limits the damage anyway. |
+
+**Invariant the whole design rests on.** The ledger may influence *display* and *whether to skip a
+copy*. It must never influence *deletion*, *overwrite* or *verification*: deletes still hash and
+back up and verify against the hash before removing; overwrites do not depend on it; write
+verification compares against freshly computed hashes. A wrong ledger can therefore cause a **missed
+update**, never data loss, and rolling verification bounds how long a missed update can persist.
+
+**Optimizations found**
+- Directory-cluster reads dominate a stat-walk (about 100 bytes per file on FAT with long names, so
+  roughly 700 KB and about a second for 7,000 files at USB speed), far cheaper than opening files.
+- Keep direct USB single-threaded (the Pocket serves bulk transfers one at a time) and use a few
+  workers for card readers, where queue depth helps random reads.
+- Source hashing is local-disk work and parallelisable with std threads (no new dependency).
+- Hash while copying (finding 3) and share one cached scan between `list_library` and
+  `rebuild_index`.
+- A persistent thumbnail cache keyed like the ledger entries.
+
+**Experiments needed before building** (all need the real Pocket or a card, none done)
+1. mtime behaviour of files written to the Pocket over USB (H1): decides whether skip-copy decisions
+   are possible there at all.
+2. A real read-back cost with and without the no-cache read (security finding).
+3. Real stat-walk time on a 7,000-file card over both USB and a reader.
+
 ## Ranked next steps
 
-1. Ledger + incremental scan (items 1, 2 and 3 above): biggest effect, medium work, contained in `tau-core`.
+0. **Fix the embedded-cover verification gap first** (finding 1 of the red-team): it is a correctness hole in the default path, independent of any cache.
+1. Ledger + incremental scan (items 1, 2 and 3 above), with the red-team mitigations (provenance, rolling verification, racy-timestamp handling, untrusted-mtime mode). Run the three experiments first.
 2. `rebuild_index` and `list_library` share one cached scan so a sync scans the card at most once.
 3. Coalesce `replan` (debounce, cancel the previous plan) and reuse source hashes by (path, size, mtime).
 4. Persistent thumbnail cache keyed by (file, size, mtime); only fetch visible rows.
