@@ -49,7 +49,7 @@
   const costLabel = (costClass: number) => (['Baseline', 'Modest', 'Higher'][costClass] ?? `Class ${costClass}`);
 </script>
 <section class="page" aria-labelledby="meters-title">
-  <header><div><p class="eyebrow">METERS</p><h1 id="meters-title">Meter presets</h1><p class="lede">Scaffold only: every meter and parameter below is a placeholder, not tau-alpha's real registry. Nothing here writes to a card yet.</p></div></header>
+  <header><div><p class="eyebrow">METER LAB</p><h1 id="meters-title">Meter Lab</h1><p class="lede">Scaffold only: every meter and parameter below is a placeholder, not tau-alpha's real registry. Nothing here writes to a card yet.</p></div></header>
 
   <section class="settings-card meters-placeholder-notice">
     <p><strong>Not real yet.</strong> tau-alpha's own meter-module work (<code>docs/METER_MODULE_SPEC.md</code>) is still mid-build; this screen proves out the editor/preset/preview structure against a synthetic schema so the real one drops in later without a rewrite.</p>
