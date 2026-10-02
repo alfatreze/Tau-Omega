@@ -1,1 +1,1 @@
-bc1182ea8755d66864bdf7671d993711216389c7a0116008756e35e2f80089b0  Tau Omega_0.4.0-alpha.3_arm64.app.zip
+e16a48f55deff1e4888b0bb44895a324984a0ba6b10f79a0d62379ee21dce1ce  Tau Omega.app/Contents/MacOS/tau-omega

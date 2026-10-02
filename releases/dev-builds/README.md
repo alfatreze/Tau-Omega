@@ -12,9 +12,10 @@ Every build that is not a proper release goes in a folder here, named
 * **Releases** stay in `../v<version>/` (decision D-013). Nothing here is a release and nothing here is signed.
 * The build id is also stamped into the app itself (Finder > Get Info shows `0.4.0-alpha.N`).
 
-Make one with [`tools/dev-build.sh`](../../tools/dev-build.sh) (it picks the next counter, builds, zips, and writes
-`BUILD.txt` with the commit and a SHA-256). The `.zip` files are not committed (see `.gitignore`); each folder's
-`BUILD.txt` and `SHA256SUMS.txt` are, so the history of test builds is recorded.
+Make one with [`tools/dev-build.sh`](../../tools/dev-build.sh) (it picks the next counter, builds, copies the app into
+the folder, and writes `BUILD.txt` with the commit and a SHA-256 of the executable). Each folder holds the runnable
+`Tau Omega.app` itself, not a zip. The apps are not committed (see `.gitignore`); each folder's `BUILD.txt` and
+`SHA256SUMS.txt` are, so the history of test builds is recorded.
 
-To try one: unzip, right-click `Tau Omega.app` > Open the first time (unsigned), and use a throwaway card
-first (`TEST_PLAN.md` item 5).
+To try one: right-click `Tau Omega.app` > Open the first time (unsigned), and use a throwaway card first
+(`TEST_PLAN.md` item 5).

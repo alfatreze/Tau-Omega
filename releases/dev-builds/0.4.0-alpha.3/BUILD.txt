@@ -5,8 +5,8 @@ Branch       : integration/workbench-base
 Commit       : e4c29cd   ui: Start sync moves to the card space bar at the top
 Working tree : clean
 Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
-App          : Tau Omega_0.4.0-alpha.3_arm64.app.zip   (unsigned: right-click > Open the first time)
-SHA-256      : bc1182ea8755d66864bdf7671d993711216389c7a0116008756e35e2f80089b0
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : e16a48f55deff1e4888b0bb44895a324984a0ba6b10f79a0d62379ee21dce1ce  (of Contents/MacOS/tau-omega)
 
 What is in it: Start sync moved to the card space bar at the top (it only opens the review; nothing is written until the second confirmation); everything from 0.4.0-alpha.2 (card space bar with per-core segments and the Details panel, the UTF-16 album and artist name fix).
 Not yet tested on a real card.
