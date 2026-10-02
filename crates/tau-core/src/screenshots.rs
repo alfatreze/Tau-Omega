@@ -8,8 +8,7 @@
 
 use crate::TauError;
 use std::{
-    fs,
-    io,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -104,7 +103,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(root.join("Memories/Screenshots")).unwrap();
         root
@@ -123,7 +123,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&card).unwrap();
         assert_eq!(list_screenshots(&card).unwrap(), Vec::new());
@@ -170,11 +171,7 @@ mod tests {
     #[test]
     fn lists_a_file_with_no_pocket_timestamp_shape_anyway() {
         let card = scratch_card("odd-name");
-        fs::write(
-            card.join("Memories/Screenshots/photo.png"),
-            b"not empty",
-        )
-        .unwrap();
+        fs::write(card.join("Memories/Screenshots/photo.png"), b"not empty").unwrap();
         let entries = list_screenshots(&card).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].filename, "photo.png");

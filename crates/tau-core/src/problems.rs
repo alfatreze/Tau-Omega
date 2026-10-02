@@ -3,7 +3,7 @@
 //! silently rewrite or collide on, an ID3 version the cover embedder can't
 //! handle, and folders with no cover art at all. Nothing here writes to disk.
 
-use crate::{cover, duplicates, Entry, TauError};
+use crate::{Entry, TauError, cover, duplicates};
 use std::{collections::BTreeMap, fs, path::Path};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,7 +189,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         root
@@ -205,12 +206,16 @@ mod tests {
             entry("cafe.mp3", &[], 1),
         ];
         let problems = find_problems(&root, &entries).unwrap();
-        assert!(problems
-            .iter()
-            .any(|p| p.kind == ProblemKind::MissingTag && p.files == ["cafe.mp3"]));
-        assert!(problems
-            .iter()
-            .any(|p| p.kind == ProblemKind::PathIssue && p.files == ["café.mp3"]));
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.kind == ProblemKind::MissingTag && p.files == ["cafe.mp3"])
+        );
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.kind == ProblemKind::PathIssue && p.files == ["café.mp3"])
+        );
         assert!(problems.iter().any(|p| p.kind == ProblemKind::PathIssue
             && p.files.len() == 2
             && p.message.contains("collide")));
@@ -221,19 +226,27 @@ mod tests {
     fn flags_folders_with_no_cover_and_id3v22() {
         let root = scratch_root("cover");
         // Minimal ID3v2.2 header: "ID3", version 2, flags 0, size 0.
-        fs::write(root.join("no-cover.mp3"), b"ID3\x02\x00\x00\x00\x00\x00\x00").unwrap();
+        fs::write(
+            root.join("no-cover.mp3"),
+            b"ID3\x02\x00\x00\x00\x00\x00\x00",
+        )
+        .unwrap();
         let entries = [entry(
             "no-cover.mp3",
             &[("TIT2", "Song"), ("TPE1", "Artist")],
             1,
         )];
         let problems = find_problems(&root, &entries).unwrap();
-        assert!(problems
-            .iter()
-            .any(|p| p.kind == ProblemKind::UnsupportedFormat));
-        assert!(problems
-            .iter()
-            .any(|p| p.kind == ProblemKind::MissingCover && p.files == ["no-cover.mp3"]));
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.kind == ProblemKind::UnsupportedFormat)
+        );
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.kind == ProblemKind::MissingCover && p.files == ["no-cover.mp3"])
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }

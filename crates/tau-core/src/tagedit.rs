@@ -9,8 +9,7 @@
 //! (`reapply_for`).
 
 use crate::{
-    ErrorCode, Progress, ProgressObserver, Stage, TauError, cover, read_tags, sync, tick,
-    workbench,
+    ErrorCode, Progress, ProgressObserver, Stage, TauError, cover, read_tags, sync, tick, workbench,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -46,7 +45,10 @@ impl FieldEdits {
             title: newer.title.clone().or_else(|| self.title.clone()),
             artist: newer.artist.clone().or_else(|| self.artist.clone()),
             album: newer.album.clone().or_else(|| self.album.clone()),
-            album_artist: newer.album_artist.clone().or_else(|| self.album_artist.clone()),
+            album_artist: newer
+                .album_artist
+                .clone()
+                .or_else(|| self.album_artist.clone()),
             year: newer.year.clone().or_else(|| self.year.clone()),
         }
     }
@@ -206,7 +208,10 @@ pub fn execute_edit(
         {
             return Err(TauError::e(
                 ErrorCode::SourceChangedSincePlan,
-                format!("changed since the plan was reviewed: {}", item.relative.display()),
+                format!(
+                    "changed since the plan was reviewed: {}",
+                    item.relative.display()
+                ),
             ));
         }
         let cover_path = match &item.cover {
@@ -225,7 +230,13 @@ pub fn execute_edit(
     }
     record_manifest(&plan.destination, &plan.requests)?;
     let mut warnings = Vec::new();
-    sync::rebuild_index(&plan.destination, root_prefix, &plan.id, &mut warnings, progress)?;
+    sync::rebuild_index(
+        &plan.destination,
+        root_prefix,
+        &plan.id,
+        &mut warnings,
+        progress,
+    )?;
     Ok(EditReport {
         plan_id: plan.id.clone(),
         files_changed: plan.items.len(),
@@ -310,9 +321,9 @@ fn record_manifest(common: &Path, requests: &[EditRequest]) -> Result<(), TauErr
             Some(track) => ("tracks", "rel", track.clone()),
             None => ("albums", "dir", request.album_id.clone()),
         };
-        let entries = manifest[list].as_array_mut().ok_or_else(|| {
-            TauError::e(ErrorCode::Json, "edit manifest is malformed")
-        })?;
+        let entries = manifest[list]
+            .as_array_mut()
+            .ok_or_else(|| TauError::e(ErrorCode::Json, "edit manifest is malformed"))?;
         let index = entries
             .iter()
             .position(|e| e[key_name].as_str() == Some(key.as_str()));
@@ -347,7 +358,10 @@ fn record_manifest(common: &Path, requests: &[EditRequest]) -> Result<(), TauErr
 /// pick the right parser) and starts with `._` (so a scan ignores it even if a
 /// crash leaves it behind).
 fn temp_path(path: &Path, tag: &str) -> PathBuf {
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     path.with_file_name(format!("._tau-{tag}-{name}"))
 }
 
@@ -488,7 +502,11 @@ fn id3_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
             .pairs()
             .iter()
             .flat_map(|(frame, _, _)| {
-                if *frame == "TDRC" { vec!["TDRC", "TYER"] } else { vec![*frame] }
+                if *frame == "TDRC" {
+                    vec!["TDRC", "TYER"]
+                } else {
+                    vec![*frame]
+                }
             })
             .collect();
         let mut kept = Vec::new();
@@ -548,8 +566,16 @@ fn id3_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
         if value.is_empty() {
             continue; // clearing a field just drops the frame
         }
-        let id = if frame == "TDRC" && major == 3 { "TYER" } else { frame };
-        let value = if frame == "TDRC" { &value[..value.len().min(4)] } else { value };
+        let id = if frame == "TDRC" && major == 3 {
+            "TYER"
+        } else {
+            frame
+        };
+        let value = if frame == "TDRC" {
+            &value[..value.len().min(4)]
+        } else {
+            value
+        };
         frames.extend_from_slice(&text_frame(major, id, value));
     }
     let mut out = Vec::with_capacity(frames.len() + data.len());
@@ -595,7 +621,8 @@ fn flac_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
         let n = u32::from_le_bytes(body.get(p..p + 4).ok_or_else(bad)?.try_into().unwrap());
         p += 4;
         for _ in 0..n {
-            let len = u32::from_le_bytes(body.get(p..p + 4).ok_or_else(bad)?.try_into().unwrap()) as usize;
+            let len = u32::from_le_bytes(body.get(p..p + 4).ok_or_else(bad)?.try_into().unwrap())
+                as usize;
             p += 4;
             let comment = body.get(p..p + len).ok_or_else(bad)?;
             p += len;
@@ -611,7 +638,11 @@ fn flac_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
     for (_, key, value) in fields.pairs() {
         let value = value.trim();
         if !value.is_empty() {
-            let value = if key == "DATE" { &value[..value.len().min(4)] } else { value };
+            let value = if key == "DATE" {
+                &value[..value.len().min(4)]
+            } else {
+                value
+            };
             comments.push(format!("{key}={value}").into_bytes());
         }
     }
@@ -645,7 +676,10 @@ fn flac_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
     let last = out_blocks.len() - 1;
     for (i, (kind, body)) in out_blocks.iter().enumerate() {
         if body.len() >= 1 << 24 {
-            return Err(TauError::e(ErrorCode::UnsupportedTags, "FLAC metadata block too large"));
+            return Err(TauError::e(
+                ErrorCode::UnsupportedTags,
+                "FLAC metadata block too large",
+            ));
         }
         out.push(kind | if i == last { 0x80 } else { 0 });
         out.extend_from_slice(&(body.len() as u32).to_be_bytes()[1..]);
@@ -663,7 +697,11 @@ mod tests {
     fn tmp(name: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!(
             "tau-te-{name}-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&p).unwrap();
         p
@@ -698,7 +736,10 @@ mod tests {
             vorbis.extend_from_slice(c.as_bytes());
         }
         let mut out = b"fLaC".to_vec();
-        for (i, (kind, body)) in [(0u8, streaminfo), (4, vorbis), (1, vec![0; 16])].iter().enumerate() {
+        for (i, (kind, body)) in [(0u8, streaminfo), (4, vorbis), (1, vec![0; 16])]
+            .iter()
+            .enumerate()
+        {
             out.push(kind | if i == 2 { 0x80 } else { 0 });
             out.extend_from_slice(&(body.len() as u32).to_be_bytes()[1..]);
             out.extend_from_slice(body);
@@ -710,7 +751,10 @@ mod tests {
         read_tags(path).unwrap().0
     }
     fn edits(album: &str) -> FieldEdits {
-        FieldEdits { album: Some(album.into()), ..Default::default() }
+        FieldEdits {
+            album: Some(album.into()),
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -718,8 +762,26 @@ mod tests {
         let dir = tmp("mp3");
         let file = dir.join("a.mp3");
         let audio = vec![0xff, 0xfb, 0x90, 0x00, 1, 2, 3, 4, 5];
-        fs::write(&file, mp3(3, &[("TIT2", "Song"), ("TALB", "Old"), ("TRCK", "3")], &audio)).unwrap();
-        apply_to_file(&file, &FieldEdits { album: Some("New Album".into()), artist: Some("Bjork".into()), year: Some("1997".into()), ..Default::default() }, None).unwrap();
+        fs::write(
+            &file,
+            mp3(
+                3,
+                &[("TIT2", "Song"), ("TALB", "Old"), ("TRCK", "3")],
+                &audio,
+            ),
+        )
+        .unwrap();
+        apply_to_file(
+            &file,
+            &FieldEdits {
+                album: Some("New Album".into()),
+                artist: Some("Bjork".into()),
+                year: Some("1997".into()),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap();
         let t = tags(&file);
         assert_eq!(t["TALB"], "New Album");
         assert_eq!(t["TPE1"], "Bjork");
@@ -750,7 +812,11 @@ mod tests {
     fn clearing_a_field_removes_it() {
         let dir = tmp("clear");
         let file = dir.join("a.mp3");
-        fs::write(&file, mp3(3, &[("TALB", "Old"), ("TIT2", "S")], &[0xff, 0xfb, 0x90, 0])).unwrap();
+        fs::write(
+            &file,
+            mp3(3, &[("TALB", "Old"), ("TIT2", "S")], &[0xff, 0xfb, 0x90, 0]),
+        )
+        .unwrap();
         apply_to_file(&file, &edits(""), None).unwrap();
         assert!(!tags(&file).contains_key("TALB"));
         assert_eq!(tags(&file)["TIT2"], "S");
@@ -774,8 +840,22 @@ mod tests {
         let dir = tmp("flac");
         let file = dir.join("a.flac");
         let audio = vec![0xff, 0xf8, 1, 2, 3];
-        fs::write(&file, flac(&["TITLE=Song", "ALBUM=Old", "TRACKNUMBER=2"], &audio)).unwrap();
-        apply_to_file(&file, &FieldEdits { album: Some("New".into()), album_artist: Some("VA".into()), year: Some("2001-05".into()), ..Default::default() }, None).unwrap();
+        fs::write(
+            &file,
+            flac(&["TITLE=Song", "ALBUM=Old", "TRACKNUMBER=2"], &audio),
+        )
+        .unwrap();
+        apply_to_file(
+            &file,
+            &FieldEdits {
+                album: Some("New".into()),
+                album_artist: Some("VA".into()),
+                year: Some("2001-05".into()),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap();
         let t = tags(&file);
         assert_eq!(t["TALB"], "New");
         assert_eq!(t["TPE2"], "VA");
@@ -792,15 +872,27 @@ mod tests {
         fs::create_dir_all(common.join("Artist/Album")).unwrap();
         let file = common.join("Artist/Album/01.mp3");
         fs::write(&file, mp3(3, &[("TALB", "Old")], &[0xff, 0xfb, 0x90, 0])).unwrap();
-        let req = EditRequest { album_id: "Artist/Album".into(), fields: edits("New"), ..Default::default() };
+        let req = EditRequest {
+            album_id: "Artist/Album".into(),
+            fields: edits("New"),
+            ..Default::default()
+        };
         let plan = plan_edit(&common, &[req]).unwrap();
         assert_eq!(
-            execute_edit(&plan, "nope", "/Assets/tau/common/", &mut None).unwrap_err().code(),
+            execute_edit(&plan, "nope", "/Assets/tau/common/", &mut None)
+                .unwrap_err()
+                .code(),
             ErrorCode::ConfirmationMismatch
         );
-        fs::write(&file, mp3(3, &[("TALB", "Someone else")], &[0xff, 0xfb, 0x90, 0])).unwrap();
+        fs::write(
+            &file,
+            mp3(3, &[("TALB", "Someone else")], &[0xff, 0xfb, 0x90, 0]),
+        )
+        .unwrap();
         assert_eq!(
-            execute_edit(&plan, &plan.id, "/Assets/tau/common/", &mut None).unwrap_err().code(),
+            execute_edit(&plan, &plan.id, "/Assets/tau/common/", &mut None)
+                .unwrap_err()
+                .code(),
             ErrorCode::SourceChangedSincePlan
         );
     }
@@ -811,9 +903,17 @@ mod tests {
         let common = root.join("Assets/tau/common");
         let album = common.join("Artist/Album");
         fs::create_dir_all(&album).unwrap();
-        let pristine = mp3(3, &[("TALB", "Original"), ("TIT2", "One")], &[0xff, 0xfb, 0x90, 0]);
+        let pristine = mp3(
+            3,
+            &[("TALB", "Original"), ("TIT2", "One")],
+            &[0xff, 0xfb, 0x90, 0],
+        );
         fs::write(album.join("01.mp3"), &pristine).unwrap();
-        let req = EditRequest { album_id: "Artist/Album".into(), fields: edits("Renamed"), ..Default::default() };
+        let req = EditRequest {
+            album_id: "Artist/Album".into(),
+            fields: edits("Renamed"),
+            ..Default::default()
+        };
         let plan = plan_edit(&common, &[req]).unwrap();
         execute_edit(&plan, &plan.id, "/Assets/tau/common/", &mut None).unwrap();
         assert_eq!(tags(&album.join("01.mp3"))["TALB"], "Renamed");
@@ -827,7 +927,10 @@ mod tests {
         // unrelated albums are untouched
         fs::create_dir_all(common.join("Other")).unwrap();
         fs::write(common.join("Other/01.mp3"), &pristine).unwrap();
-        assert_eq!(reapply_for(&common, &["Other/01.mp3".to_string()]).unwrap(), 0);
+        assert_eq!(
+            reapply_for(&common, &["Other/01.mp3".to_string()]).unwrap(),
+            0
+        );
     }
 
     #[test]
@@ -835,8 +938,20 @@ mod tests {
         let root = tmp("index");
         let common = root.join("Assets/tau/common");
         fs::create_dir_all(common.join("A/B")).unwrap();
-        fs::write(common.join("A/B/01.mp3"), mp3(3, &[("TIT2", "T"), ("TALB", "Old"), ("TPE1", "A")], &[0xff, 0xfb, 0x90, 0])).unwrap();
-        let req = EditRequest { album_id: "A/B".into(), fields: edits("New"), ..Default::default() };
+        fs::write(
+            common.join("A/B/01.mp3"),
+            mp3(
+                3,
+                &[("TIT2", "T"), ("TALB", "Old"), ("TPE1", "A")],
+                &[0xff, 0xfb, 0x90, 0],
+            ),
+        )
+        .unwrap();
+        let req = EditRequest {
+            album_id: "A/B".into(),
+            fields: edits("New"),
+            ..Default::default()
+        };
         let plan = plan_edit(&common, &[req]).unwrap();
         let report = execute_edit(&plan, &plan.id, "/Assets/tau/common/", &mut None).unwrap();
         let index = fs::read(report.index_path).unwrap();
@@ -859,7 +974,11 @@ mod tests {
         fs::write(album.join("02.flac"), &flac_pristine).unwrap();
         let image = root.join("new-cover.jpg");
         fs::write(&image, JPEG).unwrap();
-        let req = EditRequest { album_id: "A/B".into(), cover: Some(image), ..Default::default() };
+        let req = EditRequest {
+            album_id: "A/B".into(),
+            cover: Some(image),
+            ..Default::default()
+        };
         let plan = plan_edit(&common, &[req]).unwrap();
         assert_eq!(plan.items.len(), 2);
         execute_edit(&plan, &plan.id, "/Assets/tau/common/", &mut None).unwrap();
@@ -867,12 +986,22 @@ mod tests {
         assert!(cover::has_embedded_cover(&album.join("02.flac")).unwrap());
         assert_eq!(tags(&album.join("01.mp3"))["TIT2"], "One");
         // no scratch files left behind
-        assert!(fs::read_dir(&album).unwrap().all(|e| !e.unwrap().file_name().to_string_lossy().starts_with("._")));
+        assert!(
+            fs::read_dir(&album).unwrap().all(|e| !e
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with("._"))
+        );
         // a re-sync overwrites the copies with the source; the recorded cover comes back
         fs::write(album.join("01.mp3"), &mp3_pristine).unwrap();
         fs::write(album.join("02.flac"), &flac_pristine).unwrap();
         assert!(!cover::has_embedded_cover(&album.join("01.mp3")).unwrap());
-        let n = reapply_for(&common, &["A/B/01.mp3".to_string(), "A/B/02.flac".to_string()]).unwrap();
+        let n = reapply_for(
+            &common,
+            &["A/B/01.mp3".to_string(), "A/B/02.flac".to_string()],
+        )
+        .unwrap();
         assert_eq!(n, 2);
         assert!(cover::has_embedded_cover(&album.join("01.mp3")).unwrap());
         assert!(cover::has_embedded_cover(&album.join("02.flac")).unwrap());
@@ -883,10 +1012,18 @@ mod tests {
         let root = tmp("badcover");
         let common = root.join("Assets/tau/common");
         fs::create_dir_all(common.join("A/B")).unwrap();
-        fs::write(common.join("A/B/01.mp3"), mp3(3, &[("TIT2", "One")], &[0xff, 0xfb, 0x90, 0])).unwrap();
+        fs::write(
+            common.join("A/B/01.mp3"),
+            mp3(3, &[("TIT2", "One")], &[0xff, 0xfb, 0x90, 0]),
+        )
+        .unwrap();
         let image = root.join("prog.jpg");
         fs::write(&image, [0xff, 0xd8, 0xff, 0xc2, 0, 2, 0xff, 0xd9]).unwrap();
-        let req = EditRequest { album_id: "A/B".into(), cover: Some(image), ..Default::default() };
+        let req = EditRequest {
+            album_id: "A/B".into(),
+            cover: Some(image),
+            ..Default::default()
+        };
         assert!(plan_edit(&common, &[req]).is_err());
     }
 
@@ -897,12 +1034,19 @@ mod tests {
         let album = common.join("A/B");
         fs::create_dir_all(&album).unwrap();
         for n in ["01.mp3", "02.mp3"] {
-            fs::write(album.join(n), mp3(3, &[("TIT2", "Old")], &[0xff, 0xfb, 0x90, 0])).unwrap();
+            fs::write(
+                album.join(n),
+                mp3(3, &[("TIT2", "Old")], &[0xff, 0xfb, 0x90, 0]),
+            )
+            .unwrap();
         }
         let req = EditRequest {
             album_id: "A/B".into(),
             track: Some("A/B/02.mp3".into()),
-            fields: FieldEdits { title: Some("Better".into()), ..Default::default() },
+            fields: FieldEdits {
+                title: Some("Better".into()),
+                ..Default::default()
+            },
             ..Default::default()
         };
         let plan = plan_edit(&common, &[req]).unwrap();

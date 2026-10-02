@@ -37,3 +37,12 @@ jobs:
           node-version: '22'
       - run: npm ci
       - run: npm run check
+      # Behaviour checks against the dev mock (ui/scripts/workbench-test.cjs). Playwright is installed globally so
+      # the app's own dependencies stay unchanged; the script finds it through NODE_PATH.
+      - name: Install a browser for the behaviour checks
+        run: npm install -g playwright && playwright install --with-deps chromium
+      - name: Library workbench behaviour checks
+        run: |
+          npm run dev -- --port 5173 --strictPort > /tmp/vite.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:5173 > /dev/null && break; sleep 1; done
+          NODE_PATH=$(npm root -g) node scripts/workbench-test.cjs

@@ -8,8 +8,8 @@
 //! and the index is rebuilt (and verified) last.
 
 use crate::{
-    ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, ascii_name, cover,
-    playlist, scan_dir_with_progress, sync, tick,
+    ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, ascii_name, cover, playlist,
+    scan_dir_with_progress, sync, tick,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -216,7 +216,9 @@ pub fn list_library(
 
 /// Counts the audio files under a media root and the folders that hold them,
 /// without reading any tags (cheap enough to run on every plan).
-pub(crate) fn count_audio(root: &Path) -> Result<(usize, std::collections::BTreeSet<String>), TauError> {
+pub(crate) fn count_audio(
+    root: &Path,
+) -> Result<(usize, std::collections::BTreeSet<String>), TauError> {
     fn walk(
         root: &Path,
         at: &Path,
@@ -225,7 +227,10 @@ pub(crate) fn count_audio(root: &Path) -> Result<(usize, std::collections::BTree
     ) -> Result<(), TauError> {
         for child in fs::read_dir(at)? {
             let path = child?.path();
-            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
             if name.starts_with("._") {
                 continue;
             }
@@ -262,7 +267,11 @@ pub struct Thumbnail {
 /// cover picture if it has one, otherwise the picture embedded in its first
 /// track. Never fails the batch because one album has no or a broken picture.
 /// Read-only.
-pub fn album_thumbnails(root: &Path, ids: &[String], long_side: u16) -> Result<Vec<Thumbnail>, TauError> {
+pub fn album_thumbnails(
+    root: &Path,
+    ids: &[String],
+    long_side: u16,
+) -> Result<Vec<Thumbnail>, TauError> {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let mut out = Vec::with_capacity(ids.len());
     for id in ids {
@@ -280,7 +289,10 @@ pub fn album_thumbnails(root: &Path, ids: &[String], long_side: u16) -> Result<V
             }
             crate::image::thumbnail_png(&bytes, long_side).ok()
         });
-        out.push(Thumbnail { id: id.clone(), png_base64: picture.map(|p| STANDARD.encode(p)) });
+        out.push(Thumbnail {
+            id: id.clone(),
+            png_base64: picture.map(|p| STANDARD.encode(p)),
+        });
     }
     Ok(out)
 }
@@ -493,21 +505,28 @@ pub fn execute_removal(
         ));
     }
     sync::validate_media_root(&plan.destination)?;
-    if let Some(backup) = backup_root {
-        if backup.as_os_str().is_empty() || sync::backup_is_inside(backup, &plan.destination) {
-            return Err(TauError::e(
-                ErrorCode::UnsafeBackupLocation,
-                "backup folder must be outside the card media root",
-            ));
-        }
+    if let Some(backup) = backup_root
+        && (backup.as_os_str().is_empty() || sync::backup_is_inside(backup, &plan.destination))
+    {
+        return Err(TauError::e(
+            ErrorCode::UnsafeBackupLocation,
+            "backup folder must be outside the card media root",
+        ));
     }
     let total = plan.items.len() as u64;
     // Phase 0: a backup that cannot fit must stop the run before anything is
     // touched (a full host disk used to be discovered halfway through an album).
     if let Some(backup) = backup_root {
         let existing = crate::storage::nearest_existing_ancestor(backup)?;
-        let unit = fs4::allocation_granularity(&existing).ok().filter(|u| *u > 0).unwrap_or(4096);
-        let needed: u64 = plan.items.iter().map(|i| sync::round_up_to(i.bytes, unit)).sum();
+        let unit = fs4::allocation_granularity(&existing)
+            .ok()
+            .filter(|u| *u > 0)
+            .unwrap_or(4096);
+        let needed: u64 = plan
+            .items
+            .iter()
+            .map(|i| sync::round_up_to(i.bytes, unit))
+            .sum();
         if let Ok(available) = fs4::available_space(&existing) {
             sync::ensure_space(available, needed, crate::storage::DEFAULT_MARGIN_BYTES)?;
         }
@@ -528,10 +547,15 @@ pub fn execute_removal(
         match backup_root {
             Some(backup) => sync::backup_copy_streaming(item, backup, &plan.id)?,
             None => {
-                if sync::sha256_file(&item.destination).ok().as_deref() != Some(item.sha256.as_str()) {
+                if sync::sha256_file(&item.destination).ok().as_deref()
+                    != Some(item.sha256.as_str())
+                {
                     return Err(TauError::e(
                         ErrorCode::SourceChangedSincePlan,
-                        format!("changed since the plan was reviewed: {}", item.relative.display()),
+                        format!(
+                            "changed since the plan was reviewed: {}",
+                            item.relative.display()
+                        ),
                     ));
                 }
             }
@@ -601,14 +625,21 @@ mod tests {
     fn tmp(name: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!(
             "tau-wb-{name}-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&p).unwrap();
         p
     }
     fn library(root: &Path) {
         for (dir, files) in [
-            ("Miles Davis/Kind of Blue", vec!["01 So What.mp3", "02 Blue in Green.mp3"]),
+            (
+                "Miles Davis/Kind of Blue",
+                vec!["01 So What.mp3", "02 Blue in Green.mp3"],
+            ),
             ("John Coltrane/Blue Train", vec!["01 Blue Train.flac"]),
             ("Mingus/Ah Um", vec!["01 Goodbye Pork Pie Hat.mp3"]),
         ] {
@@ -632,7 +663,11 @@ mod tests {
         library(&lib);
         let listing = list_library(&lib, &mut None).unwrap();
         assert_eq!(listing.albums.len(), 3);
-        let kob = listing.albums.iter().find(|a| a.title == "Kind of Blue").unwrap();
+        let kob = listing
+            .albums
+            .iter()
+            .find(|a| a.title == "Kind of Blue")
+            .unwrap();
         assert_eq!(kob.id, "Miles Davis/Kind of Blue");
         assert_eq!(kob.tracks, 2);
         assert!(kob.bytes > 0 && kob.has_cover);
@@ -640,7 +675,9 @@ mod tests {
     }
 
     fn png(width: u16, height: u16) -> Vec<u8> {
-        let rgb: Vec<u8> = (0..width as usize * height as usize).flat_map(|i| [(i % 251) as u8, 90, 160]).collect();
+        let rgb: Vec<u8> = (0..width as usize * height as usize)
+            .flat_map(|i| [(i % 251) as u8, 90, 160])
+            .collect();
         crate::image::rgb8_to_png(width, height, &rgb).unwrap()
     }
     fn decode_b64(s: &str) -> Vec<u8> {
@@ -648,7 +685,10 @@ mod tests {
         STANDARD.decode(s).unwrap()
     }
     fn png_size(bytes: &[u8]) -> (u32, u32) {
-        (u32::from_be_bytes(bytes[16..20].try_into().unwrap()), u32::from_be_bytes(bytes[20..24].try_into().unwrap()))
+        (
+            u32::from_be_bytes(bytes[16..20].try_into().unwrap()),
+            u32::from_be_bytes(bytes[20..24].try_into().unwrap()),
+        )
     }
 
     #[test]
@@ -659,12 +699,18 @@ mod tests {
         fs::write(lib.join("A/B/cover.png"), png(200, 100)).unwrap();
         let t = album_thumbnails(&lib, &["A/B".to_string()], 96).unwrap();
         let bytes = decode_b64(t[0].png_base64.as_ref().unwrap());
-        assert_eq!(&bytes[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        assert_eq!(
+            &bytes[..8],
+            &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
+        );
         assert_eq!(png_size(&bytes), (96, 48)); // longest side 96, proportions kept
         // a small picture is never enlarged
         fs::write(lib.join("A/B/cover.png"), png(40, 40)).unwrap();
         let t = album_thumbnails(&lib, &["A/B".to_string()], 96).unwrap();
-        assert_eq!(png_size(&decode_b64(t[0].png_base64.as_ref().unwrap())), (40, 40));
+        assert_eq!(
+            png_size(&decode_b64(t[0].png_base64.as_ref().unwrap())),
+            (40, 40)
+        );
     }
 
     #[test]
@@ -684,27 +730,49 @@ mod tests {
         let mut mp3 = b"ID3".to_vec();
         mp3.extend_from_slice(&[3, 0, 0]);
         let n = frame.len();
-        mp3.extend_from_slice(&[((n >> 21) & 127) as u8, ((n >> 14) & 127) as u8, ((n >> 7) & 127) as u8, (n & 127) as u8]);
+        mp3.extend_from_slice(&[
+            ((n >> 21) & 127) as u8,
+            ((n >> 14) & 127) as u8,
+            ((n >> 7) & 127) as u8,
+            (n & 127) as u8,
+        ]);
         mp3.extend_from_slice(&frame);
         mp3.extend_from_slice(&[0xff, 0xfb, 0x90, 0]);
         fs::create_dir_all(lib.join("M/one")).unwrap();
         fs::write(lib.join("M/one/01.mp3"), mp3).unwrap();
         // FLAC: STREAMINFO then a PICTURE block
         let mut block = Vec::new();
-        for v in [3u32] { block.extend_from_slice(&v.to_be_bytes()); }
-        block.extend_from_slice(&9u32.to_be_bytes()); block.extend_from_slice(b"image/png");
+        for v in [3u32] {
+            block.extend_from_slice(&v.to_be_bytes());
+        }
+        block.extend_from_slice(&9u32.to_be_bytes());
+        block.extend_from_slice(b"image/png");
         block.extend_from_slice(&0u32.to_be_bytes());
-        for v in [64u32, 64, 24, 0] { block.extend_from_slice(&v.to_be_bytes()); }
-        block.extend_from_slice(&(picture.len() as u32).to_be_bytes()); block.extend_from_slice(&picture);
+        for v in [64u32, 64, 24, 0] {
+            block.extend_from_slice(&v.to_be_bytes());
+        }
+        block.extend_from_slice(&(picture.len() as u32).to_be_bytes());
+        block.extend_from_slice(&picture);
         let mut flac = b"fLaC".to_vec();
-        flac.extend_from_slice(&[0, 0, 0, 34]); flac.extend_from_slice(&[0u8; 34]);
-        flac.push(0x80 | 6); flac.extend_from_slice(&(block.len() as u32).to_be_bytes()[1..]); flac.extend_from_slice(&block);
+        flac.extend_from_slice(&[0, 0, 0, 34]);
+        flac.extend_from_slice(&[0u8; 34]);
+        flac.push(0x80 | 6);
+        flac.extend_from_slice(&(block.len() as u32).to_be_bytes()[1..]);
+        flac.extend_from_slice(&block);
         flac.extend_from_slice(&[0xff, 0xf8]);
         fs::create_dir_all(lib.join("F/two")).unwrap();
         fs::write(lib.join("F/two/01.flac"), flac).unwrap();
         let t = album_thumbnails(&lib, &["M/one".to_string(), "F/two".to_string()], 96).unwrap();
         for entry in &t {
-            assert_eq!(png_size(&decode_b64(entry.png_base64.as_ref().unwrap_or_else(|| panic!("no picture for {}", entry.id)))), (64, 64));
+            assert_eq!(
+                png_size(&decode_b64(
+                    entry
+                        .png_base64
+                        .as_ref()
+                        .unwrap_or_else(|| panic!("no picture for {}", entry.id))
+                )),
+                (64, 64)
+            );
         }
     }
 
@@ -716,7 +784,10 @@ mod tests {
             fs::write(lib.join(d).join("01.mp3"), b"audio").unwrap();
         }
         fs::write(lib.join("A/broken/cover.jpg"), b"not an image").unwrap();
-        let ids: Vec<String> = ["A/none", "A/broken", "../outside", "A/missing"].iter().map(|s| s.to_string()).collect();
+        let ids: Vec<String> = ["A/none", "A/broken", "../outside", "A/missing"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let t = album_thumbnails(&lib, &ids, 96).unwrap();
         assert_eq!(t.len(), 4);
         assert!(t.iter().all(|x| x.png_base64.is_none()));
@@ -742,13 +813,28 @@ mod tests {
         )
         .unwrap();
         assert_eq!(plan.items.len(), 2);
-        assert!(plan.items.iter().all(|i| i.destination.to_string_lossy().contains("Miles Davis/Kind of Blue")));
+        assert!(plan.items.iter().all(|i| {
+            i.destination
+                .to_string_lossy()
+                .contains("Miles Davis/Kind of Blue")
+        }));
         sync::execute(&plan, &plan.id, &mut None).unwrap();
         // re-running is an in-place no-op
-        let again = plan_selection(&lib, &["Miles Davis/Kind of Blue".to_string()], &common, "/Assets/tau/common/", sync::PlanOptions::default(), &mut None).unwrap();
+        let again = plan_selection(
+            &lib,
+            &["Miles Davis/Kind of Blue".to_string()],
+            &common,
+            "/Assets/tau/common/",
+            sync::PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
         assert!(again.items.iter().all(|i| i.state == sync::CopyState::Same));
         // the source is untouched
-        assert!(lib.join("Mingus/Ah Um/01 Goodbye Pork Pie Hat.mp3").is_file());
+        assert!(
+            lib.join("Mingus/Ah Um/01 Goodbye Pork Pie Hat.mp3")
+                .is_file()
+        );
     }
 
     #[test]
@@ -756,7 +842,15 @@ mod tests {
         let lib = tmp("esc-lib");
         library(&lib);
         let (_r, common) = card();
-        let err = plan_selection(&lib, &["../etc".into()], &common, "/Assets/tau/common/", sync::PlanOptions::default(), &mut None).unwrap_err();
+        let err = plan_selection(
+            &lib,
+            &["../etc".into()],
+            &common,
+            "/Assets/tau/common/",
+            sync::PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap_err();
         assert_eq!(err.code(), ErrorCode::InvalidPathReference);
     }
 
@@ -766,9 +860,16 @@ mod tests {
         let (root, common) = card();
         let plan = plan_selection(
             &lib,
-            &["Miles Davis/Kind of Blue".to_string(), "John Coltrane/Blue Train".to_string()],
-            &common, "/Assets/tau/common/", sync::PlanOptions::default(), &mut None,
-        ).unwrap();
+            &[
+                "Miles Davis/Kind of Blue".to_string(),
+                "John Coltrane/Blue Train".to_string(),
+            ],
+            &common,
+            "/Assets/tau/common/",
+            sync::PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
         sync::execute(&plan, &plan.id, &mut None).unwrap();
         (lib, root, common)
     }
@@ -779,11 +880,27 @@ mod tests {
         let backup = tmp("backup");
         let plan = plan_removal(&common, &["Miles Davis/Kind of Blue".to_string()]).unwrap();
         assert_eq!(plan.items.len(), 2); // sync embeds covers rather than copying the loose file
-        let report = execute_removal(&plan, &plan.id, Some(&backup), "/Assets/tau/common/", &mut None).unwrap();
+        let report = execute_removal(
+            &plan,
+            &plan.id,
+            Some(&backup),
+            "/Assets/tau/common/",
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(report.deleted, 2);
         assert!(!common.join("Miles Davis/Kind of Blue").exists());
-        assert!(common.join("John Coltrane/Blue Train/01 Blue Train.flac").is_file());
-        assert!(backup.join(&plan.id).join("Miles Davis/Kind of Blue/01 So What.mp3").is_file());
+        assert!(
+            common
+                .join("John Coltrane/Blue Train/01 Blue Train.flac")
+                .is_file()
+        );
+        assert!(
+            backup
+                .join(&plan.id)
+                .join("Miles Davis/Kind of Blue/01 So What.mp3")
+                .is_file()
+        );
         let index = fs::read(common.join("tau-library.tdb")).unwrap();
         assert!(crate::verify(&index, Some(&common)).unwrap().is_empty());
         assert_eq!(crate::parse(&index).unwrap().counts.tracks, 1);
@@ -795,15 +912,34 @@ mod tests {
         let backup = tmp("backup-fail");
         let plan = plan_removal(&common, &["Miles Davis/Kind of Blue".to_string()]).unwrap();
         // Make the SECOND file's backup impossible: a non-empty folder where its file should go.
-        let blocker = backup.join(&plan.id).join("Miles Davis/Kind of Blue/02 Blue in Green.mp3");
+        let blocker = backup
+            .join(&plan.id)
+            .join("Miles Davis/Kind of Blue/02 Blue in Green.mp3");
         fs::create_dir_all(blocker.join("inside")).unwrap();
-        let result = execute_removal(&plan, &plan.id, Some(&backup), "/Assets/tau/common/", &mut None);
+        let result = execute_removal(
+            &plan,
+            &plan.id,
+            Some(&backup),
+            "/Assets/tau/common/",
+            &mut None,
+        );
         assert!(result.is_err());
         // The first file was backed up, but nothing was deleted from the card: no half-removed album.
-        assert!(common.join("Miles Davis/Kind of Blue/01 So What.mp3").is_file());
-        assert!(common.join("Miles Davis/Kind of Blue/02 Blue in Green.mp3").is_file());
+        assert!(
+            common
+                .join("Miles Davis/Kind of Blue/01 So What.mp3")
+                .is_file()
+        );
+        assert!(
+            common
+                .join("Miles Davis/Kind of Blue/02 Blue in Green.mp3")
+                .is_file()
+        );
         // And no unverified temp file is left in the backup.
-        let leftovers: Vec<_> = walk(&backup).into_iter().filter(|p| p.to_string_lossy().ends_with(".tmp")).collect();
+        let leftovers: Vec<_> = walk(&backup)
+            .into_iter()
+            .filter(|p| p.to_string_lossy().ends_with(".tmp"))
+            .collect();
         assert!(leftovers.is_empty(), "{leftovers:?}");
     }
 
@@ -812,7 +948,11 @@ mod tests {
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_dir() { out.extend(walk(&path)); } else { out.push(path); }
+                if path.is_dir() {
+                    out.extend(walk(&path));
+                } else {
+                    out.push(path);
+                }
             }
         }
         out
@@ -823,23 +963,43 @@ mod tests {
         let (_lib, _root, common) = synced_card();
         let plan = plan_removal(&common, &["Miles Davis/Kind of Blue".to_string()]).unwrap();
         assert_eq!(
-            execute_removal(&plan, "nope", None, "/Assets/tau/common/", &mut None).unwrap_err().code(),
+            execute_removal(&plan, "nope", None, "/Assets/tau/common/", &mut None)
+                .unwrap_err()
+                .code(),
             ErrorCode::ConfirmationMismatch
         );
         assert_eq!(
-            execute_removal(&plan, &plan.id, Some(&common.join("bak")), "/Assets/tau/common/", &mut None).unwrap_err().code(),
+            execute_removal(
+                &plan,
+                &plan.id,
+                Some(&common.join("bak")),
+                "/Assets/tau/common/",
+                &mut None
+            )
+            .unwrap_err()
+            .code(),
             ErrorCode::UnsafeBackupLocation
         );
-        assert!(common.join("Miles Davis/Kind of Blue/01 So What.mp3").is_file());
+        assert!(
+            common
+                .join("Miles Davis/Kind of Blue/01 So What.mp3")
+                .is_file()
+        );
     }
 
     #[test]
     fn removal_refuses_a_file_changed_since_the_plan() {
         let (_lib, _root, common) = synced_card();
         let plan = plan_removal(&common, &["John Coltrane/Blue Train".to_string()]).unwrap();
-        fs::write(common.join("John Coltrane/Blue Train/01 Blue Train.flac"), b"changed").unwrap();
+        fs::write(
+            common.join("John Coltrane/Blue Train/01 Blue Train.flac"),
+            b"changed",
+        )
+        .unwrap();
         assert_eq!(
-            execute_removal(&plan, &plan.id, None, "/Assets/tau/common/", &mut None).unwrap_err().code(),
+            execute_removal(&plan, &plan.id, None, "/Assets/tau/common/", &mut None)
+                .unwrap_err()
+                .code(),
             ErrorCode::SourceChangedSincePlan
         );
     }

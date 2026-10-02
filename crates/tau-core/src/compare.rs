@@ -110,7 +110,9 @@ pub(crate) struct MediaFile {
 /// `pub(crate)` so [`crate::backup`] can reuse the same walk-and-hash logic
 /// for a plain folder backup, rather than duplicating it under a second
 /// name.
-pub(crate) fn files_by_relative_path(root: &Path) -> Result<BTreeMap<PathBuf, MediaFile>, TauError> {
+pub(crate) fn files_by_relative_path(
+    root: &Path,
+) -> Result<BTreeMap<PathBuf, MediaFile>, TauError> {
     let mut files = Vec::new();
     collect_files(root, root, &mut files)?;
     files.sort();
@@ -191,7 +193,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         let left = root.join("left/Assets/tau/common");
         let right = root.join("right/Assets/tau-test/common");

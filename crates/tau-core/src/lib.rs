@@ -23,8 +23,8 @@ pub mod diag;
 pub mod duplicates;
 pub mod icon;
 pub mod image;
-pub mod ledger;
 pub mod journal;
+pub mod ledger;
 pub mod package;
 pub mod playlist;
 pub mod problems;
@@ -502,9 +502,7 @@ fn platform_category_for(card_root: &Path, platform: &str) -> Option<String> {
     if platform.is_empty() {
         return None;
     }
-    let path = card_root
-        .join("Platforms")
-        .join(format!("{platform}.json"));
+    let path = card_root.join("Platforms").join(format!("{platform}.json"));
     let json: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
     json.pointer("/platform/category")
         .and_then(Value::as_str)
@@ -727,8 +725,16 @@ pub fn scan_dir_with_progress(
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
-        let print = fs::metadata(&path).ok().and_then(|m| ledger::fingerprint(&m));
-        media.push(Media { done: done as u64, path, rel, is_flac: extension == "flac", print });
+        let print = fs::metadata(&path)
+            .ok()
+            .and_then(|m| ledger::fingerprint(&m));
+        media.push(Media {
+            done: done as u64,
+            path,
+            rel,
+            is_flac: extension == "flac",
+            print,
+        });
     }
     let mut cache = ledger::Session::open(common);
     if let Some(session) = cache.as_mut() {
@@ -736,7 +742,13 @@ pub fn scan_dir_with_progress(
         session.assess(&prints);
     }
     for m in media {
-        let Media { done, path, rel, is_flac, print } = m;
+        let Media {
+            done,
+            path,
+            rel,
+            is_flac,
+            print,
+        } = m;
         tick(
             progress,
             Progress {
@@ -758,7 +770,15 @@ pub fn scan_dir_with_progress(
             match read_tags(&path) {
                 Ok(result) => {
                     if let (Some(session), Some(print)) = (cache.as_mut(), print) {
-                        session.put_tags(&rel, print, ledger::TagRecord { tags: result.0.clone(), secs: result.1, fmt: result.2 });
+                        session.put_tags(
+                            &rel,
+                            print,
+                            ledger::TagRecord {
+                                tags: result.0.clone(),
+                                secs: result.1,
+                                fmt: result.2,
+                            },
+                        );
                     }
                     result
                 }
@@ -1035,7 +1055,13 @@ fn decode_id3_text(b: &[u8]) -> Option<String> {
             .as_chunks::<2>()
             .0
             .iter()
-            .map(|p| if big { u16::from_be_bytes(*p) } else { u16::from_le_bytes(*p) })
+            .map(|p| {
+                if big {
+                    u16::from_be_bytes(*p)
+                } else {
+                    u16::from_le_bytes(*p)
+                }
+            })
             .collect();
         String::from_utf16(&units).ok()
     };
@@ -1052,7 +1078,13 @@ fn decode_id3_text(b: &[u8]) -> Option<String> {
         2 => utf16(body, true).unwrap_or_else(|| latin1(body)),
         _ => String::from_utf8(body.to_vec()).unwrap_or_else(|_| latin1(body)),
     };
-    Some(text.split('\0').next().unwrap_or_default().trim().to_string())
+    Some(
+        text.split('\0')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_string(),
+    )
 }
 fn read_id3v1(f: &mut fs::File, size: u64) -> Result<BTreeMap<String, String>, TauError> {
     let mut out = BTreeMap::new();
@@ -1788,7 +1820,10 @@ mod id3_text_tests {
     use super::decode_id3_text;
 
     fn hex(s: &str) -> Vec<u8> {
-        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+            .collect()
     }
 
     /// Every expected value below was produced by running the reference
@@ -1797,10 +1832,22 @@ mod id3_text_tests {
     #[test]
     fn id3_text_decodes_exactly_like_the_reference() {
         let cases: &[(&str, &str, &str)] = &[
-            ("utf16le_bom", "01fffe4b0069006e00640020006f006600200042006c0075006500", "Kind of Blue"),
-            ("utf16be_bom", "01feff004700f60074007400650072006400e4006d006d006500720075006e0067", "Götterdämmerung"),
+            (
+                "utf16le_bom",
+                "01fffe4b0069006e00640020006f006600200042006c0075006500",
+                "Kind of Blue",
+            ),
+            (
+                "utf16be_bom",
+                "01feff004700f60074007400650072006400e4006d006d006500720075006e0067",
+                "Götterdämmerung",
+            ),
             ("utf16le_nobom", "0150006c00610069006e00", "Plain"),
-            ("utf16_nul_terminated", "01fffe41006200630000006a0075006e006b00", "Abc"),
+            (
+                "utf16_nul_terminated",
+                "01fffe41006200630000006a0075006e006b00",
+                "Abc",
+            ),
             ("utf16_empty_bom_only", "01fffe", ""),
             ("utf16_odd_length", "01fffe4800690041", "\u{ff}\u{fe}H"),
             ("enc2_be", "020042006500740061", "Beta"),
@@ -1815,7 +1862,11 @@ mod id3_text_tests {
             ("utf16_lone_surrogate", "01fffe00d84100", "\u{ff}\u{fe}"),
         ];
         for (name, bytes, expected) in cases {
-            assert_eq!(decode_id3_text(&hex(bytes)).as_deref(), Some(*expected), "{name}");
+            assert_eq!(
+                decode_id3_text(&hex(bytes)).as_deref(),
+                Some(*expected),
+                "{name}"
+            );
         }
         assert_eq!(decode_id3_text(&[]), None);
     }
@@ -1838,10 +1889,18 @@ mod id3_text_tests {
         frames.extend(frame("TALB", "Kind of Blue"));
         let size = frames.len();
         let mut file = b"ID3\x03\x00\x00".to_vec();
-        file.extend([(size >> 21 & 0x7f) as u8, (size >> 14 & 0x7f) as u8, (size >> 7 & 0x7f) as u8, (size & 0x7f) as u8]);
+        file.extend([
+            (size >> 21 & 0x7f) as u8,
+            (size >> 14 & 0x7f) as u8,
+            (size >> 7 & 0x7f) as u8,
+            (size & 0x7f) as u8,
+        ]);
         file.extend(frames);
         file.extend(vec![0u8; 2048]);
-        let dir = std::env::temp_dir().join(format!("tau-id3-utf16-{}", std::process::id() as u128 + crate::test_uniq()));
+        let dir = std::env::temp_dir().join(format!(
+            "tau-id3-utf16-{}",
+            std::process::id() as u128 + crate::test_uniq()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("01 So What.mp3");
         std::fs::write(&path, file).unwrap();

@@ -46,3 +46,20 @@ and from the owner's working rules. They apply to Tau Omega exactly as they appl
 12. **Privacy:** the app reads only folders the user selected. Nothing is uploaded. Tag text stays local.
 13. **Honest reporting:** if a step is skipped, failed or only partly done, the report says so plainly. No "success" summary hides a
     warning. Results that came from real hardware carry a label; results from tests say they are from tests.
+
+## Engine invariants added 2026-10-02 (each has a test)
+14. **The ledger never decides anything destructive.** What the app remembers about a card (`ledger`, kept in the app's cache folder, never on
+    the card) may only skip *reading or copying* a file it can prove is unchanged. It never influences a deletion, an overwrite or a verification:
+    those always look at the real file. A missing, unreadable, wrong-version or wrong-card ledger is ignored and rebuilt. "Forget what the app
+    remembers" is always safe.
+15. **Verification reads the device, not the OS cache.** After a write the copy is read back through a path that bypasses what the OS still holds
+    (macOS `mmap` + `msync(MS_INVALIDATE)`), and a pass that could not do so says so (`readback_status`).
+16. **The index swap is recoverable.** The new index is written beside the old one and swapped in; the previous one is kept until a confirmed sync,
+    and an interrupted swap is recovered on the next run.
+17. **One writer per card.** Every card write takes the volume write lock and refuses a second job; the host never runs a card write on the
+    window thread.
+18. **Space is checked before writing**, counting whole allocation units, embedded covers, sidecars and the index twice, plus a margin
+    (`InsufficientSpace`, E51). The Library's fit bar is only an estimate (it still counts logical bytes).
+19. **A theme file is written only after the firmware's own readability rules pass**, read back, and parsed to the same themes. The firmware
+    trusts only CRCs, so the writer owns this check (`tau_core::assets`).
+

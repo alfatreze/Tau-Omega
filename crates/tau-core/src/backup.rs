@@ -8,8 +8,8 @@
 //! with the most caution).
 
 use crate::{
-    compare::{self, DifferenceState},
     ErrorCode, TauError,
+    compare::{self, DifferenceState},
 };
 use std::{
     collections::BTreeMap,
@@ -133,7 +133,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         root

@@ -122,7 +122,7 @@ prose (`Tau Omega/testdata/images/README.md`).
 ## 4. Persisted settings (read-only display)
 `Settings/<core>/Interact/_core/interact_persist.json` holds `variables[]` `{id, type, val}`. Tau library builds use (id -> word):
 10 volume, 11 colour index (0..18, Pocket edition colours), 12 repeat, 13 shuffle, 15 meter, 16 EQ, 18 saved position, 19 resume on,
-20-23 legacy playlist name/hash, **24 library history**, 25 index build id (31 bits), 26 Shuffle All seed, 27 library off (1 = disabled).
+20-23 legacy playlist name/hash, **24 library history**, 25 index build id (31 bits), 26 Shuffle All seed, **27 theme index, 28 theme mode** (Dark/Light). *Updated 2026-10-02 against the shipped `alfatreze.TAU` `interact.json` (tau-alpha v0.6.0-alpha.1): id 27 was "library off" in v0.5.0 and the library switch has since been removed; the firmware reuses the id for the theme. tau-alpha's `tools/tau_data_slots.py` docstring still calls 27 retired; the shipped `interact.json` is what the Pocket reads. Cards written by a v0.5.0 core can still hold a library-off value in 27, so the label is only right for a 0.6 core.*
 
 > **Ids 20-23 are overloaded — verified on hardware files 2026-09-22.** Every core (release and
 > Diagnostic Build alike) declares them as `(internal) list 1..4`, the legacy playlist state above.

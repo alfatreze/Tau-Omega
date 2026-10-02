@@ -98,8 +98,17 @@ fn change_request_accepts_exactly_what_the_ui_sends() {
     let request: tau_core::changes::ChangeRequest = serde_json::from_str(json).unwrap();
     assert_eq!(request.add_albums, ["Miles Davis/Kind of Blue"]);
     assert_eq!(request.edits.len(), 2);
-    assert_eq!(request.edits[0].fields.album.as_deref(), Some("Blue Train (Remaster)"));
-    assert_eq!(request.edits[0].cover.as_deref().map(|p| p.to_str().unwrap()), Some("/Users/me/cover.jpg"));
+    assert_eq!(
+        request.edits[0].fields.album.as_deref(),
+        Some("Blue Train (Remaster)")
+    );
+    assert_eq!(
+        request.edits[0]
+            .cover
+            .as_deref()
+            .map(|p| p.to_str().unwrap()),
+        Some("/Users/me/cover.jpg")
+    );
     assert_eq!(request.edits[1].track.as_deref(), Some("A/B/01.mp3"));
     assert!(request.options.embed_covers && !request.options.mirror);
 }
@@ -120,7 +129,16 @@ fn library_listing_serialises_the_fields_the_ui_reads() {
         ..Default::default()
     };
     let value: serde_json::Value = serde_json::to_value(&listing).unwrap();
-    for key in ["id", "dest_id", "title", "artist", "year", "tracks", "bytes", "has_cover"] {
+    for key in [
+        "id",
+        "dest_id",
+        "title",
+        "artist",
+        "year",
+        "tracks",
+        "bytes",
+        "has_cover",
+    ] {
         assert!(value["albums"][0].get(key).is_some(), "missing {key}");
     }
     for key in ["albums", "tracks", "playlists", "warnings", "limits"] {

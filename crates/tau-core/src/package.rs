@@ -15,7 +15,7 @@
 //! other installed core's `core.json` before touching shared media -- a
 //! separate, smaller piece of work from install/update.
 
-use crate::{compare::DifferenceState, ErrorCode, TauError};
+use crate::{ErrorCode, TauError, compare::DifferenceState};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -183,9 +183,7 @@ pub fn execute_install(
             )
         })?;
         let mut data = Vec::with_capacity(entry.bytes as usize);
-        zip_entry
-            .read_to_end(&mut data)
-            .map_err(TauError::from)?;
+        zip_entry.read_to_end(&mut data).map_err(TauError::from)?;
         if sha256_bytes(&data) != entry.sha256 {
             return Err(TauError::e(
                 ErrorCode::SourceChangedSincePlan,
@@ -274,7 +272,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         root
