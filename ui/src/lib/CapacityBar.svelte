@@ -59,10 +59,14 @@
     active: s.platform === activePlatform,
   }));
   $: activeFound = segs.some((s) => s.active);
-  // A removal is drawn inside the segment it comes from; with no such segment it is drawn out of "other data".
-  $: removeInside = (s: { active: boolean; bytes: number }) => (s.active ? Math.min(removeBytes, s.bytes) : 0);
-  $: removeOutside = activeFound ? 0 : Math.min(removeBytes, breakdown?.other_bytes ?? 0);
-  $: otherKept = Math.max(0, (breakdown?.other_bytes ?? 0) - removeOutside);
+  // A removal always sits at the end of the used part of the bar, just before the adding segment, so the
+  // two changes read as one stack at the end: what goes, then what comes. The bytes still come out of the
+  // active core's segment (or out of "other data" when that core is not measured), which therefore draws
+  // at its size after the removal.
+  $: activeBytes = segs.find((s) => s.active)?.bytes ?? 0;
+  $: removeShown = activeFound ? Math.min(removeBytes, activeBytes) : Math.min(removeBytes, breakdown?.other_bytes ?? 0);
+  $: kept = (s: { active: boolean; bytes: number }) => (s.active ? Math.max(0, s.bytes - removeShown) : s.bytes);
+  $: otherKept = Math.max(0, (breakdown?.other_bytes ?? 0) - (activeFound ? 0 : removeShown));
   $: label = (() => {
     const parts = [`${size(used)} used`];
     if (breakdown) parts.push(`${segs.map((s) => `${s.label} ${size(s.bytes)}`).concat(`other data ${size(breakdown.other_bytes)}`).join(', ')}`);
@@ -89,9 +93,9 @@
     <div class="wb-bar" role="img" aria-label={label}>
       {#if breakdown}
         {#each segs as s (s.key)}
-          <i class="seg" style="width:{pct(s.bytes - removeInside(s))};background:{s.color}"></i>{#if removeInside(s)}<i class="seg k-rm" style="width:{pct(removeInside(s))}"></i>{/if}
+          <i class="seg" style="width:{pct(kept(s))};background:{s.color}"></i>
         {/each}
-        <i class="seg k-other" style="width:{pct(otherKept)}"></i>{#if removeOutside}<i class="seg k-rm" style="width:{pct(removeOutside)}"></i>{/if}
+        <i class="seg k-other" style="width:{pct(otherKept)}"></i>{#if removeShown}<i class="seg k-rm" style="width:{pct(removeShown)}"></i>{/if}
       {:else}
         <i class="seg k-used" class:measuring style="width:{pct(Math.max(0, used - removeBytes))}"></i>{#if removeBytes}<i class="seg k-rm" style="width:{pct(removeBytes)}"></i>{/if}
       {/if}
