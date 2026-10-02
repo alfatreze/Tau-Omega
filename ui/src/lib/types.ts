@@ -156,3 +156,7 @@ export type PolarityInput = { bg_luma: number; colors: Record<string, string> };
 export type ThemeInput = { name: string; dark: PolarityInput; light: PolarityInput };
 export type ContrastCheck = { polarity: 'dark' | 'light'; text: string; against: string; worst: number; needed: number; ok: boolean };
 export type ThemeReport = { problems: string[]; checks: ContrastCheck[]; dark_snapped: Record<string, string>; light_snapped: Record<string, string> };
+export type ExistingAssets = { bytes: number; sha256: string; themes: string[]; other_sections: string[]; readable: boolean };
+export type ThemeFileReader = { core_id: string; version: string; declares_slot: boolean };
+export type AssetsInstallPlan = { id: string; destination: string; bytes: number; sha256: string; themes: string[]; existing: ExistingAssets | null; readers: ThemeFileReader[]; interrupted_install: boolean; warnings: string[] };
+export type AssetsInstallReport = { destination: string; bytes_written: number; replaced: boolean; backup: string | null };

@@ -379,9 +379,8 @@ fn u32le(b: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
 }
 
-/// Reads a `tau-assets.bin`, verifying the version and every CRC before using a byte, and returns its themes for editing.
-/// A file without a `THEM` section has no themes (an empty list).
-pub fn parse_assets(blob: &[u8]) -> Result<Vec<ThemeInput>, TauError> {
+/// Verifies the container and returns each section's tag and bytes (every CRC checked first).
+fn read_sections(blob: &[u8]) -> Result<Vec<([u8; 4], &[u8])>, TauError> {
     if blob.len() < 12 || &blob[..4] != MAGIC {
         return Err(bad_file("This is not a Tau assets file."));
     }
@@ -399,6 +398,7 @@ pub fn parse_assets(blob: &[u8]) -> Result<Vec<ThemeInput>, TauError> {
     if crc(table) != u32le(blob, 8) {
         return Err(bad_file("The section table failed its check."));
     }
+    let mut out = Vec::new();
     for i in 0..n {
         let e = &table[i * 16..i * 16 + 16];
         let (off, len) = (u32le(e, 4) as usize, u32le(e, 8) as usize);
@@ -410,7 +410,16 @@ pub fn parse_assets(blob: &[u8]) -> Result<Vec<ThemeInput>, TauError> {
         if crc(data) != u32le(e, 12) {
             return Err(bad_file("A section failed its check."));
         }
-        if &e[..4] == SECTION_THEM {
+        out.push(([e[0], e[1], e[2], e[3]], data));
+    }
+    Ok(out)
+}
+
+/// Reads a `tau-assets.bin`, verifying the version and every CRC before using a byte, and returns its themes for editing.
+/// A file without a `THEM` section has no themes (an empty list).
+pub fn parse_assets(blob: &[u8]) -> Result<Vec<ThemeInput>, TauError> {
+    for (tag, data) in read_sections(blob)? {
+        if &tag == SECTION_THEM {
             return parse_them(data);
         }
     }
@@ -460,6 +469,307 @@ fn parse_them(d: &[u8]) -> Result<Vec<ThemeInput>, TauError> {
         });
     }
     Ok(out)
+}
+
+// ---- installing to a card -------------------------------------------------------------------------------------
+
+use crate::sync;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// File name on the card (data slot 8 of a Tau core).
+pub const FILE_NAME: &str = "tau-assets.bin";
+const TEMP_NAME: &str = ".tau-assets.bin.tmp";
+const PREVIOUS_NAME: &str = ".tau-assets.bin.prev";
+
+/// What is already at the destination, so the review can say what an install would replace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ExistingAssets {
+    pub bytes: u64,
+    pub sha256: String,
+    /// Names of the themes in it (empty when it has none or cannot be read).
+    pub themes: Vec<String>,
+    /// Sections other than `THEM` (for example `METR` meter presets): they are **not** carried over by an install.
+    pub other_sections: Vec<String>,
+    /// False when the file does not parse; it is still backed up before being replaced.
+    pub readable: bool,
+}
+
+/// A core on this card that uses the same media folder, and whether it asks for the file at all.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ThemeFileReader {
+    pub core_id: String,
+    pub version: String,
+    /// True when the core's `data.json` declares a slot for `tau-assets.bin`.
+    pub declares_slot: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct AssetsInstallPlan {
+    /// Confirmation token: changes when the destination, the new file or the existing file changes.
+    pub id: String,
+    pub destination: PathBuf,
+    pub bytes: u64,
+    pub sha256: String,
+    pub themes: Vec<String>,
+    pub existing: Option<ExistingAssets>,
+    pub readers: Vec<ThemeFileReader>,
+    /// A previous install was interrupted; running this one first puts the old file back.
+    pub interrupted_install: bool,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct AssetsInstallReport {
+    pub destination: PathBuf,
+    pub bytes_written: u64,
+    pub replaced: bool,
+    pub backup: Option<PathBuf>,
+}
+
+fn describe_existing(bytes: &[u8]) -> ExistingAssets {
+    let mut e = ExistingAssets {
+        bytes: bytes.len() as u64,
+        sha256: sync::sha256_bytes(bytes),
+        themes: Vec::new(),
+        other_sections: Vec::new(),
+        readable: false,
+    };
+    if let Ok(sections) = read_sections(bytes) {
+        e.readable = true;
+        for (tag, _) in &sections {
+            if tag != SECTION_THEM {
+                e.other_sections
+                    .push(String::from_utf8_lossy(tag).into_owned());
+            }
+        }
+        match parse_assets(bytes) {
+            Ok(t) => e.themes = t.into_iter().map(|t| t.name).collect(),
+            Err(_) => e.readable = false,
+        }
+    }
+    e
+}
+
+/// Cores under `<card>/Cores` whose platform is the media root's platform. `media_root` is `<card>/Assets/<platform>/common`.
+fn readers_for(media_root: &Path) -> Vec<ThemeFileReader> {
+    let platform = media_root
+        .parent()
+        .and_then(Path::file_name)
+        .map(|n| n.to_string_lossy().into_owned());
+    let card = media_root
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent);
+    let (Some(platform), Some(card)) = (platform, card) else {
+        return Vec::new();
+    };
+    let Ok(dir) = fs::read_dir(card.join("Cores")) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for folder in dir.filter_map(Result::ok).filter(|f| f.path().is_dir()) {
+        let read = |name: &str| -> Option<serde_json::Value> {
+            serde_json::from_slice(&fs::read(folder.path().join(name)).ok()?).ok()
+        };
+        let Some(core) = read("core.json") else {
+            continue;
+        };
+        let meta = core.pointer("/core/metadata");
+        let plat = meta
+            .and_then(|m| m.pointer("/platform_ids/0"))
+            .and_then(|v| v.as_str());
+        if plat != Some(platform.as_str()) {
+            continue;
+        }
+        let version = meta
+            .and_then(|m| m.get("version"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let declares_slot = read("data.json").is_some_and(|d| {
+            [
+                "/data/data_slots",
+                "/core/data/data_slots",
+                "/data",
+                "/core/data",
+            ]
+            .iter()
+            .any(|p| {
+                d.pointer(p).and_then(|v| v.as_array()).is_some_and(|a| {
+                    a.iter()
+                        .any(|s| s.get("filename").and_then(|f| f.as_str()) == Some(FILE_NAME))
+                })
+            })
+        });
+        out.push(ThemeFileReader {
+            core_id: folder.file_name().to_string_lossy().into_owned(),
+            version,
+            declares_slot,
+        });
+    }
+    out.sort_by(|a, b| a.core_id.cmp(&b.core_id));
+    out
+}
+
+/// Plans writing these themes to `<media_root>/tau-assets.bin`. Writes nothing. Refuses any theme that fails
+/// `check_theme`, a media root that is not an `Assets/<platform>/common` folder, and a missing folder.
+pub fn plan_install(
+    themes: &[ThemeInput],
+    media_root: &Path,
+) -> Result<AssetsInstallPlan, TauError> {
+    sync::validate_media_root(media_root)?;
+    let blob = pack_assets(themes)?;
+    let destination = media_root.join(FILE_NAME);
+    let existing = fs::read(&destination).ok().map(|b| describe_existing(&b));
+    let sha256 = sync::sha256_bytes(&blob);
+    let readers = readers_for(media_root);
+    let interrupted_install = !destination.is_file() && media_root.join(PREVIOUS_NAME).is_file();
+    let mut warnings = Vec::new();
+    if readers.is_empty() {
+        warnings.push(
+            "No core on this card uses this media folder, so nothing would read the file.".into(),
+        );
+    } else if !readers.iter().any(|r| r.declares_slot) {
+        warnings.push("None of the cores that use this folder ask for a theme file (they need Tau 0.5.0 or later), so it will be ignored until one is installed.".into());
+    }
+    if let Some(e) = &existing {
+        if !e.other_sections.is_empty() {
+            warnings.push(format!("The file already there also holds {}, which is not carried over: it will be gone after this install (the backup keeps it).", e.other_sections.join(", ")));
+        }
+        if !e.readable {
+            warnings.push("The file already there cannot be read as a Tau assets file. It will still be backed up before it is replaced.".into());
+        }
+    }
+    let id = sync::sha256_bytes(
+        format!(
+            "assets|{}|{}|{}",
+            destination.display(),
+            sha256,
+            existing.as_ref().map_or("none", |e| e.sha256.as_str())
+        )
+        .as_bytes(),
+    );
+    Ok(AssetsInstallPlan {
+        id,
+        destination,
+        bytes: blob.len() as u64,
+        sha256,
+        themes: themes.iter().map(|t| t.name.clone()).collect(),
+        existing,
+        readers,
+        interrupted_install,
+        warnings,
+    })
+}
+
+/// Puts back an old file left by an install that was interrupted between its two renames (never invents one).
+fn recover(media_root: &Path) -> Result<(), TauError> {
+    let live = media_root.join(FILE_NAME);
+    let previous = media_root.join(PREVIOUS_NAME);
+    if previous.is_file() {
+        if live.is_file() {
+            let _ = fs::remove_file(&previous);
+        } else {
+            fs::rename(&previous, &live)?;
+        }
+    }
+    Ok(())
+}
+
+/// Writes a reviewed [`AssetsInstallPlan`]. Refuses unless `confirmation` is the plan's id **and** the plan is
+/// still what a fresh plan would be (the existing file or the themes changed since review). Order: recover an
+/// interrupted install, back up the existing file (when `backup_root` is given; it must be outside the card),
+/// write a temporary file beside the target, read it back through the cache-bypassing path and check it parses
+/// to the same bytes, swap it in keeping the old file until the new one is in place, then read the result back.
+pub fn execute_install(
+    themes: &[ThemeInput],
+    media_root: &Path,
+    plan: &AssetsInstallPlan,
+    confirmation: &str,
+    backup_root: Option<&Path>,
+) -> Result<AssetsInstallReport, TauError> {
+    if confirmation != plan.id {
+        return Err(TauError::e(
+            ErrorCode::ConfirmationMismatch,
+            "confirmation token does not match the current plan",
+        ));
+    }
+    // A backup on the card itself is not a backup, so the whole card is off limits, not just the media folder.
+    let card = media_root
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .unwrap_or(media_root);
+    if let Some(backup) = backup_root
+        && (backup.as_os_str().is_empty() || sync::backup_is_inside(backup, card))
+    {
+        return Err(TauError::e(
+            ErrorCode::UnsafeBackupLocation,
+            "backup folder must be outside the card",
+        ));
+    }
+    recover(media_root)?;
+    let fresh = plan_install(themes, media_root)?;
+    if fresh.id != plan.id {
+        return Err(TauError::e(
+            ErrorCode::SourceChangedSincePlan,
+            "the theme file on the card or the themes changed since the plan was reviewed",
+        ));
+    }
+    let blob = pack_assets(themes)?;
+    let live = media_root.join(FILE_NAME);
+    let mut backup = None;
+    if live.is_file() {
+        if let Some(root) = backup_root {
+            let old = fs::read(&live)?;
+            let dest = root.join(&plan.id).join(FILE_NAME);
+            if let Some(parent) = dest.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            sync::write_durable(&dest, &old)?;
+            if sync::sha256_bytes(&fs::read(&dest)?) != sync::sha256_bytes(&old) {
+                return Err(TauError::e(
+                    ErrorCode::VerificationFailed,
+                    "the backup of the existing theme file did not read back the same, so nothing was changed",
+                ));
+            }
+            backup = Some(dest);
+        }
+    }
+    let temp = media_root.join(TEMP_NAME);
+    let result = (|| -> Result<(), TauError> {
+        sync::write_durable(&temp, &blob)?;
+        let back = sync::read_back_bytes(&temp)?;
+        if back != blob || pack_assets(&parse_assets(&back)?)? != blob {
+            return Err(TauError::e(
+                ErrorCode::VerificationFailed,
+                "the theme file written to the card did not read back the same",
+            ));
+        }
+        sync::swap_in_file(&temp, &live, PREVIOUS_NAME)?;
+        if sync::read_back_bytes(&live)? != blob {
+            return Err(TauError::e(
+                ErrorCode::VerificationFailed,
+                "the installed theme file did not read back the same",
+            ));
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result?;
+    Ok(AssetsInstallReport {
+        destination: live,
+        bytes_written: blob.len() as u64,
+        replaced: plan.existing.is_some(),
+        backup,
+    })
 }
 
 #[cfg(test)]
@@ -611,5 +921,239 @@ mod tests {
         // What the editor shows is what the device shows: snapping twice changes nothing.
         let once = snap("#2A1820").unwrap();
         assert_eq!(snap(&to_hex(once)), Some(once));
+    }
+
+    fn card(name: &str) -> (PathBuf, PathBuf) {
+        let root = std::env::temp_dir().join(format!(
+            "tau-assets-{name}-{}-{}",
+            std::process::id(),
+            crate::test_uniq()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let media = root.join("Assets").join("tau").join("common");
+        fs::create_dir_all(&media).unwrap();
+        let core = root.join("Cores").join("alfatreze.TAU");
+        fs::create_dir_all(&core).unwrap();
+        fs::write(
+            core.join("core.json"),
+            r#"{"core":{"metadata":{"platform_ids":["tau"],"version":"0.6.0"}}}"#,
+        )
+        .unwrap();
+        fs::write(
+            core.join("data.json"),
+            r#"{"data":{"data_slots":[{"id":8,"filename":"tau-assets.bin"}]}}"#,
+        )
+        .unwrap();
+        (root, media)
+    }
+
+    #[test]
+    fn plans_without_writing_and_names_the_cores_that_will_read_it() {
+        let (root, media) = card("plan");
+        let plan = plan_install(&[sunset()], &media).unwrap();
+        assert!(plan.existing.is_none() && !plan.interrupted_install && plan.warnings.is_empty());
+        assert_eq!(plan.themes, vec!["SUNSET"]);
+        assert_eq!(
+            plan.readers,
+            vec![ThemeFileReader {
+                core_id: "alfatreze.TAU".into(),
+                version: "0.6.0".into(),
+                declares_slot: true
+            }]
+        );
+        assert_eq!(plan.bytes, SUNSET_BIN.len() as u64);
+        assert!(!media.join(FILE_NAME).exists(), "planning wrote something");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn installs_verifies_and_leaves_no_temp_files() {
+        let (root, media) = card("install");
+        let plan = plan_install(&[sunset()], &media).unwrap();
+        let report = execute_install(&[sunset()], &media, &plan, &plan.id, None).unwrap();
+        assert_eq!(fs::read(media.join(FILE_NAME)).unwrap(), SUNSET_BIN);
+        assert!(!report.replaced && report.backup.is_none());
+        let left: Vec<_> = fs::read_dir(&media)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(left, vec![FILE_NAME]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn replacing_backs_up_the_old_file_and_warns_about_what_is_lost() {
+        let (root, media) = card("replace");
+        // An existing file that also carries a meter-preset section this writer cannot keep.
+        let mut other = sunset();
+        other.name = "OLDER".into();
+        let first = pack_assets(&[other]).unwrap();
+        // Rebuild the container with an extra METR section by hand (tag + bytes), CRCs valid.
+        let them = parse_assets(&first).unwrap();
+        assert_eq!(them.len(), 1);
+        fs::write(media.join(FILE_NAME), &first).unwrap();
+        let backups = root.with_extension("backups");
+        let plan = plan_install(&[sunset()], &media).unwrap();
+        let e = plan.existing.as_ref().unwrap();
+        assert_eq!(e.themes, vec!["OLDER"]);
+        assert!(e.readable);
+        let report = execute_install(&[sunset()], &media, &plan, &plan.id, Some(&backups)).unwrap();
+        assert!(report.replaced);
+        assert_eq!(fs::read(report.backup.unwrap()).unwrap(), first);
+        let _ = fs::remove_dir_all(&backups);
+        assert_eq!(fs::read(media.join(FILE_NAME)).unwrap(), SUNSET_BIN);
+        assert!(!media.join(PREVIOUS_NAME).exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn an_unreadable_existing_file_is_flagged_and_still_backed_up() {
+        let (root, media) = card("junk");
+        fs::write(media.join(FILE_NAME), b"not a tau file").unwrap();
+        let plan = plan_install(&[sunset()], &media).unwrap();
+        assert!(!plan.existing.as_ref().unwrap().readable);
+        assert!(plan.warnings.iter().any(|w| w.contains("cannot be read")));
+        let report = execute_install(
+            &[sunset()],
+            &media,
+            &plan,
+            &plan.id,
+            Some(&root.with_extension("backups")),
+        )
+        .unwrap();
+        assert_eq!(fs::read(report.backup.unwrap()).unwrap(), b"not a tau file");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn refuses_a_wrong_token_a_changed_card_and_an_unsafe_backup() {
+        let (root, media) = card("refuse");
+        let plan = plan_install(&[sunset()], &media).unwrap();
+        assert_eq!(
+            execute_install(&[sunset()], &media, &plan, "nope", None)
+                .unwrap_err()
+                .code(),
+            ErrorCode::ConfirmationMismatch
+        );
+        // The card's file changes after review.
+        fs::write(media.join(FILE_NAME), b"changed behind our back").unwrap();
+        assert_eq!(
+            execute_install(&[sunset()], &media, &plan, &plan.id, None)
+                .unwrap_err()
+                .code(),
+            ErrorCode::SourceChangedSincePlan
+        );
+        assert_eq!(
+            fs::read(media.join(FILE_NAME)).unwrap(),
+            b"changed behind our back",
+            "a refused install changed the file"
+        );
+        let fresh = plan_install(&[sunset()], &media).unwrap();
+        assert_eq!(
+            execute_install(&[sunset()], &media, &fresh, &fresh.id, Some(&root))
+                .unwrap_err()
+                .code(),
+            ErrorCode::UnsafeBackupLocation
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn an_interrupted_install_is_recovered_not_lost() {
+        let (root, media) = card("recover");
+        fs::write(media.join(PREVIOUS_NAME), SUNSET_BIN).unwrap(); // the old file, moved aside; the new one never arrived
+        let plan = plan_install(&[sunset()], &media).unwrap();
+        assert!(plan.interrupted_install);
+        // Installing something else first restores the old file, so it is the "existing" one that gets replaced and backed up.
+        let mut t = sunset();
+        t.name = "SUNSET 2".into();
+        let plan2 = plan_install(&[t.clone()], &media).unwrap();
+        assert!(plan2.interrupted_install);
+        recover(&media).unwrap();
+        assert_eq!(fs::read(media.join(FILE_NAME)).unwrap(), SUNSET_BIN);
+        assert!(!media.join(PREVIOUS_NAME).exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn refuses_a_folder_that_is_not_a_media_root_and_a_faint_theme() {
+        let (root, media) = card("bad");
+        assert!(plan_install(&[sunset()], &root).is_err());
+        assert!(plan_install(&[sunset()], &media.join("missing")).is_err());
+        let mut t = sunset();
+        t.dark
+            .colors
+            .insert("text_primary".into(), t.dark.colors["surface"].clone());
+        assert!(plan_install(&[t], &media).is_err());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn warns_when_no_core_asks_for_the_file() {
+        let (root, media) = card("noslot");
+        fs::write(
+            root.join("Cores/alfatreze.TAU/data.json"),
+            r#"{"data":{"data_slots":[{"id":5,"filename":"tau-library.tdb"}]}}"#,
+        )
+        .unwrap();
+        let plan = plan_install(&[sunset()], &media).unwrap();
+        assert!(plan.warnings.iter().any(|w| w.contains("ignored")));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// Read-only check against a real card: `TAU_REAL_CARD=/Volumes/Pock cargo test -p tau-core real_card -- --ignored --nocapture`.
+    /// Plans (never writes) an install for every `Assets/<platform>/common` folder and prints what it found.
+    #[test]
+    #[ignore]
+    fn real_card_plan_is_read_only_and_finds_the_readers() {
+        let Ok(card) = std::env::var("TAU_REAL_CARD") else {
+            return;
+        };
+        let before: Vec<_> = walk(Path::new(&card).join("Assets"));
+        for entry in fs::read_dir(Path::new(&card).join("Assets"))
+            .unwrap()
+            .filter_map(Result::ok)
+        {
+            let media = entry.path().join("common");
+            if !media.is_dir() {
+                continue;
+            }
+            let plan = plan_install(&[sunset()], &media).unwrap();
+            println!(
+                "{}: existing={:?} readers={:?} warnings={:?}",
+                media.display(),
+                plan.existing
+                    .as_ref()
+                    .map(|e| (e.bytes, &e.themes, e.readable)),
+                plan.readers,
+                plan.warnings
+            );
+        }
+        assert_eq!(
+            before,
+            walk(Path::new(&card).join("Assets")),
+            "planning changed the card"
+        );
+    }
+    fn walk(root: PathBuf) -> Vec<(PathBuf, u64)> {
+        let mut out = Vec::new();
+        let mut stack = vec![root];
+        while let Some(d) = stack.pop() {
+            for e in fs::read_dir(&d)
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+            {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p)
+                } else {
+                    out.push((p, e.metadata().map(|m| m.len()).unwrap_or(0)))
+                }
+            }
+        }
+        out.sort();
+        out
     }
 }

@@ -381,7 +381,7 @@
   {:else if page === 'meters'}
     <MetersView />
   {:else if page === 'appearance'}
-    <AppearanceView />
+    <AppearanceView {mediaRoot} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'settings'}
     <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings openHistory={() => openHistory()} /></SettingsView>
   {/if}
