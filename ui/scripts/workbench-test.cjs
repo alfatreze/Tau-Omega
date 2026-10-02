@@ -29,6 +29,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await fresh();
   assert.equal(await p.getByRole('button', { name: 'Sync library' }).count(), 0); ok('old Sync library screen is gone from the menu');
   assert.equal(await p.getByRole('button', { name: 'Backup', exact: true }).count(), 0); ok('tools are collapsed by default');
+  assert.equal(await p.getByRole('button', { name: 'Meter Lab', exact: true }).count(), 1); ok('Meter Lab is in the main menu, visible without opening Tools & settings');
   await p.getByRole('button', { name: /Tools & settings/ }).click();
   assert.equal(await p.getByRole('button', { name: 'Backup', exact: true }).count(), 1); ok('tools & settings expands');
   await p.reload(); await p.waitForTimeout(600);
