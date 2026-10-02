@@ -314,7 +314,7 @@
         <button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button>
         <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
         <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
-        <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meters</button>
+        <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
         <button class:active={page === 'history'} on:click={() => openHistory()}>Sync history</button>
         <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
       </div>

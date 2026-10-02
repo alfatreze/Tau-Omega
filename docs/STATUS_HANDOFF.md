@@ -811,7 +811,7 @@ a frontend-only pass). `npm run check`: 0 errors, 0 warnings.
 
 ## Meters: UI-structure scaffold, synthetic schema (2026-09-26)
 
-*Integration note 2026-10-02: the Meters entry now sits under Tools & settings in the workbench's menu.*
+*Integration note 2026-10-02: the Meters entry now sits under Tools & settings in the workbench's menu, labelled **Meter Lab**.*
 
 Owner decision on how to start meter work given tau-alpha's instability (active hardware bug-hunting
 that same day, M0 built but uncommitted on their side, no tagged release containing a real
@@ -838,7 +838,7 @@ not tau-alpha's real preview stack (`METER_MODULE_SPEC.md` section 7's `tau_fb.j
 `tau_audio.js`/`tau_ballistics.js`, which doesn't exist to vendor yet), captioned as such on screen, but
 real enough that the editor and preview are genuinely live and interactive.
 
-New "Meters" nav entry. Verified live in a browser: switching meters preserves each one's own
+New "Meters" nav entry (labelled **Meter Lab** since 2026-10-02). Verified live in a browser: switching meters preserves each one's own
 independent parameter state, toggling "Peak cap" off correctly hides its two dependent params and
 removes the peak dot from the animating preview, and all three meters' distinct preview shapes (bars,
 scope, rings) render and animate correctly. `npm run check`: 0 errors, 0 warnings.
