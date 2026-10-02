@@ -56,7 +56,7 @@ One card, three rows, always in this order:
 |---|---|---|
 | **Core media**, one per Tau platform folder | size on disk of `Assets/<platform>/` (media plus instance files), rounded to the card's allocation unit. Cores that share a platform (for example `TAU` and `TAU_DIAGNOSTIC` share `tau`) are **one segment** labelled with both names and "(shared media)" | cool ramp `#5b7f8f`, `#6f9f9a`, `#7f8fbf`, `#9a86b8` (repeats after four, legend disambiguates) |
 | **Other data** | used space (`total - available`) minus the Tau segments: other cores, saves, screenshots, system files, anything not Tau | `#3d4b4d`, no hatch |
-| **Removing** | bytes staged for removal, inside the active core's segment | existing hatch (`#7a4a3d`/`#5b3a30`) |
+| **Removing** | bytes staged for removal. **Always stacked at the end of the used part, just before Adding** (2026-10-02, owner), so what goes and what comes read as one stack; the bytes still come out of the active core's segment, which draws at its size after the removal | existing hatch (`#7a4a3d`/`#5b3a30`) |
 | **Adding** | bytes staged to add, immediately after the used part | mint `#c1f0ad`; red `#ff9d8a` if it does not fit |
 | **Free** | the rest | track `#232e30` |
 
