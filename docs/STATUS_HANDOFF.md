@@ -1033,3 +1033,11 @@ reading); not fixed yet. **Still to do:** boot the Pocket and confirm `Info > TH
 **Hardware confirmation, 2026-10-03 (owner-reported).** After the real write above, the Pocket loaded the theme: OMEGA TEST was available and `Info > THEME FILE` read
 `1 LOADED`. So the `THEM` section Omega writes (byte-identical to tau-alpha's tool) is accepted by the firmware reader on real hardware, the first time this has been
 shown. Not captured as an image; the installed file itself is `testdata`-worthy (144 bytes, sha 15c5d571...) and still sits on `tau_dev_67`.
+
+**`._*` cleanup in sync (2026-10-03).** `sync::sweep_appledouble(media_root)` removes macOS AppleDouble stubs (regular files named `._*`, at most 64 KiB, so a
+real file that happens to start with `._` and is larger is kept) from the Tau media root. It runs after `execute_with_mirror`, `execute_core_move` (source side
+too) and `execute_changes_with` (the workbench), on success and on failure, and not when the confirmation token was refused (nothing was written then). It also
+removes orphans left by deletions. Errors are ignored by design: housekeeping never fails a run. Two tests (the sweep itself; a confirmed sync removes a planted
+stub while a refused one leaves it). **Not covered:** `package::execute_install` (writes across `Cores`/`Assets`/`Platforms`, a wider tree than the media root) and
+the standalone playlist writers. **Unverified on a real card:** the tests use planted stubs; whether the Pocket card shows no `._` after a real sync is the next
+real-card check (TEST_PLAN: look for `._*` under `Assets/<platform>/common` after a sync).

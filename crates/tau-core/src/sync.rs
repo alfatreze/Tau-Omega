@@ -439,6 +439,28 @@ pub fn execute_with_mirror(
     backup_root: Option<&Path>,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<SyncReport, TauError> {
+    let result = execute_with_mirror_inner(
+        plan,
+        confirmation,
+        delete_confirmation,
+        backup_root,
+        progress,
+    );
+    // Whether the run finished or stopped part way, do not leave macOS's metadata stubs behind (a refused
+    // confirmation wrote nothing, so skip the walk then).
+    if !matches!(&result, Err(e) if e.code() == ErrorCode::ConfirmationMismatch) {
+        sweep_appledouble(&plan.destination);
+    }
+    result
+}
+
+fn execute_with_mirror_inner(
+    plan: &SyncPlan,
+    confirmation: &str,
+    delete_confirmation: Option<&str>,
+    backup_root: Option<&Path>,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<SyncReport, TauError> {
     if confirmation != plan.id {
         return Err(TauError::e(
             ErrorCode::ConfirmationMismatch,
@@ -635,6 +657,31 @@ pub fn execute_with_mirror(
 /// file is copied to an external backup before removal. The source index is
 /// rebuilt last so both cores remain loadable after a successful move.
 pub fn execute_core_move(
+    plan: &SyncPlan,
+    confirmation: &str,
+    delete_confirmation: &str,
+    source_common: &Path,
+    source_root_prefix: &str,
+    backup_root: &Path,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<SyncReport, TauError> {
+    let result = execute_core_move_inner(
+        plan,
+        confirmation,
+        delete_confirmation,
+        source_common,
+        source_root_prefix,
+        backup_root,
+        progress,
+    );
+    if !matches!(&result, Err(e) if e.code() == ErrorCode::ConfirmationMismatch) {
+        // Files were deleted from the source core as well as written to the destination.
+        sweep_appledouble(source_common);
+    }
+    result
+}
+
+fn execute_core_move_inner(
     plan: &SyncPlan,
     confirmation: &str,
     delete_confirmation: &str,
@@ -1162,6 +1209,38 @@ pub(crate) fn sweep_stale_temps<'a>(media_root: &Path, written: impl Iterator<It
             }
         }
     }
+}
+
+/// An AppleDouble stub is a few KB; anything bigger named `._*` is somebody's file and is left alone.
+const APPLEDOUBLE_MAX: u64 = 64 * 1024;
+
+/// Removes the macOS AppleDouble stubs (`._<name>`) that the OS leaves beside files it writes, renames or deletes on
+/// exFAT/FAT (SAFETY_RULES 7), from a Tau media root. Only regular files named `._*` and no larger than a stub are
+/// removed; symlinks, directories and everything else are untouched. Errors are ignored: this is housekeeping and
+/// must never fail a run that has otherwise succeeded. Returns how many were removed.
+pub(crate) fn sweep_appledouble(media_root: &Path) -> usize {
+    let mut removed = 0;
+    let mut stack = vec![media_root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                stack.push(entry.path());
+            } else if kind.is_file()
+                && entry.file_name().to_string_lossy().starts_with("._")
+                && entry.metadata().is_ok_and(|m| m.len() <= APPLEDOUBLE_MAX)
+                && fs::remove_file(entry.path()).is_ok()
+            {
+                removed += 1;
+            }
+        }
+    }
+    removed
 }
 
 /// Sizes a sidecar `.timg` at most (a 128 px palette cover is about 17 KB).
@@ -2142,5 +2221,74 @@ mod tests {
         assert_eq!(seen, 1);
         fs::remove_dir_all(source).unwrap();
         fs::remove_dir_all(common.ancestors().nth(2).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn the_sweep_removes_only_stub_sized_appledouble_files_and_nothing_else() {
+        let common = root("appledouble").join("Assets/tau/common");
+        let album = common.join("Artist/Album");
+        fs::create_dir_all(&album).unwrap();
+        fs::write(album.join("01.mp3"), b"audio").unwrap();
+        fs::write(album.join("._01.mp3"), vec![0u8; 4096]).unwrap(); // the stub beside a file
+        fs::write(common.join("._Artist"), vec![0u8; 4096]).unwrap(); // the stub beside a folder
+        fs::write(album.join("._gone.mp3"), vec![0u8; 4096]).unwrap(); // an orphan: its file was deleted
+        fs::write(album.join("._big"), vec![0u8; 100 * 1024]).unwrap(); // too big to be a stub: somebody's file
+        fs::write(album.join(".hidden"), b"x").unwrap(); // a hidden file that is not an AppleDouble
+        fs::write(album.join(".DS_Store"), b"x").unwrap();
+        assert_eq!(sweep_appledouble(&common), 3);
+        assert!(
+            album.join("01.mp3").is_file()
+                && album.join(".hidden").is_file()
+                && album.join(".DS_Store").is_file()
+        );
+        assert!(album.join("._big").is_file(), "a large ._ file was removed");
+        assert!(
+            !album.join("._01.mp3").exists()
+                && !common.join("._Artist").exists()
+                && !album.join("._gone.mp3").exists()
+        );
+        assert_eq!(
+            sweep_appledouble(&common),
+            0,
+            "a second sweep finds nothing"
+        );
+        assert_eq!(
+            sweep_appledouble(&common.join("missing")),
+            0,
+            "a missing folder is not an error"
+        );
+    }
+
+    #[test]
+    fn a_confirmed_sync_leaves_no_appledouble_stubs_and_a_refused_one_touches_nothing() {
+        let source = root("ad-sync-source");
+        let card = root("ad-sync-card");
+        let common = card.join("Assets/tau/common");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&common).unwrap();
+        fs::write(source.join("01 Track.mp3"), b"audio one").unwrap();
+        let sync_plan = plan(
+            &[source],
+            &common,
+            "/Assets/tau/common/",
+            PlanOptions {
+                mirror: false,
+                embed_covers: false,
+                art_sidecar_pal256: false,
+            },
+            &mut None,
+        )
+        .unwrap();
+        // Something the OS left behind earlier.
+        let planted = common.join("._old.mp3");
+        fs::write(&planted, vec![0u8; 4096]).unwrap();
+        assert!(execute(&sync_plan, "wrong token", &mut None).is_err());
+        assert!(planted.exists(), "a refused run changed the card");
+        execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
+        assert!(!planted.exists(), "the stub survived a confirmed sync");
+        assert!(
+            sync_plan.items.iter().all(|i| i.destination.is_file()),
+            "the copied file is missing"
+        );
     }
 }

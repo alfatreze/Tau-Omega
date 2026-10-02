@@ -35,7 +35,8 @@ and from the owner's working rules. They apply to Tau Omega exactly as they appl
 6. **The five `System/*.bin` cache files** (`core_viewby_platform`, `corelist_cache`, `cores_cache`, `platform_viewby_category`,
    `platforms_cache`) are safe to delete after cores are added or removed so the Pocket rebuilds them. Back them up first.
 7. **macOS metadata:** `._*`, `.DS_Store` and `.fseventsd` are never copied. Files it creates on the card (`._*`) are removed after a
-   write. Leave `.Spotlight-V100` / `.fseventsd` alone.
+   write: since 2026-10-03 a confirmed sync, workbench run, core move and theme-file install sweep `._*` files (stub-sized, regular files only) from the
+   Tau media root afterwards, whether the run finished or stopped. Not yet covered: package installs and standalone playlist writes. Leave `.Spotlight-V100` / `.fseventsd` alone.
 8. **FAT rules:** FAT32 has a 4 GiB file limit and no case sensitivity; exFAT is common. Long names are fine, but the Tau core opens
    files by a path of at most 200 bytes and only ASCII names. Refuse or shorten, never silently truncate.
 9. **Ejecting:** the app tells the user to eject and, where the OS allows, offers to. Writes are flushed (`fsync` on files,
