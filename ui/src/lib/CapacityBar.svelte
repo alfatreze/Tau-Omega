@@ -92,11 +92,13 @@
     <div class="wb-bar" role="progressbar" aria-label="Sync progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={sync.total ? Math.round(syncPercent) : undefined}>
       <i class="seg k-add" class:indeterminate={!sync.total} style="width:{sync.total ? syncPercent : 40}%"></i>
     </div>
+    {#if !sync.preparing}
     <div class="wb-legend">
       <span class="keep" role="note">{sync.note}</span>
       {#if sync.slow}<span role="note">{sync.slow}</span>{/if}
       <span class="wb-actions"><button class="quiet" on:click={onCancel}>Cancel sync</button></span>
     </div>
+    {/if}
     <span class="sr-only" role="status">{sync.phase}</span>
   {:else if hasSpace}
     <div class="wb-cap-text">

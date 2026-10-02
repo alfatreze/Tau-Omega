@@ -447,6 +447,15 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('menuitem', { name: /Forget what the app remembers about this card/ }).click(); await p.waitForTimeout(600);
   assert.equal(await p.getByRole('menuitem').count(), 0); assert.match(await text(pk()), /albums?/); ok('forgetting closes the menu and reloads the card');
 
+  // --- pressing Start sync shows a status at once, even while the plan is still being worked out ----
+  await fresh(); await openLibrary(); await chooseFolder();
+  await p.evaluate(() => window.__tauMock.setPlanDelay(1200));
+  await stage((await pc().locator('input[aria-label^="Select "]').first().getAttribute('aria-label')).replace('Select ', ''));
+  await p.getByRole('button', { name: 'Start sync' }).click(); await p.waitForTimeout(250);
+  const prep = p.getByRole('region', { name: 'Sync progress' });
+  assert.equal(await prep.count(), 1); assert.match(await text(prep), /Preparing sync/); assert.equal(await prep.getByRole('button', { name: 'Cancel sync' }).count(), 0); ok('Start sync shows "Preparing sync" with the bar straight away, with nothing to cancel yet');
+  await p.waitForTimeout(2500); await p.evaluate(() => window.__tauMock.setPlanDelay(0)); await done();
+
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();
   console.log(`\n${passed} checks passed`);

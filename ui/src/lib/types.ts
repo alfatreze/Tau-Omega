@@ -142,4 +142,6 @@ export type SyncView = {
   line: string;
   note: string;
   slow: string;
+  /** Planning, before any copying: only the bar and a status line are shown, with no Cancel. */
+  preparing?: boolean;
 };
