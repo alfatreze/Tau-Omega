@@ -1,6 +1,6 @@
 # Card space and sync bar: design spec
 
-Status: **design only, nothing built.** Extends the existing dark workbench system (`ui/src/lib/Workbench.svelte`,
+Status: **built** (first in test build `0.4.0-alpha.2`; see "As built" at the end for where it differs from this design). Not yet run on a real card. Extends the existing dark workbench system (`ui/src/lib/Workbench.svelte`,
 the `.wb-cap` bar) the same way [`FIRMWARE_UPDATE_SPEC.md`](FIRMWARE_UPDATE_SPEC.md) extended it: same tokens, same
 dialog helper, plain-language copy. Written with the design-system "extend" method.
 
@@ -163,6 +163,18 @@ secondary text for the headline and legend, 12 px for legend sizes.
 3. **`DetailsPanel.svelte`.** Reuses `modal`; reads the staged list; no new backend calls.
 4. **Merge.** Move **Start sync** into the bar (same label, so existing checks and docs still match); the tray keeps the list, Clear all and a "See details" link.
 5. **Checks.** Mock backend returns a breakdown; new browser checks for the segments, the projection arithmetic, the panel's keyboard behaviour and the over-capacity state; engine tests above.
+
+## As built (differences from the design above)
+
+| Design said | Built | Why |
+|---|---|---|
+| **Start sync** moves into the bar and leaves the tray | **Start sync stays in the Pending changes area**; the bar has **Details**, and the panel has its own Start sync (same action) | the usability round found that keyboard users must meet the pending items and their Undo buttons *before* Start sync; a button in the bar above the lists breaks that order, and 40 existing checks rely on it. One line removes the tray button if you prefer the bar |
+| clicking the bar also opens the panel | only the **Details** button | a click handler on a non-interactive bar is a keyboard trap for no gain |
+| estimate adds half an allocation unit per track | estimate uses logical album sizes | the waste is tens of MB on a 100 GB card; the engine's own preflight (`InsufficientSpace`) uses exact on-disk sizes at Start sync |
+| `card_breakdown` finds Tau cores itself | the app passes `{id, shortname, platform, library_capable}` for each core | `inspect_card` reads every core's whole index; passing what the app already has avoids re-reading them over USB |
+| everything else | as designed: per-platform segments (shared media is one segment), other data, hatched removal inside the active core's segment, mint adding segment, text legend, headline "free, N after sync", details panel with by-core before and after, adding, removing, editing, heads-up, estimate footnote | |
+
+Decisions 2, 3, 4 and 5 kept their defaults. Not measured yet: how long `card_breakdown` takes on a real Pocket over USB and on a card reader (`TEST_PLAN.md`, item 5).
 
 ## Open questions (recommended default first)
 

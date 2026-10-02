@@ -7,13 +7,17 @@
   // card and core so switching cards switches the list.
   import { onDestroy, onMount, tick } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { cancelJob, checkStorageCapacity, detectConnection, ejectCard, readbackStatus, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
+  import { cancelJob, cardBreakdown, checkStorageCapacity, detectConnection, ejectCard, readbackStatus, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
   import { modal } from './a11y';
   import VirtualList from './VirtualList.svelte';
-  import type { AlbumInfo, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
+  import CapacityBar from './CapacityBar.svelte';
+  import DetailsPanel from './DetailsPanel.svelte';
+  import type { AlbumInfo, CardBreakdown, CoreRef, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
 
   /** Root folder of the open card (used to detect how it is connected). */
   export let cardPath = '';
+  /** The cores on this card (id, name, platform, library-capable): which folders count as Tau media in the capacity bar. */
+  export let cores: CoreRef[] = [];
   export let cardLabel = 'Pocket';
   export let coreLabel = '';
   /** The selected core's media root on the card (`.../Assets/<platform>/common`). */
@@ -56,6 +60,12 @@
   let card: LibraryListing | null = null;
   let cardBusy = false, cardError = '', cardProgress = '';
   let space: CapacityCheck | null = null;
+  // Where the card's space goes (Tau media per core versus other data), measured in the background so the
+  // bar shows total and free at once and fills in the split when the walk finishes.
+  let breakdown: CardBreakdown | null = null;
+  let breakdownBusy = false;
+  let breakdownJob = '';
+  let detailsOpen = false;
   let prefs: PrefsView | null = null;
   let connection: ConnectionInfo = { kind: 'unknown', detail: '' };
   let embedCovers = true;
@@ -119,12 +129,24 @@
     try {
       card = await listLibrary(mediaRoot, cardJob); resetThumbs('c');
       space = await checkStorageCapacity(mediaRoot, 0).catch(() => null);
+      loadBreakdown();
       // Drop staged removals/edits for albums that are no longer on the card.
       const here = new Set(card.albums.map((a) => a.id));
       const kept = pending.filter((p) => p.kind === 'add' || here.has(p.id));
       if (kept.length !== pending.length) pending = kept;
     } catch (error) { card = null; cardError = explainError(error); }
     finally { cardBusy = false; }
+  }
+  /** Starts (or restarts) the background measurement; a stale answer for a card that has since changed is dropped. */
+  function loadBreakdown() {
+    if (breakdownJob) cancelJob(breakdownJob).catch(() => {});
+    if (!cardPath || !cores.length) { breakdown = null; breakdownBusy = false; return; }
+    const job = (breakdownJob = newJobId());
+    breakdownBusy = true;
+    cardBreakdown(cardPath, cores, job)
+      .then((result) => { if (job === breakdownJob) breakdown = result; })
+      .catch(() => { if (job === breakdownJob) breakdown = null; })
+      .finally(() => { if (job === breakdownJob) { breakdownBusy = false; breakdownJob = ''; } });
   }
   async function scanSource() {
     if (!sourcePath) return;
@@ -161,7 +183,6 @@
   $: used = space ? space.space.total_bytes - space.space.available_bytes : 0;
   $: free = (space?.space.available_bytes ?? 0) - addBytes + removeBytes;
   $: overCapacity = !!space && free < (space.margin_bytes ?? 0);
-  $: pct = (n: number) => `${Math.max(0, Math.min(100, total ? (n / total) * 100 : 0))}%`;
   $: queuedIds = new Set(adds.map((p) => p.id));
   $: removingIds = new Set(removes.map((p) => p.id));
   $: editingIds = new Set(edits.map((p) => p.id));
@@ -174,6 +195,10 @@
   $: slowWarn = !!review && connKind === 'direct_usb' && review.bytes_to_write > SLOW_LIMIT && !prefs?.slow_alert_suppressed;
   $: pendingCount = pending.length;
   $: disconnected = connected === false;
+  $: freeNow = space?.space.available_bytes ?? 0;
+  /** The platform folder this Library works with (`.../Assets/<platform>/common`): the capacity bar's active segment. */
+  $: activePlatform = (mediaRoot.match(/\/Assets\/([^/]+)\/common\/?$/) ?? [])[1] ?? '';
+  $: activeSegment = breakdown?.segments.find((s) => s.platform === activePlatform) ?? null;
   // The Pocket's index has hard limits; show how full it is and stop before an over-limit sync.
   $: limits = card?.limits ?? null;
   $: tracksNow = card?.tracks.length ?? 0;
@@ -192,6 +217,15 @@
   $: pickOver = afterPick !== null ? Math.max(0, margin - afterPick) : 0;
   $: pickTooMany = !!limits && tracksAfter + pickedNetTracks > limits.max_tracks;
   $: canStart = pendingCount > 0 && !overCapacity && !overLimit && !disconnected && !run && !!card;
+  $: startReason = !pendingCount ? 'Nothing is staged yet.' : overCapacity ? "This won't fit on the card." : overLimit ? "This is over the Pocket's library limit." : disconnected ? 'The card is not connected.' : run ? 'A sync is already running.' : !card ? 'The card is still being read.' : '';
+  $: detailsWarnings = [
+    overCapacity ? "This won't fit on the card: remove something or add less." : '',
+    overLimit && limits ? `Over the Pocket's library limit (${limits.max_tracks.toLocaleString()} tracks, ${limits.max_albums.toLocaleString()} albums).` : '',
+    nearLimit && limits ? `Close to the Pocket's library limit (${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks).` : '',
+    slowApplies ? "Connected directly to the Pocket: transfers over 10 MB are slow, and the Pocket's own screen says not to use this for large transfers. A card reader is much faster." : '',
+    !overCapacity && total && free < total * 0.05 ? 'The card will be nearly full.' : '',
+  ].filter(Boolean);
+  $: detailsBackup = removes.length ? (prefs?.remove_mode === 'ask' ? 'You will be asked whether to back these up first.' : prefs?.remove_mode === 'none' ? 'These will be removed without a backup (your setting).' : 'These are copied to your backup folder first, then removed.') : '';
   // ---- what each list shows: search, state filter and sort ----------------------------
   type SortKey = 'artist' | 'title' | 'largest' | 'smallest';
   let sort: SortKey = (() => { try { return (localStorage.getItem('tau.wb.sort') as SortKey) || 'artist'; } catch { return 'artist'; } })();
@@ -537,22 +571,11 @@
   {#if noCard}
     <section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Connect your Pocket or a card reader, or choose a card on the Cards screen. It will appear here automatically.</p></section>
   {:else}
-  <div class="wb-cap" role="group" aria-label="Storage on the Pocket">
-    {#if space}
-      <div class="wb-cap-text">
-        <span><b>{size(used)}</b> on Pocket</span>
-        {#if addBytes}<span class="add">+ {size(addBytes)} queued</span>{/if}
-        {#if removeBytes}<span class="rm">− {size(removeBytes)} removing</span>{/if}
-        {#if limits}<span class="wb-limit" class:bad={overLimit} class:warn={nearLimit} title="The Pocket's library can hold at most {limits.max_tracks.toLocaleString()} tracks and {limits.max_albums.toLocaleString()} albums">{tracksAfter.toLocaleString()} of {limits.max_tracks.toLocaleString()} tracks (Pocket limit)</span>{/if}
-        <span class="wb-cap-free" class:bad={overCapacity}>{overCapacity ? `${size(Math.max(0, (space.margin_bytes ?? 0) - free))} too much for this card` : `${size(free)} free of ${size(total)}`}</span>
-      </div>
-      <div class="wb-bar" role="img" aria-label={`${size(used)} used, ${size(addBytes)} queued, ${size(Math.max(free, 0))} free`}>
-        <i class="k-used" style="width:{pct(used - removeBytes)}"></i><i class="k-rm" style="width:{pct(removeBytes)}"></i><i class="k-add" class:over={overCapacity} style="width:{pct(addBytes)}"></i>
-      </div>
-    {:else}
-      <div class="wb-cap-text"><span>{cardBusy ? 'Reading the card…' : 'Storage information is not available for this card.'}</span></div>
-    {/if}
-  </div>
+  <CapacityBar hasSpace={!!space} busy={cardBusy} {total} {used} {addBytes} {removeBytes} {freeNow} freeAfter={free} {margin} {overCapacity}
+    {breakdown} measuring={breakdownBusy} {activePlatform}
+    limitText={limits ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (Pocket limit)` : ''}
+    limitTitle={limits ? `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums` : ''}
+    {overLimit} {nearLimit} onDetails={() => (detailsOpen = true)} />
 
   <div class="wb-panes">
     <section class="wb-pane" data-pane="source" aria-labelledby="src-title">
@@ -814,6 +837,10 @@
     <div class="wb-modal-actions"><button class="quiet" on:click={() => seeDetails(run?.journal ?? '')}>View details</button>{#if !ejectOk}<button class="quiet" disabled={ejecting} on:click={eject}>{ejecting ? 'Ejecting…' : 'Eject safely'}</button>{/if}<button class="primary" data-autofocus on:click={closeRun}>Done</button></div>
   </div>
 {/if}
+<DetailsPanel open={detailsOpen} {adds} {removes} {edits} {addBytes} {removeBytes} {freeNow} freeAfter={free} {tracksAfter} maxTracks={limits?.max_tracks ?? 0}
+  coreLabel={coreLabel} coreBytes={activeSegment ? activeSegment.bytes_on_disk : null} warnings={detailsWarnings} backupNote={detailsBackup}
+  {canStart} {startReason} onClose={() => (detailsOpen = false)} onStart={() => { detailsOpen = false; start(); }} />
+
 <style>
   .wb{padding:24px 40px 20px;display:flex;flex-direction:column;gap:14px;height:100vh;position:relative}
   .wb-top{display:flex;justify-content:space-between;align-items:flex-start;margin:0;padding:0;flex-shrink:0}
@@ -827,13 +854,6 @@
   .wb-refresh:hover{color:#e8ecec;border-color:#2c393a}
   .wb-refresh.spin svg{animation:wb-spin .7s linear}
   @keyframes wb-spin{to{transform:rotate(360deg)}}
-  .wb-cap{flex-shrink:0;background:#161f20;border:1px solid #2c393a;border-radius:12px;padding:14px 16px}
-  .wb-cap-text{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:#a6b3b2;margin-bottom:10px}
-  .wb-cap-text b{color:#e8ecec}.wb-cap-text .add{color:#c1f0ad}.wb-cap-text .rm{color:#e8b59f}
-  .wb-cap-free{margin-left:auto}.wb-cap-free.bad{color:#ff9d8a;font-weight:700}
-  .wb-bar{display:flex;height:12px;border-radius:99px;background:#232e30;overflow:hidden}
-  .wb-bar i{display:block;height:100%;transition:width .25s}
-  .k-used{background:#5b7f8f}.k-rm{background:repeating-linear-gradient(45deg,#7a4a3d,#7a4a3d 4px,#5b3a30 4px,#5b3a30 8px)}.k-add{background:#c1f0ad}.k-add.over{background:#ff9d8a}
   .wb-panes{display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;min-height:0}
   @media(max-width:1100px){.wb-panes{grid-template-columns:1fr}.wb{height:auto;min-height:100vh}.wb-list{max-height:320px}}
   .wb-pane{position:relative;min-height:0;background:#161f20;border:1px solid #2c393a;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
@@ -908,7 +928,6 @@
   .wb-cover-pick{display:flex;gap:12px;align-items:center}.wb-cover-pick img{width:72px;height:72px;object-fit:cover;border-radius:8px}
   .wb-art.big{width:72px;height:72px}
   .wb-banner{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 16px;background:#3a2420;border:1px solid #6b3a30;border-radius:10px;color:#f4cfc4;font-size:13px;flex-shrink:0}
-  .wb-limit{color:#8c9c9b}.wb-limit.warn{color:#f0d59a}.wb-limit.bad{color:#ff9d8a;font-weight:700}
   .wb-detail{margin:0 0 10px;font-size:13px}.wb-detail summary{cursor:pointer;color:#b7c3c2;padding:4px 0}
   .wb-detail ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;max-height:160px;overflow:auto}
   .wb-detail li{display:flex;gap:8px}.wb-detail small{color:#8c9c9b;margin-left:8px}.wb-detail .k{font-weight:700;width:14px;text-align:center}.wb-detail .k.add{color:#c1f0ad}.wb-detail .k.remove{color:#e8b59f}
