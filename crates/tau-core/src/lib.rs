@@ -955,27 +955,47 @@ fn read_id3v2(f: &mut fs::File) -> Result<(BTreeMap<String, String>, u64), TauEr
 fn syncsafe(b: &[u8]) -> u32 {
     (u32::from(b[0]) << 21) | (u32::from(b[1]) << 14) | (u32::from(b[2]) << 7) | u32::from(b[3])
 }
+/// Decodes an ID3v2 text frame body (encoding byte, then text) the way the
+/// reference does (`tau-alpha/tools/tau_library.py` `_dec`): **decode the whole
+/// body first, then cut at the first NUL character.** Cutting the bytes at the
+/// first zero byte before decoding (what this used to do) destroys every UTF-16
+/// string, because each ASCII letter in UTF-16 has a zero byte: "Kind of Blue"
+/// became just a byte-order mark, so 266 of 341 albums in a real library listed
+/// with blank titles and artists, and the index written for them was blank too.
+///
+/// Encodings: 0 = Latin-1; 1 = UTF-16 where a BOM picks the byte order and no BOM
+/// means little-endian; 2 = UTF-16 big-endian (a BOM is kept as U+FEFF, as in the
+/// reference); anything else = UTF-8. Text that does not decode in its declared
+/// encoding falls back to Latin-1, like the reference.
 fn decode_id3_text(b: &[u8]) -> Option<String> {
     let (&enc, body) = b.split_first()?;
-    let bytes = body.split(|x| *x == 0).next().unwrap_or_default();
-    let text = match enc {
-        0 => bytes.iter().map(|x| char::from(*x)).collect(),
-        3 => String::from_utf8_lossy(bytes).to_string(),
-        1 | 2 => {
-            let big = enc == 2;
-            let mut chars = Vec::new();
-            for pair in bytes.as_chunks::<2>().0 {
-                chars.push(if big {
-                    u16::from_be_bytes([pair[0], pair[1]])
-                } else {
-                    u16::from_le_bytes([pair[0], pair[1]])
-                });
-            }
-            String::from_utf16_lossy(&chars)
+    let latin1 = |bytes: &[u8]| -> String { bytes.iter().map(|x| char::from(*x)).collect() };
+    let utf16 = |bytes: &[u8], big: bool| -> Option<String> {
+        if !bytes.len().is_multiple_of(2) {
+            return None;
         }
-        _ => String::from_utf8_lossy(bytes).to_string(),
+        let units: Vec<u16> = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|p| if big { u16::from_be_bytes(*p) } else { u16::from_le_bytes(*p) })
+            .collect();
+        String::from_utf16(&units).ok()
     };
-    Some(text.trim().to_string())
+    let text = match enc {
+        0 => latin1(body),
+        1 => {
+            let (rest, big) = match body {
+                [0xff, 0xfe, rest @ ..] => (rest, false),
+                [0xfe, 0xff, rest @ ..] => (rest, true),
+                _ => (body, false),
+            };
+            utf16(rest, big).unwrap_or_else(|| latin1(body))
+        }
+        2 => utf16(body, true).unwrap_or_else(|| latin1(body)),
+        _ => String::from_utf8(body.to_vec()).unwrap_or_else(|_| latin1(body)),
+    };
+    Some(text.split('\0').next().unwrap_or_default().trim().to_string())
 }
 fn read_id3v1(f: &mut fs::File, size: u64) -> Result<BTreeMap<String, String>, TauError> {
     let mut out = BTreeMap::new();
@@ -1704,4 +1724,74 @@ pub fn synth(tracks: usize, albums: usize, artists: usize) -> Vec<Entry> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod id3_text_tests {
+    use super::decode_id3_text;
+
+    fn hex(s: &str) -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    /// Every expected value below was produced by running the reference
+    /// (`tau-alpha/tools/tau_library.py`, `_dec(...).split("\x00")[0].strip()`) on the same
+    /// bytes, so this is a conformance check, not a restatement of the Rust code.
+    #[test]
+    fn id3_text_decodes_exactly_like_the_reference() {
+        let cases: &[(&str, &str, &str)] = &[
+            ("utf16le_bom", "01fffe4b0069006e00640020006f006600200042006c0075006500", "Kind of Blue"),
+            ("utf16be_bom", "01feff004700f60074007400650072006400e4006d006d006500720075006e0067", "Götterdämmerung"),
+            ("utf16le_nobom", "0150006c00610069006e00", "Plain"),
+            ("utf16_nul_terminated", "01fffe41006200630000006a0075006e006b00", "Abc"),
+            ("utf16_empty_bom_only", "01fffe", ""),
+            ("utf16_odd_length", "01fffe4800690041", "\u{ff}\u{fe}H"),
+            ("enc2_be", "020042006500740061", "Beta"),
+            ("enc2_be_bom_kept", "02feff0042006500740061", "\u{feff}Beta"),
+            ("latin1", "00436166e92020", "Café"),
+            ("latin1_nul", "0041626300646566", "Abc"),
+            ("utf8", "03c39c6ec3af636f6465", "Ünïcode"),
+            ("utf8_invalid", "036162fffe6364", "ab\u{ff}\u{fe}cd"),
+            ("utf8_nul", "034f6e650054776f", "One"),
+            ("utf16_cjk", "01fffee5652c679e8a", "日本語"),
+            ("utf16_surrogate_pair", "01fffe41003dd800de4200", "A😀B"),
+            ("utf16_lone_surrogate", "01fffe00d84100", "\u{ff}\u{fe}"),
+        ];
+        for (name, bytes, expected) in cases {
+            assert_eq!(decode_id3_text(&hex(bytes)).as_deref(), Some(*expected), "{name}");
+        }
+        assert_eq!(decode_id3_text(&[]), None);
+    }
+
+    /// The end-to-end symptom: a file whose tags are UTF-16 (iTunes, Windows Media Player
+    /// and many taggers write these) must show its real title and artist, never a BOM.
+    #[test]
+    fn a_utf16_tagged_file_lists_its_real_title_and_artist() {
+        fn frame(id: &str, text: &str) -> Vec<u8> {
+            let mut body = vec![1u8, 0xff, 0xfe];
+            body.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+            let mut f = id.as_bytes().to_vec();
+            f.extend((body.len() as u32).to_be_bytes());
+            f.extend([0, 0]);
+            f.extend(body);
+            f
+        }
+        let mut frames = frame("TIT2", "So What");
+        frames.extend(frame("TPE1", "Miles Davis"));
+        frames.extend(frame("TALB", "Kind of Blue"));
+        let size = frames.len();
+        let mut file = b"ID3\x03\x00\x00".to_vec();
+        file.extend([(size >> 21 & 0x7f) as u8, (size >> 14 & 0x7f) as u8, (size >> 7 & 0x7f) as u8, (size & 0x7f) as u8]);
+        file.extend(frames);
+        file.extend(vec![0u8; 2048]);
+        let dir = std::env::temp_dir().join(format!("tau-id3-utf16-{}", std::process::id() as u128 + crate::test_uniq()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("01 So What.mp3");
+        std::fs::write(&path, file).unwrap();
+        let (tags, _, _) = crate::read_tags(&path).unwrap();
+        assert_eq!(tags.get("TIT2").map(String::as_str), Some("So What"));
+        assert_eq!(tags.get("TPE1").map(String::as_str), Some("Miles Davis"));
+        assert_eq!(tags.get("TALB").map(String::as_str), Some("Kind of Blue"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }
