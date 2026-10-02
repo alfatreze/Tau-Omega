@@ -12,7 +12,7 @@
   import VirtualList from './VirtualList.svelte';
   import CapacityBar from './CapacityBar.svelte';
   import DetailsPanel from './DetailsPanel.svelte';
-  import type { AlbumInfo, CardBreakdown, CoreRef, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
+  import type { AlbumInfo, CardBreakdown, CoreRef, StagedItem, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
 
   /** Root folder of the open card (used to detect how it is connected). */
   export let cardPath = '';
@@ -84,7 +84,7 @@
   let connMenu = false;
 
   let dialog: null | 'review' | 'first-remove' | 'edit' = null;
-  let trayEl: HTMLElement;
+  let capBar: CapacityBar;
   let lastFailed = false;
   let review: ChangePlanView | null = null;
   let reviewError = '';
@@ -218,6 +218,22 @@
   $: pickTooMany = !!limits && tracksAfter + pickedNetTracks > limits.max_tracks;
   $: canStart = pendingCount > 0 && !overCapacity && !overLimit && !disconnected && !run && !!card;
   $: startReason = !pendingCount ? 'Nothing is staged yet.' : overCapacity ? "This won't fit on the card." : overLimit ? "This is over the Pocket's library limit." : disconnected ? 'The card is not connected.' : run ? 'A sync is already running.' : !card ? 'The card is still being read.' : '';
+  $: pendingLine = [adds.length && `${plural(adds.length, 'album')} to add (${plural(addTracks, 'track')}, ${size(addBytes)})`, removes.length && `${removes.length} to remove`, edits.length && `${edits.length} to edit`].filter(Boolean).join(' · ');
+  $: stagedItems = pending.map((p): StagedItem => {
+    const label = p.kind === 'edit' ? editLabel(p) : p.title;
+    return {
+      key: p.key, kind: p.kind, label,
+      artist: p.kind === 'edit' ? undefined : p.artist, tracks: p.kind === 'edit' ? undefined : p.tracks, bytes: p.kind === 'edit' ? undefined : p.bytes,
+      action: p.kind === 'remove' ? `Undo removing ${p.title}` : `Remove ${label} from pending changes`,
+      verb: p.kind === 'remove' ? 'Undo' : p.kind === 'edit' ? 'Discard' : 'Remove',
+    };
+  });
+  $: notes = [
+    slowApplies && prefs?.slow_alert_suppressed ? { text: `Direct connection: slow · about ${eta(addBytes, estSpeed)}${estIsDefault ? ' (estimate)' : ''}`, bad: false } : null,
+    overCapacity ? { text: "Won't fit on this card", bad: true } : null,
+    overLimit && limits ? { text: `Over the Pocket's library limit (${limits.max_tracks.toLocaleString()} tracks)`, bad: true } : null,
+    disconnected ? { text: ejectedSafely ? 'Card ejected' : 'Card disconnected', bad: true } : null,
+  ].filter((n): n is { text: string; bad: boolean } => n !== null);
   $: pendingSummary = [adds.length && `${plural(adds.length, 'album')} to add`, removes.length && `${removes.length} to remove`, edits.length && `${plural(edits.length, 'edit')}`].filter(Boolean).join(', ');
   $: detailsWarnings = [
     overCapacity ? "This won't fit on the card: remove something or add less." : '',
@@ -264,8 +280,8 @@
   const stateLabel: Record<AlbumState, string> = { on: 'On Pocket', queued: 'Queued', changed: 'Changed', new: 'New' };
 
   function say(message: string) { toast = message; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toast = ''), 7000); }
-  /** After a change to the queue, move focus to the Pending changes area, so keyboard users land next to what they just did. */
-  async function focusTray() { await tick(); trayEl?.focus(); }
+  /** After a change to the queue, keyboard focus goes to the bar (Start sync, or Details when it is not allowed yet). */
+  async function focusTray() { await tick(); capBar?.focusPrimary(); }
   function toggle(set: Set<string>, id: string) { const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id); return next; }
 
   // ---- selection: whole-row click, Shift-click ranges, select all ------------------------
@@ -533,7 +549,7 @@
 <svelte:window on:keydown={key} />
 
 <section class="wb" aria-labelledby="wb-title">
-  {#if !noCard}<a class="wb-skip" href="#tray-title" on:click|preventDefault={focusTray}>Skip to pending changes</a>{/if}
+  {#if !noCard}<a class="wb-skip" href="#cap-start-desc" on:click|preventDefault={focusTray}>Skip to Start sync</a>{/if}
   <header class="wb-top">
     <div class="wb-ctx">
       <p class="eyebrow">LIBRARY</p>
@@ -572,11 +588,12 @@
   {#if noCard}
     <section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Connect your Pocket or a card reader, or choose a card on the Cards screen. It will appear here automatically.</p></section>
   {:else}
-  <CapacityBar hasSpace={!!space} busy={cardBusy} {total} {used} {addBytes} {removeBytes} {freeNow} freeAfter={free} {margin} {overCapacity}
+  <CapacityBar bind:this={capBar} hasSpace={!!space} busy={cardBusy} {total} {used} {addBytes} {removeBytes} {freeNow} freeAfter={free} {margin} {overCapacity}
     {breakdown} measuring={breakdownBusy} {activePlatform}
     limitText={limits ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (Pocket limit)` : ''}
     limitTitle={limits ? `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums` : ''}
-    {overLimit} {nearLimit} onDetails={() => (detailsOpen = true)} {canStart} {startReason} pendingSummary={pendingSummary} onStart={start} />
+    {overLimit} {nearLimit} onDetails={() => (detailsOpen = true)} {canStart} {startReason} pendingSummary={pendingSummary} onStart={start}
+    hasPending={pendingCount > 0} clearDisabled={busy} onClear={clearAll} {notes} />
 
   <div class="wb-panes">
     <section class="wb-pane" data-pane="source" aria-labelledby="src-title">
@@ -699,7 +716,6 @@
     </section>
   </div>
 
-  <section class="wb-tray" aria-labelledby="tray-title" tabindex="-1" bind:this={trayEl}>
     {#if run && !run.finished}
       <div class="wb-dock" role="region" aria-label="Sync progress">
         <div class="wb-dock-head"><b>Syncing to {cardLabel}</b><span class="wb-dock-step">{run.phase}</span><button class="quiet" on:click={cancelSync}>Cancel sync</button></div>
@@ -710,25 +726,6 @@
         <span class="wb-sr" role="status">{run.phase}</span>
       </div>
     {/if}
-    <div class="wb-tray-info">
-      <h2 id="tray-title">Pending changes</h2>
-      <p>{#if pendingCount}{[adds.length && `${plural(adds.length, 'album')} to add (${plural(addTracks, 'track')}, ${size(addBytes)})`, removes.length && `${removes.length} to remove`, edits.length && `${edits.length} to edit`].filter(Boolean).join(' · ')}{#if space && !overCapacity && !overLimit}{' · '}<span class="wb-fit">Fits, {size(free)} free afterwards</span>{/if}{:else}Nothing yet. Changes are only made when you press Start sync.{/if}</p>
-    </div>
-    {#if pendingCount}
-      <ul class="wb-chips" aria-label="Pending changes list">
-        {#each pending as p (p.key)}
-          <li class={p.kind}><span class="k">{p.kind === 'add' ? '+' : p.kind === 'remove' ? '−' : '✎'}</span><span class="t">{p.kind === 'edit' ? editLabel(p) : p.title}</span>{#if p.kind !== 'edit'}<small>{size(p.bytes)}</small>{/if}<button aria-label={p.kind === 'remove' ? `Undo removing ${p.title}` : `Remove ${p.kind === 'edit' ? editLabel(p) : p.title} from pending changes`} disabled={busy} on:click={() => unstage(p.key)}>{p.kind === 'remove' ? 'Undo' : '×'}</button></li>
-        {/each}
-      </ul>
-    {/if}
-    <div class="wb-tray-actions">
-      {#if slowApplies && (prefs?.slow_alert_suppressed)}<span class="wb-slownote" role="note">Direct connection: slow · about {eta(addBytes, estSpeed)}{estIsDefault ? ' (estimate)' : ''}</span>{/if}
-      {#if overCapacity}<span class="wb-slownote bad" role="alert">Won't fit on this card</span>{/if}
-      {#if overLimit && limits}<span class="wb-slownote bad" role="alert">Over the Pocket's library limit ({limits.max_tracks.toLocaleString()} tracks)</span>{/if}
-      {#if disconnected}<span class="wb-slownote bad" role="alert">{ejectedSafely ? 'Card ejected' : 'Card disconnected'}</span>{/if}
-      <button class="quiet" disabled={busy || !pendingCount} on:click={clearAll}>Clear all</button>
-    </div>
-  </section>
   {/if}
 
   {#if toast}<div class="wb-toast" role="status">{toast}</div>{/if}
@@ -837,9 +834,10 @@
     <div class="wb-modal-actions"><button class="quiet" on:click={() => seeDetails(run?.journal ?? '')}>View details</button>{#if !ejectOk}<button class="quiet" disabled={ejecting} on:click={eject}>{ejecting ? 'Ejecting…' : 'Eject safely'}</button>{/if}<button class="primary" data-autofocus on:click={closeRun}>Done</button></div>
   </div>
 {/if}
-<DetailsPanel open={detailsOpen} {adds} {removes} {edits} {addBytes} {removeBytes} {freeNow} freeAfter={free} {tracksAfter} maxTracks={limits?.max_tracks ?? 0}
-  coreLabel={coreLabel} coreBytes={activeSegment ? activeSegment.bytes_on_disk : null} warnings={detailsWarnings} backupNote={detailsBackup}
-  {canStart} {startReason} onClose={() => (detailsOpen = false)} onStart={() => { detailsOpen = false; start(); }} />
+<DetailsPanel open={detailsOpen} items={stagedItems} {pendingLine} {addBytes} {removeBytes} {freeNow} freeAfter={free} {tracksAfter} maxTracks={limits?.max_tracks ?? 0}
+  coreLabel={coreLabel} coreBytes={activeSegment ? activeSegment.bytes_on_disk : null} warnings={detailsWarnings} backupNote={detailsBackup} locked={busy}
+  fits={!!space && !overCapacity && !overLimit} {canStart} {startReason} onClose={() => (detailsOpen = false)} onRemove={unstage} onClear={clearAll}
+  onStart={() => { detailsOpen = false; start(); }} />
 
 <style>
   .wb{padding:24px 40px 20px;display:flex;flex-direction:column;gap:14px;height:100vh;position:relative}
@@ -885,17 +883,7 @@
   .wb-badge.new{background:#1f3550;color:#a9d0f5}.wb-badge.changed{background:#3d3220;color:#f0d59a}.wb-badge.queued{background:#234029;color:#c5f7ad}.wb-badge.removing{background:#3a2420;color:#f0c7ba}
   .wb-pane-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#8c9c9b;margin-top:auto;padding-top:6px}
   .wb-empty{text-align:center;padding:40px 10px;color:#8c9c9b}.wb-empty b{color:#e8ecec}
-  .wb-tray{flex-shrink:0;background:#161f20;border:1px solid #2c393a;border-radius:14px;padding:14px 16px}
-  .wb-tray{display:grid;grid-template-columns:1fr auto;grid-template-areas:"dock dock" "info actions" "chips chips";gap:10px 16px;align-items:center}
-  .wb-tray:focus{outline:2px solid #c1f0ad;outline-offset:2px}
-  .wb-tray-info{grid-area:info}.wb-tray-info h2{margin:0;font-size:15px}.wb-tray-info p{margin:2px 0 0;font-size:12px;color:#8c9c9b}
-  .wb-tray-actions{grid-area:actions;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
   .wb-slownote{font-size:12px;color:#f0d59a}.wb-slownote.bad{color:#ff9d8a;font-weight:650}
-  .wb-chips{grid-area:chips;list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;max-height:72px;overflow:auto}
-  .wb-chips li{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 10px;border-radius:99px;background:#1d2c22;border:1px solid #2f4a37;font-size:12px}
-  .wb-chips li.remove{background:#2a1d1a;border-color:#5a352c}.wb-chips li.edit{background:#1f2836;border-color:#33465f}
-  .wb-chips .k{font-weight:700}.wb-chips small{color:#8c9c9b}
-  .wb-chips button{background:#273638;color:#c3d0cf;border-radius:99px;min-width:22px;height:22px;font-size:12px;padding:0 7px}
   .wb-toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#243033;border:1px solid #3b4a4b;padding:10px 16px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:80}
   .wb-veil{position:fixed;inset:0;background:rgba(5,9,10,.6);z-index:60}
   .wb-modal{position:fixed;z-index:70;top:50%;left:50%;transform:translate(-50%,-50%);width:min(460px,92vw);background:#1a2325;border:1px solid #344244;border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
@@ -948,7 +936,7 @@
   .wb-filters button{background:#1a2325;color:#a6b3b2;border:1px solid #2c393a;border-radius:99px;padding:4px 10px;font-size:12px}
   .wb-filters button.on{background:#1d2c22;color:#c1f0ad;border-color:#2f4a37}
   .wb-selectall{display:flex;gap:8px;align-items:center;font-size:12px;color:#8c9c9b;padding:2px 4px;cursor:pointer}
-  .wb-dock{grid-area:dock;background:#182320;border:1px solid #2f4a37;border-radius:11px;padding:12px 14px}
+  .wb-dock{flex-shrink:0;background:#182320;border:1px solid #2f4a37;border-radius:11px;padding:12px 14px}
   .wb-dock-head{display:flex;align-items:center;gap:12px;margin-bottom:8px}.wb-dock-head b{font-size:14px}.wb-dock-step{color:#8c9c9b;font-size:12px;margin-right:auto}
   .wb-dock .wb-progress{margin:0 0 8px}.wb-dock-line{margin:0 0 4px;font-size:12px;color:#b7c3c2}.wb-dock .wb-fine{margin:4px 0 0}
   .wb-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
