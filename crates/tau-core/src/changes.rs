@@ -7,9 +7,7 @@
 //! to anything re-copied -> apply new edits -> remove albums (backed up) with
 //! the index rebuilt after each step, so the card is loadable at every point.
 
-use crate::{
-    ErrorCode, ProgressObserver, TauError, root_prefix, sync, tagedit, workbench,
-};
+use crate::{ErrorCode, ProgressObserver, TauError, root_prefix, sync, tagedit, workbench};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
@@ -67,7 +65,12 @@ struct Counts {
 /// Tracks are counted exactly. Albums are estimated from folders (the index
 /// groups by tag), so this can only under-count a folder holding several
 /// albums, never block a library that fits.
-fn check_index_limits(now: Counts, add: Counts, remove: Counts, limits: workbench::IndexLimits) -> Result<(), TauError> {
+fn check_index_limits(
+    now: Counts,
+    add: Counts,
+    remove: Counts,
+    limits: workbench::IndexLimits,
+) -> Result<(), TauError> {
     let tracks = (now.tracks + add.tracks).saturating_sub(remove.tracks);
     let albums = (now.albums + add.albums).saturating_sub(remove.albums);
     if tracks > limits.max_tracks {
@@ -100,13 +103,19 @@ pub fn plan_changes(
     sync::validate_media_root(common)?;
     if request.add_albums.is_empty() && request.remove_albums.is_empty() && request.edits.is_empty()
     {
-        return Err(TauError::e(ErrorCode::NoSources, "there are no changes to apply"));
+        return Err(TauError::e(
+            ErrorCode::NoSources,
+            "there are no changes to apply",
+        ));
     }
     let prefix = root_prefix(common)?;
     // An album being (re)written by a sync cannot also be edited or removed in
     // the same run: the edit/removal was reviewed against the old files.
-    let adding: std::collections::BTreeSet<String> =
-        request.add_albums.iter().map(|id| workbench::dest_dir(id)).collect();
+    let adding: std::collections::BTreeSet<String> = request
+        .add_albums
+        .iter()
+        .map(|id| workbench::dest_dir(id))
+        .collect();
     for id in request
         .remove_albums
         .iter()
@@ -123,7 +132,10 @@ pub fn plan_changes(
         None
     } else {
         let library = request.library_root.as_deref().ok_or_else(|| {
-            TauError::e(ErrorCode::NoSources, "a library folder is needed to add albums")
+            TauError::e(
+                ErrorCode::NoSources,
+                "a library folder is needed to add albums",
+            )
         })?;
         Some(workbench::plan_selection(
             library,
@@ -149,22 +161,45 @@ pub fn plan_changes(
     // would then fail.
     let (tracks_now, dirs_now) = workbench::count_audio(common)?;
     let new_tracks = sync_plan.as_ref().map_or(0, |p| {
-        p.items.iter().filter(|i| i.state == sync::CopyState::New && sync::audio_file(&i.destination)).count()
+        p.items
+            .iter()
+            .filter(|i| i.state == sync::CopyState::New && sync::audio_file(&i.destination))
+            .count()
     });
     let new_albums = sync_plan.as_ref().map_or(0, |p| {
         p.items
             .iter()
             .filter(|i| i.state == sync::CopyState::New)
-            .filter_map(|i| i.destination.parent()?.strip_prefix(common.canonicalize().ok()?).ok().map(|d| d.to_string_lossy().replace('\\', "/")))
+            .filter_map(|i| {
+                i.destination
+                    .parent()?
+                    .strip_prefix(common.canonicalize().ok()?)
+                    .ok()
+                    .map(|d| d.to_string_lossy().replace('\\', "/"))
+            })
             .filter(|d| !dirs_now.contains(d))
             .collect::<std::collections::BTreeSet<_>>()
             .len()
     });
-    let removed_tracks = removal.as_ref().map_or(0, |r| r.items.iter().filter(|i| sync::audio_file(&i.destination)).count());
+    let removed_tracks = removal.as_ref().map_or(0, |r| {
+        r.items
+            .iter()
+            .filter(|i| sync::audio_file(&i.destination))
+            .count()
+    });
     check_index_limits(
-        Counts { tracks: tracks_now, albums: dirs_now.len() },
-        Counts { tracks: new_tracks, albums: new_albums },
-        Counts { tracks: removed_tracks, albums: request.remove_albums.len() },
+        Counts {
+            tracks: tracks_now,
+            albums: dirs_now.len(),
+        },
+        Counts {
+            tracks: new_tracks,
+            albums: new_albums,
+        },
+        Counts {
+            tracks: removed_tracks,
+            albums: request.remove_albums.len(),
+        },
         workbench::IndexLimits::default(),
     )?;
     let mut hasher = Sha256::new();
@@ -277,12 +312,19 @@ pub fn execute_changes_with(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+    use std::{
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn tmp(name: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!(
             "tau-ch-{name}-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&p).unwrap();
         p
@@ -323,7 +365,10 @@ mod tests {
             remove_albums: vec!["B/Two".into()],
             edits: vec![tagedit::EditRequest {
                 album_id: "C/Three".into(),
-                fields: tagedit::FieldEdits { album: Some("Renamed".into()), ..Default::default() },
+                fields: tagedit::FieldEdits {
+                    album: Some("Renamed".into()),
+                    ..Default::default()
+                },
                 ..Default::default()
             }],
             options: sync::PlanOptions::default(),
@@ -332,7 +377,9 @@ mod tests {
         assert!(plan.sync.is_some() && plan.removal.is_some() && plan.edit.is_some());
         assert_eq!(plan.files_total, 3);
         assert_eq!(
-            execute_changes(&plan, "wrong", None, &mut None).unwrap_err().code(),
+            execute_changes(&plan, "wrong", None, &mut None)
+                .unwrap_err()
+                .code(),
             ErrorCode::ConfirmationMismatch
         );
         let report = execute_changes(&plan, &plan.id, Some(&backup), &mut None).unwrap();
@@ -354,7 +401,10 @@ mod tests {
         let edit = ChangeRequest {
             edits: vec![tagedit::EditRequest {
                 album_id: "C/Three".into(),
-                fields: tagedit::FieldEdits { album: Some("Mine".into()), ..Default::default() },
+                fields: tagedit::FieldEdits {
+                    album: Some("Mine".into()),
+                    ..Default::default()
+                },
                 ..Default::default()
             }],
             ..Default::default()
@@ -373,7 +423,11 @@ mod tests {
         assert_eq!((report.copied, report.reapplied), (1, 1));
         let (tags, _, _) = crate::read_tags(&common.join("C/Three/01.mp3")).unwrap();
         assert_eq!(tags["TALB"], "Mine");
-        assert!(fs::read(common.join("C/Three/01.mp3")).unwrap().ends_with(b"audio changed upstream"));
+        assert!(
+            fs::read(common.join("C/Three/01.mp3"))
+                .unwrap()
+                .ends_with(b"audio changed upstream")
+        );
     }
 
     #[test]
@@ -387,21 +441,39 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            plan_changes(&common, &request, &mut None).unwrap_err().code(),
+            plan_changes(&common, &request, &mut None)
+                .unwrap_err()
+                .code(),
             ErrorCode::NameCollision
         );
     }
 
     #[test]
     fn the_index_limits_are_enforced_before_anything_is_copied() {
-        let limits = workbench::IndexLimits { max_tracks: 10, max_albums: 3, max_artists: 5 };
+        let limits = workbench::IndexLimits {
+            max_tracks: 10,
+            max_albums: 3,
+            max_artists: 5,
+        };
         let c = |tracks, albums| Counts { tracks, albums };
         assert!(check_index_limits(c(8, 2), c(2, 1), c(0, 0), limits).is_ok()); // exactly full is fine
-        assert_eq!(check_index_limits(c(8, 2), c(3, 0), c(0, 0), limits).unwrap_err().code(), ErrorCode::IndexCapExceeded);
-        assert_eq!(check_index_limits(c(8, 3), c(1, 1), c(0, 0), limits).unwrap_err().code(), ErrorCode::IndexCapExceeded);
+        assert_eq!(
+            check_index_limits(c(8, 2), c(3, 0), c(0, 0), limits)
+                .unwrap_err()
+                .code(),
+            ErrorCode::IndexCapExceeded
+        );
+        assert_eq!(
+            check_index_limits(c(8, 3), c(1, 1), c(0, 0), limits)
+                .unwrap_err()
+                .code(),
+            ErrorCode::IndexCapExceeded
+        );
         // removing in the same run makes room
         assert!(check_index_limits(c(8, 3), c(3, 1), c(2, 1), limits).is_ok());
-        let message = check_index_limits(c(9, 1), c(5, 0), c(0, 0), limits).unwrap_err().message;
+        let message = check_index_limits(c(9, 1), c(5, 0), c(0, 0), limits)
+            .unwrap_err()
+            .message;
         assert!(message.contains("14 tracks") && message.contains("at most 10"));
     }
 
@@ -411,7 +483,11 @@ mod tests {
         let common = card_with(&lib, &["B/Two", "C/Three"]);
         let (tracks, dirs) = workbench::count_audio(&common).unwrap();
         assert_eq!((tracks, dirs.len()), (2, 2));
-        let request = ChangeRequest { library_root: Some(lib), add_albums: vec!["A/One".into()], ..Default::default() };
+        let request = ChangeRequest {
+            library_root: Some(lib),
+            add_albums: vec!["A/One".into()],
+            ..Default::default()
+        };
         assert!(plan_changes(&common, &request, &mut None).is_ok());
     }
 
@@ -428,7 +504,14 @@ mod tests {
         };
         let plan = plan_changes(&common, &request, &mut None).unwrap();
         let mut report = ChangeReport::default();
-        let err = execute_changes_with(&plan, &plan.id, Some(&common.join("inside-the-card")), &mut report, &mut None).unwrap_err();
+        let err = execute_changes_with(
+            &plan,
+            &plan.id,
+            Some(&common.join("inside-the-card")),
+            &mut report,
+            &mut None,
+        )
+        .unwrap_err();
         assert_eq!(err.code(), ErrorCode::UnsafeBackupLocation);
         assert_eq!(report.phase, "remove");
         assert_eq!(report.copied, 1); // the add finished before the removal failed

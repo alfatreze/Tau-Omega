@@ -188,7 +188,12 @@ pub fn execute_changes_to_journal(
     }
     validate_location(journal_path, &plan.destination)?;
     let started = timestamp();
-    let ctx = ChangeJournal { plan, path: journal_path, context: context.as_ref(), started };
+    let ctx = ChangeJournal {
+        plan,
+        path: journal_path,
+        context: context.as_ref(),
+        started,
+    };
     ctx.write("running", None, None)?;
     let mut report = changes::ChangeReport::default();
     match changes::execute_changes_with(plan, confirmation, backup_root, &mut report, progress) {
@@ -288,7 +293,11 @@ fn write_json_atomic(path: &Path, value: &serde_json::Value) -> Result<(), TauEr
 /// `0` means "no limit" for that rule. Only files that are recognisably
 /// Tau Omega journals are ever touched, and a journal still marked `running`
 /// that is under a day old is left alone. Returns how many were removed.
-pub fn prune_journals(dir: impl AsRef<Path>, keep_last: usize, keep_days: u64) -> Result<usize, TauError> {
+pub fn prune_journals(
+    dir: impl AsRef<Path>,
+    keep_last: usize,
+    keep_days: u64,
+) -> Result<usize, TauError> {
     prune_at(dir.as_ref(), keep_last, keep_days, timestamp())
 }
 
@@ -301,7 +310,9 @@ fn prune_at(dir: &Path, keep_last: usize, keep_days: u64, now: u64) -> Result<us
         }
         if let Ok(value) = read_journal(&path)
             && value.get("tool").and_then(serde_json::Value::as_str) == Some("tau-omega")
-            && let Some(at) = value.get("recorded_at_unix").and_then(serde_json::Value::as_u64)
+            && let Some(at) = value
+                .get("recorded_at_unix")
+                .and_then(serde_json::Value::as_u64)
         {
             let running = value.get("state").and_then(serde_json::Value::as_str) == Some("running");
             ours.push((path, at, running));
@@ -490,18 +501,32 @@ fn summary_from(path: &Path, value: &serde_json::Value) -> Option<JournalSummary
         plan_id: value.pointer("/plan/id")?.as_str()?.to_string(),
         destination: value.pointer("/plan/destination")?.as_str()?.to_string(),
         files: value.pointer("/plan/files")?.as_u64()?,
-        copied: value.pointer("/result/copied").and_then(serde_json::Value::as_u64),
-        deleted: value.pointer("/result/deleted").and_then(serde_json::Value::as_u64),
+        copied: value
+            .pointer("/result/copied")
+            .and_then(serde_json::Value::as_u64),
+        deleted: value
+            .pointer("/result/deleted")
+            .and_then(serde_json::Value::as_u64),
         error: value
             .get("error")
             .and_then(serde_json::Value::as_str)
             .map(String::from),
         error_code: value.get("error_code").and_then(serde_json::Value::as_u64),
-        started_at_unix: value.get("started_at_unix").and_then(serde_json::Value::as_u64),
-        duration_secs: value.get("duration_secs").and_then(serde_json::Value::as_u64),
-        edited: value.pointer("/result/edited").and_then(serde_json::Value::as_u64),
-        bytes_written: value.pointer("/result/bytes_written").and_then(serde_json::Value::as_u64),
-        bytes_per_sec: value.pointer("/result/bytes_per_sec").and_then(serde_json::Value::as_u64),
+        started_at_unix: value
+            .get("started_at_unix")
+            .and_then(serde_json::Value::as_u64),
+        duration_secs: value
+            .get("duration_secs")
+            .and_then(serde_json::Value::as_u64),
+        edited: value
+            .pointer("/result/edited")
+            .and_then(serde_json::Value::as_u64),
+        bytes_written: value
+            .pointer("/result/bytes_written")
+            .and_then(serde_json::Value::as_u64),
+        bytes_per_sec: value
+            .pointer("/result/bytes_per_sec")
+            .and_then(serde_json::Value::as_u64),
         phase: value
             .pointer("/result/phase")
             .or_else(|| value.pointer("/partial/phase"))
@@ -559,11 +584,29 @@ mod tests {
         };
         let plan = changes::plan_changes(&common, &request, &mut None).unwrap();
         // inside the card is refused before anything is written
-        assert!(execute_changes_to_journal(&plan, &plan.id, None, &common.join("j.json"), None, &mut None).is_err());
+        assert!(
+            execute_changes_to_journal(
+                &plan,
+                &plan.id,
+                None,
+                &common.join("j.json"),
+                None,
+                &mut None
+            )
+            .is_err()
+        );
         assert!(!common.join("A").exists());
         let report = root.join("reports/changes.json");
         fs::create_dir_all(report.parent().unwrap()).unwrap();
-        execute_changes_to_journal(&plan, &plan.id, None, &report, Some(json!({"card": "Pocket", "items": [{"kind": "add", "title": "One"}]})), &mut None).unwrap();
+        execute_changes_to_journal(
+            &plan,
+            &plan.id,
+            None,
+            &report,
+            Some(json!({"card": "Pocket", "items": [{"kind": "add", "title": "One"}]})),
+            &mut None,
+        )
+        .unwrap();
         let journal = read_journal(&report).unwrap();
         assert_eq!(journal["kind"], "library_changes");
         assert_eq!(journal["state"], "completed");
@@ -596,7 +639,17 @@ mod tests {
         let report = root.join("reports/failed.json");
         fs::create_dir_all(report.parent().unwrap()).unwrap();
         // a backup folder inside the card makes the removal step fail after the add finished
-        assert!(execute_changes_to_journal(&plan, &plan.id, Some(&common.join("bak")), &report, None, &mut None).is_err());
+        assert!(
+            execute_changes_to_journal(
+                &plan,
+                &plan.id,
+                Some(&common.join("bak")),
+                &report,
+                None,
+                &mut None
+            )
+            .is_err()
+        );
         let entry = &list_journals(root.join("reports")).unwrap()[0];
         assert_eq!(entry.state, "failed");
         assert_eq!(entry.phase.as_deref(), Some("remove"));
@@ -613,8 +666,10 @@ mod tests {
             serde_json::to_vec(&json!({
                 "tool": tool, "kind": "library_changes", "state": state, "recorded_at_unix": at,
                 "plan": {"id": name, "destination": "/x", "files": 1}
-            })).unwrap(),
-        ).unwrap();
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -624,13 +679,29 @@ mod tests {
         let now = 1_800_000_000u64;
         let day = 86_400u64;
         for (i, age_days) in [0u64, 1, 2, 3, 40, 400].iter().enumerate() {
-            fake_journal(&dir, &format!("j{i}.json"), now - age_days * day, "completed", "tau-omega");
+            fake_journal(
+                &dir,
+                &format!("j{i}.json"),
+                now - age_days * day,
+                "completed",
+                "tau-omega",
+            );
         }
         fs::write(dir.join("notes.json"), br#"{"hello": "world"}"#).unwrap();
-        fake_journal(&dir, "other-tool.json", now - 900 * day, "completed", "someone-else");
+        fake_journal(
+            &dir,
+            "other-tool.json",
+            now - 900 * day,
+            "completed",
+            "someone-else",
+        );
         // keep the newest 4 and nothing older than 30 days: drops the 40- and 400-day-old entries
         assert_eq!(prune_at(&dir, 4, 30, now).unwrap(), 2);
-        assert!(dir.join("j3.json").exists() && !dir.join("j4.json").exists() && !dir.join("j5.json").exists());
+        assert!(
+            dir.join("j3.json").exists()
+                && !dir.join("j4.json").exists()
+                && !dir.join("j5.json").exists()
+        );
         // by count only
         assert_eq!(prune_at(&dir, 2, 0, now).unwrap(), 2);
         assert!(dir.join("j1.json").exists() && !dir.join("j2.json").exists());
@@ -650,7 +721,11 @@ mod tests {
         fake_journal(&dir, "newest.json", now, "completed", "tau-omega");
         fake_journal(&dir, "stale.json", now - 3 * 86_400, "running", "tau-omega");
         assert_eq!(prune_at(&dir, 1, 0, now).unwrap(), 1);
-        assert!(dir.join("fresh.json").exists() && dir.join("newest.json").exists() && !dir.join("stale.json").exists());
+        assert!(
+            dir.join("fresh.json").exists()
+                && dir.join("newest.json").exists()
+                && !dir.join("stale.json").exists()
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -736,14 +811,7 @@ mod tests {
             &mut None,
         )
         .unwrap();
-        execute_to_journal(
-            &plan,
-            &plan.id,
-            "sync",
-            &reports.join("a.json"),
-            &mut None,
-        )
-        .unwrap();
+        execute_to_journal(&plan, &plan.id, "sync", &reports.join("a.json"), &mut None).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1100));
         let plan = sync::plan(
             std::slice::from_ref(&source),
@@ -753,14 +821,7 @@ mod tests {
             &mut None,
         )
         .unwrap();
-        execute_to_journal(
-            &plan,
-            &plan.id,
-            "sync",
-            &reports.join("b.json"),
-            &mut None,
-        )
-        .unwrap();
+        execute_to_journal(&plan, &plan.id, "sync", &reports.join("b.json"), &mut None).unwrap();
         fs::write(reports.join("not-a-journal.json"), b"not json").unwrap();
         fs::write(reports.join("ignored.txt"), b"ignore me").unwrap();
         let summaries = list_journals(&reports).unwrap();

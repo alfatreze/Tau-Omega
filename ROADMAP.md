@@ -1,4 +1,37 @@
-# Roadmap: phases, extensions and ideas
+# Roadmap: the one ordered list of what is next
+
+**Updated 2026-10-02.** This is the only place that says what comes next; other documents say what exists. The order is the owner's to set.
+Status per row: DONE (built, tested), NEXT (ready), GATED (needs a real artefact or a decision first). Rationale: `docs/ARCHITECTURE_ROADMAP_REVIEW_2026-10-02.md`.
+
+## Now
+| # | Item | Status |
+|---|---|---|
+| 1 | CI green: `cargo fmt`, 3 clippy fixes, browser suite added to CI | DONE 2026-10-02 (the browser step is unproven until the first CI run) |
+| 2 | Persist labels 27/28 (theme, theme mode); firmware sync re-check against tau-alpha `v0.6.0-alpha.1` | DONE 2026-10-02, see `docs/FIRMWARE_SYNC.md` |
+| 3 | Roadmap, architecture and safety docs brought up to date | DONE 2026-10-02 |
+
+## Next
+| # | Item | Gate |
+|---|---|---|
+| 4 | Decode Check QR tags 20-22 (then 15-19) | Real captured screenshots of a Meter Sweep, an Info export and a Check with DECPROF2 |
+| 5 | Appearance: install a theme file to a card (plan, review, confirm) | One real card run: `Info > THEME FILE` reads `1 LOADED`; capture the file as a fixture |
+| 6 | Send diagnostics (`DIAGNOSTICS_COLLECTOR.md`) | Owner confirms its order against item 5 |
+| 7 | Meter Lab on the real `meters_schema.json`, plus a `METR` writer | A real `tau-assets.bin` with a `METR` section from a card |
+| 8 | Ledger follow-ups: per-volume I/O governor, hash-while-copy, cluster-aware Library fit bar, card-speed benchmark | First real card timing numbers |
+
+## Later
+Split `sync.rs`, `lib.rs`, `main.rs` and the pre-workbench state in `App.svelte`; `tau-cli` parity with `--json`; installers, signing and the opt-in updater;
+Pocket Sync adoption (TP2); watch mode, smart playlists, loudness tags, localisation. Details of each idea are in the sections below.
+
+## Done since the original phase table
+T0-T3, T4 (as the Library workbench), T5 (core install and removal), T6 (Check/QR decode, screenshots, settings viewer), cover sidecars and `TIM1` images,
+TP0-TP1 (portable boundary, `serde`, no panics), the verification ledger, the card-space bar, safe eject with read-back, and the Appearance editor.
+Not done from the table: T7 (installers/signing) and the TP2 adoption.
+
+---
+*Everything below is the original 2026-09-22 roadmap, kept for the ideas it lists. Where it disagrees with the tables above, the tables win.*
+
+## Original phases, extensions and ideas
 
 Phases are ordered so each one is usable on its own and each later firmware phase has a place to land.
 

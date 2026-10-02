@@ -45,12 +45,16 @@ pub struct RemoveReport {
 /// filesystem state beyond reading sizes; nothing is deleted until
 /// [`execute_remove`] is called with a matching confirmation token.
 pub fn plan_remove(card: &Card, core_id: &str) -> Result<RemovePlan, TauError> {
-    let core = card.cores.iter().find(|core| core.id == core_id).ok_or_else(|| {
-        TauError::e(
-            ErrorCode::NotFound,
-            format!("{core_id}: no such installed core"),
-        )
-    })?;
+    let core = card
+        .cores
+        .iter()
+        .find(|core| core.id == core_id)
+        .ok_or_else(|| {
+            TauError::e(
+                ErrorCode::NotFound,
+                format!("{core_id}: no such installed core"),
+            )
+        })?;
     let platform = core.platform.clone();
     let platform_shared = !platform.is_empty()
         && card
@@ -203,7 +207,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         root
@@ -252,7 +257,11 @@ mod tests {
         let remove_plan = plan_remove(&inspected, "alfatreze.TAU").unwrap();
 
         assert!(!remove_plan.platform_shared);
-        assert!(remove_plan.paths.contains(&"Cores/alfatreze.TAU".to_string()));
+        assert!(
+            remove_plan
+                .paths
+                .contains(&"Cores/alfatreze.TAU".to_string())
+        );
         // `Assets/tau` holds only this core's own folder plus `common`, so
         // the whole platform folder collapses into one path rather than two.
         assert!(remove_plan.paths.contains(&"Assets/tau".to_string()));
@@ -280,10 +289,7 @@ mod tests {
 
         assert!(plan.platform_shared);
         assert!(plan.paths.contains(&"Cores/alfatreze.TAU".to_string()));
-        assert!(
-            plan.paths
-                .contains(&"Assets/tau/alfatreze.TAU".to_string())
-        );
+        assert!(plan.paths.contains(&"Assets/tau/alfatreze.TAU".to_string()));
         assert!(!plan.paths.contains(&"Assets/tau/common".to_string()));
         assert!(!plan.paths.contains(&"Platforms/tau.json".to_string()));
 

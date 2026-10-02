@@ -88,7 +88,11 @@ pub fn plan_write(
 /// folder before being written back rooted at the new location, so the
 /// playlist keeps resolving correctly even though its own folder is what
 /// bare lines would otherwise have been read relative to.
-pub fn plan_rename(common: &Path, old_file: &str, new_file: &str) -> Result<PlaylistPlan, TauError> {
+pub fn plan_rename(
+    common: &Path,
+    old_file: &str,
+    new_file: &str,
+) -> Result<PlaylistPlan, TauError> {
     if old_file == new_file {
         return Err(TauError::e(
             ErrorCode::SamePath,
@@ -179,7 +183,10 @@ pub fn plan_import(
             .as_deref()
             .and_then(|rel| by_rel.get(rel).copied())
             .or_else(|| {
-                let name = candidate.file_name()?.to_string_lossy().to_ascii_lowercase();
+                let name = candidate
+                    .file_name()?
+                    .to_string_lossy()
+                    .to_ascii_lowercase();
                 match by_basename.get(&name) {
                     Some(ids) if ids.len() == 1 => Some(ids[0]),
                     _ => None,
@@ -262,7 +269,12 @@ fn validate_m3u_path(common: &Path, file: &str) -> Result<PathBuf, TauError> {
     Ok(common.join(candidate))
 }
 
-fn plan_id(file: &str, previous_file: Option<&str>, tracks: &[String], dropped: &[String]) -> String {
+fn plan_id(
+    file: &str,
+    previous_file: Option<&str>,
+    tracks: &[String],
+    dropped: &[String],
+) -> String {
     let mut hasher = Sha256::new();
     hasher.update(file.as_bytes());
     hasher.update([0]);
@@ -320,7 +332,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         export_m3u(&path, &playlist, &entries).unwrap();
         assert_eq!(
@@ -336,7 +349,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         root
@@ -437,7 +451,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::write(
             &source,
@@ -472,13 +487,15 @@ mod tests {
     fn write_refuses_a_track_not_in_the_library() {
         let common = scratch_root("unknown-track");
         let entries = sample_entries();
-        assert!(plan_write(
-            &common,
-            "Mix.m3u",
-            &["Nowhere/ghost.mp3".to_string()],
-            &entries
-        )
-        .is_err());
+        assert!(
+            plan_write(
+                &common,
+                "Mix.m3u",
+                &["Nowhere/ghost.mp3".to_string()],
+                &entries
+            )
+            .is_err()
+        );
         fs::remove_dir_all(common).unwrap();
     }
 }

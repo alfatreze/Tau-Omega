@@ -4,11 +4,24 @@ Tau Omega writes files that Tau's firmware reads, so its assumptions go stale wh
 ships. This is the standing record of when they were last checked and what is still open. **Re-run it
 after every tau-alpha release**, and when the blit engine lands.
 
-Last checked **2026-09-27** against tau-alpha **v0.5.0** (tag `v0.5.0`, commit `63ea499`), by re-reading its docs
+Last checked **2026-10-02** against tau-alpha **v0.6.0-alpha.1** (see the section below; the older notes are against **v0.5.0**, checked 2026-09-27) (tag `v0.5.0`, commit `63ea499`), by re-reading its docs
 (`CROSS_PROJECT_INTERFACE.md`, `tools/tau_data_slots.py`, `THEME_FILE_FORMAT.md`, `CHANGELOG.md`) and the shipped
 `dist/Cores/alfatreze.TAU/data.json`. **Not yet done: re-verifying our code against real files captured from a card**
 (a `tau-assets.bin`, a `SR_T_METERCFG` record, a fresh `.timg`); until then the items below marked *re-verify* are
 docs-level only.
+
+## Re-check against v0.6.0-alpha.1 (2026-10-02)
+
+Checked tau-alpha tag `v0.6.0-alpha.1` (`273b67b`) and its `main`. **Docs and shipped files only; nothing yet re-verified against a file captured from a card.**
+- **Persist ids changed:** the shipped `interact.json` declares 24-26 "library 1..3", **27 "theme", 28 "theme mode"**. Omega labelled 27 "Library off": fixed
+  (`App.svelte`, `DATA_FORMATS.md` section 4). A card last written by a 0.5.0 core can still hold a library-off value in id 27; the file carries no core version,
+  so the label is right only for 0.6 cores. tau-alpha's `tools/tau_data_slots.py` docstring still says id 27 is retired: stale on their side (to report).
+- **Check/QR tags:** firmware enum is now `1..22` (`SR_T_BLITTEST` 15 through `SR_T_DECPROF2` 22). `taud.rs` decodes 1-14; the rest are kept as unknown entries
+  and shown raw, not dropped. Open: decode 20 (METERCFG), 21 (METERTRACE), 22 (DECPROF2) and 17-19 from real captures.
+- **Meters:** Layered Wave is meter id 16; the Meter slider range grew. Meter Lab still uses the synthetic schema; swap to the real `meters_schema.json` (open).
+- **`tau-assets.bin`:** container unchanged in layout; `fw/assets_core.h` has a 3-line change after the tag, not yet read. The format is still not frozen until a card reads a real file.
+  Omega now writes the `THEM` section (byte-identical to `tools/tau_assets.py`); it does not write `METR` and drops it on save.
+- **Unchanged and still correct:** data slots 5-8, index v1, caps, persist ids 20-26.
 
 ## Verified correct — no action
 

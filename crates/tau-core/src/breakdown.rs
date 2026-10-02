@@ -65,9 +65,13 @@ fn walk(
     let mut files = 0u64;
     let mut stack = vec![dir.to_path_buf()];
     while let Some(folder) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&folder) else { continue };
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
         for entry in entries.flatten() {
-            let Ok(kind) = entry.file_type() else { continue };
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
             if kind.is_symlink() {
                 continue;
             }
@@ -103,10 +107,16 @@ pub fn card_breakdown(
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<CardBreakdown, TauError> {
     let space = crate::storage::volume_space(root)?;
-    let unit = fs4::allocation_granularity(root).ok().filter(|u| *u > 0).unwrap_or(4096);
+    let unit = fs4::allocation_granularity(root)
+        .ok()
+        .filter(|u| *u > 0)
+        .unwrap_or(4096);
     let mut platforms: std::collections::BTreeMap<String, (Vec<String>, Vec<String>)> =
         std::collections::BTreeMap::new();
-    for core in cores.iter().filter(|c| is_tau_core(c) && !c.platform.is_empty()) {
+    for core in cores
+        .iter()
+        .filter(|c| is_tau_core(c) && !c.platform.is_empty())
+    {
         let entry = platforms.entry(core.platform.clone()).or_default();
         entry.0.push(core.id.clone());
         entry.1.push(core.shortname.clone());
@@ -116,9 +126,19 @@ pub fn card_breakdown(
     let mut tau_bytes = 0u64;
     for (platform, (core_ids, shortnames)) in platforms {
         let dir = root.join("Assets").join(&platform);
-        let (bytes_on_disk, files) = if dir.is_dir() { walk(&dir, unit, progress, &mut seen)? } else { (0, 0) };
+        let (bytes_on_disk, files) = if dir.is_dir() {
+            walk(&dir, unit, progress, &mut seen)?
+        } else {
+            (0, 0)
+        };
         tau_bytes = tau_bytes.saturating_add(bytes_on_disk);
-        segments.push(MediaSegment { platform, core_ids, shortnames, bytes_on_disk, files });
+        segments.push(MediaSegment {
+            platform,
+            core_ids,
+            shortnames,
+            bytes_on_disk,
+            files,
+        });
     }
     let used = space.total_bytes.saturating_sub(space.available_bytes);
     Ok(CardBreakdown {
@@ -137,7 +157,12 @@ mod tests {
     use std::fs;
 
     fn core(id: &str, shortname: &str, platform: &str, library: bool) -> CoreRef {
-        CoreRef { id: id.into(), shortname: shortname.into(), platform: platform.into(), library_capable: library }
+        CoreRef {
+            id: id.into(),
+            shortname: shortname.into(),
+            platform: platform.into(),
+            library_capable: library,
+        }
     }
 
     fn card(name: &str) -> std::path::PathBuf {
@@ -157,8 +182,18 @@ mod tests {
     #[test]
     fn the_tau_family_is_library_cores_and_the_alfatreze_tau_prefix() {
         assert!(is_tau_core(&core("alfatreze.TAU", "TAU", "tau", false)));
-        assert!(is_tau_core(&core("alfatreze.TAU_DEV_61", "TAU_DEV_61", "tau_dev_61", false)));
-        assert!(is_tau_core(&core("someone.player", "player", "mp3player", true)));
+        assert!(is_tau_core(&core(
+            "alfatreze.TAU_DEV_61",
+            "TAU_DEV_61",
+            "tau_dev_61",
+            false
+        )));
+        assert!(is_tau_core(&core(
+            "someone.player",
+            "player",
+            "mp3player",
+            true
+        )));
         assert!(!is_tau_core(&core("agg23.GB", "GB", "gb", false)));
     }
 
@@ -178,13 +213,25 @@ mod tests {
         ];
         let b = card_breakdown(&root, &cores, &mut None).unwrap();
         let unit = b.unit;
-        assert_eq!(b.segments.len(), 2, "tau and tau_dev_61; the gb platform is not Tau media");
+        assert_eq!(
+            b.segments.len(),
+            2,
+            "tau and tau_dev_61; the gb platform is not Tau media"
+        );
         let tau = b.segments.iter().find(|s| s.platform == "tau").unwrap();
-        assert_eq!(tau.core_ids, ["alfatreze.TAU", "alfatreze.TAU_DIAGNOSTIC"], "cores sharing a platform are one segment");
+        assert_eq!(
+            tau.core_ids,
+            ["alfatreze.TAU", "alfatreze.TAU_DIAGNOSTIC"],
+            "cores sharing a platform are one segment"
+        );
         assert_eq!(tau.files, 3);
         let round = |n: u64| n.div_ceil(unit) * unit;
         assert_eq!(tau.bytes_on_disk, round(1000) + round(5000) + round(10));
-        let dev = b.segments.iter().find(|s| s.platform == "tau_dev_61").unwrap();
+        let dev = b
+            .segments
+            .iter()
+            .find(|s| s.platform == "tau_dev_61")
+            .unwrap();
         assert_eq!(dev.bytes_on_disk, round(70_000));
         assert_eq!(b.tau_bytes, tau.bytes_on_disk + dev.bytes_on_disk);
         let used = b.total_bytes - b.available_bytes;
@@ -195,7 +242,12 @@ mod tests {
     #[test]
     fn a_missing_platform_folder_is_an_empty_segment_not_an_error() {
         let root = card("missing");
-        let b = card_breakdown(&root, &[core("alfatreze.TAU", "TAU", "tau", true)], &mut None).unwrap();
+        let b = card_breakdown(
+            &root,
+            &[core("alfatreze.TAU", "TAU", "tau", true)],
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(b.segments.len(), 1);
         assert_eq!((b.segments[0].bytes_on_disk, b.segments[0].files), (0, 0));
         fs::remove_dir_all(root).unwrap();
@@ -209,8 +261,17 @@ mod tests {
         put(&elsewhere.join("huge.bin"), 4_000_000);
         put(&root.join("Assets/tau/common/01.mp3"), 1000);
         std::os::unix::fs::symlink(&elsewhere, root.join("Assets/tau/common/link")).unwrap();
-        std::os::unix::fs::symlink(elsewhere.join("huge.bin"), root.join("Assets/tau/common/filelink")).unwrap();
-        let b = card_breakdown(&root, &[core("alfatreze.TAU", "TAU", "tau", true)], &mut None).unwrap();
+        std::os::unix::fs::symlink(
+            elsewhere.join("huge.bin"),
+            root.join("Assets/tau/common/filelink"),
+        )
+        .unwrap();
+        let b = card_breakdown(
+            &root,
+            &[core("alfatreze.TAU", "TAU", "tau", true)],
+            &mut None,
+        )
+        .unwrap();
         assert_eq!(b.segments[0].files, 1);
         assert!(b.segments[0].bytes_on_disk < 4_000_000);
         fs::remove_dir_all(root).unwrap();
@@ -225,7 +286,12 @@ mod tests {
         }
         let mut stop = |_: crate::Progress| false;
         let mut observer: Option<&mut dyn ProgressObserver> = Some(&mut stop);
-        let error = card_breakdown(&root, &[core("alfatreze.TAU", "TAU", "tau", true)], &mut observer).unwrap_err();
+        let error = card_breakdown(
+            &root,
+            &[core("alfatreze.TAU", "TAU", "tau", true)],
+            &mut observer,
+        )
+        .unwrap_err();
         assert_eq!(error.code(), crate::ErrorCode::Cancelled);
         fs::remove_dir_all(root).unwrap();
     }

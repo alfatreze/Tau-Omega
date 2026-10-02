@@ -182,7 +182,8 @@ fn read_tag_region(path: &Path) -> Result<Option<Vec<u8>>, std::io::Error> {
             if file.read_exact(&mut block).is_err() {
                 return Ok(None);
             }
-            let length = (u64::from(block[1]) << 16) | (u64::from(block[2]) << 8) | u64::from(block[3]);
+            let length =
+                (u64::from(block[1]) << 16) | (u64::from(block[2]) << 8) | u64::from(block[3]);
             position += 4 + length;
             if position > MAX_TAG_REGION {
                 return Ok(None);
@@ -211,7 +212,10 @@ fn skip_text(data: &[u8], from: usize, encoding: u8) -> Option<usize> {
         }
         None
     } else {
-        data.get(from..)?.iter().position(|b| *b == 0).map(|n| from + n + 1)
+        data.get(from..)?
+            .iter()
+            .position(|b| *b == 0)
+            .map(|n| from + n + 1)
     }
 }
 
@@ -225,10 +229,20 @@ fn id3_picture(data: &[u8]) -> Option<Vec<u8>> {
     while position + if major == 2 { 6 } else { 10 } <= end {
         let (id, length, header) = if major == 2 {
             let id = data.get(position..position + 3)?;
-            (id.to_vec(), ((data[position + 3] as usize) << 16) | ((data[position + 4] as usize) << 8) | data[position + 5] as usize, 6)
+            (
+                id.to_vec(),
+                ((data[position + 3] as usize) << 16)
+                    | ((data[position + 4] as usize) << 8)
+                    | data[position + 5] as usize,
+                6,
+            )
         } else {
             let header = data.get(position..position + 10)?;
-            let length = if major == 4 { syncsafe(&header[4..8]) as usize } else { u32::from_be_bytes(header[4..8].try_into().ok()?) as usize };
+            let length = if major == 4 {
+                syncsafe(&header[4..8]) as usize
+            } else {
+                u32::from_be_bytes(header[4..8].try_into().ok()?) as usize
+            };
             (header[..4].to_vec(), length, 10)
         };
         if id[0] == 0 || length == 0 || position + header + length > end {
@@ -256,17 +270,23 @@ fn flac_picture(data: &[u8]) -> Option<Vec<u8>> {
     let mut position = 4;
     loop {
         let header = *data.get(position)?;
-        let length = ((*data.get(position + 1)? as usize) << 16) | ((*data.get(position + 2)? as usize) << 8) | *data.get(position + 3)? as usize;
+        let length = ((*data.get(position + 1)? as usize) << 16)
+            | ((*data.get(position + 2)? as usize) << 8)
+            | *data.get(position + 3)? as usize;
         position += 4;
         let body = data.get(position..position + length)?;
         if header & 0x7f == 6 {
-            let read_u32 = |at: usize| -> Option<usize> { Some(u32::from_be_bytes(body.get(at..at + 4)?.try_into().ok()?) as usize) };
+            let read_u32 = |at: usize| -> Option<usize> {
+                Some(u32::from_be_bytes(body.get(at..at + 4)?.try_into().ok()?) as usize)
+            };
             let mime = read_u32(4)?;
             let desc_at = 8 + mime;
             let desc = read_u32(desc_at)?;
             let data_len_at = desc_at + 4 + desc + 16; // width, height, depth, colours
             let picture = read_u32(data_len_at)?;
-            return body.get(data_len_at + 4..data_len_at + 4 + picture).map(<[u8]>::to_vec);
+            return body
+                .get(data_len_at + 4..data_len_at + 4 + picture)
+                .map(<[u8]>::to_vec);
         }
         position += length;
         if header & 0x80 != 0 {
@@ -569,14 +589,26 @@ mod tests {
         let mut file = b"fLaC".to_vec();
         file.extend([0x00, 0, 0, 34]);
         file.extend([0u8; 34]);
-        file.extend([0x80 | 6, (body.len() >> 16) as u8, (body.len() >> 8) as u8, body.len() as u8]);
+        file.extend([
+            0x80 | 6,
+            (body.len() >> 16) as u8,
+            (body.len() >> 8) as u8,
+            body.len() as u8,
+        ]);
         file.extend(body);
         file.extend(vec![0xAA; audio_bytes]);
         file
     }
     #[test]
     fn extracts_an_embedded_cover_from_the_tag_region_only() {
-        let root = std::env::temp_dir().join(format!("tau-tagregion-{}", SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()));
+        let root = std::env::temp_dir().join(format!(
+            "tau-tagregion-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                + crate::test_uniq()
+        ));
         fs::create_dir_all(&root).unwrap();
         let picture = [0xff, 0xd8, 0xff, 0xd9];
         // MP3: a real embedded cover followed by 3 MB of audio.
@@ -584,7 +616,10 @@ mod tests {
         fs::write(&source, vec![0x55u8; 3 << 20]).unwrap();
         fs::write(&cover, picture).unwrap();
         embed_mp3_copy(&source, &cover, &output).unwrap();
-        assert_eq!(extract_embedded_cover(&output).as_deref(), Some(&picture[..]));
+        assert_eq!(
+            extract_embedded_cover(&output).as_deref(),
+            Some(&picture[..])
+        );
         assert!(has_embedded_cover(&output).unwrap());
         // FLAC, same shape.
         let flac = root.join("t.flac");
@@ -613,7 +648,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         let source = root.join("source.mp3");
@@ -636,7 +672,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         let source = root.join("source.flac");
@@ -667,7 +704,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         let source = root.join("source.mp3");

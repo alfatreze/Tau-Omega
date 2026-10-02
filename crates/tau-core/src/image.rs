@@ -13,7 +13,7 @@
 //! pixel-for-pixel, only the container shape, since the format itself says
 //! so.
 
-use crate::{cover, ErrorCode, TauError};
+use crate::{ErrorCode, TauError, cover};
 use std::{collections::HashMap, path::Path};
 
 const MAGIC: &[u8; 4] = b"TIM1";
@@ -68,8 +68,7 @@ pub fn decode_tim1(bytes: &[u8]) -> Result<DecodedImage, TauError> {
     let width = u16::from_le_bytes([bytes[6], bytes[7]]);
     let height = u16::from_le_bytes([bytes[8], bytes[9]]);
     let ncolors = u16::from_le_bytes([bytes[10], bytes[11]]) as usize;
-    let payload_len =
-        u32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]) as usize;
+    let payload_len = u32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]) as usize;
     let payload = &bytes[HEADER_LEN..];
     if payload.len() != payload_len {
         return Err(TauError::e(
@@ -120,7 +119,10 @@ pub fn decode_tim1(bytes: &[u8]) -> Result<DecodedImage, TauError> {
             let mut rgb = Vec::with_capacity(pixel_count * 3);
             for index in indices {
                 let &(r, g, b) = clut.get(index as usize).ok_or_else(|| {
-                    TauError::e(ErrorCode::InvalidTim1Container, "palette index out of range")
+                    TauError::e(
+                        ErrorCode::InvalidTim1Container,
+                        "palette index out of range",
+                    )
                 })?;
                 rgb.extend_from_slice(&[r, g, b]);
             }
@@ -213,7 +215,11 @@ fn pack_indices(indices: &[u8], bpp: u8) -> Vec<u8> {
                     | ((padded[1] as u32) << 12)
                     | ((padded[2] as u32) << 6)
                     | padded[3] as u32;
-                [((v >> 16) & 0xff) as u8, ((v >> 8) & 0xff) as u8, (v & 0xff) as u8]
+                [
+                    ((v >> 16) & 0xff) as u8,
+                    ((v >> 8) & 0xff) as u8,
+                    (v & 0xff) as u8,
+                ]
             })
             .collect::<Vec<[u8; 3]>>()
             .concat(),
@@ -231,9 +237,8 @@ pub fn pal256_sidecar_name(long_side: u16) -> String {
 /// locates) as a palette-256 `TIM1` file at `long_side` px on the long side,
 /// scaled proportionally with no crop or letterbox (D-I02).
 pub fn encode_cover_pal256(folder: &Path, long_side: u16) -> Result<Vec<u8>, TauError> {
-    let source = cover::find_cover(folder).ok_or_else(|| {
-        TauError::e(ErrorCode::NotFound, "no cover image found in this folder")
-    })?;
+    let source = cover::find_cover(folder)
+        .ok_or_else(|| TauError::e(ErrorCode::NotFound, "no cover image found in this folder"))?;
     let bytes = std::fs::read(&source)?;
     encode_pal256_bytes(&bytes, long_side)
 }
@@ -292,7 +297,11 @@ pub fn thumbnail_png(source: &[u8], long_side: u16) -> Result<Vec<u8>, TauError>
     let (width, height, rgb) = decode_source_image(source)?;
     let longest = width.max(height);
     if longest <= long_side as u32 {
-        return rgb8_to_png(width.min(u16::MAX as u32) as u16, height.min(u16::MAX as u32) as u16, &rgb);
+        return rgb8_to_png(
+            width.min(u16::MAX as u32) as u16,
+            height.min(u16::MAX as u32) as u16,
+            &rgb,
+        );
     }
     let (dw, dh) = fit_long_side(width, height, long_side as u32);
     let resized = resize_rgb8(&rgb, width, height, dw, dh)?;
@@ -338,7 +347,10 @@ fn decode_source_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), TauError> {
 fn decode_jpeg(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), TauError> {
     let mut decoder = zune_jpeg::JpegDecoder::new(std::io::Cursor::new(bytes));
     let pixels = decoder.decode().map_err(|error| {
-        TauError::e(ErrorCode::UnsupportedCover, format!("invalid JPEG cover: {error}"))
+        TauError::e(
+            ErrorCode::UnsupportedCover,
+            format!("invalid JPEG cover: {error}"),
+        )
     })?;
     let info = decoder
         .info()
@@ -354,16 +366,22 @@ fn decode_jpeg(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), TauError> {
 fn decode_png(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), TauError> {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
-    let mut reader = decoder
-        .read_info()
-        .map_err(|error| TauError::e(ErrorCode::UnsupportedCover, format!("invalid PNG cover: {error}")))?;
+    let mut reader = decoder.read_info().map_err(|error| {
+        TauError::e(
+            ErrorCode::UnsupportedCover,
+            format!("invalid PNG cover: {error}"),
+        )
+    })?;
     let buffer_size = reader
         .output_buffer_size()
         .ok_or_else(|| TauError::e(ErrorCode::UnsupportedCover, "PNG cover too large to decode"))?;
     let mut buffer = vec![0u8; buffer_size];
-    let info = reader
-        .next_frame(&mut buffer)
-        .map_err(|error| TauError::e(ErrorCode::UnsupportedCover, format!("invalid PNG frame: {error}")))?;
+    let info = reader.next_frame(&mut buffer).map_err(|error| {
+        TauError::e(
+            ErrorCode::UnsupportedCover,
+            format!("invalid PNG frame: {error}"),
+        )
+    })?;
     let channels = match info.color_type {
         png::ColorType::Grayscale => 1,
         png::ColorType::GrayscaleAlpha => 2,
@@ -373,7 +391,7 @@ fn decode_png(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), TauError> {
             return Err(TauError::e(
                 ErrorCode::UnsupportedCover,
                 "indexed PNG was not expanded to a plain colour type",
-            ))
+            ));
         }
     };
     let rgb = to_rgb8(&buffer[..info.buffer_size()], channels)?;
@@ -400,7 +418,7 @@ fn to_rgb8(buffer: &[u8], channels: usize) -> Result<Vec<u8>, TauError> {
                 return Err(TauError::e(
                     ErrorCode::UnsupportedCover,
                     format!("unsupported channel count {channels}"),
-                ))
+                ));
             }
         }
     }
@@ -434,10 +452,20 @@ fn resize_rgb8(
         resize::Pixel::RGB8,
         resize::Type::Lanczos3,
     )
-    .map_err(|error| TauError::e(ErrorCode::UnsupportedCover, format!("resize setup failed: {error}")))?;
+    .map_err(|error| {
+        TauError::e(
+            ErrorCode::UnsupportedCover,
+            format!("resize setup failed: {error}"),
+        )
+    })?;
     resizer
         .resize(&src_pixels, &mut dst_pixels)
-        .map_err(|error| TauError::e(ErrorCode::UnsupportedCover, format!("resize failed: {error}")))?;
+        .map_err(|error| {
+            TauError::e(
+                ErrorCode::UnsupportedCover,
+                format!("resize failed: {error}"),
+            )
+        })?;
     let mut out = Vec::with_capacity(dst_pixels.len() * 3);
     for pixel in dst_pixels {
         out.extend_from_slice(&[pixel.r, pixel.g, pixel.b]);
@@ -569,7 +597,12 @@ fn dither_floyd_steinberg(
                 px[1] - chosen.1 as f32,
                 px[2] - chosen.2 as f32,
             ];
-            for &(dx, dy, weight) in &[(1i32, 0i32, 7.0f32 / 16.0), (-1, 1, 3.0 / 16.0), (0, 1, 5.0 / 16.0), (1, 1, 1.0 / 16.0)] {
+            for &(dx, dy, weight) in &[
+                (1i32, 0i32, 7.0f32 / 16.0),
+                (-1, 1, 3.0 / 16.0),
+                (0, 1, 5.0 / 16.0),
+                (1, 1, 1.0 / 16.0),
+            ] {
                 let (nx, ny) = (x as i32 + dx, y as i32 + dy);
                 if nx >= 0 && ny >= 0 && (nx as usize) < width && (ny as usize) < height {
                     let j = ny as usize * width + nx as usize;
@@ -660,7 +693,10 @@ mod tests {
     fn decode_tim1_to_png_produces_a_real_png_a_browser_can_display() {
         let bytes = fixture("cover_128.pal256.timg");
         let png_bytes = decode_tim1_to_png(&bytes).expect("png encode");
-        assert_eq!(&png_bytes[0..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        assert_eq!(
+            &png_bytes[0..8],
+            &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
+        );
         // Read it back with the same `png` decoder the rest of this module
         // (and taud's screenshot path) already relies on, confirming a real
         // browser-displayable file, not just a byte prefix.

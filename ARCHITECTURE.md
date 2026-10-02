@@ -44,6 +44,24 @@ tau-omega/
   docs/              copy of this folder's documents
 ```
 
+## What exists today (2026-10-02)
+
+The engine (`crates/tau-core`, `forbid(unsafe_code)`, three runtime dependencies plus optional `serde`) is flat, one file per concern:
+`lib` (card inspection, ASCII rules, scanning with the ledger, tags, index codec), `sync` (plan, copy, verify, provenance, space preflight, index swap,
+read-back), `workbench` (library listing, album add/remove, two-phase removal), `changes`/`tagedit`/`cover`/`image` (tag and cover edits, `TIM1`),
+`ledger` (remembered verification), `breakdown` (card space per core), `assets` (theme file writer/reader), `journal`/`backup`/`remove`/`package`/
+`compare`/`duplicates`/`playlist`/`problems`/`storage`/`diag`/`taud`/`screenshots`/`icon`.
+
+**Host (`src-tauri`) owns what the engine must not:** threads (plain commands run on the window thread, long ones are `#[tauri::command(async)]`),
+job registry and cancellation, the per-volume card write lock, eject and USB-device identification (`device.rs`), OS cache flushing
+(`cacheflush.rs`), the ledger's location and volume identity (`ledger_host.rs`). The engine reaches them only through two registered hooks
+(`register_cache_evictor`, `ledger::register_locator`), so another host supplies its own or runs without.
+
+**UI (`ui/`):** Svelte pages over `tau-api.ts`; `dev-mock.ts` stands in for the host in the browser behaviour suite
+(`ui/scripts/workbench-test.cjs`). The mock is shape-only by intent; the Rust tests are the authority on behaviour.
+
+The module tree above is still the intended split and is not done. The five extension points are still unbuilt interfaces.
+
 ## Dependencies
 
 > **Status 2026-09-22 — the list below was not followed, and that was the right call.** `tau-core`

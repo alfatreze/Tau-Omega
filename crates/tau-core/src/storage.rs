@@ -80,7 +80,7 @@ pub(crate) fn nearest_existing_ancestor(path: &Path) -> Result<PathBuf, TauError
                 return Err(TauError::e(
                     ErrorCode::InvalidPathReference,
                     "no existing directory found on this path to check capacity against",
-                ))
+                ));
             }
         }
     }
@@ -100,7 +100,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&root).unwrap();
         root

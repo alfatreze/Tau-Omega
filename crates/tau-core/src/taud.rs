@@ -13,7 +13,7 @@
 //! exists.
 
 use crate::{ErrorCode, TauError};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use std::{fs::File, io::BufReader, path::Path};
 
 const FORMAT: u8 = 1;
@@ -240,12 +240,9 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
         return Err(bad_record("bad magic"));
     }
     let body = &record[..record.len() - 4];
-    let expected_crc =
-        u32::from_le_bytes(record[record.len() - 4..].try_into().expect("4 bytes"));
+    let expected_crc = u32::from_le_bytes(record[record.len() - 4..].try_into().expect("4 bytes"));
     if crc32fast::hash(body) != expected_crc {
-        return Err(bad_record(
-            "CRC mismatch (record damaged or incomplete)",
-        ));
+        return Err(bad_record("CRC mismatch (record damaged or incomplete)"));
     }
     if record[2] != FORMAT {
         return Err(bad_record(format!("unsupported format {}", record[2])));
@@ -326,16 +323,21 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
                 match tag {
                     4 | 5 => {
                         let cycles = match values.as_slice() {
-                            [read_min, read_avg, read_max, write_min, write_avg, write_max] => {
-                                Some(TaudCycles {
-                                    read_min: Some(*read_min),
-                                    read_avg: *read_avg,
-                                    read_max: *read_max,
-                                    write_min: Some(*write_min),
-                                    write_avg: *write_avg,
-                                    write_max: *write_max,
-                                })
-                            }
+                            [
+                                read_min,
+                                read_avg,
+                                read_max,
+                                write_min,
+                                write_avg,
+                                write_max,
+                            ] => Some(TaudCycles {
+                                read_min: Some(*read_min),
+                                read_avg: *read_avg,
+                                read_max: *read_max,
+                                write_min: Some(*write_min),
+                                write_avg: *write_avg,
+                                write_max: *write_max,
+                            }),
                             [read_avg, read_max, write_avg, write_max] => Some(TaudCycles {
                                 read_min: None,
                                 read_avg: *read_avg,
@@ -355,8 +357,7 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
                         }
                     }
                     8 => {
-                        if let [late_underruns, audio_full, stall_ms, window_s] =
-                            values.as_slice()
+                        if let [late_underruns, audio_full, stall_ms, window_s] = values.as_slice()
                         {
                             entries.audio = Some(TaudAudio {
                                 late_underruns: *late_underruns,
@@ -570,10 +571,12 @@ mod tests {
         // B-067's evidence: base seven plus Stress R1/R2/R3, all PASS.
         let report = read_qr_report(fixture("20260921_231110.png")).unwrap();
         assert_eq!(report.tests.len(), 10);
-        assert!(report
-            .tests
-            .iter()
-            .any(|test| test.name == "Stress R1 (30 s)" && test.result == "PASS"));
+        assert!(
+            report
+                .tests
+                .iter()
+                .any(|test| test.name == "Stress R1 (30 s)" && test.result == "PASS")
+        );
     }
 
     #[test]

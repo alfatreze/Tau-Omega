@@ -28,15 +28,30 @@ const LIGHT_ACC_MAX_L: i32 = 110;
 
 /// The themeable roles: file key and the firmware's enum index. Order is the firmware's `ROLES` list.
 pub const ROLES: [(&str, usize); 18] = [
-    ("bg_bottom", 1), ("surface", 2), ("surface_track", 3), ("text_primary", 4), ("text_secondary", 5),
-    ("on_accent", 7), ("ok", 9), ("warn", 10), ("danger", 11), ("base", 12), ("chrome", 13), ("pill", 14),
-    ("error", 15), ("faint", 16), ("splash_bg", 17), ("splash_bar", 18), ("fs_red", 19), ("fs_track", 20),
+    ("bg_bottom", 1),
+    ("surface", 2),
+    ("surface_track", 3),
+    ("text_primary", 4),
+    ("text_secondary", 5),
+    ("on_accent", 7),
+    ("ok", 9),
+    ("warn", 10),
+    ("danger", 11),
+    ("base", 12),
+    ("chrome", 13),
+    ("pill", 14),
+    ("error", 15),
+    ("faint", 16),
+    ("splash_bg", 17),
+    ("splash_bar", 18),
+    ("fs_red", 19),
+    ("fs_track", 20),
 ];
 
 /// The accent colours the device offers (`ui_palette[]` in `fw/player.c`, RGB565). The contrast rules are checked against all of them.
 const PALETTE: [u16; 19] = [
-    0x18C3, 0xF7BE, 0x2A83, 0xE73B, 0x8C51, 0xD1E6, 0xE429, 0x5D0D, 0x4BD4, 0x9BF6, 0xFEA0, 0xE429, 0xD1E6, 0xE4B6,
-    0x4BD4, 0x5D0D, 0x6AD2, 0xBDF7, 0x8C71,
+    0x18C3, 0xF7BE, 0x2A83, 0xE73B, 0x8C51, 0xD1E6, 0xE429, 0x5D0D, 0x4BD4, 0x9BF6, 0xFEA0, 0xE429,
+    0xD1E6, 0xE4B6, 0x4BD4, 0x5D0D, 0x6AD2, 0xBDF7, 0x8C71,
 ];
 
 /// One polarity of a theme as the editor holds it: `#RRGGBB` per role key, plus the background luma.
@@ -97,12 +112,19 @@ pub fn snap(text: &str) -> Option<u16> {
     }
     let c = |i: usize| u32::from_str_radix(&h[i..i + 2], 16).ok();
     let (r, g, b) = (c(0)?, c(2)?, c(4)?);
-    Some((((r * 31 + 127) / 255) << 11 | ((g * 63 + 127) / 255) << 5 | ((b * 31 + 127) / 255)) as u16)
+    Some(
+        (((r * 31 + 127) / 255) << 11 | ((g * 63 + 127) / 255) << 5 | ((b * 31 + 127) / 255))
+            as u16,
+    )
 }
 
 fn rgb8(c: u16) -> (i32, i32, i32) {
     let c = c as i32;
-    ((c >> 11) * 255 / 31, ((c >> 5) & 0x3F) * 255 / 63, (c & 0x1F) * 255 / 31)
+    (
+        (c >> 11) * 255 / 31,
+        ((c >> 5) & 0x3F) * 255 / 63,
+        (c & 0x1F) * 255 / 31,
+    )
 }
 
 /// RGB565 back to `#RRGGBB` as the screen shows it.
@@ -118,7 +140,11 @@ fn pack565(r: i32, g: i32, b: i32) -> u16 {
 fn luminance(c: u16) -> f64 {
     let f = |x: i32| {
         let v = x as f64 / 255.0;
-        if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
     };
     let (r, g, b) = rgb8(c);
     0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
@@ -137,7 +163,11 @@ fn acc_eff(a: u16, light: bool) -> u16 {
     let (r, g, b) = rgb8(a);
     let l = (2126 * r + 7152 * g + 722 * b) / 10000;
     if l > LIGHT_ACC_MAX_L {
-        pack565(r * LIGHT_ACC_MAX_L / l, g * LIGHT_ACC_MAX_L / l, b * LIGHT_ACC_MAX_L / l)
+        pack565(
+            r * LIGHT_ACC_MAX_L / l,
+            g * LIGHT_ACC_MAX_L / l,
+            b * LIGHT_ACC_MAX_L / l,
+        )
     } else {
         a
     }
@@ -156,7 +186,9 @@ fn grad_top(accent: u16, luma: i32) -> u16 {
 fn mix565(a: u16, b: u16, t: i32, n: i32) -> u16 {
     let (a, b) = (a as i32, b as i32);
     let ch = |x: i32, y: i32| x + ((y - x) * t).div_euclid(n);
-    ((ch(a >> 11, b >> 11) << 11) | (ch((a >> 5) & 0x3F, (b >> 5) & 0x3F) << 5) | ch(a & 0x1F, b & 0x1F)) as u16
+    ((ch(a >> 11, b >> 11) << 11)
+        | (ch((a >> 5) & 0x3F, (b >> 5) & 0x3F) << 5)
+        | ch(a & 0x1F, b & 0x1F)) as u16
 }
 
 /// Contrast rules: text role, backgrounds ("ramp" = the background ramp behind every device accent), minimum ratio.
@@ -173,7 +205,9 @@ fn read_polarity(
 ) -> Option<BTreeMap<&'static str, u16>> {
     let mut out = BTreeMap::new();
     if !(20..=235).contains(&p.bg_luma) {
-        problems.push(format!("{label}: the background brightness must be between 20 and 235."));
+        problems.push(format!(
+            "{label}: the background brightness must be between 20 and 235."
+        ));
     }
     for (key, _) in ROLES {
         match p.colors.get(key).map(|v| snap(v)) {
@@ -191,18 +225,30 @@ fn read_polarity(
 pub fn check_theme(t: &ThemeInput) -> ThemeReport {
     let mut report = ThemeReport::default();
     let name_ok = !t.name.is_empty()
-        && t.name.len() <= NAME_LEN - 1
-        && t.name.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || matches!(b, b' ' | b'_' | b'-'));
+        && t.name.len() < NAME_LEN
+        && t.name.bytes().all(|b| {
+            b.is_ascii_uppercase() || b.is_ascii_digit() || matches!(b, b' ' | b'_' | b'-')
+        });
     if !name_ok {
         report.problems.push("The name must be 1 to 15 characters: capital letters, digits, space, _ or - (the Pocket's font is capitals only).".into());
     }
     if BUILTIN_NAMES.contains(&t.name.as_str()) {
-        report.problems.push(format!("“{}” is already a built-in theme; pick another name.", t.name));
+        report.problems.push(format!(
+            "“{}” is already a built-in theme; pick another name.",
+            t.name
+        ));
     }
     for (label, light, p) in [("Dark", false, &t.dark), ("Light", true, &t.light)] {
-        let Some(c) = read_polarity(label, p, &mut report.problems) else { continue };
-        let snapped: BTreeMap<String, String> = c.iter().map(|(k, v)| (k.to_string(), to_hex(*v))).collect();
-        if light { report.light_snapped = snapped } else { report.dark_snapped = snapped }
+        let Some(c) = read_polarity(label, p, &mut report.problems) else {
+            continue;
+        };
+        let snapped: BTreeMap<String, String> =
+            c.iter().map(|(k, v)| (k.to_string(), to_hex(*v))).collect();
+        if light {
+            report.light_snapped = snapped
+        } else {
+            report.dark_snapped = snapped
+        }
         if !(20..=235).contains(&p.bg_luma) {
             continue;
         }
@@ -230,17 +276,32 @@ pub fn check_theme(t: &ThemeInput) -> ThemeReport {
                 ));
             }
             report.checks.push(ContrastCheck {
-                polarity: label.to_lowercase(), text: text.into(), against: backs.join("/"), worst, needed: need, ok,
+                polarity: label.to_lowercase(),
+                text: text.into(),
+                against: backs.join("/"),
+                worst,
+                needed: need,
+                ok,
             });
         }
         if light {
             // On Light the accent is also used as text and fills against the surface.
-            let worst = PALETTE.iter().map(|ac| contrast(acc_eff(*ac, true), c["surface"])).fold(99.0, f64::min);
+            let worst = PALETTE
+                .iter()
+                .map(|ac| contrast(acc_eff(*ac, true), c["surface"]))
+                .fold(99.0, f64::min);
             let ok = worst >= 3.0;
             if !ok {
                 report.problems.push(format!("Light: some accent colours would be too faint on the surface ({worst:.2}, needs 3.0)."));
             }
-            report.checks.push(ContrastCheck { polarity: "light".into(), text: "accent".into(), against: "surface".into(), worst, needed: 3.0, ok });
+            report.checks.push(ContrastCheck {
+                polarity: "light".into(),
+                text: "accent".into(),
+                against: "surface".into(),
+                worst,
+                needed: 3.0,
+                ok,
+            });
         }
     }
     report
@@ -263,7 +324,11 @@ fn pack_them(themes: &[ThemeInput]) -> Result<Vec<u8>, TauError> {
         seen.push(&t.name);
         let report = check_theme(t);
         if !report.problems.is_empty() {
-            return Err(invalid(format!("{}: {}", t.name, report.problems.join(" "))));
+            return Err(invalid(format!(
+                "{}: {}",
+                t.name,
+                report.problems.join(" ")
+            )));
         }
         let mut name = [0u8; NAME_LEN];
         name[..t.name.len()].copy_from_slice(t.name.as_bytes());
@@ -321,7 +386,10 @@ pub fn parse_assets(blob: &[u8]) -> Result<Vec<ThemeInput>, TauError> {
         return Err(bad_file("This is not a Tau assets file."));
     }
     if u16le(blob, 4) != VERSION {
-        return Err(bad_file(format!("Unsupported assets file version {}.", u16le(blob, 4))));
+        return Err(bad_file(format!(
+            "Unsupported assets file version {}.",
+            u16le(blob, 4)
+        )));
     }
     let n = u16le(blob, 6) as usize;
     if n > 8 || blob.len() < 12 + 16 * n {
@@ -334,7 +402,10 @@ pub fn parse_assets(blob: &[u8]) -> Result<Vec<ThemeInput>, TauError> {
     for i in 0..n {
         let e = &table[i * 16..i * 16 + 16];
         let (off, len) = (u32le(e, 4) as usize, u32le(e, 8) as usize);
-        let end = off.checked_add(len).filter(|end| *end <= blob.len()).ok_or_else(|| bad_file("A section runs past the end of the file."))?;
+        let end = off
+            .checked_add(len)
+            .filter(|end| *end <= blob.len())
+            .ok_or_else(|| bad_file("A section runs past the end of the file."))?;
         let data = &blob[off..end];
         if crc(data) != u32le(e, 12) {
             return Err(bad_file("A section failed its check."));
@@ -361,18 +432,32 @@ fn parse_them(d: &[u8]) -> Result<Vec<ThemeInput>, TauError> {
     let mut out = Vec::new();
     for i in 0..tc {
         let e = &d[12 + i * per..12 + (i + 1) * per];
-        let name_end = e[..NAME_LEN].iter().position(|b| *b == 0).unwrap_or(NAME_LEN);
+        let name_end = e[..NAME_LEN]
+            .iter()
+            .position(|b| *b == 0)
+            .unwrap_or(NAME_LEN);
         let name = String::from_utf8_lossy(&e[..name_end]).into_owned();
         let pol = |luma: u8, base: usize| {
             let mut colors = BTreeMap::new();
             for (key, idx) in ROLES {
                 // A file written for an older firmware may carry fewer roles; the missing ones start from white to be edited.
-                let v = if idx < rc { u16le(e, base + 2 * idx) } else { 0xFFFF };
+                let v = if idx < rc {
+                    u16le(e, base + 2 * idx)
+                } else {
+                    0xFFFF
+                };
                 colors.insert(key.to_string(), to_hex(v));
             }
-            PolarityInput { bg_luma: luma, colors }
+            PolarityInput {
+                bg_luma: luma,
+                colors,
+            }
         };
-        out.push(ThemeInput { name, dark: pol(e[16], 20), light: pol(e[17], 20 + 2 * rc) });
+        out.push(ThemeInput {
+            name,
+            dark: pol(e[16], 20),
+            light: pol(e[17], 20 + 2 * rc),
+        });
     }
     Ok(out)
 }
@@ -391,10 +476,17 @@ mod tests {
             let o = v[p].as_object().unwrap();
             PolarityInput {
                 bg_luma: o["bg_luma"].as_u64().unwrap() as u8,
-                colors: ROLES.iter().map(|(k, _)| (k.to_string(), o[*k].as_str().unwrap().to_string())).collect(),
+                colors: ROLES
+                    .iter()
+                    .map(|(k, _)| (k.to_string(), o[*k].as_str().unwrap().to_string()))
+                    .collect(),
             }
         };
-        ThemeInput { name: v["name"].as_str().unwrap().into(), dark: pol("dark"), light: pol("light") }
+        ThemeInput {
+            name: v["name"].as_str().unwrap().into(),
+            dark: pol("dark"),
+            light: pol("light"),
+        }
     }
 
     #[test]
@@ -418,7 +510,10 @@ mod tests {
             assert!(parse_assets(&b).is_err(), "flipping byte {i} was accepted");
         }
         for n in 0..SUNSET_BIN.len() {
-            assert!(parse_assets(&SUNSET_BIN[..n]).is_err(), "a file cut to {n} bytes was accepted");
+            assert!(
+                parse_assets(&SUNSET_BIN[..n]).is_err(),
+                "a file cut to {n} bytes was accepted"
+            );
         }
     }
 
@@ -426,13 +521,26 @@ mod tests {
     fn contrast_figures_match_the_firmware_generators_report() {
         let r = check_theme(&sunset());
         assert!(r.problems.is_empty(), "{:?}", r.problems);
-        let worst = |pol: &str, text: &str, against: &str| r.checks.iter().find(|c| c.polarity == pol && c.text == text && c.against == against).unwrap().worst;
+        let worst = |pol: &str, text: &str, against: &str| {
+            r.checks
+                .iter()
+                .find(|c| c.polarity == pol && c.text == text && c.against == against)
+                .unwrap()
+                .worst
+        };
         for (pol, text, against, want) in [
-            ("dark", "text_primary", "surface/base/ramp", 12.21), ("dark", "text_secondary", "surface/base", 7.14),
-            ("dark", "text_secondary", "ramp", 5.69), ("light", "text_primary", "surface/base/ramp", 10.11),
-            ("light", "text_secondary", "surface/base", 6.71), ("light", "text_secondary", "ramp", 4.86),
+            ("dark", "text_primary", "surface/base/ramp", 12.21),
+            ("dark", "text_secondary", "surface/base", 7.14),
+            ("dark", "text_secondary", "ramp", 5.69),
+            ("light", "text_primary", "surface/base/ramp", 10.11),
+            ("light", "text_secondary", "surface/base", 6.71),
+            ("light", "text_secondary", "ramp", 4.86),
         ] {
-            assert!((worst(pol, text, against) - want).abs() < 0.006, "{pol} {text} vs {against}: {} != {want}", worst(pol, text, against));
+            assert!(
+                (worst(pol, text, against) - want).abs() < 0.006,
+                "{pol} {text} vs {against}: {} != {want}",
+                worst(pol, text, against)
+            );
         }
     }
 
@@ -442,7 +550,13 @@ mod tests {
         let surface = t.dark.colors["surface"].clone();
         t.dark.colors.insert("text_primary".into(), surface);
         let r = check_theme(&t);
-        assert!(r.problems.iter().any(|p| p.contains("text primary") && p.contains("too faint")), "{:?}", r.problems);
+        assert!(
+            r.problems
+                .iter()
+                .any(|p| p.contains("text primary") && p.contains("too faint")),
+            "{:?}",
+            r.problems
+        );
         assert!(pack_assets(&[t]).is_err());
     }
 
@@ -452,19 +566,37 @@ mod tests {
         t.name = "sunset".into();
         assert!(!check_theme(&t).problems.is_empty());
         t.name = "TAU".into();
-        assert!(check_theme(&t).problems.iter().any(|p| p.contains("built-in")));
+        assert!(
+            check_theme(&t)
+                .problems
+                .iter()
+                .any(|p| p.contains("built-in"))
+        );
         let mut t = sunset();
         t.dark.bg_luma = 10;
         assert!(!check_theme(&t).problems.is_empty());
         let mut t = sunset();
         t.light.colors.remove("ok");
-        assert!(check_theme(&t).problems.iter().any(|p| p.contains("no colour")));
+        assert!(
+            check_theme(&t)
+                .problems
+                .iter()
+                .any(|p| p.contains("no colour"))
+        );
         let mut t = sunset();
         t.dark.colors.insert("ok".into(), "green".into());
-        assert!(check_theme(&t).problems.iter().any(|p| p.contains("not a colour")));
+        assert!(
+            check_theme(&t)
+                .problems
+                .iter()
+                .any(|p| p.contains("not a colour"))
+        );
         assert!(pack_assets(&[]).is_err());
         let (a, mut b) = (sunset(), sunset());
-        assert!(pack_assets(&[a.clone(), a.clone()]).is_err(), "duplicate names");
+        assert!(
+            pack_assets(&[a.clone(), a.clone()]).is_err(),
+            "duplicate names"
+        );
         b.name = "SUNSET 2".into();
         assert!(pack_assets(&[a, b]).is_ok());
     }

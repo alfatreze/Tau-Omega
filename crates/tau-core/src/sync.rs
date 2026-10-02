@@ -232,7 +232,10 @@ pub(crate) fn plan_candidates(
         if !seen.insert(relative.to_string_lossy().to_lowercase()) {
             return Err(TauError::e(
                 ErrorCode::NameCollision,
-                format!("name collision (the card ignores letter case): {}", relative.display()),
+                format!(
+                    "name collision (the card ignores letter case): {}",
+                    relative.display()
+                ),
             ));
         }
         let target = destination.join(&relative);
@@ -262,9 +265,10 @@ pub(crate) fn plan_candidates(
                                 WarningCode::CoverNotEmbedded,
                                 format!(
                                     "{}: the cover was not put inside the songs ({})",
-                                    path.parent()
-                                        .and_then(|p| p.file_name())
-                                        .map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned()),
+                                    path.parent().and_then(|p| p.file_name()).map_or_else(
+                                        || path.display().to_string(),
+                                        |n| n.to_string_lossy().into_owned()
+                                    ),
                                     error.message
                                 ),
                             ));
@@ -304,18 +308,23 @@ pub(crate) fn plan_candidates(
         // re-sync. A small canary below re-hashes a few of these to catch anything that drifted.
         let rel_key = relative.to_string_lossy().replace('\\', "/");
         let cover_sha = cover.as_ref().map(|c| c.sha256.clone()).unwrap_or_default();
-        let remembered = match (ledger.as_ref(), fs::metadata(&target).ok().and_then(|m| ledger::fingerprint(&m))) {
+        let remembered = match (
+            ledger.as_ref(),
+            fs::metadata(&target)
+                .ok()
+                .and_then(|m| ledger::fingerprint(&m)),
+        ) {
             (Some(session), Some(print)) => session
                 .provenance(&rel_key, &print)
                 .filter(|(p, _)| p.source_sha == sha256 && p.cover_sha == cover_sha),
             _ => None,
         };
-        let mut state = if remembered.is_some() {
-            CopyState::Same
-        } else if target.is_file()
-            && fs::metadata(&target)?.len() == bytes
-            && sha256_file(&target).ok().as_deref() == Some(&sha256)
-        {
+        // Same when the ledger remembers this very copy, else when the file on the card hashes equal.
+        let same = remembered.is_some()
+            || (target.is_file()
+                && fs::metadata(&target)?.len() == bytes
+                && sha256_file(&target).ok().as_deref() == Some(&sha256));
+        let mut state = if same {
             CopyState::Same
         } else if target.exists() {
             CopyState::Update
@@ -329,7 +338,12 @@ pub(crate) fn plan_candidates(
             state = CopyState::Update;
         }
         if let Some((prov, verified_ms)) = remembered {
-            proven.push(Proven { index: items.len(), rel: rel_key, output_sha: prov.output_sha, verified_ms });
+            proven.push(Proven {
+                index: items.len(),
+                rel: rel_key,
+                output_sha: prov.output_sha,
+                verified_ms,
+            });
         }
         if state != CopyState::Same {
             bytes_to_write += bytes;
@@ -343,7 +357,13 @@ pub(crate) fn plan_candidates(
             state,
         });
     }
-    run_canary(&mut items, &mut proven, &mut ledger, &mut bytes_to_write, &mut warnings);
+    run_canary(
+        &mut items,
+        &mut proven,
+        &mut ledger,
+        &mut bytes_to_write,
+        &mut warnings,
+    );
     if let Some(session) = ledger.take() {
         session.finish();
     }
@@ -429,7 +449,10 @@ pub fn execute_with_mirror(
     preflight_space(plan)?;
     // Repair what an earlier interrupted run left behind before adding to it.
     recover_index(&plan.destination)?;
-    sweep_stale_temps(&plan.destination, plan.items.iter().map(|i| i.destination.as_path()));
+    sweep_stale_temps(
+        &plan.destination,
+        plan.items.iter().map(|i| i.destination.as_path()),
+    );
     let mut copied = 0;
     let mut unchanged = 0;
     let mut bytes_written = 0;
@@ -462,7 +485,11 @@ pub fn execute_with_mirror(
                         print,
                         ledger::Provenance {
                             source_sha: item.sha256.clone(),
-                            cover_sha: item.cover.as_ref().map(|c| c.sha256.clone()).unwrap_or_default(),
+                            cover_sha: item
+                                .cover
+                                .as_ref()
+                                .map(|c| c.sha256.clone())
+                                .unwrap_or_default(),
                             embed_version: ledger::EMBED_VERSION,
                             output_sha,
                         },
@@ -506,7 +533,10 @@ pub fn execute_with_mirror(
             let _ = fs::remove_file(&temp);
             return Err(TauError::e(
                 ErrorCode::VerificationFailed,
-                format!("cover file verification failed: {}", item.destination.display()),
+                format!(
+                    "cover file verification failed: {}",
+                    item.destination.display()
+                ),
             ));
         }
         fs::rename(&temp, &item.destination)?;
@@ -627,7 +657,9 @@ pub fn execute_core_move(
         ));
     }
     let source_common = source_common.canonicalize()?;
-    if backup_is_inside(backup_root, &source_common) || backup_is_inside(backup_root, &plan.destination) {
+    if backup_is_inside(backup_root, &source_common)
+        || backup_is_inside(backup_root, &plan.destination)
+    {
         return Err(TauError::e(
             ErrorCode::UnsafeBackupLocation,
             "move backup folder must be outside both core media roots",
@@ -793,7 +825,10 @@ pub(crate) fn backup_copy_streaming(
         if format!("{:x}", hasher.finalize()) != item.sha256 {
             return Err(TauError::e(
                 ErrorCode::SourceChangedSincePlan,
-                format!("changed since the plan was reviewed: {}", item.relative.display()),
+                format!(
+                    "changed since the plan was reviewed: {}",
+                    item.relative.display()
+                ),
             ));
         }
         verify_written(&temp, &item.sha256, &item.destination)
@@ -1100,7 +1135,9 @@ pub(crate) fn sweep_stale_temps<'a>(media_root: &Path, written: impl Iterator<It
         }
     }
     for dir in dirs {
-        let Ok(entries) = fs::read_dir(&dir) else { continue };
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             let ours = (name.contains(".tau-omega-") && name.ends_with(".tmp"))
@@ -1137,11 +1174,7 @@ pub(crate) fn round_up_to(bytes: u64, unit: u64) -> u64 {
 /// the old one before the swap, so counted twice).
 pub(crate) fn bytes_on_disk(plan: &SyncPlan, unit: u64) -> u64 {
     let mut total = 0u64;
-    for item in plan
-        .items
-        .iter()
-        .filter(|i| i.state != CopyState::Same)
-    {
+    for item in plan.items.iter().filter(|i| i.state != CopyState::Same) {
         let cover = item
             .cover
             .as_ref()
@@ -1226,7 +1259,9 @@ fn run_canary(
     bytes_to_write: &mut u64,
     warnings: &mut Vec<Warning>,
 ) {
-    let Some(session) = ledger.as_mut() else { return };
+    let Some(session) = ledger.as_mut() else {
+        return;
+    };
     proven.sort_by_key(|p| p.verified_ms);
     let mut budget = CANARY_BUDGET_BYTES;
     let mut drift = false;
@@ -1236,7 +1271,8 @@ fn run_canary(
             if budget <= 0 {
                 break; // checked enough for this plan; the rest stay trusted
             }
-            budget -= i64::try_from(fs::metadata(&item.destination).map_or(0, |m| m.len())).unwrap_or(i64::MAX);
+            budget -= i64::try_from(fs::metadata(&item.destination).map_or(0, |m| m.len()))
+                .unwrap_or(i64::MAX);
             evict_cache(&item.destination);
             if sha256_file(&item.destination).ok().as_deref() == Some(p.output_sha.as_str()) {
                 session.touch_verified(&p.rel);
@@ -1248,7 +1284,11 @@ fn run_canary(
                 format!("{}: this file on the card is not what Tau Omega wrote there, so it and any earlier files that could not be re-checked will be copied again", p.rel),
             ));
         }
-        item.state = if item.destination.exists() { CopyState::Update } else { CopyState::New };
+        item.state = if item.destination.exists() {
+            CopyState::Update
+        } else {
+            CopyState::New
+        };
         *bytes_to_write += item.bytes;
         session.invalidate(&p.rel);
     }
@@ -1351,11 +1391,28 @@ mod tests {
         let needed = bytes_on_disk(&plan, 131_072);
         assert!(needed >= 1000 * 131_072, "exFAT-sized clusters: {needed}");
         // Files that are already on the card cost nothing.
-        let same = SyncPlan { items: plan.items.iter().cloned().map(|mut i| { i.state = CopyState::Same; i }).collect(), ..plan.clone() };
+        let same = SyncPlan {
+            items: plan
+                .items
+                .iter()
+                .cloned()
+                .map(|mut i| {
+                    i.state = CopyState::Same;
+                    i
+                })
+                .collect(),
+            ..plan.clone()
+        };
         assert!(bytes_on_disk(&same, 131_072) < 1000 * 131_072);
         // The check refuses with its own code, and passes when there is room.
-        assert_eq!(ensure_space(10, 1_000, 0).unwrap_err().code(), ErrorCode::InsufficientSpace);
-        assert_eq!(ensure_space(1_000, 1_000, 1).unwrap_err().code(), ErrorCode::InsufficientSpace);
+        assert_eq!(
+            ensure_space(10, 1_000, 0).unwrap_err().code(),
+            ErrorCode::InsufficientSpace
+        );
+        assert_eq!(
+            ensure_space(1_000, 1_000, 1).unwrap_err().code(),
+            ErrorCode::InsufficientSpace
+        );
         ensure_space(2_000, 1_000, 1_000).unwrap();
     }
 
@@ -1370,7 +1427,11 @@ mod tests {
             &[source],
             &common,
             "/Assets/tau/common/",
-            PlanOptions { mirror: false, embed_covers: false, art_sidecar_pal256: false },
+            PlanOptions {
+                mirror: false,
+                embed_covers: false,
+                art_sidecar_pal256: false,
+            },
             &mut None,
         )
         .unwrap();
@@ -1385,7 +1446,10 @@ mod tests {
         let common = synced_card("index-swap");
         let live = common.join("tau-library.tdb");
         let good = fs::read(&live).unwrap();
-        assert!(!common.join(".tau-library.tdb.prev").exists(), "a finished swap leaves no .prev");
+        assert!(
+            !common.join(".tau-library.tdb.prev").exists(),
+            "a finished swap leaves no .prev"
+        );
         assert_eq!(recover_index(&common).unwrap(), IndexRecovery::Clean);
 
         // Card pulled between "move old aside" and "move new into place".
@@ -1428,18 +1492,36 @@ mod tests {
         }
         let two_hours_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 3600);
         for f in [&old_temp, &foreign, &index_temp] {
-            fs::File::options().write(true).open(f).unwrap().set_modified(two_hours_ago).unwrap();
+            fs::File::options()
+                .write(true)
+                .open(f)
+                .unwrap()
+                .set_modified(two_hours_ago)
+                .unwrap();
         }
         let written = [album.join("Song.mp3")];
         sweep_stale_temps(&common, written.iter().map(|p| p.as_path()));
         assert!(!old_temp.exists(), "an old leftover of ours is removed");
-        assert!(!index_temp.exists(), "an old leftover index temp is removed");
-        assert!(fresh_temp.exists(), "a recent temp may belong to a run in progress");
-        assert!(foreign.exists(), "files that are not ours are never touched");
+        assert!(
+            !index_temp.exists(),
+            "an old leftover index temp is removed"
+        );
+        assert!(
+            fresh_temp.exists(),
+            "a recent temp may belong to a run in progress"
+        );
+        assert!(
+            foreign.exists(),
+            "files that are not ours are never touched"
+        );
     }
 
     fn opts(embed: bool) -> PlanOptions {
-        PlanOptions { mirror: false, embed_covers: embed, art_sidecar_pal256: false }
+        PlanOptions {
+            mirror: false,
+            embed_covers: embed,
+            art_sidecar_pal256: false,
+        }
     }
 
     /// The ledger remembers what this tool wrote and verified, so re-adding an album that is already on the
@@ -1449,7 +1531,10 @@ mod tests {
     #[test]
     fn a_resync_of_an_embedded_album_is_recognised_and_every_change_is_still_noticed() {
         crate::ledger::register_test_locator();
-        let base = std::env::temp_dir().join(format!("tau-ledger-it-sync-{}", std::process::id() as u128 + crate::test_uniq()));
+        let base = std::env::temp_dir().join(format!(
+            "tau-ledger-it-sync-{}",
+            std::process::id() as u128 + crate::test_uniq()
+        ));
         let (album, common) = (base.join("lib/Album"), base.join("card/Assets/tau/common"));
         for dir in [&album, &common] {
             fs::create_dir_all(dir).unwrap();
@@ -1458,7 +1543,16 @@ mod tests {
         fs::write(album.join("02.mp3"), b"audio two, also long").unwrap();
         fs::write(album.join("cover.jpg"), [0xff, 0xd8, 0xff, 0xd9]).unwrap();
         let sources = [album.clone()];
-        let make = || plan(&sources, &common, "/Assets/tau/common/", opts(true), &mut None).unwrap();
+        let make = || {
+            plan(
+                &sources,
+                &common,
+                "/Assets/tau/common/",
+                opts(true),
+                &mut None,
+            )
+            .unwrap()
+        };
 
         let first = make();
         assert!(first.items.iter().all(|i| i.state == CopyState::New));
@@ -1466,8 +1560,15 @@ mod tests {
 
         // Nothing changed anywhere: both files are provably already there, so nothing is planned.
         let again = make();
-        assert!(again.items.iter().all(|i| i.state == CopyState::Same), "{:?}", again.items.iter().map(|i| i.state).collect::<Vec<_>>());
-        assert_eq!(again.bytes_to_write, 0, "no rewriting of an album that is already on the card");
+        assert!(
+            again.items.iter().all(|i| i.state == CopyState::Same),
+            "{:?}",
+            again.items.iter().map(|i| i.state).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            again.bytes_to_write, 0,
+            "no rewriting of an album that is already on the card"
+        );
 
         // A source changes: that file is copied again, the other is still recognised.
         fs::write(album.join("02.mp3"), b"audio two, REVISED and longer").unwrap();
@@ -1477,8 +1578,15 @@ mod tests {
         fs::write(album.join("02.mp3"), b"audio two, also long").unwrap(); // put it back
 
         // The cover changes: every embedded copy is stale.
-        fs::write(album.join("cover.jpg"), [0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9]).unwrap();
-        assert!(make().items.iter().all(|i| i.state == CopyState::Update), "a different cover means different bytes");
+        fs::write(
+            album.join("cover.jpg"),
+            [0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9],
+        )
+        .unwrap();
+        assert!(
+            make().items.iter().all(|i| i.state == CopyState::Update),
+            "a different cover means different bytes"
+        );
         fs::write(album.join("cover.jpg"), [0xff, 0xd8, 0xff, 0xd9]).unwrap();
         assert!(make().items.iter().all(|i| i.state == CopyState::Same));
 
@@ -1490,21 +1598,45 @@ mod tests {
         let mid = bytes.len() / 2;
         bytes[mid] ^= 0xff;
         fs::write(&victim, &bytes).unwrap();
-        fs::File::options().write(true).open(&victim).unwrap().set_modified(kept_time).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&victim)
+            .unwrap()
+            .set_modified(kept_time)
+            .unwrap();
         let caught = make();
-        let altered = caught.items.iter().find(|i| i.destination.ends_with("Album/01.mp3")).unwrap();
-        assert_eq!(altered.state, CopyState::Update, "the altered file is always caught and copied again");
+        let altered = caught
+            .items
+            .iter()
+            .find(|i| i.destination.ends_with("Album/01.mp3"))
+            .unwrap();
+        assert_eq!(
+            altered.state,
+            CopyState::Update,
+            "the altered file is always caught and copied again"
+        );
         // The other file is either re-checked and confirmed (Same) or, if the canary hit the altered file
         // first, distrusted along with everything it had not checked yet (Update). Both are safe.
-        assert!(caught.warnings.iter().any(|w| w.code == WarningCode::CardFileChanged));
+        assert!(
+            caught
+                .warnings
+                .iter()
+                .any(|w| w.code == WarningCode::CardFileChanged)
+        );
         let repaired = caught.bytes_to_write;
         assert!(repaired > 0);
         execute(&caught, &caught.id, &mut None).unwrap();
-        assert!(make().items.iter().all(|i| i.state == CopyState::Same), "after the repair the ledger trusts the card again");
+        assert!(
+            make().items.iter().all(|i| i.state == CopyState::Same),
+            "after the repair the ledger trusts the card again"
+        );
 
         // Forgetting the card costs nothing but time: the same plan falls back to reading and hashing.
         assert!(crate::ledger::clear(&common));
-        assert!(make().items.iter().all(|i| i.state == CopyState::Update), "without the ledger an embedded copy cannot be proven, so it is rewritten (the old behaviour)");
+        assert!(
+            make().items.iter().all(|i| i.state == CopyState::Update),
+            "without the ledger an embedded copy cannot be proven, so it is rewritten (the old behaviour)"
+        );
         fs::remove_dir_all(base).unwrap();
     }
 
@@ -1514,7 +1646,10 @@ mod tests {
     #[test]
     fn an_unusable_cover_warns_instead_of_failing_the_sync() {
         let base = root("bad-cover");
-        let (album, other) = (base.join("lib/Bad Cover Album"), base.join("lib/Good Album"));
+        let (album, other) = (
+            base.join("lib/Bad Cover Album"),
+            base.join("lib/Good Album"),
+        );
         let common = base.join("card/Assets/tau/common");
         for dir in [&album, &other, &common] {
             fs::create_dir_all(dir).unwrap();
@@ -1525,7 +1660,8 @@ mod tests {
         fs::write(other.join("01.mp3"), b"audio good").unwrap();
         fs::write(album.join("cover.jpg"), b"this is not a jpeg at all").unwrap();
         fs::copy(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata/images/cover455.jpg"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../testdata/images/cover455.jpg"),
             other.join("cover.jpg"),
         )
         .unwrap();
@@ -1533,17 +1669,36 @@ mod tests {
             &[album.clone(), other.clone()],
             &common,
             "/Assets/tau/common/",
-            PlanOptions { mirror: false, embed_covers: true, art_sidecar_pal256: false },
+            PlanOptions {
+                mirror: false,
+                embed_covers: true,
+                art_sidecar_pal256: false,
+            },
             &mut None,
         )
         .expect("an unusable cover must not fail the plan");
-        let covers: Vec<_> = sync_plan.warnings.iter().filter(|w| w.code == WarningCode::CoverNotEmbedded).collect();
-        assert_eq!(covers.len(), 1, "one warning for the album, not one per track: {:?}", sync_plan.warnings);
+        let covers: Vec<_> = sync_plan
+            .warnings
+            .iter()
+            .filter(|w| w.code == WarningCode::CoverNotEmbedded)
+            .collect();
+        assert_eq!(
+            covers.len(),
+            1,
+            "one warning for the album, not one per track: {:?}",
+            sync_plan.warnings
+        );
         assert!(covers[0].message.contains("Bad Cover Album"));
         let with_cover = sync_plan.items.iter().filter(|i| i.cover.is_some()).count();
-        assert_eq!(with_cover, 1, "only the album with a usable cover gets one embedded");
+        assert_eq!(
+            with_cover, 1,
+            "only the album with a usable cover gets one embedded"
+        );
         execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
-        assert!(common.join("Bad Cover Album/03.mp3").is_file(), "the songs are still copied");
+        assert!(
+            common.join("Bad Cover Album/03.mp3").is_file(),
+            "the songs are still copied"
+        );
     }
 
     /// The card's file system ignores letter case, so two sources that differ only
@@ -1563,7 +1718,11 @@ mod tests {
             &[upper, lower],
             &common,
             "/Assets/tau/common/",
-            PlanOptions { mirror: false, embed_covers: false, art_sidecar_pal256: false },
+            PlanOptions {
+                mirror: false,
+                embed_covers: false,
+                art_sidecar_pal256: false,
+            },
             &mut None,
         )
         .unwrap_err();
@@ -1582,7 +1741,11 @@ mod tests {
         register_cache_evictor(counting);
         let dir = std::env::temp_dir().join(format!(
             "tau-evict-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("w.bin");
@@ -1602,7 +1765,11 @@ mod tests {
     fn verify_written_rejects_wrong_bytes_and_removes_the_temp_file() {
         let dir = std::env::temp_dir().join(format!(
             "tau-verify-{}",
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() + crate::test_uniq()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                + crate::test_uniq()
         ));
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("x.tmp");
@@ -1610,7 +1777,10 @@ mod tests {
         let intended = sha256_bytes(b"what we meant to write");
         let error = verify_written(&file, &intended, Path::new("src.mp3")).unwrap_err();
         assert_eq!(error.code(), ErrorCode::VerificationFailed);
-        assert!(!file.exists(), "a failed verification must not leave the temp file");
+        assert!(
+            !file.exists(),
+            "a failed verification must not leave the temp file"
+        );
         fs::write(&file, b"exact").unwrap();
         verify_written(&file, &sha256_bytes(b"exact"), Path::new("src.mp3")).unwrap();
         assert!(file.exists());
@@ -1637,7 +1807,8 @@ mod tests {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos() + crate::test_uniq()
+                .as_nanos()
+                + crate::test_uniq()
         ))
     }
     /// P2-1: the token used to be a 32-bit-truncated hash formatted `T2-xxxxxxxx`,

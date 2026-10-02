@@ -91,7 +91,10 @@ pub fn fingerprint(meta: &fs::Metadata) -> Option<Fingerprint> {
         Ok(d) => i64::try_from(d.as_millis()).ok()?,
         Err(e) => -i64::try_from(e.duration().as_millis()).ok()?,
     };
-    Some(Fingerprint { size: meta.len(), mtime_ms })
+    Some(Fingerprint {
+        size: meta.len(),
+        mtime_ms,
+    })
 }
 
 /// Tags, duration and format read from a media file.
@@ -153,7 +156,14 @@ impl Session {
     pub fn open(root: &Path) -> Option<Session> {
         let path = LOCATOR.get().and_then(|locate| locate(root))?;
         let files = load(&path).unwrap_or_default();
-        Some(Session { path, files, seen: BTreeSet::new(), dirty: false, trust: true, stats: Stats::default() })
+        Some(Session {
+            path,
+            files,
+            seen: BTreeSet::new(),
+            dirty: false,
+            trust: true,
+            stats: Stats::default(),
+        })
     }
 
     /// Looks at every file's fingerprint once before any lookup and decides whether this card's modified
@@ -169,7 +179,11 @@ impl Session {
         if !self.trust {
             return None;
         }
-        let hit = self.files.get(rel).filter(|r| r.trustworthy(fp)).and_then(|r| r.tags.clone());
+        let hit = self
+            .files
+            .get(rel)
+            .filter(|r| r.trustworthy(fp))
+            .and_then(|r| r.tags.clone());
         if hit.is_some() {
             self.stats.reused += 1;
         }
@@ -192,7 +206,16 @@ impl Session {
                 record.recorded_ms = record.recorded_ms.max(now);
             }
             _ => {
-                self.files.insert(rel.to_string(), Record { fp, recorded_ms: now, tags: Some(tags), provenance: None, verified_ms: 0 });
+                self.files.insert(
+                    rel.to_string(),
+                    Record {
+                        fp,
+                        recorded_ms: now,
+                        tags: Some(tags),
+                        provenance: None,
+                        verified_ms: 0,
+                    },
+                );
             }
         }
         self.dirty = true;
@@ -204,7 +227,10 @@ impl Session {
             return None;
         }
         let record = self.files.get(rel).filter(|r| r.trustworthy(fp))?;
-        let prov = record.provenance.clone().filter(|p| p.embed_version == EMBED_VERSION)?;
+        let prov = record
+            .provenance
+            .clone()
+            .filter(|p| p.embed_version == EMBED_VERSION)?;
         Some((prov, record.verified_ms))
     }
 
@@ -301,7 +327,9 @@ pub fn mtimes_are_meaningful(prints: &[Fingerprint]) -> bool {
 pub(crate) fn register_test_locator() {
     fn locate(root: &Path) -> Option<PathBuf> {
         let name = root.file_name()?.to_string_lossy().into_owned();
-        root.to_string_lossy().contains("tau-ledger-it").then(|| root.with_file_name(format!("{name}.ledger")))
+        root.to_string_lossy()
+            .contains("tau-ledger-it")
+            .then(|| root.with_file_name(format!("{name}.ledger")))
     }
     register_locator(locate);
 }
@@ -322,10 +350,20 @@ fn load(path: &Path) -> Option<BTreeMap<String, Record>> {
     }
     let mut out = BTreeMap::new();
     for (rel, v) in root.get("files")?.as_object()? {
-        let fp = Fingerprint { size: v.get("s")?.as_u64()?, mtime_ms: v.get("m")?.as_i64()? };
+        let fp = Fingerprint {
+            size: v.get("s")?.as_u64()?,
+            mtime_ms: v.get("m")?.as_i64()?,
+        };
         let tags = v.get("t").and_then(Value::as_object).map(|t| TagRecord {
-            tags: t.iter().filter_map(|(k, x)| Some((k.clone(), x.as_str()?.to_string()))).collect(),
-            secs: v.get("d").and_then(Value::as_u64).unwrap_or(0).min(u64::from(u16::MAX)) as u16,
+            tags: t
+                .iter()
+                .filter_map(|(k, x)| Some((k.clone(), x.as_str()?.to_string())))
+                .collect(),
+            secs: v
+                .get("d")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                .min(u64::from(u16::MAX)) as u16,
             fmt: v.get("f").and_then(Value::as_u64).unwrap_or(0).min(255) as u8,
         });
         let provenance = v.get("p").and_then(|p| {
@@ -359,7 +397,10 @@ fn store(path: &Path, files: &BTreeMap<String, Record>) -> std::io::Result<()> {
         o.insert("r".into(), json!(r.recorded_ms));
         o.insert("vm".into(), json!(r.verified_ms));
         if let Some(t) = &r.tags {
-            o.insert("t".into(), Value::Object(t.tags.iter().map(|(k, v)| (k.clone(), json!(v))).collect()));
+            o.insert(
+                "t".into(),
+                Value::Object(t.tags.iter().map(|(k, v)| (k.clone(), json!(v))).collect()),
+            );
             o.insert("d".into(), json!(t.secs));
             o.insert("f".into(), json!(t.fmt));
         }
@@ -389,12 +430,26 @@ mod tests {
         Fingerprint { size, mtime_ms }
     }
     fn tags(title: &str) -> TagRecord {
-        TagRecord { tags: BTreeMap::from([("TIT2".to_string(), title.to_string())]), secs: 180, fmt: 1 }
+        TagRecord {
+            tags: BTreeMap::from([("TIT2".to_string(), title.to_string())]),
+            secs: 180,
+            fmt: 1,
+        }
     }
     fn session(name: &str) -> Session {
-        let dir = std::env::temp_dir().join(format!("tau-ledger-unit-{name}-{}", std::process::id() as u128 + crate::test_uniq()));
+        let dir = std::env::temp_dir().join(format!(
+            "tau-ledger-unit-{name}-{}",
+            std::process::id() as u128 + crate::test_uniq()
+        ));
         fs::create_dir_all(&dir).unwrap();
-        Session { path: dir.join("l.bin"), files: BTreeMap::new(), seen: BTreeSet::new(), dirty: false, trust: true, stats: Stats::default() }
+        Session {
+            path: dir.join("l.bin"),
+            files: BTreeMap::new(),
+            seen: BTreeSet::new(),
+            dirty: false,
+            trust: true,
+            stats: Stats::default(),
+        }
     }
     const OLD: i64 = 1_700_000_000_000;
 
@@ -414,7 +469,11 @@ mod tests {
         let mut s = session("racy");
         s.put_tags("a.mp3", fp(100, OLD), tags("A"));
         s.files.get_mut("a.mp3").unwrap().recorded_ms = OLD + 1_000; // within 2.5 s of the file's own time
-        assert_eq!(s.tags("a.mp3", &fp(100, OLD)), None, "racy: a later edit in the same tick would look identical");
+        assert_eq!(
+            s.tags("a.mp3", &fp(100, OLD)),
+            None,
+            "racy: a later edit in the same tick would look identical"
+        );
         s.files.get_mut("a.mp3").unwrap().recorded_ms = OLD + 2_501;
         assert!(s.tags("a.mp3", &fp(100, OLD)).is_some());
     }
@@ -422,12 +481,33 @@ mod tests {
     #[test]
     fn verified_provenance_is_trusted_straight_away_but_only_for_the_same_embed_version() {
         let mut s = session("prov");
-        let prov = Provenance { source_sha: "s".into(), cover_sha: "c".into(), embed_version: EMBED_VERSION, output_sha: "o".into() };
+        let prov = Provenance {
+            source_sha: "s".into(),
+            cover_sha: "c".into(),
+            embed_version: EMBED_VERSION,
+            output_sha: "o".into(),
+        };
         s.record_verified("a.mp3", fp(100, OLD), prov.clone());
-        assert_eq!(s.provenance("a.mp3", &fp(100, OLD)).map(|p| p.0), Some(prov.clone()), "no waiting out the racy window after our own verified write");
-        assert!(s.provenance("a.mp3", &fp(100, OLD + 1)).is_none(), "the file changed");
-        s.files.get_mut("a.mp3").unwrap().provenance.as_mut().unwrap().embed_version = EMBED_VERSION + 1;
-        assert!(s.provenance("a.mp3", &fp(100, OLD)).is_none(), "a different embed algorithm invalidates it");
+        assert_eq!(
+            s.provenance("a.mp3", &fp(100, OLD)).map(|p| p.0),
+            Some(prov.clone()),
+            "no waiting out the racy window after our own verified write"
+        );
+        assert!(
+            s.provenance("a.mp3", &fp(100, OLD + 1)).is_none(),
+            "the file changed"
+        );
+        s.files
+            .get_mut("a.mp3")
+            .unwrap()
+            .provenance
+            .as_mut()
+            .unwrap()
+            .embed_version = EMBED_VERSION + 1;
+        assert!(
+            s.provenance("a.mp3", &fp(100, OLD)).is_none(),
+            "a different embed algorithm invalidates it"
+        );
         s.invalidate("a.mp3");
         assert!(s.files["a.mp3"].provenance.is_none());
     }
@@ -435,11 +515,19 @@ mod tests {
     #[test]
     fn reading_tags_later_does_not_make_verified_provenance_look_racy() {
         let mut s = session("keep-trust");
-        let prov = Provenance { source_sha: "s".into(), cover_sha: String::new(), embed_version: EMBED_VERSION, output_sha: "o".into() };
+        let prov = Provenance {
+            source_sha: "s".into(),
+            cover_sha: String::new(),
+            embed_version: EMBED_VERSION,
+            output_sha: "o".into(),
+        };
         let just_now = now_ms() - 40; // the file was written 40 ms ago
         s.record_verified("a.mp3", fp(100, just_now), prov);
         s.put_tags("a.mp3", fp(100, just_now), tags("A")); // the scan after the sync
-        assert!(s.provenance("a.mp3", &fp(100, just_now)).is_some(), "still provable straight after the scan");
+        assert!(
+            s.provenance("a.mp3", &fp(100, just_now)).is_some(),
+            "still provable straight after the scan"
+        );
     }
 
     #[test]
@@ -454,7 +542,10 @@ mod tests {
         let mut s = session("untrusted");
         s.assess(&same);
         s.put_tags("a.mp3", fp(1, OLD), tags("A"));
-        assert!(s.is_empty(), "nothing is stored while the times are untrusted");
+        assert!(
+            s.is_empty(),
+            "nothing is stored while the times are untrusted"
+        );
         assert_eq!(s.tags("a.mp3", &fp(1, OLD)), None);
     }
 
@@ -462,7 +553,16 @@ mod tests {
     fn the_file_round_trips_and_a_damaged_one_is_an_empty_ledger() {
         let mut s = session("file");
         s.put_tags("Artist/Album/01.mp3", fp(100, OLD), tags("Straße"));
-        s.record_verified("Artist/Album/02.mp3", fp(200, OLD), Provenance { source_sha: "s".into(), cover_sha: String::new(), embed_version: EMBED_VERSION, output_sha: "o".into() });
+        s.record_verified(
+            "Artist/Album/02.mp3",
+            fp(200, OLD),
+            Provenance {
+                source_sha: "s".into(),
+                cover_sha: String::new(),
+                embed_version: EMBED_VERSION,
+                output_sha: "o".into(),
+            },
+        );
         store(&s.path, &s.files).unwrap();
         let loaded = load(&s.path).unwrap();
         assert_eq!(loaded, s.files);
@@ -480,7 +580,10 @@ mod tests {
         future.extend(crc32fast::hash(&body).to_le_bytes());
         future.extend(body);
         fs::write(&s.path, future).unwrap();
-        assert!(load(&s.path).is_none(), "a version this build does not know is ignored, not guessed at");
+        assert!(
+            load(&s.path).is_none(),
+            "a version this build does not know is ignored, not guessed at"
+        );
     }
 
     // ---- through the real scanner -------------------------------------------------------------
@@ -494,7 +597,12 @@ mod tests {
         frame.extend(body);
         let size = frame.len();
         let mut file = b"ID3\x03\x00\x00".to_vec();
-        file.extend([(size >> 21 & 0x7f) as u8, (size >> 14 & 0x7f) as u8, (size >> 7 & 0x7f) as u8, (size & 0x7f) as u8]);
+        file.extend([
+            (size >> 21 & 0x7f) as u8,
+            (size >> 14 & 0x7f) as u8,
+            (size >> 7 & 0x7f) as u8,
+            (size & 0x7f) as u8,
+        ]);
         file.extend(frame);
         file.extend(vec![0u8; pad]);
         file
@@ -503,28 +611,59 @@ mod tests {
     fn write_old(path: &Path, bytes: &[u8]) {
         fs::write(path, bytes).unwrap();
         let hour_ago = SystemTime::now() - std::time::Duration::from_secs(3_600);
-        fs::File::options().write(true).open(path).unwrap().set_modified(hour_ago).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(hour_ago)
+            .unwrap();
     }
 
     #[test]
     fn the_scanner_reads_each_file_once_and_only_again_when_it_changes() {
         register_test_locator();
-        let base = std::env::temp_dir().join(format!("tau-ledger-it-{}", std::process::id() as u128 + crate::test_uniq()));
+        let base = std::env::temp_dir().join(format!(
+            "tau-ledger-it-{}",
+            std::process::id() as u128 + crate::test_uniq()
+        ));
         let root = base.join("common");
         fs::create_dir_all(root.join("Artist/Album")).unwrap();
         for (n, title) in ["One", "Two", "Three"].iter().enumerate() {
-            write_old(&root.join(format!("Artist/Album/0{}.mp3", n + 1)), &mp3(title, 2048));
+            write_old(
+                &root.join(format!("Artist/Album/0{}.mp3", n + 1)),
+                &mp3(title, 2048),
+            );
         }
-        let titles = |scan: &crate::Scan| scan.entries.iter().map(|e| e.tags.get("TIT2").cloned().unwrap_or_default()).collect::<Vec<_>>();
+        let titles = |scan: &crate::Scan| {
+            scan.entries
+                .iter()
+                .map(|e| e.tags.get("TIT2").cloned().unwrap_or_default())
+                .collect::<Vec<_>>()
+        };
 
         let cold = crate::scan_dir(&root, false).unwrap();
-        assert_eq!((cold.reused, cold.read), (0, 3), "first look reads everything");
+        assert_eq!(
+            (cold.reused, cold.read),
+            (0, 3),
+            "first look reads everything"
+        );
         let warm = crate::scan_dir(&root, false).unwrap();
-        assert_eq!((warm.reused, warm.read), (3, 0), "second look reads nothing");
-        assert_eq!(titles(&warm), titles(&cold), "and returns exactly the same answer");
+        assert_eq!(
+            (warm.reused, warm.read),
+            (3, 0),
+            "second look reads nothing"
+        );
+        assert_eq!(
+            titles(&warm),
+            titles(&cold),
+            "and returns exactly the same answer"
+        );
 
         // one file changes (size and time): only it is read again, and the new title shows
-        write_old(&root.join("Artist/Album/02.mp3"), &mp3("Two, remastered", 4096));
+        write_old(
+            &root.join("Artist/Album/02.mp3"),
+            &mp3("Two, remastered", 4096),
+        );
         let changed = crate::scan_dir(&root, false).unwrap();
         assert_eq!((changed.reused, changed.read), (2, 1));
         assert!(titles(&changed).contains(&"Two, remastered".to_string()));
@@ -533,7 +672,11 @@ mod tests {
         fs::remove_file(root.join("Artist/Album/03.mp3")).unwrap();
         let fewer = crate::scan_dir(&root, false).unwrap();
         assert_eq!((fewer.reused, fewer.read, fewer.entries.len()), (2, 0, 2));
-        assert_eq!(Session::open(&root).unwrap().len(), 2, "no entry is kept for a file that is gone");
+        assert_eq!(
+            Session::open(&root).unwrap().len(),
+            2,
+            "no entry is kept for a file that is gone"
+        );
 
         // a damaged ledger is just an empty one
         let ledger_file = base.join("common.ledger");
@@ -542,15 +685,26 @@ mod tests {
         bytes[last] ^= 0xff;
         fs::write(&ledger_file, bytes).unwrap();
         let healed = crate::scan_dir(&root, false).unwrap();
-        assert_eq!((healed.reused, healed.read), (0, 2), "a corrupt ledger is ignored and rebuilt");
+        assert_eq!(
+            (healed.reused, healed.read),
+            (0, 2),
+            "a corrupt ledger is ignored and rebuilt"
+        );
         assert_eq!(titles(&healed), titles(&fewer));
-        assert_eq!(crate::scan_dir(&root, false).unwrap().reused, 2, "and it works again afterwards");
+        assert_eq!(
+            crate::scan_dir(&root, false).unwrap().reused,
+            2,
+            "and it works again afterwards"
+        );
 
         // a file written a moment ago is racy: it is read again rather than trusted
         fs::write(root.join("Artist/Album/04.mp3"), mp3("Four", 1024)).unwrap();
         let _ = crate::scan_dir(&root, false).unwrap();
         let again = crate::scan_dir(&root, false).unwrap();
-        assert_eq!(again.read, 1, "the brand new file is not trusted yet, the two old ones are");
+        assert_eq!(
+            again.read, 1,
+            "the brand new file is not trusted yet, the two old ones are"
+        );
         assert_eq!(again.reused, 2);
 
         assert!(clear(&root), "forgetting the card deletes the ledger");
