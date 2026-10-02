@@ -22,6 +22,7 @@ pub mod diag;
 pub mod duplicates;
 pub mod icon;
 pub mod image;
+pub mod ledger;
 pub mod journal;
 pub mod package;
 pub mod playlist;
@@ -548,6 +549,10 @@ pub struct Scan {
     pub entries: Vec<Entry>,
     pub playlists: Vec<Playlist>,
     pub warnings: Vec<Warning>,
+    /// Files whose tags came from the verification ledger instead of being read (0 without a ledger).
+    pub reused: u64,
+    /// Files whose tags were read from the file itself.
+    pub read: u64,
 }
 
 /// Returns printable device ASCII. Latin characters needed by common music tags
@@ -685,6 +690,16 @@ pub fn scan_dir_with_progress(
     files.sort();
     let total = files.len() as u64;
     let mut output = Scan::default();
+    // First pass: which files are media, and what each looks like (one `stat` each). The ledger needs the
+    // whole set before it can say whether this card's modified times mean anything.
+    struct Media {
+        done: u64,
+        path: PathBuf,
+        rel: String,
+        is_flac: bool,
+        print: Option<ledger::Fingerprint>,
+    }
+    let mut media = Vec::new();
     for (done, path) in files.into_iter().enumerate() {
         let extension = path
             .extension()
@@ -703,23 +718,48 @@ pub fn scan_dir_with_progress(
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
+        let print = fs::metadata(&path).ok().and_then(|m| ledger::fingerprint(&m));
+        media.push(Media { done: done as u64, path, rel, is_flac: extension == "flac", print });
+    }
+    let mut cache = ledger::Session::open(common);
+    if let Some(session) = cache.as_mut() {
+        let prints: Vec<_> = media.iter().filter_map(|m| m.print).collect();
+        session.assess(&prints);
+    }
+    for m in media {
+        let Media { done, path, rel, is_flac, print } = m;
         tick(
             progress,
             Progress {
                 stage: Stage::Scanning,
-                done: done as u64,
+                done,
                 total,
                 path: Some(rel.clone()),
             },
         )?;
-        let (tags, secs, fmt) = match read_tags(&path) {
-            Ok(result) => result,
-            Err(e) => {
-                output.warnings.push(Warning::new(
-                    WarningCode::TagsUnreadable,
-                    format!("{rel}: tags unreadable ({e})"),
-                ));
-                (BTreeMap::new(), 0, if extension == "flac" { 2 } else { 1 })
+        let cached = match (cache.as_mut(), print.as_ref()) {
+            (Some(session), Some(print)) => session.tags(&rel, print),
+            _ => None,
+        };
+        let (tags, secs, fmt) = if let Some(hit) = cached {
+            output.reused += 1;
+            (hit.tags, hit.secs, hit.fmt)
+        } else {
+            output.read += 1;
+            match read_tags(&path) {
+                Ok(result) => {
+                    if let (Some(session), Some(print)) = (cache.as_mut(), print) {
+                        session.put_tags(&rel, print, ledger::TagRecord { tags: result.0.clone(), secs: result.1, fmt: result.2 });
+                    }
+                    result
+                }
+                Err(e) => {
+                    output.warnings.push(Warning::new(
+                        WarningCode::TagsUnreadable,
+                        format!("{rel}: tags unreadable ({e})"),
+                    ));
+                    (BTreeMap::new(), 0, if is_flac { 2 } else { 1 })
+                }
             }
         };
         let (dir, file) = rel
@@ -734,6 +774,9 @@ pub fn scan_dir_with_progress(
             secs,
             fmt,
         });
+    }
+    if let Some(session) = cache {
+        session.finish_scan();
     }
     if playlists {
         output.playlists = scan_playlists(common, &output.entries, &mut output.warnings)?;
