@@ -53,7 +53,7 @@
   });
   // Rarely-used tools and settings live in a collapsible sidebar section; it
   // stays open while one of its pages is showing and remembers the user's choice.
-  const moreItems = ['compare', 'backup', 'package', 'problems', 'meters', 'history', 'settings'];
+  const moreItems = ['compare', 'backup', 'package', 'problems', 'history', 'settings'];
   let moreOpen = false;
   try { moreOpen = localStorage.getItem('tau.nav.more') === '1'; } catch { /* per-viewer convenience */ }
   function toggleMore() { moreOpen = !moreOpen; try { localStorage.setItem('tau.nav.more', moreOpen ? '1' : '0'); } catch { /* ignore */ } }
@@ -311,6 +311,7 @@
     <button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button>
     <button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Library</button>
     <button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button>
+    <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
     <button class="nav-group" class:has-active={moreItems.includes(page)} aria-expanded={moreOpen} aria-controls="more-tools" on:click={toggleMore}><span>Tools &amp; settings</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={moreOpen}><path d="m6 9 6 6 6-6"/></svg></button>
     {#if moreOpen || moreItems.includes(page)}
       <div class="nav-sub" id="more-tools">
@@ -318,7 +319,6 @@
         <button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button>
         <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
         <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
-        <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
         <button class:active={page === 'history'} on:click={() => openHistory()}>Sync history</button>
         <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
       </div>

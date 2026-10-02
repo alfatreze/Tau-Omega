@@ -811,7 +811,7 @@ a frontend-only pass). `npm run check`: 0 errors, 0 warnings.
 
 ## Meters: UI-structure scaffold, synthetic schema (2026-09-26)
 
-*Integration note 2026-10-02: the Meters entry now sits under Tools & settings in the workbench's menu, labelled **Meter Lab**.*
+*Integration note 2026-10-02: the Meters entry is labelled **Meter Lab** and sits in the main menu, below Playlists (it first went under Tools & settings, then moved out).*
 
 Owner decision on how to start meter work given tau-alpha's instability (active hardware bug-hunting
 that same day, M0 built but uncommitted on their side, no tagged release containing a real
@@ -933,7 +933,7 @@ real users, so treat their findings as a checklist, not evidence of demand).
 | Pocket confirmed by its real USB descriptor (macOS) | Merged into the workbench's `device.rs` (`usb_disk_is_pocket`: vendor `0x04D8`, product name "Analogue Pocket", found empirically 2026-09-26). The workbench's name-based guess stays as the fallback and as the Windows/Linux path; a name match alone no longer produces a "direct USB" verdict on macOS if the descriptor disagrees. The two `#[ignore]`d live-hardware tests moved to `device.rs`. |
 | Card icon | `CardIcon.svelte` on the sidebar active card, driven by `detect_connection` (`direct_usb` → handheld, `card_reader` → SD card, `unknown` → handheld). |
 | Playlist export "Choose" and name suggestions | Unchanged from the earlier session. |
-| Meters scaffold | `MetersView.svelte` and `meters/`, now under **Tools & settings**. Still a synthetic schema, still waiting on a tau-alpha tagged release with a real `meters_schema.json`. |
+| Meters scaffold | `MetersView.svelte` and `meters/`, now in the main menu, below Playlists. Still a synthetic schema, still waiting on a tau-alpha tagged release with a real `meters_schema.json`. |
 | Opt-in cover sidecar | New checkbox in the Library review sheet, remembered per card. The workbench had hardcoded `art_sidecar_pal256: false`; the engine already honoured it. |
 
 **Deliberately not ported:** the `CardsView`/`SyncView`/`CompareView` extraction. The workbench retired
