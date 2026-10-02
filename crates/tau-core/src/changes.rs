@@ -251,6 +251,21 @@ pub fn execute_changes_with(
     report: &mut ChangeReport,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<(), TauError> {
+    let result = execute_changes_inner(plan, confirmation, backup_root, report, progress);
+    // Finished or stopped part way: remove macOS's metadata stubs from the media root (a refused token wrote nothing).
+    if !matches!(&result, Err(e) if e.code() == ErrorCode::ConfirmationMismatch) {
+        sync::sweep_appledouble(&plan.destination);
+    }
+    result
+}
+
+fn execute_changes_inner(
+    plan: &ChangePlan,
+    confirmation: &str,
+    backup_root: Option<&Path>,
+    report: &mut ChangeReport,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<(), TauError> {
     if confirmation != plan.id {
         return Err(TauError::e(
             ErrorCode::ConfirmationMismatch,
