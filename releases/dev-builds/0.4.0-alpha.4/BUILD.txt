@@ -1,0 +1,12 @@
+Tau Omega test build 0.4.0-alpha.4   (NOT a release)
+Release goal : 0.4.0
+Built        : 2026-10-02 21:37 WEST
+Branch       : integration/workbench-base
+Commit       : 491089e   ui: move the pending changes into the Details panel as a plain list; remove the bottom area
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 488997c32f529de2451617ffdf43b21128881dfe4a8293b84452a6b3a10dc6f7  (of Contents/MacOS/tau-omega)
+
+What is in it: the bottom Pending changes area is gone; the staged list is in the Details panel as a plain list (Remove / Undo / Discard per row); Start sync and Clear all in the card space bar; more room for the media lists; everything from 0.4.0-alpha.3.
+Not yet tested on a real card.
