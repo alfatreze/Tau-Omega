@@ -3,3 +3,6 @@
 /ui/dist/
 /src-tauri/target/
 .DS_Store
+
+# Test-build binaries (their BUILD.txt and SHA256SUMS.txt are tracked; see releases/dev-builds/README.md)
+/releases/dev-builds/*/*.zip

@@ -119,3 +119,12 @@ releases/
 
 Before committing a new release folder's contents, show a directory-tree preview for approval first
 — release artifacts are typically binary and can be large, so review before commit rather than after.
+
+## D-014 — test builds are `<next release>-alpha.<n>` under `releases/dev-builds/`
+
+Builds that are not releases are filed in `releases/dev-builds/<target>-alpha.<n>/`, where `<target>` is the
+next release's version (kept in `releases/dev-builds/TARGET`) and `<n>` counts up from 1 per target.
+Semver pre-release identifiers sort before the release (`0.4.0-alpha.2 < 0.4.0`), so a test build can never be
+mistaken for it, and `alpha`/`beta`/`rc` can be used as a goal gets close. It matches the Tau Alpha core's own
+`0.6.0-alpha.N` convention. Binaries are not committed; each build's `BUILD.txt` (commit, date, SHA-256) and
+`SHA256SUMS.txt` are. `tools/dev-build.sh` does the numbering. Releases still follow D-013 (`releases/v<version>/`).
