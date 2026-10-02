@@ -388,6 +388,7 @@ fn apply_to_file(path: &Path, fields: &FieldEdits, cover: Option<&Path>) -> Resu
 }
 
 fn verify_written(path: &Path, fields: &FieldEdits, expect_cover: bool) -> Result<(), TauError> {
+    sync::evict_cache(path);
     let (tags, _, _) = read_tags(path)?;
     for (frame, _, value) in fields.pairs() {
         let got = if frame == "TDRC" {
