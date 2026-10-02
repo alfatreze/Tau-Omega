@@ -51,6 +51,7 @@ export const pruneHistory = () => invoke<number>('prune_history');
 export const clearHistory = () => invoke<number>('clear_history');
 export const detectConnection = (path: string) => invoke<ConnectionInfo>('detect_connection', { path });
 export const cardBreakdown = (card: string, cores: CoreRef[], jobId: string) => invoke<CardBreakdown>('card_breakdown', { card, cores, jobId });
+export const ledgerForget = (mediaRoot: string) => invoke<boolean>('ledger_forget', { mediaRoot });
 export const ejectCard = (path: string) => invoke<EjectResult>('eject_card', { path });
 export const readbackStatus = () => invoke<ReadbackStatus>('readback_status');
 export const getPrefs = () => invoke<PrefsView>('get_prefs');

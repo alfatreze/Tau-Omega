@@ -84,6 +84,10 @@ pub struct LibraryListing {
     pub tracks: Vec<TrackInfo>,
     pub playlists: Vec<PlaylistInfo>,
     pub warnings: Vec<Warning>,
+    /// Files whose tags came from the verification ledger instead of being read from the file.
+    pub files_reused: u64,
+    /// Files whose tags were read from the file itself.
+    pub files_read: u64,
 }
 
 /// Device ASCII form of a `/`-separated relative folder path.
@@ -129,6 +133,8 @@ pub fn list_library(
         .unwrap_or_default();
     let mut listing = LibraryListing {
         warnings: scan.warnings.clone(),
+        files_reused: scan.reused,
+        files_read: scan.read,
         ..Default::default()
     };
     for (dir, entries) in by_dir {

@@ -19,7 +19,8 @@ about the card.
 | D7 names FAT cannot hold | **Deferred on purpose**: `ascii_name` is held byte-for-byte to the Python reference by the conformance tests, so it cannot change here alone. Needs a decision with tau-alpha (trailing dots, reserved device names), or a plan-time warning that does not alter names |
 | D2 no-cache read-back and safe eject | **Fixed**, see "Cache experiment and safe eject" below |
 | D10 per-volume I/O governor | Not started |
-| P2, P3, P4, P5, P7 and the ledger | Not started |
+| The ledger (scan cache, provenance, canary, host registration, Forget menu item) | Built and tested; real-card read-only run: 77 tracks cold 240 ms (77 reads), warm 12.5 ms (0 reads) |
+| P2, P3, P4, P5, P7 | Not started |
 
 Known limit of D1: the embedded copy is built from a second read of the source, a few milliseconds
 after the source hash check; a source rewritten in that window would be embedded as it is then. The
