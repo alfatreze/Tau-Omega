@@ -93,6 +93,7 @@ pub enum ErrorCode {
     NoQrCodeFound = 48,
     InvalidTim1Container = 49,
     UnsupportedTags = 50,
+    InsufficientSpace = 51,
 }
 
 impl ErrorCode {
@@ -140,6 +141,7 @@ impl TryFrom<u16> for ErrorCode {
             48 => Self::NoQrCodeFound,
             49 => Self::InvalidTim1Container,
             50 => Self::UnsupportedTags,
+            51 => Self::InsufficientSpace,
             _ => return Err(()),
         })
     }

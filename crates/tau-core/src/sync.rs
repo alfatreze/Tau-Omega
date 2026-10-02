@@ -383,6 +383,7 @@ pub fn execute_with_mirror(
         ));
     }
     validate_media_root(&plan.destination)?;
+    preflight_space(plan)?;
     let mut copied = 0;
     let mut unchanged = 0;
     let mut bytes_written = 0;
@@ -850,6 +851,74 @@ pub(crate) fn write_durable(path: &Path, data: &[u8]) -> Result<(), TauError> {
     file.sync_all()?;
     Ok(())
 }
+/// Sizes a sidecar `.timg` at most (a 128 px palette cover is about 17 KB).
+const ART_SIDECAR_MAX_BYTES: u64 = 24 * 1024;
+
+/// `bytes` rounded up to whole allocation units, which is what a file really
+/// costs on FAT/exFAT (clusters can be 32-128 KB, so many small files waste a lot).
+pub(crate) fn round_up_to(bytes: u64, unit: u64) -> u64 {
+    let unit = unit.max(1);
+    bytes.div_ceil(unit) * unit
+}
+
+/// What writing this plan will occupy on the card, counting whole clusters:
+/// every new or updated file (plus its embedded cover, which makes the copy
+/// larger than its source), every art sidecar, and the index (written next to
+/// the old one before the swap, so counted twice).
+pub(crate) fn bytes_on_disk(plan: &SyncPlan, unit: u64) -> u64 {
+    let mut total = 0u64;
+    for item in plan
+        .items
+        .iter()
+        .filter(|i| i.state != CopyState::Same)
+    {
+        let cover = item
+            .cover
+            .as_ref()
+            .and_then(|c| fs::metadata(&c.source).ok())
+            .map_or(0, |m| m.len());
+        total = total.saturating_add(round_up_to(item.bytes.saturating_add(cover), unit));
+    }
+    total = total.saturating_add(
+        (plan.art_sidecars.len() as u64).saturating_mul(round_up_to(ART_SIDECAR_MAX_BYTES, unit)),
+    );
+    total.saturating_add(2 * round_up_to(INDEX_MAX_BYTES, unit))
+}
+
+/// The index file's hard cap (see `DATA_FORMATS.md`).
+const INDEX_MAX_BYTES: u64 = 4 * 1024 * 1024;
+
+pub(crate) fn ensure_space(available: u64, needed: u64, margin: u64) -> Result<(), TauError> {
+    if available < needed.saturating_add(margin) {
+        return Err(TauError::e(
+            ErrorCode::InsufficientSpace,
+            format!(
+                "not enough room on the card: this needs about {} MB (counting whole clusters) plus a safety margin, and {} MB is free",
+                needed.div_ceil(1_000_000),
+                available / 1_000_000
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// Refuses a run that cannot fit **before anything is written**. Without this a
+/// full card failed halfway: some files copied, the old index left in place.
+fn preflight_space(plan: &SyncPlan) -> Result<(), TauError> {
+    let unit = fs4::allocation_granularity(&plan.destination)
+        .ok()
+        .filter(|u| *u > 0)
+        .unwrap_or(4096);
+    let Ok(available) = fs4::available_space(&plan.destination) else {
+        return Ok(()); // cannot measure: do not block, the write itself will report a full card
+    };
+    ensure_space(
+        available,
+        bytes_on_disk(plan, unit),
+        crate::storage::DEFAULT_MARGIN_BYTES,
+    )
+}
+
 /// Reads `written` back and requires its SHA-256 to equal `expected`; on a
 /// mismatch the temporary file is removed so nothing unverified can be renamed
 /// into place. Every write path (plain copy and cover-embedded copy) ends here.
@@ -927,6 +996,44 @@ fn copy_verified(item: &CopyItem) -> Result<(), TauError> {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn space_is_counted_in_whole_clusters_and_checked_before_writing() {
+        assert_eq!(round_up_to(1, 32768), 32768);
+        assert_eq!(round_up_to(32768, 32768), 32768);
+        assert_eq!(round_up_to(32769, 32768), 65536);
+        assert_eq!(round_up_to(0, 32768), 0);
+        // 1,000 one-byte files really cost 1,000 clusters, not 1,000 bytes.
+        let plan = SyncPlan {
+            id: String::new(),
+            destination: PathBuf::new(),
+            root_prefix: String::new(),
+            items: (0..1000)
+                .map(|n| CopyItem {
+                    source: PathBuf::from(format!("{n}")),
+                    destination: PathBuf::from(format!("d{n}")),
+                    bytes: 1,
+                    sha256: String::new(),
+                    cover: None,
+                    state: CopyState::New,
+                })
+                .collect(),
+            deletions: Vec::new(),
+            embed_covers: false,
+            art_sidecars: Vec::new(),
+            warnings: Vec::new(),
+            bytes_to_write: 1000,
+        };
+        let needed = bytes_on_disk(&plan, 131_072);
+        assert!(needed >= 1000 * 131_072, "exFAT-sized clusters: {needed}");
+        // Files that are already on the card cost nothing.
+        let same = SyncPlan { items: plan.items.iter().cloned().map(|mut i| { i.state = CopyState::Same; i }).collect(), ..plan.clone() };
+        assert!(bytes_on_disk(&same, 131_072) < 1000 * 131_072);
+        // The check refuses with its own code, and passes when there is room.
+        assert_eq!(ensure_space(10, 1_000, 0).unwrap_err().code(), ErrorCode::InsufficientSpace);
+        assert_eq!(ensure_space(1_000, 1_000, 1).unwrap_err().code(), ErrorCode::InsufficientSpace);
+        ensure_space(2_000, 1_000, 1_000).unwrap();
+    }
 
     /// The card's file system ignores letter case, so two sources that differ only
     /// by case must be refused at plan time instead of the second silently
