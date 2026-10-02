@@ -1041,3 +1041,9 @@ removes orphans left by deletions. Errors are ignored by design: housekeeping ne
 stub while a refused one leaves it). **Not covered:** `package::execute_install` (writes across `Cores`/`Assets`/`Platforms`, a wider tree than the media root) and
 the standalone playlist writers. **Unverified on a real card:** the tests use planted stubs; whether the Pocket card shows no `._` after a real sync is the next
 real-card check (TEST_PLAN: look for `._*` under `Assets/<platform>/common` after a sync).
+
+**Real-card check of the `._*` cleanup (2026-10-03, owner-approved, `tau_dev_67` only).** Ignored test `real_card_sync_and_remove_leave_no_appledouble_stubs`
+ran the app's own path: add one real 2.1 MB MP3 album ("Omega Sweep Test") with covers/sidecar options on, then remove it again (backup to
+`~/Downloads/tau-omega-card-backups`). Result: 0 `._*` files before, after the add, and after the removal; a before/after listing of the card's whole
+`Assets` and `Cores` (excluding the rewritten index) was identical; `tau verify` on the rebuilt index says valid. **Caveat:** I did not run it without the fix,
+so I cannot say macOS would have left stubs on this particular write (the theme install's rename did). The result shows the sync and removal paths end clean.

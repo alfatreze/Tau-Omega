@@ -539,4 +539,131 @@ mod tests {
         let common = card_with(&lib, &["B/Two"]);
         assert!(plan_changes(&common, &ChangeRequest::default(), &mut None).is_err());
     }
+
+    /// A real, approved write through the app's own path (plan, execute, then remove). Runs only with
+    /// `TAU_REAL_SYNC_MEDIA` (a card's `Assets/<platform>/common`), `TAU_REAL_SYNC_LIB` (a local library folder holding
+    /// one album folder named `Omega Sweep Test`) and `TAU_REAL_SYNC_BACKUP` (a folder outside the card) set.
+    /// Checks that no AppleDouble stub is left after the add or after the removal, and that the card ends as it began.
+    #[test]
+    #[ignore]
+    fn real_card_sync_and_remove_leave_no_appledouble_stubs() {
+        let (Ok(media), Ok(lib), Ok(backup)) = (
+            std::env::var("TAU_REAL_SYNC_MEDIA"),
+            std::env::var("TAU_REAL_SYNC_LIB"),
+            std::env::var("TAU_REAL_SYNC_BACKUP"),
+        ) else {
+            return;
+        };
+        let (media, lib, backup) = (
+            PathBuf::from(media),
+            PathBuf::from(lib),
+            PathBuf::from(backup),
+        );
+        let card = media
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        fn walk(dir: &Path, out: &mut Vec<(PathBuf, u64)>) {
+            for e in fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+            {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else {
+                    out.push((p, e.metadata().map(|m| m.len()).unwrap_or(0)));
+                }
+            }
+        }
+        let snapshot = || {
+            let mut all = Vec::new();
+            walk(&card.join("Assets"), &mut all);
+            walk(&card.join("Cores"), &mut all);
+            // The index and its ledger are rewritten by design; everything else must come back as it was.
+            all.retain(|(p, _)| p.file_name().is_none_or(|n| n != "tau-library.tdb"));
+            all.sort();
+            all
+        };
+        let stubs = |dir: &Path| {
+            let mut all = Vec::new();
+            walk(dir, &mut all);
+            all.into_iter()
+                .filter(|(p, _)| {
+                    p.file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with("._"))
+                })
+                .count()
+        };
+        let before = snapshot();
+        println!("stubs before: {}", stubs(&media));
+        let opts = sync::PlanOptions {
+            mirror: false,
+            embed_covers: true,
+            art_sidecar_pal256: true,
+        };
+        let add = plan_changes(
+            &media,
+            &ChangeRequest {
+                library_root: Some(lib),
+                add_albums: vec!["Omega Sweep Test".into()],
+                remove_albums: vec![],
+                edits: vec![],
+                options: opts,
+            },
+            &mut None,
+        )
+        .unwrap();
+        let report = execute_changes(&add, &add.id, Some(&backup), &mut None).unwrap();
+        let after_add = stubs(&media);
+        println!(
+            "added: copied={} bytes={} phase={} stubs after add: {after_add}",
+            report.copied, report.bytes_written, report.phase
+        );
+        let dest_album = add.sync.as_ref().unwrap().items[0]
+            .destination
+            .parent()
+            .unwrap()
+            .strip_prefix(&media)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        println!("album folder on card: {dest_album}");
+        let remove = plan_changes(
+            &media,
+            &ChangeRequest {
+                library_root: None,
+                add_albums: vec![],
+                remove_albums: vec![dest_album],
+                edits: vec![],
+                options: opts,
+            },
+            &mut None,
+        )
+        .unwrap();
+        let report = execute_changes(&remove, &remove.id, Some(&backup), &mut None).unwrap();
+        let after_remove = stubs(&media);
+        println!(
+            "removed: deleted={} phase={} stubs after removal: {after_remove}",
+            report.deleted, report.phase
+        );
+        let after = snapshot();
+        let diff: Vec<_> = after
+            .iter()
+            .filter(|e| !before.contains(e))
+            .chain(before.iter().filter(|e| !after.contains(e)))
+            .collect();
+        println!("entries that differ from before: {diff:?}");
+        assert_eq!(after_add, 0, "stubs left after the add");
+        assert_eq!(after_remove, 0, "stubs left after the removal");
+        assert!(
+            diff.is_empty(),
+            "the card did not come back to how it started"
+        );
+    }
 }
