@@ -693,6 +693,52 @@ fn collect_files(root: &Path, at: &Path, out: &mut Vec<PathBuf>) -> Result<(), T
     }
     Ok(())
 }
+/// Backs a card file up to the host in **one pass over the card**: the bytes are
+/// hashed while they are copied, the hash must equal the one the user reviewed
+/// (otherwise the file changed since the plan and nothing is kept), and the
+/// finished backup is read back from the host disk before it is renamed into
+/// place. Does not delete anything. The old per-file route read each card file
+/// four times, which over the Pocket's USB mode is the difference between
+/// minutes and an hour for a large album.
+pub(crate) fn backup_copy_streaming(
+    item: &DeleteItem,
+    backup_root: &Path,
+    plan_id: &str,
+) -> Result<(), TauError> {
+    let backup = backup_root.join(plan_id).join(&item.relative);
+    if let Some(parent) = backup.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temp = backup.with_extension(format!("tau-omega-{}.tmp", std::process::id()));
+    let result = (|| -> Result<(), TauError> {
+        let mut source = fs::File::open(&item.destination)?;
+        let mut target = fs::File::create(&temp)?;
+        let mut hasher = Sha256::new();
+        let mut buffer = vec![0u8; 1 << 20];
+        loop {
+            let n = source.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buffer[..n]);
+            target.write_all(&buffer[..n])?;
+        }
+        target.sync_all()?;
+        if format!("{:x}", hasher.finalize()) != item.sha256 {
+            return Err(TauError::e(
+                ErrorCode::SourceChangedSincePlan,
+                format!("changed since the plan was reviewed: {}", item.relative.display()),
+            ));
+        }
+        verify_written(&temp, &item.sha256, &item.destination)
+    })();
+    let result = result.and_then(|()| fs::rename(&temp, &backup).map_err(TauError::from));
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
 pub(crate) fn backup_then_delete(
     item: &DeleteItem,
     backup_root: &Path,

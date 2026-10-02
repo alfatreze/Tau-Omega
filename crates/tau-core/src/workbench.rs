@@ -496,8 +496,46 @@ pub fn execute_removal(
         }
     }
     let total = plan.items.len() as u64;
+    // Phase 0: a backup that cannot fit must stop the run before anything is
+    // touched (a full host disk used to be discovered halfway through an album).
+    if let Some(backup) = backup_root {
+        let existing = crate::storage::nearest_existing_ancestor(backup)?;
+        let unit = fs4::allocation_granularity(&existing).ok().filter(|u| *u > 0).unwrap_or(4096);
+        let needed: u64 = plan.items.iter().map(|i| sync::round_up_to(i.bytes, unit)).sum();
+        if let Ok(available) = fs4::available_space(&existing) {
+            sync::ensure_space(available, needed, crate::storage::DEFAULT_MARGIN_BYTES)?;
+        }
+    }
+    // Phase 1: prove every file is what was reviewed and (with a backup) copy it
+    // out and verify the copy. Nothing on the card is deleted in this phase, so a
+    // failure or a cancel here never leaves a half-removed album.
     for (done, item) in plan.items.iter().enumerate() {
         tick(
+            progress,
+            Progress {
+                stage: Stage::Copying,
+                done: done as u64,
+                total,
+                path: Some(item.relative.to_string_lossy().into_owned()),
+            },
+        )?;
+        match backup_root {
+            Some(backup) => sync::backup_copy_streaming(item, backup, &plan.id)?,
+            None => {
+                if sync::sha256_file(&item.destination).ok().as_deref() != Some(item.sha256.as_str()) {
+                    return Err(TauError::e(
+                        ErrorCode::SourceChangedSincePlan,
+                        format!("changed since the plan was reviewed: {}", item.relative.display()),
+                    ));
+                }
+            }
+        }
+    }
+    // Phase 2: every file is now backed up and verified. Delete them all. A cancel
+    // request is deliberately ignored from here on so an album is never left
+    // half-deleted; this phase is only file removals and is quick.
+    for (done, item) in plan.items.iter().enumerate() {
+        let _ = tick(
             progress,
             Progress {
                 stage: Stage::Deleting,
@@ -505,17 +543,8 @@ pub fn execute_removal(
                 total,
                 path: Some(item.relative.to_string_lossy().into_owned()),
             },
-        )?;
-        if sync::sha256_file(&item.destination).ok().as_deref() != Some(item.sha256.as_str()) {
-            return Err(TauError::e(
-                ErrorCode::SourceChangedSincePlan,
-                format!("changed since the plan was reviewed: {}", item.relative.display()),
-            ));
-        }
-        match backup_root {
-            Some(backup) => sync::backup_then_delete(item, backup, &plan.id)?,
-            None => fs::remove_file(&item.destination)?,
-        }
+        );
+        fs::remove_file(&item.destination)?;
     }
     // Tidy folders the removal emptied (deepest first); never the root.
     let mut dirs: Vec<PathBuf> = plan
@@ -752,6 +781,35 @@ mod tests {
         let index = fs::read(common.join("tau-library.tdb")).unwrap();
         assert!(crate::verify(&index, Some(&common)).unwrap().is_empty());
         assert_eq!(crate::parse(&index).unwrap().counts.tracks, 1);
+    }
+
+    #[test]
+    fn a_failed_backup_leaves_every_file_on_the_card() {
+        let (_lib, _root, common) = synced_card();
+        let backup = tmp("backup-fail");
+        let plan = plan_removal(&common, &["Miles Davis/Kind of Blue".to_string()]).unwrap();
+        // Make the SECOND file's backup impossible: a non-empty folder where its file should go.
+        let blocker = backup.join(&plan.id).join("Miles Davis/Kind of Blue/02 Blue in Green.mp3");
+        fs::create_dir_all(blocker.join("inside")).unwrap();
+        let result = execute_removal(&plan, &plan.id, Some(&backup), "/Assets/tau/common/", &mut None);
+        assert!(result.is_err());
+        // The first file was backed up, but nothing was deleted from the card: no half-removed album.
+        assert!(common.join("Miles Davis/Kind of Blue/01 So What.mp3").is_file());
+        assert!(common.join("Miles Davis/Kind of Blue/02 Blue in Green.mp3").is_file());
+        // And no unverified temp file is left in the backup.
+        let leftovers: Vec<_> = walk(&backup).into_iter().filter(|p| p.to_string_lossy().ends_with(".tmp")).collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+    }
+
+    fn walk(dir: &Path) -> Vec<PathBuf> {
+        let mut out = Vec::new();
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() { out.extend(walk(&path)); } else { out.push(path); }
+            }
+        }
+        out
     }
 
     #[test]
