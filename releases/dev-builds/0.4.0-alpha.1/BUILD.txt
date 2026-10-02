@@ -1,0 +1,13 @@
+Tau Omega test build 0.4.0-alpha.1   (NOT a release)
+Release goal : 0.4.0
+Built        : 2026-10-02 18:26 WEST
+Branch       : integration/workbench-base
+Commit       : 9ade1d5   docs: test plan for the Pocket USB eject order and remount behaviour
+Working tree : UNCOMMITTED CHANGES in the working tree
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega_0.4.0-alpha.1_arm64.app.zip   (unsigned: right-click > Open the first time)
+SHA-256      : 9390f88b1c5621982401092315bb2b2c8b93ea7f56fa9cb82947e8cfdbcd4aa0
+
+What is in it: the Library workbench plus the ported Pocket detection, card icon, Meter Lab, playlist pickers and cover-file option; the freeze fixes (covers read only the tag, commands off the main thread); the correctness pass (verified cover copies, case collisions, space preflight, recoverable index swap, two-phase removal); read-backs that check the card and Eject safely.
+Note: the working tree held only this folder's own docs and script (uncommitted at build time); all code was committed.
+Not yet tested on a real card.
