@@ -165,6 +165,8 @@ const handlers: Record<string, (args: any) => unknown> = {
   prune_history: () => prune(),
   clear_history: () => { const n = history.length; history = []; return n; },
   detect_connection: () => ({ kind: connection, detail: connection === 'direct_usb' ? 'Analogue Pocket (USB)' : 'Generic card reader (USB)' }),
+  eject_card: () => ({ ok: true, message: 'Safe to remove. The card is unmounted; you can unplug the reader or leave USB mode on the Pocket.' }),
+  readback_status: () => ({ checks_the_device: true, failed_evictions: 0 }),
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
   set_prefs: (a) => { prefs = { ...a.prefs }; return { ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }; },
   plan_sync: () => ({ id: 'mock-plan-1', new_files: 42, updates: 5, unchanged: 7133, bytes_to_write: 412_000_000, art_sidecars: 3, art_sidecar_previews: [], warnings: [] }),

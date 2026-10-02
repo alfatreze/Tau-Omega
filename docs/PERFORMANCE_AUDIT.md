@@ -17,7 +17,7 @@ about the card.
 | D8 sidecars written in place | **Fixed**: temp, verify against the intended bytes, rename |
 | D9 leftover temp files | **Fixed**: `sweep_stale_temps` removes this tool's own temp files older than an hour from the folders a run writes to |
 | D7 names FAT cannot hold | **Deferred on purpose**: `ascii_name` is held byte-for-byte to the Python reference by the conformance tests, so it cannot change here alone. Needs a decision with tau-alpha (trailing dots, reserved device names), or a plan-time warning that does not alter names |
-| D2 no-cache read-back and safe eject | Not started (next) |
+| D2 no-cache read-back and safe eject | **Fixed**, see "Cache experiment and safe eject" below |
 | D10 per-volume I/O governor | Not started |
 | P2, P3, P4, P5, P7 and the ledger | Not started |
 
@@ -25,6 +25,37 @@ Known limit of D1: the embedded copy is built from a second read of the source, 
 after the source hash check; a source rewritten in that window would be embedded as it is then. The
 read-back check still proves what reached the card is what was built. Closing it needs the streaming
 embed (P3).
+
+## Cache experiment and safe eject (2026-10-02)
+
+The security finding (a read-back after a write may be served from memory) was **measured**, on a
+throwaway FAT disk image whose bytes were changed underneath a mounted volume to stand in for "the card
+holds something different from memory":
+
+| Read | Result |
+|---|---|
+| plain read after a plain write | **stale** (memory, not the device) |
+| read through an `F_NOCACHE` descriptor, file already cached | **stale** (the obvious fix does not work) |
+| write through an `F_NOCACHE` descriptor, then read | device (but only for files this process wrote) |
+| `mmap` + `msync(MS_INVALIDATE)` on the file, then read | **device** |
+| unmount and remount, then read | device |
+
+So the read-back now calls a host-registered cache evictor first (`tau_core::sync::register_cache_evictor`;
+`tau-core` keeps `forbid(unsafe_code)`). macOS: `mmap`+`msync(MS_INVALIDATE)`; Linux: `posix_fadvise(DONTNEED)`
+(not tested here); Windows: none, and `readback_status` says so. Every write-then-verify read goes through
+it: copies, embedded covers, index, sidecars, package install, tag edits. A Rust test
+(`cacheflush::real_device_checks`, `#[ignore]`d because it mounts a volume) reproduces the table above.
+
+**Safe eject.** `eject_card` runs `diskutil eject` (macOS) or `udisksctl unmount` + `power-off` (Linux),
+never forces, is refused while a card write is running (and holds the write guard so none can start), and
+returns a sentence a person can act on ("Something is still using the card ... Do not unplug it yet").
+The completion dialog no longer says "You can disconnect the Pocket now"; it asks for the eject, offers an
+**Eject safely** button (also next to the connection chip), and says "Safe to remove" only after the OS
+confirms. A deliberate eject shows "Safely ejected" instead of the disconnect alarm. Windows returns a
+message pointing at Safe Remove. Real-device test ejects a throwaway image, never a real card.
+
+What this does not do: it does not prove the Pocket's own USB mode flushed its SD card (only a reader or a
+remount-and-verify pass could); that, and a "verify after remount" step, remain optional follow-ups.
 
 ## Fixed in this pass
 

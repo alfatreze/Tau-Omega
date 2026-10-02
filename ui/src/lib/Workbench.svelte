@@ -7,7 +7,7 @@
   // card and core so switching cards switches the list.
   import { onDestroy, onMount, tick } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { cancelJob, checkStorageCapacity, detectConnection, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
+  import { cancelJob, checkStorageCapacity, detectConnection, ejectCard, readbackStatus, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
   import { modal } from './a11y';
   import VirtualList from './VirtualList.svelte';
   import type { AlbumInfo, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, CapacityCheck, ConnectionInfo, EditRequest, FieldEdits, LibraryListing, PrefsView, TrackInfo } from './types';
@@ -25,6 +25,8 @@
   export let openSettings: () => void = () => {};
   /** Whether the app still sees the card as mounted (`false` = unplugged, `null` = not a removable volume). */
   export let connected: boolean | null = null;
+  /** True when this card was just ejected on purpose (Eject safely), so "not connected" is expected and calm, not an alarm. */
+  export let ejectedSafely = false;
   /** Opens the sync history page, optionally on one entry (`'latest'` = the newest). */
   export let openHistory: (id?: string) => void = () => {};
 
@@ -455,7 +457,22 @@
     run = { ...run, phase: STAGES[stage] ?? stage, done: stage === 'copying' ? done : run.done, total: stage === 'copying' ? totalUnits : run.total, path, samples, speed };
   }
   async function cancelSync() { if (runId) await cancelJob(runId); }
-  function closeRun() { run = null; }
+  function closeRun() { run = null; ejectMsg = ''; ejectOk = false; }
+  // Safe eject: unmount so the OS writes out anything it still holds. "You can unplug it" is only
+  // ever said after the OS confirms the volume is unmounted.
+  let ejecting = false; let ejectMsg = ''; let ejectOk = false;
+  let verifiedOnDevice = true;
+  readbackStatus().then((r) => (verifiedOnDevice = r.checks_the_device && r.failed_evictions === 0)).catch(() => {});
+  async function eject() {
+    if (!cardPath || busy || ejecting) return;
+    ejecting = true; ejectMsg = ''; ejectOk = false;
+    try {
+      const result = await ejectCard(cardPath);
+      ejectOk = result.ok; ejectMsg = result.message;
+      if (result.ok) window.dispatchEvent(new CustomEvent('tau-ejected', { detail: cardPath }));
+    } catch (error) { ejectMsg = explainError(error); }
+    finally { ejecting = false; }
+  }
   function dismissFailure() { lastFailed = false; save('lastfail', false); }
   $: runSlowNote = run && !run.finished && connKind !== 'direct_usb' && run.speed > 0 && run.speed < 3 * MB && run.total > SLOW_LIMIT;
 
@@ -498,6 +515,7 @@
               </div>
             {/if}
           </span>
+          {#if connected !== false}<button class="wb-eject quiet" disabled={busy || ejecting} title="Unmount the card so it is safe to unplug" on:click={eject}>{ejecting ? 'Ejecting…' : 'Eject safely'}</button>{/if}
         {/if}
       </div>
     </div>
@@ -507,7 +525,11 @@
   </header>
 
   {#if disconnected}
-    <div class="wb-banner" role="alert"><span>This card is disconnected. Your pending changes are kept; reconnect it to continue.</span><button class="quiet" on:click={doRefresh}>Check again</button></div>
+    {#if ejectedSafely}
+      <div class="wb-banner" role="status"><span>Safely ejected. You can unplug it now. Your pending changes are kept; plug it back in to continue.</span><button class="quiet" on:click={doRefresh}>Check again</button></div>
+    {:else}
+      <div class="wb-banner" role="alert"><span>This card is disconnected. Your pending changes are kept; reconnect it to continue.</span><button class="quiet" on:click={doRefresh}>Check again</button></div>
+    {/if}
   {/if}
   {#if lastFailed && !run}
     <div class="wb-banner wb-banner-fail" role="alert"><span>Your last sync didn't finish. Nothing was lost; open the details to see what happened.</span><span class="wb-banner-actions"><button class="quiet" on:click={() => openHistory('latest')}>See what happened</button><button class="quiet" on:click={dismissFailure}>Dismiss</button></span></div>
@@ -679,7 +701,7 @@
       {#if slowApplies && (prefs?.slow_alert_suppressed)}<span class="wb-slownote" role="note">Direct connection: slow · about {eta(addBytes, estSpeed)}{estIsDefault ? ' (estimate)' : ''}</span>{/if}
       {#if overCapacity}<span class="wb-slownote bad" role="alert">Won't fit on this card</span>{/if}
       {#if overLimit && limits}<span class="wb-slownote bad" role="alert">Over the Pocket's library limit ({limits.max_tracks.toLocaleString()} tracks)</span>{/if}
-      {#if disconnected}<span class="wb-slownote bad" role="alert">Card disconnected</span>{/if}
+      {#if disconnected}<span class="wb-slownote bad" role="alert">{ejectedSafely ? 'Card ejected' : 'Card disconnected'}</span>{/if}
       <button class="quiet" disabled={busy || !pendingCount} on:click={clearAll}>Clear all</button>
       <button class="primary" disabled={!canStart} on:click={start}>Start sync</button>
     </div>
@@ -786,8 +808,10 @@
     <h2 id="run-t">Sync complete</h2>
     <p class="wb-ok">✓ {[run.report.copied && `${plural(run.report.copied, 'track')} copied`, run.report.deleted && `${plural(run.report.deleted, 'track')} removed`, run.report.edited && `${plural(run.report.edited, 'track')} edited`].filter(Boolean).join(', ') || 'Everything was already up to date'}. The Pocket's library list was updated and checked.</p>
     {#if run.report.backup_dir}<p class="wb-fine">Removed files were backed up to {run.report.backup_dir}</p>{/if}
-    <p class="wb-fine wb-keep">You can disconnect the Pocket now.</p>
-    <div class="wb-modal-actions"><button class="quiet" on:click={() => seeDetails(run?.journal ?? '')}>View details</button><button class="primary" data-autofocus on:click={closeRun}>Done</button></div>
+    <p class="wb-fine">{verifiedOnDevice ? 'Every file was read back from the card itself and matched.' : 'Every file was checked after writing, but on this computer that check may have been answered from memory.'}</p>
+    {#if ejectMsg}<p class={ejectOk ? 'wb-ok' : 'wb-fine wb-keep'} role="status">{ejectOk ? '✓ ' : ''}{ejectMsg}</p>
+    {:else}<p class="wb-fine wb-keep">Before you unplug it, eject it so everything is written out.</p>{/if}
+    <div class="wb-modal-actions"><button class="quiet" on:click={() => seeDetails(run?.journal ?? '')}>View details</button>{#if !ejectOk}<button class="quiet" disabled={ejecting} on:click={eject}>{ejecting ? 'Ejecting…' : 'Eject safely'}</button>{/if}<button class="primary" data-autofocus on:click={closeRun}>Done</button></div>
   </div>
 {/if}
 <style>
@@ -798,6 +822,7 @@
   .wb-dot{width:7px;height:7px;border-radius:50%;background:#8fd6f2}
   .wb-conn{background:#273032;color:#b7c3c2;border-radius:99px;padding:4px 10px;font-size:11px;font-weight:650}
   .wb-conn.slow{background:#3d3220;color:#f0d59a}
+  .wb-eject{font-size:11px;padding:3px 10px;margin-left:6px}
   .wb-refresh{margin-right:52px;background:transparent;color:#6f807f;padding:8px;border-radius:9px;border:1px solid transparent}
   .wb-refresh:hover{color:#e8ecec;border-color:#2c393a}
   .wb-refresh.spin svg{animation:wb-spin .7s linear}

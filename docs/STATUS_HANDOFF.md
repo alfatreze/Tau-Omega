@@ -959,6 +959,25 @@ one (not built).
 - `cargo fmt --check` reports pre-existing formatting drift; `cargo clippy` has the two known
   `too_many_arguments` findings in `src-tauri`.
 
+## Correctness pass, cache experiment and safe eject (2026-10-02)
+
+Found while integrating: a macOS hang report (a 71 s freeze) led to a performance and card-safety audit
+(`PERFORMANCE_AUDIT.md`, three passes including a ledger red-team). Built so far, all on
+`integration/workbench-base`, `cargo test` 117 in `tau-core` and 129 browser checks passing:
+- **Freeze fixes:** covers read only the tag region (not whole files); every command except `cancel_job`
+  runs off the window's main thread; one card write at a time (try-lock, a second is refused with a message).
+- **Correctness:** cover-embedded copies are now actually verified (the old check could never fail); names
+  differing only by case collide; execute refuses a run that cannot fit, counting whole clusters
+  (`InsufficientSpace`, code 51); the index swap keeps `.tau-library.tdb.prev` and a confirmed sync recovers
+  an interrupted swap; art sidecars are written temp, verify, rename; our own stale temp files are swept;
+  album removal is two-phase (verify and back up everything in one pass, then delete) with a backup-space
+  check.
+- **No-cache verification and safe eject:** see `PERFORMANCE_AUDIT.md`, "Cache experiment and safe eject".
+  `eject_card` and `readback_status` commands; the completion dialog asks for an eject.
+- **Not built:** the verification ledger and incremental scan, the per-volume I/O governor, hash-while-copy for
+  plain copies, the Library fit bar counting clusters, FAT-unsafe names (needs a decision with tau-alpha).
+- **Hardware not yet exercised:** all of it. `TEST_PLAN.md` item 5 now lists the eject and read-back runs.
+
 ## Safety and UX baseline
 
 - Source media is never edited by sync, cover, playlist, or duplicate workflows.
