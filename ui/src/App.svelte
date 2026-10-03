@@ -13,11 +13,12 @@
   import CardIcon from './lib/CardIcon.svelte';
   import MetersView from './lib/MetersView.svelte';
   import AppearanceView from './lib/AppearanceView.svelte';
+  import DiagnosticsView from './lib/DiagnosticsView.svelte';
   import LibrarySettings from './lib/LibrarySettings.svelte';
   import { modal, trap } from './lib/a11y';
   import { tick } from 'svelte';
   import PackageView from './lib/PackageView.svelte';
-  let page: 'cards' | 'workbench' | 'compare' | 'history' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
+  let page: 'cards' | 'workbench' | 'compare' | 'history' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'diagnostics' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
   let packageZipPath = ''; let packageCardPath = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
   async function inspectPackageZip() { packageManifest = null; packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packageManifest = await inspectPackage(packageZipPath); packageInspectNotice = `${packageManifest.entries.length} files found. Nothing was changed.`; } catch (error) { packageInspectNotice = `Could not read this package: ${errorMessage(error)}`; } }
@@ -54,7 +55,7 @@
   });
   // Rarely-used tools and settings live in a collapsible sidebar section; it
   // stays open while one of its pages is showing and remembers the user's choice.
-  const moreItems = ['compare', 'backup', 'package', 'problems', 'history', 'settings'];
+  const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'history', 'settings'];
   let moreOpen = false;
   try { moreOpen = localStorage.getItem('tau.nav.more') === '1'; } catch { /* per-viewer convenience */ }
   function toggleMore() { moreOpen = !moreOpen; try { localStorage.setItem('tau.nav.more', moreOpen ? '1' : '0'); } catch { /* ignore */ } }
@@ -321,6 +322,7 @@
         <button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button>
         <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
         <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
+        <button class:active={page === 'diagnostics'} on:click={() => page = 'diagnostics'}>Send diagnostics</button>
         <button class:active={page === 'history'} on:click={() => openHistory()}>Sync history</button>
         <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
       </div>
@@ -380,6 +382,8 @@
     <PackageView bind:zipPath={packageZipPath} bind:cardPath={packageCardPath} chooseZip={() => chooseFolder('packageZip')} chooseCard={() => chooseFolder('packageCard')} inspect={inspectPackageZip} manifest={packageManifest} inspectNotice={packageInspectNotice} review={reviewPackageInstall} plan={packagePlan} planNotice={packagePlanNotice} confirm={confirmPackageInstall} report={packageReport} confirmNotice={packageConfirmNotice} loadCoresToRemove={loadCoresToRemove} removeCores={removeCores} removeCoresNotice={removeCoresNotice} bind:removeCoreId={removeCoreId} reviewRemove={reviewRemoveCore} removePlan={removePlan} removePlanNotice={removePlanNotice} confirmRemove={confirmRemoveCore} removeReport={removeReport} removeConfirmNotice={removeConfirmNotice} />
   {:else if page === 'meters'}
     <MetersView />
+  {:else if page === 'diagnostics'}
+    <DiagnosticsView cardPath={path} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'appearance'}
     <AppearanceView {mediaRoot} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'settings'}

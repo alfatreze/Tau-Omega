@@ -20,6 +20,7 @@ pub mod changes;
 pub mod compare;
 pub mod cover;
 pub mod diag;
+pub mod diagnostics;
 pub mod duplicates;
 pub mod icon;
 pub mod image;

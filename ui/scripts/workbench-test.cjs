@@ -482,6 +482,16 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await text(ap), /already a built-in theme/); ok('a built-in name is refused');
   await ap.getByRole('tab', { name: 'Light' }).click(); assert.equal(await ap.getByRole('tab', { name: 'Light' }).getAttribute('aria-selected'), 'true'); ok('the Light version can be switched to');
 
+  // --- Send diagnostics: reads the Check the card holds, and offers a copy and a zip ---------------
+  await fresh();
+  await p.getByRole('button', { name: /Tools & settings/ }).click();
+  await p.getByRole('button', { name: 'Send diagnostics' }).click(); await p.waitForTimeout(600);
+  const dg = p.getByRole('region', { name: 'Send diagnostics' });
+  assert.equal(await dg.count(), 1); assert.match(await text(dg), /Nothing is uploaded/); ok('Send diagnostics opens and says nothing is uploaded');
+  assert.match(await text(dg), /alfatreze\.TAU_DEV_67/); assert.match(await text(dg), /some checks failed/); assert.match(await text(dg), /Playback counters/); ok('it shows the saved Check result of the core on the card');
+  assert.match(await text(dg), /20261002_191502\.png/); assert.match(await text(dg), /Screenshots with a Check report/); ok('it lists the screenshots that hold a Check report');
+  assert.equal(await dg.getByRole('button', { name: 'Create zip…' }).isEnabled(), true); assert.equal(await dg.getByRole('button', { name: 'Copy summary' }).isEnabled(), true); ok('copy and zip are offered once there is something to send');
+
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();
   console.log(`\n${passed} checks passed`);

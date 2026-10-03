@@ -160,3 +160,11 @@ export type ExistingAssets = { bytes: number; sha256: string; themes: string[]; 
 export type ThemeFileReader = { core_id: string; version: string; declares_slot: boolean };
 export type AssetsInstallPlan = { id: string; destination: string; bytes: number; sha256: string; themes: string[]; existing: ExistingAssets | null; readers: ThemeFileReader[]; interrupted_install: boolean; warnings: string[] };
 export type AssetsInstallReport = { destination: string; bytes_written: number; replaced: boolean; backup: string | null };
+
+// ---- Send diagnostics ----
+export type DiagFile = { path: string; bytes: number; sha256: string };
+export type DiagIndex = { tracks: number; albums: number; artists: number; playlists: number; build_id: number };
+export type DiagCore = { id: string; version: string; date_release: string; platform: string; persist_path: string | null; check: CheckSummary | null; check_note: string | null; files: DiagFile[]; index: DiagIndex | null; media_files: number; media_bytes: number };
+export type DiagShot = { filename: string; captured_at: string | null; report: TaudReport | null; note: string | null };
+export type DiagReading = { card: string; total_bytes: number; free_bytes: number; cores: DiagCore[]; shots: DiagShot[]; shots_examined: number; notes: string[] };
+export type DiagView = { reading: DiagReading; summary: string };

@@ -195,6 +195,15 @@ const handlers: Record<string, (args: any) => unknown> = {
   appearance_check: (a) => appearanceCheckMock(a.theme),
   appearance_open: () => [],
   appearance_export: () => 144,
+  diag_read: () => ({
+    summary: '# Tau diagnostics\n\nmock summary',
+    reading: {
+      card: '/Volumes/Pocket', total_bytes: 64e9, free_bytes: 20e9, shots_examined: 12, notes: [],
+      cores: [{ id: 'alfatreze.TAU_DEV_67', version: '0.6.0', date_release: '2026-09-30', platform: 'tau_dev_67', persist_path: 'Settings/x', check: { profile: 'USER CHECK', run: 5, verdict: 'some checks failed', passed: ['SDRAM window test'], failed: ['Playback counters'], worst_access_cycles: 373, cold_cycles_per_word: 31.6, late_underruns: 1, draw_stall_ms: 4, last_load_s: 1.2, library_error: 0, cold_error: 0, firmware_minor: 6 }, check_note: null, files: [], index: { tracks: 77, albums: 8, artists: 5, playlists: 2, build_id: 1 }, media_files: 120, media_bytes: 5e8 }],
+      shots: [{ filename: '20261002_191502.png', captured_at: null, note: null, report: { format: 1, profile: 'USER CHECK', verdict: 'all checks passed', tests: [{ id: 0, name: 'SDRAM window test', result: 'PASS', value: 89, busy_permille: null, audio_full: null }], entries: {}, unknown: [] } }],
+    },
+  }),
+  diag_zip: (a) => `${a.destDir}/tau-diagnostics-alfatreze.TAU_DEV_67-0.6.0-2026-10-03.zip`,
   appearance_plan_install: (a) => ({
     id: 'mock-plan', destination: `${a.mediaRoot}/tau-assets.bin`, bytes: 144, sha256: 'x', themes: (a.themes as { name: string }[]).map((t) => t.name),
     existing: mockAssetsOnCard ? { bytes: 144, sha256: 'y', themes: ['OLDER'], other_sections: ['METR'], readable: true } : null,
