@@ -725,6 +725,33 @@ fn appearance_install(
     tau_core::assets::execute_install(&themes, root, &plan, &confirmation, backup.as_deref().map(Path::new))
 }
 
+/// Send diagnostics: reads what a Check run left on a card (saved summaries, Check QR screenshots, core file
+/// checksums). Read-only; also returns the readable summary for "Copy summary".
+#[derive(Serialize)]
+struct DiagView {
+    reading: tau_core::diagnostics::DiagReading,
+    summary: String,
+}
+
+#[tauri::command(async)]
+fn diag_read(card: String) -> Result<DiagView, TauError> {
+    let reading = tau_core::diagnostics::read(Path::new(&card), 0)?;
+    let summary = tau_core::diagnostics::summary_markdown(&reading);
+    Ok(DiagView { reading, summary })
+}
+
+/// Send diagnostics: writes the zip into a folder outside the card. Nothing is uploaded and nothing is written to the card.
+#[tauri::command(async)]
+fn diag_zip(card: String, dest_dir: String) -> Result<String, TauError> {
+    let reading = tau_core::diagnostics::read(Path::new(&card), 0)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let path = tau_core::diagnostics::create_zip(&reading, Path::new(&card), Path::new(&dest_dir), now)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 /// Previews what `art_sidecar_pal256` will encode for one album's cover
 /// (`cover_source`, from a `plan_sync` result's `art_sidecar_previews`),
 /// without writing anything: runs the exact same quantizer `execute_sync`
@@ -1093,7 +1120,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, appearance_check, appearance_open, appearance_export, appearance_plan_install, appearance_install, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, appearance_check, appearance_open, appearance_export, appearance_plan_install, appearance_install, diag_read, diag_zip, get_prefs, set_prefs, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

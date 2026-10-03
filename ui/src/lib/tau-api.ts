@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport } from './types';
+import type { BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -63,3 +63,5 @@ export const appearanceOpen = (path: string) => invoke<ThemeInput[]>('appearance
 export const appearanceExport = (themes: ThemeInput[], path: string) => invoke<number>('appearance_export', { themes, path });
 export const appearancePlanInstall = (themes: ThemeInput[], mediaRoot: string) => invoke<AssetsInstallPlan>('appearance_plan_install', { themes, mediaRoot });
 export const appearanceInstall = (themes: ThemeInput[], mediaRoot: string, confirmation: string, backup: string | null) => invoke<AssetsInstallReport>('appearance_install', { themes, mediaRoot, confirmation, backup });
+export const diagRead = (card: string) => invoke<DiagView>('diag_read', { card });
+export const diagZip = (card: string, destDir: string) => invoke<string>('diag_zip', { card, destDir });

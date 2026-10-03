@@ -1047,3 +1047,8 @@ ran the app's own path: add one real 2.1 MB MP3 album ("Omega Sweep Test") with 
 `~/Downloads/tau-omega-card-backups`). Result: 0 `._*` files before, after the add, and after the removal; a before/after listing of the card's whole
 `Assets` and `Cores` (excluding the rewritten index) was identical; `tau verify` on the rebuilt index says valid. **Caveat:** I did not run it without the fix,
 so I cannot say macOS would have left stubs on this particular write (the theme install's rename did). The result shows the sync and removal paths end clean.
+
+### Send diagnostics (2026-10-03)
+Built per `DIAGNOSTICS_COLLECTOR.md` (see its "As built" section): `tau_core::diagnostics`, `diag_read`/`diag_zip`, a Send diagnostics page under Tools & settings.
+Read-only on the card, zip written outside it, no track names, no other cores' settings. Tests: 5 engine, 4 browser, one ignored real-card test
+(`real_card_diagnostics_read_and_zip_without_touching_the_card`) that passed on the owner's card. Open: `tau diag` CLI, an owner trial of the zip.

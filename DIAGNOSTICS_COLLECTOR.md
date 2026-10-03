@@ -23,3 +23,20 @@ Short code (fallback when only a photo of the page exists): 36 Crockford base32 
 
 ## Tests (golden)
 Use `tau-alpha/sim/test_suite.py` vectors and the real samples in `tau-alpha/work/diagnostics/` screenshots listed in tau-alpha audit B-058, B-060, B-062 (QR decodes to seven results; persist file decodes to the same verdict). Required: Rust decoders equal `decode_tau_suite.py --json` on every sample; corrupt one byte of a TAUD1 text and it must be rejected; a v1 four-value SDRAM entry and a six-value entry both decode; the 2 px version-38 QR sample decodes.
+
+
+## As built (2026-10-03, Tau Omega)
+`tau_core::diagnostics::{read, summary_markdown, create_zip}`, host commands `diag_read` / `diag_zip`, page **Tools & settings > Send diagnostics**.
+Differences from the spec above, all deliberate:
+* **Which screenshots:** the 12 newest, not "newer than the newest persist file": a Check's screenshots are taken *before* the core is quit and saves, so they are
+  older than the persist file, and the spec's rule would have excluded exactly the ones that matter. Only screenshots that hold a Check QR code are decoded and
+  copied (unchanged); a plain screenshot is skipped, a QR with a damaged record is reported.
+* **Which cores:** every Tau core installed on the card (library-capable or `alfatreze.TAU*`), each with its saved Check summary or a plain note saying no Check has been run.
+  On the owner's real card all three Tau cores read "no Check run" from their saved settings (ids 20-23 hold legacy playlist state) while two screenshots carry real reports,
+  so the screenshots are the evidence that matters in practice.
+* **Zip:** `report.json`, `report.md`, `card.json` (free space, core files with sizes and SHA-256, library header counts, media as counts and a total, never names),
+  `README.txt`, each Tau core's saved settings, and the QR screenshots. Written outside the card under a temporary name, renamed when complete; refuses a destination on the card.
+* **Not built:** the `tau diag` CLI verb, an "include file names" option (names are never included), the QR short-code fallback, and the cross-check of run counters (it only
+  compares the newest QR verdict with the newest saved verdict and says they may be different runs).
+Verified: 5 engine tests (read, privacy, no-check cases, zip contents and unchanged screenshots, dates), a real-card read-only run (3 cores, 2 reports found in 12 screenshots,
+zip made, `Settings`/`Memories`/`Cores` listings identical before and after), 4 browser checks.
