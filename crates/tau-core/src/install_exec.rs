@@ -632,4 +632,169 @@ mod tests {
         fs::remove_dir_all(card.parent().unwrap()).unwrap();
         fs::remove_dir_all(elsewhere.parent().unwrap()).unwrap();
     }
+
+    /// Hashes every file on a real card except what the operating system owns and rewrites on its own.
+    fn real_snapshot(root: &Path) -> Vec<(String, String)> {
+        const OS_OWNED: [&str; 5] = [
+            ".Spotlight-V100",
+            ".Trashes",
+            ".fseventsd",
+            "System Volume Information",
+            "FOUND.000",
+        ];
+        fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, String)>) {
+            let mut entries: Vec<_> = fs::read_dir(dir).unwrap().flatten().collect();
+            entries.sort_by_key(|e| e.file_name());
+            for e in entries {
+                if OS_OWNED.contains(&e.file_name().to_string_lossy().as_ref()) {
+                    continue;
+                }
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, root, out);
+                } else {
+                    out.push((
+                        p.strip_prefix(root).unwrap().to_string_lossy().into_owned(),
+                        sync::sha256_bytes(&fs::read(&p).unwrap()),
+                    ));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(root, root, &mut out);
+        out
+    }
+
+    /// The real-card run (roadmap 1a). Gated; **read-only unless `TAU_REAL_INSTALL_MODE` is `install` or `rollback`**.
+    /// - `TAU_REAL_INSTALL_CARD`   the card root (e.g. `/Volumes/CARDWRITE`)
+    /// - `TAU_REAL_INSTALL_ZIP`    a release zip
+    /// - `TAU_REAL_INSTALL_BACKUP` a backup folder **outside the card**
+    /// - `TAU_REAL_INSTALL_MODE`   `plan` (prints the plan, proves nothing was written), `install` (executes it and
+    ///   prints the post-install checks), or `rollback` (needs `TAU_REAL_INSTALL_JOURNAL`, the backup folder of the
+    ///   install to undo, and compares the card with `TAU_REAL_INSTALL_BEFORE`, a file of `hash  path` lines).
+    /// `TAU_REAL_INSTALL_SNAPSHOT=<file>` writes such a file for the card as it is now.
+    #[test]
+    #[ignore]
+    fn real_card_install_run() {
+        let (Ok(card), Ok(zip), Ok(backup), Ok(mode)) = (
+            std::env::var("TAU_REAL_INSTALL_CARD"),
+            std::env::var("TAU_REAL_INSTALL_ZIP"),
+            std::env::var("TAU_REAL_INSTALL_BACKUP"),
+            std::env::var("TAU_REAL_INSTALL_MODE"),
+        ) else {
+            println!("skipped: set TAU_REAL_INSTALL_CARD, _ZIP, _BACKUP and _MODE");
+            return;
+        };
+        let (card, zip, backup) = (
+            PathBuf::from(card),
+            PathBuf::from(zip),
+            PathBuf::from(backup),
+        );
+        let lines = |v: &[(String, String)]| {
+            v.iter()
+                .map(|(p, h)| format!("{h}  {p}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n"
+        };
+        if let Ok(file) = std::env::var("TAU_REAL_INSTALL_SNAPSHOT") {
+            fs::write(&file, lines(&real_snapshot(&card))).unwrap();
+            println!("snapshot of the card written to {file}");
+        }
+        let docs = crate::release_check::manifests_for_install(&backup.join("manifests"), &zip);
+        match mode.as_str() {
+            "plan" => {
+                let before = real_snapshot(&card);
+                let plan = install_plan::plan(&zip, &card, &docs, false).unwrap();
+                println!("plan id: {}", plan.id);
+                for core in &plan.update.cores {
+                    println!("{:?}: {}", core.verdict, core.reasons.join(" "));
+                    println!("pairing: {:?}", core.pair);
+                }
+                println!(
+                    "refused: {:?}\ncautions: {:?}\nnothing_to_do: {}",
+                    plan.refused, plan.cautions, plan.nothing_to_do
+                );
+                println!(
+                    "files: {} new, {} replaced, {} unchanged, {} bytes to write",
+                    plan.files.new_files,
+                    plan.files.updated_files,
+                    plan.files.unchanged_files,
+                    plan.files.bytes_to_write
+                );
+                for item in &plan.files.items {
+                    println!("  {:?} {} ({} bytes)", item.state, item.path, item.bytes);
+                }
+                println!(
+                    "backup ({} files, {} bytes):",
+                    plan.backup.len(),
+                    plan.backup_bytes
+                );
+                for b in &plan.backup {
+                    println!("  {} ({} bytes)", b.path, b.bytes);
+                }
+                println!(
+                    "caches to clear: {:?}\nobsolete: {:?}\nstubs to sweep: {:?}",
+                    plan.caches_to_clear, plan.obsolete_to_remove, plan.stubs_to_sweep
+                );
+                println!(
+                    "kept: {:?}\nsuperseded candidates: {:?}\ncapacity: {:?}",
+                    plan.user_files_kept, plan.superseded_candidates, plan.capacity
+                );
+                assert_eq!(
+                    real_snapshot(&card),
+                    before,
+                    "planning must not change the card"
+                );
+                println!("PLAN ONLY: the card is byte-identical to before");
+            }
+            "install" => {
+                let plan = install_plan::plan(&zip, &card, &docs, false).unwrap();
+                let report = execute(&zip, &card, &plan, &plan.id, &backup, &docs).unwrap();
+                println!("backup folder: {}", report.backup_dir.display());
+                println!(
+                    "written {} ({} bytes), backed up {}, caches {}, stubs {}, obsolete {}",
+                    report.files_written,
+                    report.bytes_written,
+                    report.files_backed_up,
+                    report.caches_cleared,
+                    report.stubs_swept,
+                    report.obsolete_removed
+                );
+                for check in &report.checks {
+                    print!("{}", check.to_text());
+                }
+                assert!(report.ok(), "a post-install check failed");
+            }
+            "rollback" => {
+                let journal = PathBuf::from(
+                    std::env::var("TAU_REAL_INSTALL_JOURNAL").expect("TAU_REAL_INSTALL_JOURNAL"),
+                );
+                let r = rollback(&card, &journal).unwrap();
+                println!(
+                    "restored {} files, removed {} created files",
+                    r.restored, r.created_removed
+                );
+                if let Ok(before) = std::env::var("TAU_REAL_INSTALL_BEFORE") {
+                    let after = lines(&real_snapshot(&card));
+                    let before = fs::read_to_string(before).unwrap();
+                    let strip = |t: &str| {
+                        t.lines()
+                            .filter(|l| !l.contains("/._") && !l.contains("  ._"))
+                            .map(str::to_string)
+                            .collect::<Vec<_>>()
+                    };
+                    assert_eq!(
+                        strip(&after),
+                        strip(&before),
+                        "the card differs from the snapshot beyond `._` junk"
+                    );
+                    println!(
+                        "ROLLBACK VERIFIED: the card matches the snapshot (apart from `._` junk)"
+                    );
+                }
+            }
+            other => panic!("unknown mode {other}"),
+        }
+    }
 }
