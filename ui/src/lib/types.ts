@@ -175,3 +175,20 @@ export type GithubRelease = { tag: string; title: string; prerelease: boolean; p
 /** The answer to "is there a newer Tau release". `newer` is null when no card was open to compare with. */
 export type UpdateCheck = { latest: GithubRelease; newer: boolean | null; installed_release: string | null; zips: ReleaseAsset[]; manifest: ReleaseAsset | null; sums: ReleaseAsset | null; message: string };
 export type Downloaded = { name: string; path: string; bytes: number };
+
+/** Mirrors `tau_core::update` / `install_plan` / `install_exec` (serde output). */
+export type UpdateVerdict = 'new_install' | 'same_build' | 'update' | 'same_date_different_build' | 'older' | 'mismatch';
+export type PairStatus = 'no_marker' | 'cannot_verify' | { verified: { core_version: string } } | { mismatch: { accepts: string[]; bitstream: string } };
+export type BuildIdentity = { core_id: string; shortname: string; version: string; date_release: string; platform: string };
+export type UpdateAssessment = { verdict: UpdateVerdict; reasons: string[]; installed: BuildIdentity | null; package: BuildIdentity; pair: PairStatus; installed_release: string | null; package_release: string | null };
+export type BackupFile = { path: string; bytes: number };
+export type InstallPlan = {
+  id: string; update: { cores: UpdateAssessment[]; files_replaced: string[]; user_files_kept: string[]; persist_changed: number[] | null };
+  files: PackagePlan; backup: BackupFile[]; backup_bytes: number; obsolete_to_remove: string[]; caches_to_clear: string[]; stubs_to_sweep: string[];
+  user_files_kept: string[]; superseded_candidates: string[]; capacity: { space: { available_bytes: number }; bytes_needed: number; margin_bytes: number; fits: boolean } | null;
+  nothing_to_do: boolean; refused: string | null; cautions: string[]; allow_downgrade: boolean;
+};
+export type CheckItem = { name: string; status: 'pass' | 'warn' | 'fail'; detail: string };
+export type PostInstallReport = { core_id: string; items: CheckItem[]; verdict: 'pass' | 'warn' | 'fail'; summary: string };
+export type InstallReport = { backup_dir: string; files_written: number; bytes_written: number; files_backed_up: number; obsolete_removed: number; caches_cleared: number; stubs_swept: number; nothing_to_do: boolean; checks: PostInstallReport[] };
+export type RollbackReport = { restored: number; created_removed: number };

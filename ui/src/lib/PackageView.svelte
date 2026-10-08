@@ -1,4 +1,5 @@
 <script lang="ts">
+  import UpdatePlanView from './UpdatePlanView.svelte';
   import type { Core, PackageManifest, PackagePlan, PackageReport, RemovePlan, RemoveReport } from './types';
   export let zipPath = ''; export let cardPath = '';
   export let chooseZip: () => void; export let chooseCard: () => void;
@@ -33,11 +34,13 @@
       <div style="width:100%">
         <h2>{manifest.core_ids.join(', ') || 'No core found'}</h2>
         <p>{manifest.entries.length} files in this package.</p>
-        <button class="primary" disabled={!cardPath.trim()} on:click={review}>Plan install</button>
+        <button class="quiet" disabled={!cardPath.trim()} on:click={review}>Plain file plan (no backup or cleanup)</button>
         <p class="notice" role="status">{planNotice}</p>
       </div>
     </section>
   {/if}
+
+  {#if manifest}<UpdatePlanView {zipPath} {cardPath} />{/if}
 
   {#if plan}
     <section class="comparison-counts package-counts">
