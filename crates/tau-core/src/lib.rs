@@ -25,6 +25,7 @@ pub mod diagnostics;
 pub mod duplicates;
 pub mod icon;
 pub mod image;
+pub mod install_exec;
 pub mod install_plan;
 pub mod journal;
 pub mod ledger;
@@ -116,6 +117,8 @@ pub enum ErrorCode {
     InvalidAssetsFile = 53,
     /// A Tau release manifest (`tau-compat.json`) that is malformed or of a schema this build does not know.
     InvalidReleaseManifest = 54,
+    /// An install plan that must not run (a refused pair, a downgrade not chosen, a full card) or a rollback that cannot be trusted.
+    InstallRefused = 55,
 }
 
 impl ErrorCode {
@@ -167,6 +170,7 @@ impl TryFrom<u16> for ErrorCode {
             52 => Self::InvalidTheme,
             53 => Self::InvalidAssetsFile,
             54 => Self::InvalidReleaseManifest,
+            55 => Self::InstallRefused,
             _ => return Err(()),
         })
     }
