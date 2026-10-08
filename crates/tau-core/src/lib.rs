@@ -32,6 +32,7 @@ pub mod ledger;
 pub mod package;
 pub mod playlist;
 pub mod problems;
+pub mod refresh;
 pub mod release_check;
 pub mod remove;
 pub mod screenshots;
@@ -119,6 +120,8 @@ pub enum ErrorCode {
     InvalidReleaseManifest = 54,
     /// An install plan that must not run (a refused pair, a downgrade not chosen, a full card) or a rollback that cannot be trusted.
     InstallRefused = 55,
+    /// A library refresh that must not run (nothing can be indexed, or the library exceeds what the Pocket holds).
+    RefreshRefused = 56,
 }
 
 impl ErrorCode {
@@ -171,6 +174,7 @@ impl TryFrom<u16> for ErrorCode {
             53 => Self::InvalidAssetsFile,
             54 => Self::InvalidReleaseManifest,
             55 => Self::InstallRefused,
+            56 => Self::RefreshRefused,
             _ => return Err(()),
         })
     }
