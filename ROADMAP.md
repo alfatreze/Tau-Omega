@@ -50,6 +50,12 @@ identifiers, results explained in plain words (rate limit, offline, no newer rel
 
 **Owner decisions for item 1:** (1) is the update check a button only, or also an off-by-default check at launch; (2) the compatibility table: shipped inside Omega, or fetched from the release; (3) after an update, does Omega re-verify the library index automatically (my default: yes, read-only, and offer a rebuild if the build id no longer matches); (4) the HTTPS client choice above.
 
+### 1e. Adapt to Tau Alpha's new release system (on Tau Alpha `main` since 2026-10-08; evaluation in `docs/RELEASE_SYSTEM_IMPACT_2026-10-08.md`)
+
+Seven reproduced findings, three of them unsafe (removing TAU can delete the library that Preview and Dev cores read; media paths use the first platform only, so
+Preview/Dev cores get music, themes and refreshes in the wrong folder; obsolete `common/` files are removed without Tau's "another core still reads it" rule),
+then channel-blind update checks, zip names, `replaces`, feature pairing. Order and detail are in that document. **Do this before the next Tau release is installed from Omega.**
+
 ### 2. Read the pixel-grid report codes (needed because the Tau Alpha default changed)
 
 Since 2026-10-06 the firmware shows reports as a pixel grid first and a QR second, so Omega's Send diagnostics and QR viewer see only the minority of screenshots. Build a Rust decoder for both grid layouts (robust: 4x4 cells, 2 bits per channel; lossless), reference `tools/decode_tau_suite.py --grid shot.png --table` and the format notes in `docs/features/BARCODE_STUDY.md` on Tau Alpha `main` (read-only).
