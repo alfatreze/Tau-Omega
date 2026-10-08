@@ -18,6 +18,7 @@ pub(crate) fn test_uniq() -> u128 {
 pub mod breakdown;
 pub mod changes;
 pub mod compare;
+pub mod compat;
 pub mod cover;
 pub mod diag;
 pub mod diagnostics;
@@ -111,6 +112,8 @@ pub enum ErrorCode {
     InsufficientSpace = 51,
     InvalidTheme = 52,
     InvalidAssetsFile = 53,
+    /// A Tau release manifest (`tau-compat.json`) that is malformed or of a schema this build does not know.
+    InvalidReleaseManifest = 54,
 }
 
 impl ErrorCode {
@@ -161,6 +164,7 @@ impl TryFrom<u16> for ErrorCode {
             51 => Self::InsufficientSpace,
             52 => Self::InvalidTheme,
             53 => Self::InvalidAssetsFile,
+            54 => Self::InvalidReleaseManifest,
             _ => return Err(()),
         })
     }

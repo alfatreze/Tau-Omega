@@ -363,7 +363,13 @@ fn identity_from(
         .unwrap_or_default()
         .to_string();
     let hash = |path: String| read(&path).map(|bytes| sha256_hex(&bytes));
-    let rom = read(&format!("Assets/{platform}/common/tau.rom"));
+    // Build-bound files are core-specific since Tau's layout change (Assets/<platform>/<core>/, data slots 1/4/6 with
+    // parameter bit 1); packages and cards made before keep them in common/.
+    let build_file = |name: &str| {
+        read(&format!("Assets/{platform}/{core_id}/{name}"))
+            .or_else(|| read(&format!("Assets/{platform}/common/{name}")))
+    };
+    let rom = build_file("tau.rom");
     Ok(Some(BuildIdentity {
         core_id: core_id.to_string(),
         shortname: text("shortname"),
@@ -371,7 +377,7 @@ fn identity_from(
         date_release: text("date_release"),
         bitstream_sha256: hash(format!("Cores/{core_id}/bitstream.rbf_r")),
         rom_sha256: rom.as_ref().map(|bytes| sha256_hex(bytes)),
-        cold_sha256: hash(format!("Assets/{platform}/common/tau-cold.bin")),
+        cold_sha256: build_file("tau-cold.bin").map(|bytes| sha256_hex(&bytes)),
         rom_accepts: rom.as_deref().and_then(rom_pair_marker),
         rom_needs: rom.as_deref().and_then(rom_needs_marker),
         platform,
@@ -611,7 +617,8 @@ pub fn post_install_check(
 
     // 4. Declared data slots and their files.
     let common = card_root.join("Assets").join(&platform).join("common");
-    let slot_report = data_slot_problems(&core_dir, &common);
+    let core_assets = card_root.join("Assets").join(&platform).join(core_id);
+    let slot_report = data_slot_problems(&core_dir, &common, &core_assets);
     match slot_report {
         Err(detail) => push("data slots", CheckStatus::Fail, detail),
         Ok(report) if report.problems.is_empty() => push(
@@ -775,7 +782,28 @@ struct SlotReport {
     problems: Vec<String>,
 }
 
-fn data_slot_problems(core_dir: &Path, common: &Path) -> Result<SlotReport, String> {
+/// Data-slot parameter bit 1: the file is specific to this core (`Assets/<platform>/<core>/`), not the platform's `common/`.
+const SLOT_CORE_SPECIFIC: u64 = 0x2;
+
+fn slot_parameters(slot: &Value) -> u64 {
+    match slot.get("parameters") {
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(0),
+        Some(Value::String(s)) => {
+            let t = s.trim();
+            t.strip_prefix("0x")
+                .or_else(|| t.strip_prefix("0X"))
+                .map_or_else(|| t.parse().ok(), |h| u64::from_str_radix(h, 16).ok())
+                .unwrap_or(0)
+        }
+        _ => 0,
+    }
+}
+
+fn data_slot_problems(
+    core_dir: &Path,
+    common: &Path,
+    core_assets: &Path,
+) -> Result<SlotReport, String> {
     let bytes =
         fs::read(core_dir.join("data.json")).map_err(|_| "data.json is missing.".to_string())?;
     let json: Value =
@@ -814,7 +842,12 @@ fn data_slot_problems(core_dir: &Path, common: &Path) -> Result<SlotReport, Stri
                 .get("required")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
-            if required && !common.join(filename).is_file() && !core_dir.join(filename).is_file() {
+            let folder = if slot_parameters(slot) & SLOT_CORE_SPECIFIC != 0 {
+                core_assets
+            } else {
+                common
+            };
+            if required && !folder.join(filename).is_file() {
                 problems.push(format!("required file {filename} is not on the card."));
             }
         }
@@ -935,6 +968,39 @@ fn collect_junk(dir: &Path, card_root: &Path, out: &mut Vec<String>) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_core_specific_required_slot_is_looked_for_in_the_core_folder() {
+        let root = std::env::temp_dir().join(format!(
+            "tau-slots-h4-{}-{}",
+            std::process::id(),
+            crate::test_uniq()
+        ));
+        let (core_dir, common, core_assets) = (
+            root.join("Cores/alfatreze.TAU"),
+            root.join("Assets/tau/common"),
+            root.join("Assets/tau/alfatreze.TAU"),
+        );
+        for d in [&core_dir, &common, &core_assets] {
+            fs::create_dir_all(d).unwrap();
+        }
+        fs::write(core_dir.join("data.json"), br#"{"data":{"data_slots":[{"name":"Firmware","id":1,"required":true,"parameters":"0x10A","filename":"tau.rom"}]}}"#).unwrap();
+        fs::write(common.join("tau.rom"), b"old place").unwrap();
+        let r = data_slot_problems(&core_dir, &common, &core_assets).unwrap();
+        assert!(
+            r.problems.iter().any(|p| p.contains("tau.rom")),
+            "a core-specific slot is not satisfied by common/: {:?}",
+            r.problems
+        );
+        fs::write(core_assets.join("tau.rom"), b"rom").unwrap();
+        assert!(
+            data_slot_problems(&core_dir, &common, &core_assets)
+                .unwrap()
+                .problems
+                .is_empty()
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 

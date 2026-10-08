@@ -158,6 +158,8 @@ pub fn read(card_root: &Path, screenshot_limit: usize) -> Result<DiagReading, Ta
         let mut files: Vec<DiagFile> = Vec::new();
         for rel in [
             format!("Cores/{}/bitstream.rbf_r", core.id),
+            format!("Assets/{}/{}/tau.rom", core.platform, core.id),
+            format!("Assets/{}/{}/tau-cold.bin", core.platform, core.id),
             format!("{common}/tau.rom"),
             format!("{common}/tau-cold.bin"),
             format!("{common}/tau-assets.bin"),
