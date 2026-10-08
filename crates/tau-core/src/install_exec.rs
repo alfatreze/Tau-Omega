@@ -147,12 +147,18 @@ pub fn execute(
         .filter(|i| i.state == DifferenceState::OnlyLeft)
         .map(|i| i.path.as_str())
         .collect();
+    // Folders this install will create (none of them exist yet): rollback removes exactly these, and no others.
+    let created_dirs: std::collections::BTreeSet<String> = created
+        .iter()
+        .flat_map(|path| ancestors(path))
+        .filter(|dir| !card_root.join(dir).exists())
+        .collect();
     write_journal(
         &backup_dir,
         &json!({
             "version": 1, "state": "started", "plan_id": plan.id,
             "card": card_root.to_string_lossy(), "zip": zip_path.file_name().map(|n| n.to_string_lossy()),
-            "files": backed, "created": created,
+            "files": backed, "created": created, "created_dirs": created_dirs,
         }),
     )?;
 
@@ -168,11 +174,27 @@ pub fn execute(
         for path in &plan.stubs_to_sweep {
             remove_file(card_root, path)?;
         }
+        // The operating system creates a `._` companion for everything written (a file and each folder above it),
+        // after the plan was made: sweep those too, so the card is left clean.
+        let mut after_write = 0;
+        for item in plan
+            .files
+            .items
+            .iter()
+            .filter(|i| i.state != DifferenceState::Identical)
+        {
+            for stub in stub_companions(&item.path) {
+                if card_root.join(&stub).is_file() && !plan.stubs_to_sweep.contains(&stub) {
+                    remove_file(card_root, &stub)?;
+                    after_write += 1;
+                }
+            }
+        }
         Ok((
             written,
             plan.obsolete_to_remove.len(),
             plan.caches_to_clear.len(),
-            plan.stubs_to_sweep.len(),
+            plan.stubs_to_sweep.len() + after_write,
         ))
     };
     let (written, obsolete_removed, caches_cleared, stubs_swept) = match changes() {
@@ -221,6 +243,28 @@ pub fn execute(
         nothing_to_do: false,
         checks,
     })
+}
+
+/// The `._` companions macOS may create for a card-relative path: for the file itself and for every folder above it.
+fn stub_companions(relative: &str) -> Vec<String> {
+    let parts: Vec<&str> = relative.split('/').collect();
+    (0..parts.len())
+        .map(|i| {
+            let dir = parts[..i].join("/");
+            let prefix = if dir.is_empty() {
+                String::new()
+            } else {
+                format!("{dir}/")
+            };
+            format!("{prefix}._{}", parts[i])
+        })
+        .collect()
+}
+
+/// Every folder above a card-relative file path (`a/b/c.txt` -> `a`, `a/b`).
+fn ancestors(relative: &str) -> Vec<String> {
+    let parts: Vec<&str> = relative.split('/').collect();
+    (1..parts.len()).map(|i| parts[..i].join("/")).collect()
 }
 
 fn remove_file(card_root: &Path, relative: &str) -> Result<(), TauError> {
@@ -297,6 +341,11 @@ pub fn rollback(card_root: &Path, backup_dir: &Path) -> Result<RollbackReport, T
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)?;
         }
+        // The OS creates a `._` companion for what it writes; one that was not there before this restore is ours to remove.
+        let companion = stub_companions(path).pop();
+        let had_companion = companion
+            .as_ref()
+            .is_some_and(|c| card_root.join(c).exists());
         sync::write_durable(&dest, &saved)?;
         if sync::sha256_bytes(&fs::read(&dest)?) != hash {
             return Err(TauError::e(
@@ -304,16 +353,21 @@ pub fn rollback(card_root: &Path, backup_dir: &Path) -> Result<RollbackReport, T
                 format!("{path} did not read back the same after it was restored"),
             ));
         }
+        if let (Some(companion), false) = (companion, had_companion) {
+            remove_file(card_root, &companion)?;
+        }
         restored += 1;
     }
     let mut created_removed = 0;
-    for path in journal
+    let created: Vec<String> = journal
         .get("created")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(Value::as_str)
-    {
+        .map(str::to_string)
+        .collect();
+    for path in &created {
         if path.split('/').any(|c| c == ".." || c.is_empty()) || path.starts_with('/') {
             return Err(refuse(format!(
                 "the install journal names an unsafe path ({path})"
@@ -323,13 +377,49 @@ pub fn rollback(card_root: &Path, backup_dir: &Path) -> Result<RollbackReport, T
         if file.is_file() {
             fs::remove_file(&file)?;
             created_removed += 1;
-            // Leave no empty folders behind that only the install made.
-            let mut dir = file.parent().map(Path::to_path_buf);
-            while let Some(d) = dir {
-                if d == card_root || fs::remove_dir(&d).is_err() {
-                    break;
+        }
+        // The OS's `._` companion of the file goes with it.
+        if let Some(stub) = stub_companions(path).pop() {
+            remove_file(card_root, &stub)?;
+        }
+    }
+    // Folders the install created, deepest first, once only OS companions are left in them. (A journal written before
+    // this was recorded falls back to every folder above a created file.)
+    let mut dirs: Vec<String> = match journal.get("created_dirs").and_then(Value::as_array) {
+        Some(list) => list
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        None => created.iter().flat_map(|p| ancestors(p)).collect(),
+    };
+    dirs.sort();
+    dirs.dedup();
+    dirs.sort_by_key(|d| std::cmp::Reverse(d.matches('/').count()));
+    for dir in &dirs {
+        if dir.split('/').any(|c| c == ".." || c.is_empty()) || dir.starts_with('/') {
+            return Err(refuse(format!(
+                "the install journal names an unsafe folder ({dir})"
+            )));
+        }
+        let path = card_root.join(dir);
+        let Ok(read) = fs::read_dir(&path) else {
+            continue;
+        };
+        let entries: Vec<_> = read.flatten().collect();
+        if entries
+            .iter()
+            .all(|e| e.file_name().to_string_lossy().starts_with("._"))
+        {
+            for e in &entries {
+                if e.path().is_file() {
+                    fs::remove_file(e.path())?;
                 }
-                dir = d.parent().map(Path::to_path_buf);
+            }
+            if fs::remove_dir(&path).is_ok()
+                && let Some(stub) = stub_companions(dir).pop()
+            {
+                remove_file(card_root, &stub)?;
             }
         }
     }
@@ -631,6 +721,151 @@ mod tests {
         );
         fs::remove_dir_all(card.parent().unwrap()).unwrap();
         fs::remove_dir_all(elsewhere.parent().unwrap()).unwrap();
+    }
+
+    /// What macOS does on exFAT: a `._` companion for each file and folder it *creates* (never for folders that were
+    /// already there). `existing` lists the card-relative paths that pre-date the install.
+    fn add_os_stubs(card: &Path, relatives: &[&str], existing: &[&str]) {
+        for r in relatives {
+            let parts: Vec<&str> = r.split('/').collect();
+            for i in 0..parts.len() {
+                let base = parts[..=i].join("/");
+                let dir = parts[..i].join("/");
+                let target = if dir.is_empty() {
+                    card.join(format!("._{}", parts[i]))
+                } else {
+                    card.join(&dir).join(format!("._{}", parts[i]))
+                };
+                // Only where the thing exists now and the folder is there; never beside something that pre-dated the install.
+                if !existing.contains(&base.as_str())
+                    && card.join(&base).exists()
+                    && target.parent().is_some_and(Path::is_dir)
+                {
+                    fs::write(target, b"AppleDouble").unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn stubs_the_os_creates_after_the_plan_are_swept() {
+        let card = card("os-sweep");
+        install_raw(&alpha3(), &card);
+        let plan = install_plan::plan(&alpha4(), &card, &[], false).unwrap();
+        // After the plan, "the OS" creates companions beside the files the update will overwrite.
+        let paths: Vec<&str> = plan
+            .files
+            .items
+            .iter()
+            .filter(|i| i.state == DifferenceState::Different)
+            .map(|i| i.path.as_str())
+            .collect();
+        add_os_stubs(&card, &paths, &[]);
+        assert!(snapshot(&card).iter().any(|(p, _)| p.contains("/._")));
+        let report = execute(&alpha4(), &card, &plan, &plan.id, &backups(&card), &[]).unwrap();
+        assert!(report.stubs_swept > 0, "{}", report.stubs_swept);
+        let stray = report.checks[0]
+            .items
+            .iter()
+            .find(|i| i.name == "stray files")
+            .unwrap();
+        assert_eq!(stray.status, CheckStatus::Pass, "{}", stray.detail);
+        assert!(
+            snapshot(&card).iter().all(|(p, _)| !p.contains("/._")),
+            "{:?}",
+            snapshot(&card)
+        );
+        fs::remove_dir_all(card.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn rollback_removes_the_os_companions_and_only_the_folders_the_install_made() {
+        const EXISTING: &[&str] = &[
+            "Assets",
+            "Cores",
+            "Platforms",
+            "Platforms/_images",
+            "Platforms/_images/ex.bin",
+        ];
+        let card = card("os-rollback");
+        fs::create_dir_all(card.join("Platforms/_images")).unwrap();
+        fs::write(card.join("Platforms/_images/ex.bin"), b"x").unwrap();
+        fs::write(card.join("Platforms/_images/._ex.bin"), b"theirs").unwrap(); // already there: must stay
+        let before = snapshot(&card);
+        let plan = install_plan::plan(&alpha4(), &card, &[], false).unwrap();
+        let report = execute(&alpha4(), &card, &plan, &plan.id, &backups(&card), &[]).unwrap();
+        // The OS creates companions for the new files and new folders while they are written.
+        let paths: Vec<&str> = plan.files.items.iter().map(|i| i.path.as_str()).collect();
+        add_os_stubs(&card, &paths, EXISTING);
+        assert!(
+            snapshot(&card)
+                .iter()
+                .filter(|(p, _)| p.contains("/._") || p.starts_with("._"))
+                .count()
+                > 15
+        );
+        rollback(&card, &report.backup_dir).unwrap();
+        assert_eq!(
+            snapshot(&card),
+            before,
+            "byte-identical, including the stub that pre-dated the install"
+        );
+        assert!(!card.join("Cores/alfatreze.TAU").exists() && !card.join("Assets/tau").exists());
+        assert!(
+            card.join("Platforms/_images/ex.bin").is_file(),
+            "folders that were already there stay"
+        );
+        fs::remove_dir_all(card.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_companion_that_was_there_before_a_restore_is_kept() {
+        let card = card("keep-stub");
+        install_raw(&alpha3(), &card);
+        let rom = card.join("Assets/tau/common/tau.rom");
+        fs::write(card.join("Assets/tau/common/._tau.rom"), b"theirs").unwrap();
+        let plan = install_plan::plan(&alpha4(), &card, &[], false).unwrap();
+        let report = execute(&alpha4(), &card, &plan, &plan.id, &backups(&card), &[]).unwrap();
+        assert!(rom.is_file());
+        // The plan swept their stub (it is junk beside a file being replaced); put one back, as if the user had it.
+        fs::write(card.join("Assets/tau/common/._tau.rom"), b"theirs").unwrap();
+        rollback(&card, &report.backup_dir).unwrap();
+        assert_eq!(
+            fs::read(card.join("Assets/tau/common/._tau.rom")).unwrap(),
+            b"theirs"
+        );
+        fs::remove_dir_all(card.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn an_older_journal_without_folder_records_still_rolls_back_cleanly() {
+        let card = card("old-journal");
+        let before = snapshot(&card);
+        let plan = install_plan::plan(&alpha4(), &card, &[], false).unwrap();
+        let report = execute(&alpha4(), &card, &plan, &plan.id, &backups(&card), &[]).unwrap();
+        let journal_path = report.backup_dir.join(JOURNAL);
+        let mut journal: Value = serde_json::from_slice(&fs::read(&journal_path).unwrap()).unwrap();
+        journal.as_object_mut().unwrap().remove("created_dirs");
+        fs::write(&journal_path, serde_json::to_vec(&journal).unwrap()).unwrap();
+        let paths: Vec<String> = plan.files.items.iter().map(|i| i.path.clone()).collect();
+        add_os_stubs(
+            &card,
+            &paths.iter().map(String::as_str).collect::<Vec<_>>(),
+            &[],
+        );
+        rollback(&card, &report.backup_dir).unwrap();
+        assert_eq!(snapshot(&card), before);
+        fs::remove_dir_all(card.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn companions_cover_the_file_and_every_folder_above_it() {
+        assert_eq!(
+            stub_companions("a/b/c.txt"),
+            ["._a", "a/._b", "a/b/._c.txt"]
+        );
+        assert_eq!(stub_companions("c.txt"), ["._c.txt"]);
+        assert_eq!(ancestors("a/b/c.txt"), ["a", "a/b"]);
     }
 
     /// Hashes every file on a real card except what the operating system owns and rewrites on its own.
