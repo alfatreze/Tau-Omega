@@ -25,6 +25,7 @@
 use crate::{
     ErrorCode, TauError,
     compare::DifferenceState,
+    compat::{self, CompatDoc, CompatPackage},
     package::{self, PackagePlan},
 };
 use serde_json::Value;
@@ -107,21 +108,71 @@ pub enum PairStatus {
     },
 }
 
+/// Pairing from the built-in table only; see [`pair_status_with`].
 pub fn pair_status(identity: &BuildIdentity) -> PairStatus {
+    pair_status_with(identity, &[])
+}
+
+/// The release manifest's package whose firmware files are exactly these (a manifest is the release's own statement,
+/// so it outranks [`KNOWN_BITSTREAMS`]).
+fn manifest_package<'a>(
+    identity: &BuildIdentity,
+    docs: &'a [CompatDoc],
+) -> Option<(&'a CompatDoc, &'a CompatPackage)> {
+    let bitstream = identity.bitstream_sha256.as_deref()?;
+    docs.iter().find_map(|doc| {
+        doc.packages
+            .iter()
+            .find(|p| {
+                p.core_id == identity.core_id
+                    && p.bitstream_sha256 == bitstream
+                    && identity.rom_sha256.as_deref() == Some(&p.rom_sha256[..])
+                    && identity
+                        .cold_sha256
+                        .as_deref()
+                        .is_none_or(|c| c == p.cold_sha256)
+            })
+            .map(|p| (doc, p))
+    })
+}
+
+/// The release tag these firmware files belong to, when a manifest names them (the newest if several do).
+pub fn release_of(identity: &BuildIdentity, docs: &[CompatDoc]) -> Option<String> {
+    docs.iter()
+        .filter(|doc| manifest_package(identity, std::slice::from_ref(doc)).is_some())
+        .map(|doc| doc.release.clone())
+        .max_by(|a, b| compat::compare_tags(a, b))
+}
+
+/// Whether the ROM and bitstream are a pair the Pocket accepts. A release manifest that names these exact files gives
+/// the bitstream's `CORE_VERSION` (and vouches for a ROM without a marker); otherwise the built-in table is used.
+pub fn pair_status_with(identity: &BuildIdentity, docs: &[CompatDoc]) -> PairStatus {
     let (Some(_), Some(bitstream)) = (&identity.rom_sha256, &identity.bitstream_sha256) else {
         return PairStatus::CannotVerify;
     };
+    let manifest_version =
+        manifest_package(identity, docs).map(|(_, p)| p.bitstream_core_version.clone());
     let Some(accepts) = &identity.rom_accepts else {
-        return PairStatus::NoMarker;
+        // The release itself says this ROM goes with this bitstream.
+        return match manifest_version {
+            Some(core_version) => PairStatus::Verified { core_version },
+            None => PairStatus::NoMarker,
+        };
     };
-    match KNOWN_BITSTREAMS.iter().find(|(hash, _)| hash == bitstream) {
+    let known = manifest_version.or_else(|| {
+        KNOWN_BITSTREAMS
+            .iter()
+            .find(|(hash, _)| hash == bitstream)
+            .map(|(_, version)| (*version).to_string())
+    });
+    match known {
         None => PairStatus::CannotVerify,
-        Some((_, version)) if accepts.iter().any(|a| a == version) => PairStatus::Verified {
-            core_version: (*version).to_string(),
+        Some(version) if accepts.contains(&version) => PairStatus::Verified {
+            core_version: version,
         },
-        Some((_, version)) => PairStatus::Mismatch {
+        Some(version) => PairStatus::Mismatch {
             accepts: accepts.clone(),
-            bitstream: (*version).to_string(),
+            bitstream: version,
         },
     }
 }
@@ -154,6 +205,10 @@ pub struct UpdateAssessment {
     pub installed: Option<BuildIdentity>,
     pub package: BuildIdentity,
     pub pair: PairStatus,
+    /// The release tag the installed files belong to, when a manifest names them.
+    pub installed_release: Option<String>,
+    /// The release tag of the package, when a manifest names its files.
+    pub package_release: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,10 +223,24 @@ pub struct UpdateReport {
     /// User files found on the card that the package does not contain and an
     /// update never touches (library index, theme file).
     pub user_files_kept: Vec<String>,
+    /// Persisted settings ids the update may change (the union rule over every release between the installed one and
+    /// the package's), when manifests allow knowing; `None` otherwise.
+    pub persist_changed: Option<Vec<u64>>,
 }
 
 /// Compares what is installed with what a package would install. Never writes.
 pub fn assess_update(zip_path: &Path, card_root: &Path) -> Result<UpdateReport, TauError> {
+    assess_update_with(zip_path, card_root, &[])
+}
+
+/// [`assess_update`] with release manifests (`tau-compat.json`) for the releases the caller knows. Manifests name the
+/// installed and packaged builds by release tag (ordering them exactly, where the package alone cannot), supply the
+/// bitstream's `CORE_VERSION`, and give the persisted ids an update changes.
+pub fn assess_update_with(
+    zip_path: &Path,
+    card_root: &Path,
+    docs: &[CompatDoc],
+) -> Result<UpdateReport, TauError> {
     let manifest = package::inspect(zip_path)?;
     let plan = package::plan_install(zip_path, card_root)?;
     if manifest.core_ids.is_empty() {
@@ -192,7 +261,13 @@ pub fn assess_update(zip_path: &Path, card_root: &Path) -> Result<UpdateReport, 
                 )
             })?;
         let installed = identity_from(core_id, |path| fs::read(card_root.join(path)).ok())?;
-        cores.push(assess(installed, package_identity.clone()));
+        let mut assessment = assess_with(installed, package_identity.clone(), docs);
+        // A schema-2 manifest identifies the installed build from every file it owns, not just the firmware.
+        let on_card = compat::identify_installed(docs, card_root, core_id);
+        if let Some(tag) = on_card.iter().max_by(|a, b| compat::compare_tags(a, b)) {
+            assessment.installed_release = Some(tag.clone());
+        }
+        cores.push(assessment);
         let common = card_root
             .join("Assets")
             .join(&package_identity.platform)
@@ -214,17 +289,35 @@ pub fn assess_update(zip_path: &Path, card_root: &Path) -> Result<UpdateReport, 
         .filter(|item| item.state == DifferenceState::Different)
         .map(|item| item.path.clone())
         .collect();
+    let persist_changed = cores.iter().find_map(|core| {
+        let installed = core.installed_release.as_deref()?;
+        let package = core.package_release.as_deref()?;
+        let doc = docs.iter().find(|d| d.release == package)?;
+        compat::persist_changed_since(doc, installed)
+    });
     Ok(UpdateReport {
         cores,
         plan,
         files_replaced,
         user_files_kept,
+        persist_changed,
     })
 }
 
 /// The pure comparison behind [`assess_update`], testable on identities alone.
 pub fn assess(installed: Option<BuildIdentity>, package: BuildIdentity) -> UpdateAssessment {
-    let pair = pair_status(&package);
+    assess_with(installed, package, &[])
+}
+
+/// [`assess`] with release manifests: see [`assess_update_with`].
+pub fn assess_with(
+    installed: Option<BuildIdentity>,
+    package: BuildIdentity,
+    docs: &[CompatDoc],
+) -> UpdateAssessment {
+    let pair = pair_status_with(&package, docs);
+    let package_release = release_of(&package, docs);
+    let installed_release = installed.as_ref().and_then(|old| release_of(old, docs));
     let mut reasons = Vec::new();
     let finish = |verdict, reasons, installed, package, pair| UpdateAssessment {
         verdict,
@@ -232,6 +325,8 @@ pub fn assess(installed: Option<BuildIdentity>, package: BuildIdentity) -> Updat
         installed,
         package,
         pair,
+        installed_release: installed_release.clone(),
+        package_release: package_release.clone(),
     };
 
     if let PairStatus::Mismatch { accepts, bitstream } = &pair {
@@ -290,14 +385,33 @@ pub fn assess(installed: Option<BuildIdentity>, package: BuildIdentity) -> Updat
         return finish(UpdateVerdict::Update, reasons, installed, package, pair);
     }
 
-    let verdict = match compare_versions(&package.version, &old.version)
-        .then_with(|| package.date_release.cmp(&old.date_release))
-    {
+    // Release tags order two builds exactly; without them the package's version and date are all there is.
+    let ordering = match (&package_release, &installed_release) {
+        (Some(new), Some(old_tag)) if new != old_tag => compat::compare_tags(new, old_tag),
+        _ => compare_versions(&package.version, &old.version)
+            .then_with(|| package.date_release.cmp(&old.date_release)),
+    };
+    let verdict = match ordering {
         std::cmp::Ordering::Greater => UpdateVerdict::Update,
         std::cmp::Ordering::Less => UpdateVerdict::Older,
         std::cmp::Ordering::Equal => UpdateVerdict::SameDateDifferentBuild,
     };
+    let label = |tag: &Option<String>, version: &str, date: &str| {
+        tag.clone().unwrap_or_else(|| format!("{version} {date}"))
+    };
+    let (new_label, old_label) = (
+        label(&package_release, &package.version, &package.date_release),
+        label(&installed_release, &old.version, &old.date_release),
+    );
     let line = match verdict {
+        UpdateVerdict::Update if package_release.is_some() && installed_release.is_some() => {
+            format!("Update: {new_label} replaces {old_label}.")
+        }
+        UpdateVerdict::Older if package_release.is_some() && installed_release.is_some() => {
+            format!(
+                "The package ({new_label}) is older than the installed core ({old_label}); installing it is a downgrade."
+            )
+        }
         UpdateVerdict::Update => format!(
             "Update: {} {} replaces {} {}.",
             package.version, package.date_release, old.version, old.date_release
@@ -504,6 +618,17 @@ pub fn post_install_check(
     core_id: &str,
     package_zip: Option<&Path>,
 ) -> Result<PostInstallReport, TauError> {
+    post_install_check_with(card_root, core_id, package_zip, &[])
+}
+
+/// [`post_install_check`] with release manifests: pairing uses the manifest's `CORE_VERSION`, and when a manifest
+/// names the installed build the whole card is checked against that release's layout ([`compat::check_card`]).
+pub fn post_install_check_with(
+    card_root: &Path,
+    core_id: &str,
+    package_zip: Option<&Path>,
+    docs: &[CompatDoc],
+) -> Result<PostInstallReport, TauError> {
     let mut items = Vec::new();
     let mut push = |name: &str, status, detail: String| {
         items.push(CheckItem {
@@ -587,7 +712,7 @@ pub fn post_install_check(
     }
 
     // 3. Firmware and bitstream are a pair the Pocket accepts.
-    match pair_status(&identity) {
+    match pair_status_with(&identity, docs) {
         PairStatus::Verified { core_version } => push(
             "firmware pairing",
             CheckStatus::Pass,
@@ -678,6 +803,47 @@ pub fn post_install_check(
             CheckStatus::Warn,
             format!("{} stray file(s), e.g. {}.", junk.len(), shown.join(", ")),
         );
+    }
+
+    // 8. Against the release manifest that names this build: the layout the release itself defines.
+    // (A schema-1 manifest has no layout to check against: it only names the build.)
+    if let Some(doc) = release_of(&identity, docs)
+        .and_then(|tag| docs.iter().find(|doc| doc.release == tag))
+        .filter(|doc| {
+            doc.packages
+                .iter()
+                .any(|p| p.core_id == core_id && !p.layout.is_empty())
+        })
+    {
+        let findings = compat::check_card(doc, card_root, core_id);
+        let errors: Vec<_> = findings.iter().filter(|f| f.error).collect();
+        let shown = |list: &[&compat::Finding]| {
+            list.iter()
+                .take(5)
+                .map(|f| f.message.clone())
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        if findings.is_empty() {
+            push(
+                "release layout",
+                CheckStatus::Pass,
+                format!("the card matches release {}.", doc.release),
+            );
+        } else if !errors.is_empty() {
+            push(
+                "release layout",
+                CheckStatus::Fail,
+                format!("against release {}: {}", doc.release, shown(&errors)),
+            );
+        } else {
+            let warnings: Vec<_> = findings.iter().collect();
+            push(
+                "release layout",
+                CheckStatus::Warn,
+                format!("against release {}: {}", doc.release, shown(&warnings)),
+            );
+        }
     }
 
     Ok(finish_report(core_id, items))
@@ -1413,6 +1579,163 @@ mod tests {
         let report = post_install_check(&card, "alfatreze.TAU", None).unwrap();
         assert_eq!(report.verdict, CheckStatus::Fail);
         assert_eq!(report.items.len(), 1);
+        fs::remove_dir_all(card).unwrap();
+    }
+
+    // ---- release manifests ----
+
+    /// A schema-2 manifest built from a real package's own entries and hashes (what Tau's release tool records for it).
+    fn manifest(
+        zip: &Path,
+        tag: &str,
+        previous: Option<&str>,
+        persist: &[u64],
+        version: &str,
+    ) -> CompatDoc {
+        let reader = ZipReader::open(zip).unwrap();
+        let id = identity_from("alfatreze.TAU", |p| reader.read(p))
+            .unwrap()
+            .unwrap();
+        let layout: Vec<_> = package::inspect(zip)
+            .unwrap()
+            .entries
+            .iter()
+            .map(|e| serde_json::json!({"path": e.path, "role": "owned", "sha256": e.sha256, "slot": null, "required": false}))
+            .collect();
+        let doc = serde_json::json!({
+            "schema": 2, "release": tag, "date_release": id.date_release, "prerelease": true,
+            "previous_release": previous,
+            "packages": [{"zip": "x.zip", "zip_sha256": "00", "core_id": "alfatreze.TAU",
+                "bitstream_sha256": id.bitstream_sha256, "bitstream_core_version": version,
+                "rom_sha256": id.rom_sha256, "cold_sha256": id.cold_sha256,
+                "rom_accepts": id.rom_accepts, "rom_needs": id.rom_needs, "layout": layout}],
+            "requires_omega": {"persist_ids_changed": persist, "min_omega": "0.4.0"}
+        });
+        compat::parse_compat(&serde_json::to_vec(&doc).unwrap()).unwrap()
+    }
+
+    fn two_releases() -> Vec<CompatDoc> {
+        vec![
+            manifest(&alpha3(), "v0.6.0-alpha.3", None, &[], "4D50331A"),
+            manifest(
+                &alpha4(),
+                "v0.6.0-alpha.4",
+                Some("v0.6.0-alpha.3"),
+                &[16],
+                "4D50331A",
+            ),
+        ]
+    }
+
+    #[test]
+    fn manifests_name_both_builds_order_them_and_list_changed_settings() {
+        let docs = two_releases();
+        let card = scratch("m-update");
+        install(&alpha3(), &card);
+        let report = assess_update_with(&alpha4(), &card, &docs).unwrap();
+        let core = &report.cores[0];
+        assert_eq!(core.verdict, UpdateVerdict::Update);
+        assert_eq!(core.installed_release.as_deref(), Some("v0.6.0-alpha.3"));
+        assert_eq!(core.package_release.as_deref(), Some("v0.6.0-alpha.4"));
+        assert_eq!(
+            core.reasons[0],
+            "Update: v0.6.0-alpha.4 replaces v0.6.0-alpha.3."
+        );
+        assert_eq!(report.persist_changed, Some(vec![16]));
+
+        install(&alpha4(), &card);
+        let down = assess_update_with(&alpha3(), &card, &docs).unwrap();
+        assert_eq!(down.cores[0].verdict, UpdateVerdict::Older);
+        assert!(
+            down.cores[0].reasons[0].contains("v0.6.0-alpha.3")
+                && down.cores[0].reasons[0].contains("downgrade")
+        );
+        // Without manifests the same call still works, with version and date only.
+        let plain = assess_update(&alpha3(), &card).unwrap();
+        assert_eq!(plain.cores[0].installed_release, None);
+        assert_eq!(plain.persist_changed, None);
+        fs::remove_dir_all(card).unwrap();
+    }
+
+    #[test]
+    fn tags_settle_two_builds_a_date_cannot() {
+        // Pretend both packages are the same day: only the tags can order them.
+        let docs = two_releases();
+        let mut old = identity_from("alfatreze.TAU", |p| {
+            ZipReader::open(&alpha3()).unwrap().read(p)
+        })
+        .unwrap()
+        .unwrap();
+        let mut new = identity_from("alfatreze.TAU", |p| {
+            ZipReader::open(&alpha4()).unwrap().read(p)
+        })
+        .unwrap()
+        .unwrap();
+        old.date_release = "2026-10-07".into();
+        new.date_release = "2026-10-07".into();
+        assert_eq!(
+            assess(Some(old.clone()), new.clone()).verdict,
+            UpdateVerdict::SameDateDifferentBuild
+        );
+        assert_eq!(
+            assess_with(Some(old), new, &docs).verdict,
+            UpdateVerdict::Update
+        );
+    }
+
+    #[test]
+    fn a_manifest_vouches_for_what_the_table_and_marker_cannot() {
+        // The 0.4.0 ROM has no marker and its bitstream is not in the table.
+        let reader = ZipReader::open(&old_release()).unwrap();
+        let id = identity_from("alfatreze.TAU", |p| reader.read(p))
+            .unwrap()
+            .unwrap();
+        assert_eq!(pair_status(&id), PairStatus::NoMarker);
+        let doc = manifest(&old_release(), "v0.4.0", None, &[], "4D503310");
+        assert_eq!(
+            pair_status_with(&id, &[doc]),
+            PairStatus::Verified {
+                core_version: "4D503310".into()
+            }
+        );
+    }
+
+    #[test]
+    fn a_manifest_that_contradicts_the_rom_is_a_mismatch() {
+        let docs = vec![manifest(&alpha4(), "v0.6.0-alpha.4", None, &[], "4D503317")];
+        let card = scratch("m-mismatch");
+        let report = assess_update_with(&alpha4(), &card, &docs).unwrap();
+        assert_eq!(report.cores[0].verdict, UpdateVerdict::Mismatch);
+        assert!(report.cores[0].reasons[0].contains("black screen"));
+        fs::remove_dir_all(card).unwrap();
+    }
+
+    #[test]
+    fn the_post_install_check_adds_the_release_layout_item() {
+        let docs = two_releases();
+        let card = scratch("m-check");
+        install(&alpha4(), &card);
+        let report =
+            post_install_check_with(&card, "alfatreze.TAU", Some(&alpha4()), &docs).unwrap();
+        assert_eq!(
+            find(&report, "release layout").status,
+            CheckStatus::Pass,
+            "{}",
+            find(&report, "release layout").detail
+        );
+        assert!(
+            find(&report, "release layout")
+                .detail
+                .contains("v0.6.0-alpha.4")
+        );
+        // With no manifest the item is simply absent.
+        let plain = post_install_check(&card, "alfatreze.TAU", Some(&alpha4())).unwrap();
+        assert!(plain.items.iter().all(|i| i.name != "release layout"));
+        // A damaged firmware file no longer matches any release: no layout item, and the file check fails.
+        fs::write(card.join("Assets/tau/common/tau.rom"), b"broken").unwrap();
+        let broken =
+            post_install_check_with(&card, "alfatreze.TAU", Some(&alpha4()), &docs).unwrap();
+        assert_eq!(broken.verdict, CheckStatus::Fail);
         fs::remove_dir_all(card).unwrap();
     }
 }
