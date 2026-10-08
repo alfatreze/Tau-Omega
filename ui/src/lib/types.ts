@@ -110,7 +110,7 @@ export type CardBreakdown = { total_bytes: number; available_bytes: number; unit
 export type EjectResult = { ok: boolean; message: string };
 /** Whether read-backs after a write are checked against the card itself, not memory. */
 export type ReadbackStatus = { checks_the_device: boolean; failed_evictions: number };
-export type Prefs = { history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; speeds: Record<string, number>; connections: Record<string, string> };
+export type Prefs = { history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */
@@ -168,3 +168,10 @@ export type DiagCore = { id: string; version: string; date_release: string; plat
 export type DiagShot = { filename: string; captured_at: string | null; report: TaudReport | null; note: string | null };
 export type DiagReading = { card: string; total_bytes: number; free_bytes: number; cores: DiagCore[]; shots: DiagShot[]; shots_examined: number; notes: string[] };
 export type DiagView = { reading: DiagReading; summary: string };
+
+/** One downloadable file of a GitHub release. */
+export type ReleaseAsset = { name: string; url: string; size: number };
+export type GithubRelease = { tag: string; title: string; prerelease: boolean; published: string; assets: ReleaseAsset[] };
+/** The answer to "is there a newer Tau release". `newer` is null when no card was open to compare with. */
+export type UpdateCheck = { latest: GithubRelease; newer: boolean | null; installed_release: string | null; zips: ReleaseAsset[]; manifest: ReleaseAsset | null; sums: ReleaseAsset | null; message: string };
+export type Downloaded = { name: string; path: string; bytes: number };

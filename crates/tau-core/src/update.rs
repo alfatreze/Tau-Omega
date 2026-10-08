@@ -453,6 +453,13 @@ fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
     parts(a).cmp(&parts(b))
 }
 
+/// The identity of the core installed at `card_root` (`None` when it has no readable `core.json`).
+pub fn installed_identity(card_root: &Path, core_id: &str) -> Option<BuildIdentity> {
+    identity_from(core_id, |path| fs::read(card_root.join(path)).ok())
+        .ok()
+        .flatten()
+}
+
 /// Reads a core's identity through `read`, which maps a card-relative path to
 /// its bytes (a zip entry or a card file). `None` when the core has no readable
 /// `core.json`.

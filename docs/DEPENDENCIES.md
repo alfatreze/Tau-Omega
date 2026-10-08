@@ -65,6 +65,8 @@ no domain logic, matching the existing `list_mounted_cards` split (host-specific
 property already states); macOS-only, every other OS returns `Other` rather than guessing at an
 unverified detection method for that platform.
 
+`ureq` 3 (default features: rustls with the bundled Mozilla roots, gzip), **`src-tauri` only**, added 2026-10-08 for the GitHub update check (`src-tauri/src/updates.rs`, the only network code in the app). Blocking, no async runtime, no OpenSSL or system TLS. Real cost, measured: **+15 crates** (`ring`, `rustls`, `rustls-webpki`, `webpki-roots`, `ureq-proto`, `httparse`, `subtle`, `untrusted`, `zeroize` and friends) and the release binary grew from 15.8 MB to 18.1 MB (about +2 MB). `reqwest`/`hyper` are in `src-tauri/Cargo.lock` but not in the macOS build tree (and would need their own TLS and an async runtime); `tauri-plugin-http` would pull `reqwest`. All judgement (is it newer, is a download trustworthy) is in `tau_core::release_check`, which has no network dependency; fetches are restricted to the Tau release API and `github.com/alfatreze/Tau-Alpha/releases/download/`, size-capped, and every zip is verified against the release's `SHA256SUMS.txt` before it is saved.
+
 `tau-cli` has no dependency beyond `tau-core`, which is the check that the engine really is
 front-end independent — if the CLI ever needs something the engine can't give it, that is a signal.
 

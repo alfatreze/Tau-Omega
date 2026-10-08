@@ -40,7 +40,7 @@ let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voy
 });
 let mounted = true;
 let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
-let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, speeds: {} as Record<string, number>, connections: {} as Record<string, string> };
+let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, speeds: {} as Record<string, number>, connections: {} as Record<string, string> };
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
@@ -213,6 +213,8 @@ const handlers: Record<string, (args: any) => unknown> = {
   appearance_install: (a) => { mockAssetsOnCard = true; return { destination: `${a.mediaRoot}/tau-assets.bin`, bytes_written: 144, replaced: false, backup: a.backup ?? null }; },
   eject_card: () => ({ ok: true, message: 'Safe to remove. The card is unmounted; you can unplug the reader or leave USB mode on the Pocket.' }),
   readback_status: () => ({ checks_the_device: true, failed_evictions: 0 }),
+  update_check: () => null,
+  update_download: () => [],
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
   set_prefs: (a) => { prefs = { ...a.prefs }; return { ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }; },
   plan_sync: () => ({ id: 'mock-plan-1', new_files: 42, updates: 5, unchanged: 7133, bytes_to_write: 412_000_000, art_sidecars: 3, art_sidecar_previews: [], warnings: [] }),
