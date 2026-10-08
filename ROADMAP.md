@@ -1,32 +1,90 @@
-# Roadmap: the one ordered list of what is next
+# Tau Omega roadmap: the one ordered list of what is next
 
-**Updated 2026-10-02.** This is the only place that says what comes next; other documents say what exists. The order is the owner's to set.
-Status per row: DONE (built, tested), NEXT (ready), GATED (needs a real artefact or a decision first). Rationale: `docs/ARCHITECTURE_ROADMAP_REVIEW_2026-10-02.md`.
+**Rewritten 2026-10-08. This is Tau Omega work only.** Tau Alpha (the firmware and RTL repository) is read-only from here: nothing in this document asks for a change there,
+and **a Tau Alpha feature enters this roadmap only once it is on Tau Alpha `main`** (not a branch, not a worktree, not a design doc). Features still in flight on other
+Tau Alpha branches (loadable meter packs, the RAM diet, 720p output) are deliberately not planned here; when one reaches `main` it gets its own row. The order is the owner's to set.
+Rationale for the earlier state of the app: `docs/ARCHITECTURE_ROADMAP_REVIEW_2026-10-02.md`; the integration record: `docs/FIRMWARE_SYNC.md`.
 
-## Now
-| # | Item | Status |
+## 0. What Tau Alpha `main` offers that Tau Omega integrates with (checked 2026-10-08, `main` = `f2d3373`, read-only)
+
+| Surface on Tau Alpha `main` | What it is today | Tau Omega coverage |
 |---|---|---|
-| 1 | CI green: `cargo fmt`, 3 clippy fixes, browser suite added to CI | DONE 2026-10-02 (the browser step is unproven until the first CI run) |
-| 2 | Persist labels 27/28 (theme, theme mode); firmware sync re-check against tau-alpha `v0.6.0-alpha.1` | DONE 2026-10-02, see `docs/FIRMWARE_SYNC.md` |
-| 3 | Roadmap, architecture and safety docs brought up to date | DONE 2026-10-02 |
+| **Release packages** | Two zips per release, `alfatreze.TAU_<ver>_<date>.zip` and `alfatreze.TAU_DIAGNOSTIC_...`, 15 files each (`Cores/`, `Assets/<platform>/common/{tau.rom,tau-cold.bin,tau-loading.bin}`, `Assets/<platform>/alfatreze.TAU/`, `Platforms/` + `_images/`), plus `SHA256SUMS.txt`; published as GitHub **pre-releases** on `alfatreze/Tau-Alpha` (latest `v0.6.0-alpha.3`; alpha.4 built, not yet tagged). **The alpha number appears nowhere inside a package**: `core.json` says `0.6.0` for every alpha and only `date_release` differs | Package inspect, plan and install from a zip (hash-checked, confirmation token, tested on a real card 2026-09-23). No version comparison, no update semantics, no GitHub access |
+| **Firmware/bitstream pairing** | The ROM carries plain-text markers `TAUFWPAIR:<core versions>;` and `TAUFWNEED:<features>;` (`fw/player.c`); a mismatched pair black-screens with no message (four times so far) | Not read. Omega can refuse a bad pair before writing a card |
+| **Data slots** | 1 firmware, 2 audio file, 4 loading artwork (`tau-loading.bin`), 5 library index `tau-library.tdb`, 6 cold image, 7 cover image, 8 `tau-assets.bin`. Slot 3 (legacy playlist) is gone | Library detection by filename (done); slot 4 and 6 are package files (no special handling) |
+| **Library index** | Format v1, unchanged; host-built (the Pocket never builds one); `root` is baked in per core | Engine builds, verifies and rebuilds it (byte-exact with the Python reference) |
+| **Persisted settings** (`interact_persist.json`) | ids 10 volume, 11 colour, 12 repeat, 15 meter, **16 Halcyon EQ preset** (was the legacy EQ), 20-23 legacy list/Check summary, 24-26 library, 27 theme, 28 theme mode (bit 0 polarity; ReplayGain mode in bits 4-5 of the same word) | Settings viewer labels 10-13, 15, 16 as "EQ" (**stale: now the Halcyon preset**), 24-28; ReplayGain and polarity bits not unpacked |
+| **Check / report tags** | `SR_T_*` 1-27 on `main` (new since Omega last looked: 23 heap, 24 load, 25 load2, 26 infotext, 27 nowplaying) | Decoded: 1-14, 16, 19, 20, 21, 22. **Not decoded: 15, 17, 18, 23-27** (no captures yet for 15/17/18; captures exist on the owner's card for some of the new ones) |
+| **Report view** | **The pixel grid (TPG) is the default view** of every report page since 2026-10-06 (robust grid up to 6,059 B, lossless up to 259,184 B; QR is one press away). Reference decoder: `tools/decode_tau_suite.py --grid`/`--table` | **Omega decodes QR only**, so most new screenshots are unreadable to it (Send diagnostics found 2 reports in the 12 newest screenshots on the real card) |
+| **`tau-assets.bin`** (data slot 8) | Container `TAUA` with `THEM` themes, `METR` meter presets and **`PRST` Halcyon presets** (format `HALCYON_DATA_FORMAT.md`, read limit now 64 KiB); `tools/tau_assets.py` is the reference | Omega writes **`THEM` only** (hardware-confirmed 2026-10-03) and **drops `METR` and `PRST` when it saves**; no `PRST`/`METR` writer; no Halcyon importer (the spec assigns the APO/AutoEQ import to Omega) |
+| **Cover art** | `TIM1` palette-256 at 128 px in `<album>/tau-art/`, reader hardware-confirmed for MP3 and FLAC; container still unfrozen by the owner (D-I05) | Encoder, decoder and sidecar writing built and tested |
+| **Names and paths** | Firmware opens ASCII paths only (issue 001), 200-byte limit | Omega folds names on the copy and refuses collisions |
 
-## Next
-| # | Item | Gate |
-|---|---|---|
-| 4 | Decode Check QR tags | **DONE for 16, 19, 20, 21, 22 (2026-10-02, from real captures).** Left: 15, 17, 18 (Blit Test, Winamp config export, Meter Sweep), gated on one real screenshot of each |
-| 5 | Appearance: install a theme file to a card (plan, review, confirm) | **BUILT 2026-10-02**, engine and UI tested, planned read-only against the real card. **DONE and hardware-confirmed 2026-10-03** (owner: the theme loaded, `Info > THEME FILE` = `1 LOADED`; see `STATUS_HANDOFF.md`). Open: keep a copy of the installed file as a fixture. The `._*` cleanup after sync writes was fixed 2026-10-03 |
-| 6 | Send diagnostics (`DIAGNOSTICS_COLLECTOR.md`) | **BUILT 2026-10-03** (engine, app page under Tools & settings, zip). Open: the `tau diag` CLI verb, the "include file names" option, and an owner trial of the zip |
-| 7 | Meter Lab on the real `meters_schema.json`, plus a `METR` writer | A real `tau-assets.bin` with a `METR` section from a card |
-| 8 | Ledger follow-ups: per-volume I/O governor, hash-while-copy, cluster-aware Library fit bar, card-speed benchmark | First real card timing numbers |
+**Not on `main`, so not planned here:** loadable meter packs (data slot 9, `meter-builder`), the RAM-diet build switches (`ram-diet`), 800x720 output (`test/720`), gapless playback,
+Bluetooth output, hardware gain in releases. Omega's Meter Lab stays on its synthetic schema until a real meter set is final on `main`.
 
-## Later
-Split `sync.rs`, `lib.rs`, `main.rs` and the pre-workbench state in `App.svelte`; `tau-cli` parity with `--json`; installers, signing and the opt-in updater;
-Pocket Sync adoption (TP2); watch mode, smart playlists, loudness tags, localisation. Details of each idea are in the sections below.
+## 1. NEXT WORK, in order
 
-## Done since the original phase table
-T0-T3, T4 (as the Library workbench), T5 (core install and removal), T6 (Check/QR decode, screenshots, settings viewer), cover sidecars and `TIM1` images,
-TP0-TP1 (portable boundary, `serde`, no panics), the verification ledger, the card-space bar, safe eject with read-back, and the Appearance editor.
-Not done from the table: T7 (installers/signing) and the TP2 adoption.
+### 1. Install and update paths (owner request 2026-10-08, TOP PRIORITY)
+
+Four scenarios. Each ends with an acceptance run on a throwaway card, then the owner's real card (dry run first, write only after approval). Everything here is Omega code;
+what it reads from Tau Alpha is the release package layout and the two ROM markers listed above.
+
+| # | Scenario | What exists in Omega | What to build |
+|---|---|---|---|
+| **1a** | **Existing Pocket card, no Tau yet** (a card full of other cores gets Tau for the first time) | `package::{inspect, plan_install, execute_install}` (zip to card, merge, per-file hash before and after, plan token); `remove` with backup; card write lock; safe eject | (1) A guided first-install flow in the app: pick the two zips (or one), see what will be added and that nothing existing is touched, install, then "add your music" leads straight into the Library workbench. (2) The shared post-install check (below). (3) Catalog cache clearing (the five `System/*.bin`, backed up first, SAFETY_RULES 6): package install does not do it today. (4) AppleDouble `._` sweep for the files a package install writes (sync, workbench, theme install sweep already; package install does not, and the owner's card shows `._alfatreze.TAU*` stubs under `Cores/`). (5) A clear first-boot explanation: with no library the core says "Library file not found"; Omega offers the sync right after install. A truly blank card is the same flow (we never format or partition) |
+| **1b** | **Version update from GitHub** | Nothing (no network by design; SAFETY_RULES 10: update checks are opt-in and fetch a manifest only) | An opt-in "Check for Tau updates" (see design below), then 1c on the downloaded zips |
+| **1c** | **Version update from a zip file** | Package inspect/install and removal | **Update semantics**: read the installed core's identity (`core.json` version and date, file hashes, ROM markers), read the zip's, and report one of: *new install*, *same build*, *update*, *older (downgrade)*, *mismatch* with the reason. An update replaces the core and firmware files only: media, `tau-library.tdb`, `tau-assets.bin` (the user's themes), saves and settings are kept. Back up what is replaced outside the card, verify, offer rollback from that backup, offer to remove superseded numbered test cores. Refuse a firmware/bitstream pair the Pocket would refuse (parse `TAUFWPAIR`/`TAUFWNEED`; port of `tools/check_fw_bitstream_pair.py`) |
+| **1d** | **Fix/refresh files already on a core** (owner, same day: files copied by hand must show up in the library) | Scan with ledger, index build/verify, `problems` (duplicates, name/path/cover checks), workbench plans, the AppleDouble sweep | A per-core **Refresh library** action and a library health badge: scan the core's media folder, list every file the library would skip with a plain reason (non-ASCII name, path over 200 bytes, ASCII-fold collision, unsupported format or sample rate, a `._` stub, unreadable tags), fix what is fixable on the card copy (renames recorded as the workbench already does), rebuild `tau-library.tdb` rooted at this core, verify, report **before and after counts**. Same plan, review, confirm path; nothing outside the core's media folder is touched |
+
+**Shared post-install check** (engine function, used by 1a, 1c and 1d; the executable form of the manual checklist that Tau Alpha keeps): hashes of `bitstream.rbf_r`, `tau.rom`, `tau-cold.bin` against the package; ROM pairing markers;
+`core.json` valid and name lengths within the Analogue limits; data slots declared; library index present, valid, rooted at this core; catalog caches cleared; no `._` or temp files; one-line verdict and a saved report.
+
+**1b design.** Engine stays dependency-light: the network code lives in the host crate `src-tauri`, not in `tau-core`. A user-initiated button (never automatic by default): `GET https://api.github.com/repos/alfatreze/Tau-Alpha/releases`
+(unauthenticated; pre-releases included, since every Tau release so far is one), choose the newest, download its two zips and `SHA256SUMS.txt` to the app cache, verify the checksums, then hand the zips to 1c. Offline-first and private: only that request leaves the machine, no
+identifiers, results explained in plain words (rate limit, offline, no newer release). **New dependency to flag before it is added:** an HTTPS client. Candidates: `ureq` with rustls (small, blocking, the right size here) against `reqwest`
+(heavier, pulls an async runtime) or `tauri-plugin-http`; I recommend `ureq`, and the cost (transitive crates, binary size) is measured and reported before it goes in.
+**Version identity caveat:** a package does not carry the alpha number, so Omega compares by `date_release` plus the SHA-256 of the ROM and bitstream, and takes the human label (`v0.6.0-alpha.4`) from the GitHub tag it downloaded from; a zip opened from disk shows date and build id instead.
+**Compatibility table:** a small JSON that ships inside Omega (and can be refreshed from a release) mapping a release to what it needs from Omega (index version, `tau-assets.bin` sections, report tags). Unknown newer releases are offered with a warning, never blocked silently.
+
+**Owner decisions for item 1:** (1) is the update check a button only, or also an off-by-default check at launch; (2) the compatibility table: shipped inside Omega, or fetched from the release; (3) after an update, does Omega re-verify the library index automatically (my default: yes, read-only, and offer a rebuild if the build id no longer matches); (4) the HTTPS client choice above.
+
+### 2. Read the pixel-grid report codes (needed because the Tau Alpha default changed)
+
+Since 2026-10-06 the firmware shows reports as a pixel grid first and a QR second, so Omega's Send diagnostics and QR viewer see only the minority of screenshots. Build a Rust decoder for both grid layouts (robust: 4x4 cells, 2 bits per channel; lossless), reference `tools/decode_tau_suite.py --grid shot.png --table` and the format notes in `docs/features/BARCODE_STUDY.md` on Tau Alpha `main` (read-only).
+Verify against real captures first (the owner's card should hold grid screenshots from 2026-10-06 on: check, then copy a few with their provenance, per the rule that fixtures come from real artefacts), then plug it into the QR viewer and Send diagnostics so one "read this screenshot" works for either view.
+Then decode the tags `main` now emits that Omega skips (23 heap, 24 load, 25 load2, 26 infotext, 27 nowplaying; 15, 17, 18 stay undecoded until a capture exists). Also in the Settings viewer: label persist id 16 as the Halcyon EQ preset and unpack the polarity and ReplayGain bits of the theme-mode word.
+
+### 3. `tau-assets.bin` completeness (so saving never destroys what the card holds)
+
+Today saving a theme file replaces the whole `tau-assets.bin`, dropping `METR` and `PRST` (the install review warns about it, but the data is lost from the card, apart from the backup). Make the file **read-modify-write**: parse every section, keep the ones Omega does not edit byte-for-byte, replace only `THEM`.
+Then add what `main` defines and the spec assigns to Omega: the **Halcyon `PRST` section** writer and reader (control presets: six int8 controls; raw biquad presets: Q2.22 coefficients; the name, size and stability rules are the writer's job because the firmware does not clamp), an **APO/AutoEQ profile importer**, and a Halcyon preset page next to Appearance (the six sliders, the response curve, validation messages in plain words). Check the byte layout against `tools/halcyon_assets.py` output exactly as was done for themes (a fixture generated by the reference tool, byte-identical test), and the real-card proof is the Pocket loading the preset (the Info row), as with the theme file.
+The `METR` section (per-meter presets) waits: its meaning depends on the meter work that is not on `main` yet.
+
+### 4. Hardening what is built (small, no new surface)
+
+- Prove the CI browser-suite step on GitHub (it was added locally and has not been seen to run) and keep `cargo fmt`, `clippy` and the 174-check suite green.
+- Ledger follow-ups: per-volume I/O governor, hash-while-copy for plain copies, a Library fit bar that counts whole clusters, a card-speed benchmark (`tau-cli bench-card`); first real card timing numbers are the gate.
+- Send diagnostics trial by the owner (zip contents) and its `tau diag` CLI verb.
+- Windows and Linux: only macOS has been exercised; the card write lock, eject and cache-bypass read-back need a pass on each.
+- Split the large engine and host files (`sync.rs`, `lib.rs`, `main.rs`, the pre-workbench state in `App.svelte`) in small behaviour-preserving commits, after CI is proven.
+- Keep `docs/FIRMWARE_SYNC.md` current after every Tau Alpha release (this roadmap's section 0 is the live summary).
+
+### 5. Later
+
+`tau-cli` parity with `--json` everywhere (also the Pocket Sync surface); installers, signing and the opt-in updater for Omega itself; Pocket Sync adoption (TP2); watch mode, smart playlists, loudness tags, localisation; the `TIM1` container freeze when the owner decides (D-I05); Meter Lab on the real meter registry and the `METR` writer, **only after the meter work is on Tau Alpha `main`**.
+
+## 2. Built and verified (so it is not re-derived)
+
+Engine: index, scan with the verification ledger, sync with provenance, workbench edits, packages and removal, backup, comparison, journal, storage, `taud` (QR) and `diag`, screenshots, `TIM1`, **theme file writer and card install (hardware-confirmed 2026-10-03)**, **AppleDouble sweep after sync, core move, workbench and theme install (real-card checked)**, **Send diagnostics (read, summary, zip; real-card read-only run)**.
+App: Library workbench with one card-space bar and sync progress, Appearance editor with install review, Send diagnostics page, Meter Lab (synthetic), history, settings. 160 Rust tests, 174 browser checks, clippy and fmt clean (2026-10-03). Newest test build: `releases/dev-builds/0.4.0-alpha.7` (Appearance, Preparing sync); alpha.8 would carry install-from-card, `._` sweep and Send diagnostics.
+
+## 3. Rules for this roadmap
+
+1. **Tau Omega only.** Never edit the Tau Alpha repository from here; read it for integration facts. Anything Omega needs changed there goes to the owner as a note, not a patch.
+2. **Integrate with Tau Alpha `main` only.** A format, tag or file layout is planned here when it ships on `main` and has a real captured artefact to verify against (the project rule: fixtures are copied from real artefacts, never written from memory).
+3. This is the only file that orders Omega work; specs and handoffs say what exists. Update `docs/STATUS_HANDOFF.md` when a fact changes.
+4. Card writes only after a shown plan and the owner's approval; new dependencies are flagged with their real cost before they are added.
 
 ---
 *Everything below is the original 2026-09-22 roadmap, kept for the ideas it lists. Where it disagrees with the tables above, the tables win.*
