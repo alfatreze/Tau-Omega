@@ -35,6 +35,7 @@ pub mod storage;
 pub mod sync;
 pub mod tagedit;
 pub mod taud;
+pub mod update;
 pub mod workbench;
 
 use crc32fast::hash as crc32;
