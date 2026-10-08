@@ -15,8 +15,8 @@
 //! play for that reason is still listed.
 
 use crate::{
-    ErrorCode, MAX_ALBUMS, MAX_ARTISTS, MAX_TRACKS, TauError, WarningCode, ascii_name, build_index,
-    parse, root_prefix, scan_dir, string_at, sync, verify,
+    ErrorCode, MAX_ALBUMS, MAX_ARTISTS, MAX_TRACKS, TauError, WarningCode, ascii_name, ascii_text,
+    build_index, parse, root_prefix, scan_dir, string_at, sync, verify,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -501,6 +501,13 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
         }
     }
 
+    // Plain-letter spelling of every renamed file -> its final path (see the playlist fallback below).
+    let lenient: BTreeMap<String, String> = scan
+        .entries
+        .iter()
+        .filter(|e| !e.rel.is_ascii())
+        .filter_map(|e| final_of(&e.rel).map(|f| (ascii_text(&e.rel, usize::MAX), f)))
+        .collect();
     // Playlists whose lines need rewriting.
     let mut playlists = Vec::new();
     let mut playlist_fixes = Vec::new();
@@ -518,7 +525,15 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
             continue;
         };
         let text = String::from_utf8_lossy(&bytes).to_string();
-        let (new_text, lines) = rewrite_playlist(&text, &orig_base, &new_base, &|p| final_of(p));
+        // A playlist written on another machine may spell an accented name differently from how the card stores it
+        // (macOS stores "é" decomposed): fall back to matching on the plain-letter form.
+        let (new_text, lines) = rewrite_playlist(&text, &orig_base, &new_base, &|p| {
+            final_of(p).or_else(|| {
+                (!p.is_ascii())
+                    .then(|| lenient.get(&ascii_text(p, usize::MAX)).cloned())
+                    .flatten()
+            })
+        });
         if lines > 0 {
             playlist_fixes.push(PlaylistFix {
                 file: final_path.clone(),
@@ -581,7 +596,6 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
     let nothing_to_do = refused.is_none()
         && renames.is_empty()
         && playlist_fixes.is_empty()
-        && stubs == 0
         && before.valid
         && before.root_matches
         && before.missing_files == 0
@@ -620,6 +634,16 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
 /// Plans a refresh of the library in `media_root` (`Assets/<platform>/common`). Read-only.
 pub fn plan_refresh(media_root: &Path) -> Result<RefreshPlan, TauError> {
     Ok(analyse(media_root)?.plan)
+}
+
+/// The `._` companion path the OS creates beside a media-folder-relative path.
+fn companion(media_root: &Path, rel: &str) -> PathBuf {
+    let path = media_root.join(rel);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    path.with_file_name(format!("._{name}"))
 }
 
 fn card_root(media_root: &Path) -> PathBuf {
@@ -874,7 +898,12 @@ pub fn rollback_refresh(media_root: &Path, backup_dir: &Path) -> Result<(), TauE
         }
         let (now, back) = (media_root.join(to), media_root.join(from));
         if now.exists() && !back.exists() {
+            // The OS makes a `._` companion for what it renames; one that was not there before is ours to remove.
+            let had = companion(media_root, from).exists();
             fs::rename(&now, &back)?;
+            if !had {
+                let _ = fs::remove_file(companion(media_root, from));
+            }
         }
     }
     for entry in journal
@@ -900,12 +929,16 @@ pub fn rollback_refresh(media_root: &Path, backup_dir: &Path) -> Result<(), TauE
             )));
         }
         let dest = media_root.join(backup);
+        let had = companion(media_root, backup).exists();
         sync::write_durable(&dest, &saved)?;
         if sync::sha256_bytes(&fs::read(&dest)?) != hash {
             return Err(TauError::e(
                 ErrorCode::VerificationFailed,
                 format!("{backup} did not read back the same after it was restored"),
             ));
+        }
+        if !had {
+            let _ = fs::remove_file(companion(media_root, backup));
         }
     }
     // The index the refresh wrote is gone if there was none before.
@@ -918,7 +951,6 @@ pub fn rollback_refresh(media_root: &Path, backup_dir: &Path) -> Result<(), TauE
     if !had_index {
         let _ = fs::remove_file(media_root.join(INDEX));
     }
-    sync::sweep_appledouble(media_root);
     let mut journal = journal;
     journal["state"] = json!("rolled_back");
     write_journal(backup_dir, &journal)
@@ -1172,6 +1204,34 @@ mod tests {
     }
 
     #[test]
+    fn a_playlist_spelled_differently_from_how_the_card_stores_the_name_is_still_followed() {
+        let (root, common) = card("nfd");
+        // The card stores "é" decomposed (as macOS does on exFAT); the playlist, written elsewhere, uses the composed form.
+        put(&common, "Beyonce\u{301}/Lemonade/01 Formation.mp3");
+        fs::write(
+            common.join("All.m3u"),
+            "/Beyonc\u{e9}/Lemonade/01 Formation.mp3\n",
+        )
+        .unwrap();
+        let plan = plan_refresh(&common).unwrap();
+        assert_eq!(plan.renames.len(), 1);
+        assert_eq!(plan.playlist_fixes.len(), 1, "{:?}", plan.playlist_fixes);
+        execute_refresh(&common, &plan, &plan.id, &backups(&root)).unwrap();
+        assert_eq!(
+            fs::read_to_string(common.join("All.m3u")).unwrap(),
+            "/Beyonce/Lemonade/01 Formation.mp3\n"
+        );
+        assert!(
+            scan_dir(&common, true)
+                .unwrap()
+                .playlists
+                .iter()
+                .any(|p| p.rel_ids.len() == 1)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn os_stubs_are_removed_and_never_counted_as_music() {
         let (root, common) = card("stubs");
         put(&common, "A/B/01 One.mp3");
@@ -1276,5 +1336,70 @@ mod tests {
         assert!(err.message.contains("no longer matches"), "{}", err.message);
         let _ = report;
         fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The real-card run of Refresh library. Gated; read-only unless the mode is `run` or `rollback`.
+    /// `TAU_REAL_REFRESH_MEDIA` (a core's `Assets/<platform>/common`), `TAU_REAL_REFRESH_BACKUP` (outside the card),
+    /// `TAU_REAL_REFRESH_MODE` = `plan` | `run` | `rollback` (needs `TAU_REAL_REFRESH_JOURNAL`, the `refresh-<id>` folder).
+    #[test]
+    #[ignore]
+    fn real_card_refresh_run() {
+        let (Ok(media), Ok(backup), Ok(mode)) = (
+            std::env::var("TAU_REAL_REFRESH_MEDIA"),
+            std::env::var("TAU_REAL_REFRESH_BACKUP"),
+            std::env::var("TAU_REAL_REFRESH_MODE"),
+        ) else {
+            println!("skipped: set TAU_REAL_REFRESH_MEDIA, _BACKUP and _MODE");
+            return;
+        };
+        let (media, backup) = (PathBuf::from(media), PathBuf::from(backup));
+        let show = |p: &RefreshPlan| {
+            println!(
+                "plan id {}\nmedia files {}, would index {}, refused {:?}, nothing_to_do {}",
+                p.id, p.media_files, p.would_index, p.refused, p.nothing_to_do
+            );
+            println!("before: {:?}", p.before);
+            for f in &p.findings {
+                println!(
+                    "  {:?} skipped={} {} -> {:?}",
+                    f.reason, f.skipped, f.rel, f.fix
+                );
+            }
+            println!(
+                "renames: {:?}\nplaylist fixes: {:?}\nstubs: {}",
+                p.renames, p.playlist_fixes, p.stubs_to_remove
+            );
+        };
+        match mode.as_str() {
+            "plan" => {
+                let before = tree(&media);
+                let plan = plan_refresh(&media).unwrap();
+                show(&plan);
+                assert_eq!(tree(&media), before, "planning must not change the folder");
+                println!("PLAN ONLY: the folder is byte-identical to before");
+            }
+            "run" => {
+                let plan = plan_refresh(&media).unwrap();
+                show(&plan);
+                let r = execute_refresh(&media, &plan, &plan.id, &backup).unwrap();
+                println!(
+                    "backup {}\nrenamed {} playlists {} stubs {}\nafter: {:?}",
+                    r.backup_dir.display(),
+                    r.renamed,
+                    r.playlists_rewritten,
+                    r.stubs_removed,
+                    r.after
+                );
+                assert!(r.after.valid && r.after.root_matches && r.after.missing_files == 0);
+            }
+            "rollback" => {
+                let journal = PathBuf::from(
+                    std::env::var("TAU_REAL_REFRESH_JOURNAL").expect("TAU_REAL_REFRESH_JOURNAL"),
+                );
+                rollback_refresh(&media, &journal).unwrap();
+                println!("ROLLED BACK");
+            }
+            other => panic!("unknown mode {other}"),
+        }
     }
 }
