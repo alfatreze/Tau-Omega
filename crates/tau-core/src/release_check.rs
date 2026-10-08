@@ -9,7 +9,12 @@
 use crate::{ErrorCode, TauError, compat};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::{cmp::Ordering, collections::BTreeMap};
+use std::{
+    cmp::Ordering,
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// The one place releases are listed from.
 pub const RELEASES_URL: &str = "https://api.github.com/repos/alfatreze/Tau-Alpha/releases";
@@ -221,6 +226,69 @@ pub fn verify_download(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Manifests available to a plan: cached from GitHub, or beside a local zip
+// ---------------------------------------------------------------------------
+
+/// The manifest `bytes` if it parses **and one of its packages is exactly this zip** (by SHA-256). A manifest that does
+/// not describe the zip in hand is never used to vouch for it.
+pub fn manifest_matching_zip(zip_path: &Path, bytes: &[u8]) -> Option<compat::CompatDoc> {
+    let doc = compat::parse_compat(bytes).ok()?;
+    let hash = format!("{:x}", Sha256::digest(fs::read(zip_path).ok()?));
+    doc.packages
+        .iter()
+        .any(|p| p.zip_sha256 == hash)
+        .then_some(doc)
+}
+
+/// A dev package's own manifest: `tau-compat.json` in the zip's folder, used only if it describes that zip.
+pub fn sibling_manifest(zip_path: &Path) -> Option<compat::CompatDoc> {
+    let bytes = fs::read(zip_path.parent()?.join("tau-compat.json")).ok()?;
+    manifest_matching_zip(zip_path, &bytes)
+}
+
+fn cache_file(dir: &Path, release: &str) -> PathBuf {
+    let safe: String = release
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+        .collect();
+    dir.join(format!("{safe}.json"))
+}
+
+/// Validates `bytes` as a manifest and stores it in `dir` under its release tag. An invalid file is not stored.
+pub fn save_cached(dir: &Path, bytes: &[u8]) -> Result<compat::CompatDoc, TauError> {
+    let doc = compat::parse_compat(bytes)?;
+    fs::create_dir_all(dir)?;
+    fs::write(cache_file(dir, &doc.release), bytes)?;
+    Ok(doc)
+}
+
+/// Every valid manifest in `dir`; anything unreadable or unknown is skipped.
+pub fn load_cached(dir: &Path) -> Vec<compat::CompatDoc> {
+    let Ok(read) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut docs: Vec<_> = read
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+        .filter_map(|e| fs::read(e.path()).ok())
+        .filter_map(|bytes| compat::parse_compat(&bytes).ok())
+        .collect();
+    docs.sort_by(|a, b| compat::compare_tags(&a.release, &b.release));
+    docs
+}
+
+/// The manifests a plan for `zip_path` should know: those cached from GitHub plus the zip's own sibling manifest
+/// (which wins over a cached one for the same release).
+pub fn manifests_for_install(cache_dir: &Path, zip_path: &Path) -> Vec<compat::CompatDoc> {
+    let mut docs = load_cached(cache_dir);
+    if let Some(own) = sibling_manifest(zip_path) {
+        docs.retain(|d| d.release != own.release);
+        docs.push(own);
+    }
+    docs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -371,5 +439,88 @@ mod tests {
         };
         verify_download("a.zip", &zip, &sums, Some(&doc(&hash))).unwrap();
         assert!(verify_download("a.zip", &zip, &sums, Some(&doc(&"1".repeat(64)))).is_err());
+    }
+
+    fn manifest_for(zip: &Path, release: &str) -> Vec<u8> {
+        let hash = format!("{:x}", Sha256::digest(fs::read(zip).unwrap()));
+        serde_json::json!({"schema": 1, "release": release, "date_release": "2026-10-07",
+            "packages": [{"zip": "z.zip", "zip_sha256": hash, "core_id": "alfatreze.TAU",
+                "bitstream_sha256": "00", "bitstream_core_version": "4D50331A",
+                "rom_sha256": "00", "cold_sha256": "00", "rom_accepts": [], "rom_needs": []}],
+            "requires_omega": {"min_omega": "0.4.0"}})
+        .to_string()
+        .into_bytes()
+    }
+
+    fn zip() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../testdata/packages/alfatreze.TAU_0.6.0_2026-10-07.zip")
+    }
+
+    fn temp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("tau-manifests-{name}-{}", crate::test_uniq()));
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn a_manifest_is_used_only_for_the_zip_it_describes() {
+        let bytes = manifest_for(&zip(), "v0.6.0-alpha.4");
+        assert!(manifest_matching_zip(&zip(), &bytes).is_some());
+        let other = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../testdata/packages/alfatreze.TAU_0.6.0_2026-10-04.zip");
+        assert!(
+            manifest_matching_zip(&other, &bytes).is_none(),
+            "another zip's manifest must not vouch for this one"
+        );
+        assert!(manifest_matching_zip(&zip(), b"not json").is_none());
+    }
+
+    #[test]
+    fn a_dev_package_brings_its_own_manifest_beside_it() {
+        let dir = temp("sibling");
+        fs::copy(zip(), dir.join("dev.zip")).unwrap();
+        assert!(sibling_manifest(&dir.join("dev.zip")).is_none());
+        fs::write(
+            dir.join("tau-compat.json"),
+            manifest_for(&dir.join("dev.zip"), "v0.7.0-dev.1"),
+        )
+        .unwrap();
+        assert_eq!(
+            sibling_manifest(&dir.join("dev.zip")).unwrap().release,
+            "v0.7.0-dev.1"
+        );
+        // A manifest left beside a different zip is ignored.
+        fs::write(dir.join("other.zip"), b"other").unwrap();
+        assert!(sibling_manifest(&dir.join("other.zip")).is_none());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_cache_keeps_valid_manifests_and_skips_the_rest() {
+        let dir = temp("cache");
+        let a = save_cached(&dir, &manifest_for(&zip(), "v0.6.0-alpha.4")).unwrap();
+        assert_eq!(a.release, "v0.6.0-alpha.4");
+        assert!(
+            save_cached(&dir, b"{\"schema\": 99}").is_err(),
+            "an unknown schema is not stored"
+        );
+        fs::write(dir.join("junk.json"), b"junk").unwrap();
+        fs::write(dir.join("notes.txt"), b"text").unwrap();
+        let loaded = load_cached(&dir);
+        assert_eq!(loaded.len(), 1);
+        assert!(load_cached(&dir.join("missing")).is_empty());
+        // The zip's own manifest wins over a cached one for the same release.
+        let beside = temp("beside");
+        fs::copy(zip(), beside.join("dev.zip")).unwrap();
+        fs::write(
+            beside.join("tau-compat.json"),
+            manifest_for(&beside.join("dev.zip"), "v0.6.0-alpha.4"),
+        )
+        .unwrap();
+        let docs = manifests_for_install(&dir, &beside.join("dev.zip"));
+        assert_eq!(docs.len(), 1, "same release: one copy");
+        fs::remove_dir_all(dir).unwrap();
+        fs::remove_dir_all(beside).unwrap();
     }
 }
