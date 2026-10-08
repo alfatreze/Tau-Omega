@@ -89,6 +89,9 @@
         {:else}<span class="ls-confirm" role="alert">Delete all {stored}? <button class="quiet danger" on:click={doClear}>Delete</button><button class="quiet" on:click={() => (confirmClear = false)}>Cancel</button></span>{/if}
       </div></div>
 
+    <div class="ls-row"><div><b>Check for Tau updates</b><small>When the app starts, ask GitHub for the public release list (nothing about you or your card is sent). Installing is always your action.</small></div>
+      <div><button class="quiet" on:click={() => { const on = !prefs?.check_updates; void update({ check_updates: on, update_notice_shown: true }, on ? 'Update checks are on.' : 'Update checks are off.'); }}>{prefs.check_updates ? 'Turn off' : 'Turn on'}</button></div></div>
+
     <div class="ls-row"><div><b>Notices</b><small>Show the one-time messages again.</small></div>
       <div><button class="quiet" disabled={!prefs.remove_explained && !prefs.slow_alert_suppressed} on:click={() => update({ remove_explained: false, slow_alert_suppressed: false }, 'Notices will show again.')}>Reset notices</button></div></div>
     <p class="ls-notice" role="status">{notice}</p>

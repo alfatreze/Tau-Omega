@@ -1,0 +1,137 @@
+[
+ {
+  "tag_name": "v0.6.0-alpha.3",
+  "name": "TAU v0.6.0-alpha.3",
+  "prerelease": true,
+  "draft": false,
+  "published_at": "2026-10-04T20:22:05Z",
+  "assets": [
+   {
+    "name": "alfatreze.TAU_0.6.0-alpha.3_2026-10-04.zip",
+    "size": 1001256,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.3/alfatreze.TAU_0.6.0-alpha.3_2026-10-04.zip"
+   },
+   {
+    "name": "alfatreze.TAU_0.6.0_2026-10-04.zip",
+    "size": 1001369,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.3/alfatreze.TAU_0.6.0_2026-10-04.zip"
+   },
+   {
+    "name": "alfatreze.TAU_DIAGNOSTIC_0.6.0_2026-10-04.zip",
+    "size": 1024772,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.3/alfatreze.TAU_DIAGNOSTIC_0.6.0_2026-10-04.zip"
+   },
+   {
+    "name": "SHA256SUMS.txt",
+    "size": 213,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.3/SHA256SUMS.txt"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.6.0-alpha.2",
+  "name": "TAU v0.6.0-alpha.2",
+  "prerelease": true,
+  "draft": false,
+  "published_at": "2026-10-04T15:41:21Z",
+  "assets": [
+   {
+    "name": "alfatreze.TAU_0.6.0-alpha.2_2026-10-04.zip",
+    "size": 1000909,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.2/alfatreze.TAU_0.6.0-alpha.2_2026-10-04.zip"
+   },
+   {
+    "name": "alfatreze.TAU_0.6.0_2026-10-04.zip",
+    "size": 1001020,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.2/alfatreze.TAU_0.6.0_2026-10-04.zip"
+   },
+   {
+    "name": "alfatreze.TAU_DIAGNOSTIC_0.6.0_2026-10-04.zip",
+    "size": 1023575,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.2/alfatreze.TAU_DIAGNOSTIC_0.6.0_2026-10-04.zip"
+   },
+   {
+    "name": "SHA256SUMS.txt",
+    "size": 213,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.2/SHA256SUMS.txt"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.6.0-alpha.1",
+  "name": "TAU v0.6.0-alpha.1",
+  "prerelease": true,
+  "draft": false,
+  "published_at": "2026-09-30T16:08:30Z",
+  "assets": [
+   {
+    "name": "alfatreze.TAU_0.6.0-alpha.1_2026-09-30.zip",
+    "size": 915542,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.1/alfatreze.TAU_0.6.0-alpha.1_2026-09-30.zip"
+   },
+   {
+    "name": "alfatreze.TAU_0.6.0_2026-09-30.zip",
+    "size": 913514,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.1/alfatreze.TAU_0.6.0_2026-09-30.zip"
+   },
+   {
+    "name": "alfatreze.TAU_DIAGNOSTIC_0.6.0_2026-09-30.zip",
+    "size": 920297,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.1/alfatreze.TAU_DIAGNOSTIC_0.6.0_2026-09-30.zip"
+   },
+   {
+    "name": "SHA256SUMS.txt",
+    "size": 213,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.6.0-alpha.1/SHA256SUMS.txt"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.5.0",
+  "name": "TAU v0.5.0 (alpha)",
+  "prerelease": true,
+  "draft": false,
+  "published_at": "2026-09-27T00:23:54Z",
+  "assets": [
+   {
+    "name": "alfatreze.TAU_0.5.0_2026-09-27.zip",
+    "size": 860517,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.5.0/alfatreze.TAU_0.5.0_2026-09-27.zip"
+   },
+   {
+    "name": "alfatreze.TAU_DIAGNOSTIC_0.5.0_2026-09-27.zip",
+    "size": 877663,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.5.0/alfatreze.TAU_DIAGNOSTIC_0.5.0_2026-09-27.zip"
+   },
+   {
+    "name": "SHA256SUMS.txt",
+    "size": 213,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.5.0/SHA256SUMS.txt"
+   }
+  ]
+ },
+ {
+  "tag_name": "v0.3.0",
+  "name": "Tau v0.3.0 (alpha)",
+  "prerelease": true,
+  "draft": false,
+  "published_at": "2026-09-21T13:05:12Z",
+  "assets": [
+   {
+    "name": "alfatreze.TAU_0.3.0_2026-09-21.zip",
+    "size": 686596,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.3.0/alfatreze.TAU_0.3.0_2026-09-21.zip"
+   },
+   {
+    "name": "alfatreze.TAU_DIAGNOSTIC_0.3.0_2026-09-21.zip",
+    "size": 687505,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.3.0/alfatreze.TAU_DIAGNOSTIC_0.3.0_2026-09-21.zip"
+   },
+   {
+    "name": "SHA256SUMS.txt",
+    "size": 213,
+    "browser_download_url": "https://github.com/alfatreze/Tau-Alpha/releases/download/v0.3.0/SHA256SUMS.txt"
+   }
+  ]
+ }
+]

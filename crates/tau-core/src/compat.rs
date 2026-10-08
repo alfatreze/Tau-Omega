@@ -280,6 +280,11 @@ pub fn parse_compat(bytes: &[u8]) -> Result<CompatDoc, TauError> {
 /// (major, minor, patch, is a release, pre-release identifiers as (is text, number, text)).
 type TagKey = (u64, u64, u64, bool, Vec<(bool, u64, String)>);
 
+/// Whether `tag` is a release tag (`vX.Y.Z[-pre]`).
+pub fn is_release_tag(tag: &str) -> bool {
+    tag_key(tag).is_some()
+}
+
 fn tag_key(tag: &str) -> Option<TagKey> {
     let rest = tag.strip_prefix('v')?;
     let (core, pre) = rest

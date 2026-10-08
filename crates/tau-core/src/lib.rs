@@ -30,6 +30,7 @@ pub mod ledger;
 pub mod package;
 pub mod playlist;
 pub mod problems;
+pub mod release_check;
 pub mod remove;
 pub mod screenshots;
 pub mod storage;
