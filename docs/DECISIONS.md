@@ -128,3 +128,8 @@ Semver pre-release identifiers sort before the release (`0.4.0-alpha.2 < 0.4.0`)
 mistaken for it, and `alpha`/`beta`/`rc` can be used as a goal gets close. It matches the Tau Alpha core's own
 `0.6.0-alpha.N` convention. Binaries are not committed; each build's `BUILD.txt` (commit, date, SHA-256) and
 `SHA256SUMS.txt` are. `tools/dev-build.sh` does the numbering. Releases still follow D-013 (`releases/v<version>/`).
+
+## D-015 — Tau Omega work stays in the Tau Omega repo; integrate only what is on Tau Alpha `main` (2026-10-08, owner)
+Omega roadmaps, specs and code are written and committed in this repository only; the Tau Alpha repository is read-only from here. A Tau Alpha feature becomes an Omega work item only once it is on Tau Alpha `main`
+(release-bound), so Omega never tracks a moving branch (loadable meter packs, RAM-diet switches, 720p output wait). Branches and worktrees are kept few: one worktree for the line of work, merged to `main` and archived as tags
+(`archive/...` on origin) rather than left as long-lived branches.

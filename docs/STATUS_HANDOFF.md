@@ -1,5 +1,37 @@
 # Tau Omega — status handoff
 
+## START HERE (2026-10-08): fresh-session handoff
+
+**Read `ROADMAP.md` (repo root) next: it is the one ordered list of Omega work.** Then this block, then the dated sections below only for detail.
+
+**Scope rule (owner, 2026-10-08): Tau Omega work only.** The Tau Alpha repository (`../tau-alpha`) is **read-only** from here: never edit, commit or reset there; read it for integration facts. A Tau Alpha
+feature is planned in Omega **only once it is on Tau Alpha `main`** (not a branch, worktree or design doc): meter packs, the RAM diet and 720p output are therefore not planned yet. (On 2026-10-08 a roadmap was first
+written into the tau-alpha repo by mistake; it was reverted with a hard reset to `origin/main`, nothing lost, and the roadmap rewritten here.)
+
+**Repo state.** One worktree, `Tau Omega/` (branch `main`, pushed, clean). The old `Tau Omega-integration/` worktree and its branches were merged and removed on 2026-10-08. Older work is kept as tags on origin
+(`archive/main-2026-10-02`, `archive/integration-workbench-base-2026-10-03`, `archive/local-main-2026-10-02`, `archive/ci-fix-and-add-ui-check`, `archive/omega-cards-meters-firmware`, `archive/claude-exciting-bell`,
+`archive/claude-jolly-meitner`) and in a full bundle at `~/Downloads/tau-omega-repo-backup-2026-10-08.bundle`. Remaining remote branches (old, archived, deletion optional): `claude/exciting-bell-emz8il`,
+`claude/jolly-meitner-jwdzwx`, `omega-cards-meters-firmware`. Newest test build: `releases/dev-builds/0.4.0-alpha.8/Tau Omega.app` (built from `main` at `94c9687`, opened by the owner for a first look; app bundles are
+untracked, only `BUILD.txt` and `SHA256SUMS.txt` are committed). Use a single worktree per task from now on (`git worktree add`), never switch the branch of a shared one.
+
+**Built and verified this stretch (all on `main`):** the verification ledger (scan cache, provenance, canary, "Forget" menu item); "Preparing sync" status the instant Start sync is pressed; Appearance editor and **theme file install to a card
+(real write on `tau_dev_67`, loaded on a Pocket, `Info > THEME FILE` = `1 LOADED`)**; the AppleDouble `._*` sweep after sync, core move, workbench and theme install (real-card checked); Send diagnostics (read, summary, zip, no track names);
+QR tags 16, 19-22 decoded from real captures plus the BLIT TEST profile and Cold frame test name; CI fmt/clippy green locally; roadmap, architecture and safety docs refreshed (`SAFETY_RULES` 14-19). 161 Rust tests, 174 browser checks, clippy and fmt clean.
+
+**Next, in order (details in `ROADMAP.md`):** (1) **install and update paths** (owner's top item: first install onto a Pocket card that has other cores but no Tau; update from GitHub, opt-in; update from a zip; "Refresh library" for files copied by hand), with a shared
+post-install check; (2) **read the pixel-grid report codes** (Tau Alpha main's default report view; Omega decodes QR only; real fixtures are in `testdata/screenshots/20261004_*.png`, format in tau-alpha `tools/tpg.py` and `docs/features/BARCODE_STUDY.md`);
+(3) `tau-assets.bin` read-modify-write plus the Halcyon `PRST` writer and APO/AutoEQ importer; (4) hardening. Owner decisions still open: update check button-only or also at launch; compatibility table inside Omega or fetched; automatic library re-verify after an update;
+the HTTPS client for the GitHub check (recommend `ureq`; measure and flag its cost before adding any dependency).
+
+**How to run things.** `cargo test --workspace --features tau-core/serde`; `cargo clippy --workspace -- -D warnings`; `cargo fmt --all -- --check`; `cd ui && npm run check`; test build: `tools/dev-build.sh` (next number automatic).
+Browser suite: needs Playwright and a Chromium: `npm i -g playwright` (or any install), `cd ui && npx vite --port 5199 --strictPort &`, then `CHROMIUM_PATH=<headless chromium> URL=http://localhost:5199 NODE_PATH=$(npm root -g) node scripts/workbench-test.cjs`
+(expect 174 checks; the install the last session used lived in a temporary folder and is gone). Real-card tests are `#[ignore]`d and gated by environment variables, read-only unless stated: `TAU_REAL_CARD=/Volumes/Pock cargo test -p tau-core real_card -- --ignored --nocapture`
+(plan/diagnostics read-only), `TAU_REAL_WRITE_MEDIA=... TAU_REAL_WRITE_BACKUP=...` (theme install write), `TAU_REAL_SYNC_MEDIA/LIB/BACKUP` (add-and-remove sync). **Never write to a card without the owner's approval; use `tau_dev_67` or a throwaway core, backups go outside the card.**
+
+**Traps.** `cp -a`/Finder leave `._` stubs on exFAT (package installs do not sweep them yet: roadmap 1a); a package carries no alpha number (`core.json` is `0.6.0` for every alpha): compare by `date_release` and file hashes; `tau-assets.bin` is replaced whole on save (drops `METR`/`PRST`: roadmap 3);
+Omega's QR reader misses grid reports (roadmap 2); `ci.yml`'s browser-suite step has never been seen to run on GitHub; the card may carry a second volume (`CARDWRITE`): not ours.
+
+
 **Updated 2026-10-02: two parallel sessions were integrated — read "Library workbench, and the integration of two parallel sessions" first.** Sections dated before that describe the earlier session's work and may name files (`CardsView`, `SyncView`, `connection_kind`) that the integration did not carry over; each such section carries an integration note.
 
 Updated 2026-09-26 (core removal, the full TAUD1 QR decoder, real hardware write validation,
