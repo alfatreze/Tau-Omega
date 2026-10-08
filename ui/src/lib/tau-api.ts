@@ -60,7 +60,7 @@ export const albumThumbnails = (path: string, ids: string[]) => invoke<Thumbnail
 export const imageThumbnail = (path: string, longSide: number) => invoke<string>('image_thumbnail', { path, longSide });
 export const appearanceCheck = (theme: ThemeInput) => invoke<ThemeReport>('appearance_check', { theme });
 export const appearanceOpen = (path: string) => invoke<ThemeInput[]>('appearance_open', { path });
-export const appearanceExport = (themes: ThemeInput[], path: string) => invoke<number>('appearance_export', { themes, path });
+export const appearanceExport = (themes: ThemeInput[], path: string, keepFrom: string | null = null) => invoke<number>('appearance_export', { themes, path, keepFrom });
 export const appearancePlanInstall = (themes: ThemeInput[], mediaRoot: string) => invoke<AssetsInstallPlan>('appearance_plan_install', { themes, mediaRoot });
 export const appearanceInstall = (themes: ThemeInput[], mediaRoot: string, confirmation: string, backup: string | null) => invoke<AssetsInstallReport>('appearance_install', { themes, mediaRoot, confirmation, backup });
 export const diagRead = (card: string) => invoke<DiagView>('diag_read', { card });

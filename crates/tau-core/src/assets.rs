@@ -2,8 +2,11 @@
 //!
 //! Layout and rules are the firmware's (`docs/features/THEME_FILE_FORMAT.md` in tau-alpha, written by
 //! `tools/tau_assets.py`); this module is an independent Rust writer/reader checked byte for byte against a file that
-//! reference tool produced (`testdata/assets/`). Only the `THEM` section is written here. A file read from a card keeps
-//! its themes; any other section (such as `METR`) is not carried, so writing replaces the whole file.
+//! reference tool produced (`testdata/assets/`). Only the `THEM` section is *edited* here. Every other section (`METR` meter
+//! presets, `PRST` Halcyon user EQ presets, anything newer) is carried byte for byte, in its original place, whenever an
+//! existing file is replaced or re-saved ([`pack_assets_keeping`]); the Tau release manifest marks the format
+//! `preserve_unknown_sections` for exactly this reason. A file whose container version is newer than this reader is
+//! refused rather than overwritten.
 //!
 //! The firmware trusts only the CRCs, so the *writer* owns the safety rules: both polarities, a name the device font
 //! can draw, and the contrast rules the firmware's own theme generator enforces (text on every surface and on the
@@ -22,6 +25,9 @@ const NAME_LEN: usize = 16;
 /// Role count the firmware knows (`TR_COUNT` in `fw/theme.h`). The file carries all of them; roles 0, 6 and 8 are not themeable.
 const ROLE_COUNT: usize = 21;
 pub const MAX_THEMES: usize = 4;
+/// The firmware's limits (`AS_MAX_SECTIONS`, `AS_MAX_FILE` in `fw/assets_core.h`): a bigger file is not read at all.
+const MAX_SECTIONS: usize = 8;
+pub const MAX_FILE_BYTES: usize = 65536;
 /// Themes the firmware already has; a file may not reuse their names.
 pub const BUILTIN_NAMES: [&str; 2] = ["TAU", "OCEAN"];
 const LIGHT_ACC_MAX_L: i32 = 110;
@@ -354,22 +360,101 @@ fn pack_them(themes: &[ThemeInput]) -> Result<Vec<u8>, TauError> {
     Ok(out)
 }
 
-/// The whole `tau-assets.bin` for these themes (a container with one `THEM` section). Refuses any theme that fails `check_theme`.
-pub fn pack_assets(themes: &[ThemeInput]) -> Result<Vec<u8>, TauError> {
-    let them = pack_them(themes)?;
+/// The container: header, section table, then the sections back to back in table order (the reference
+/// `tools/tau_assets.py pack_container`, byte for byte).
+fn pack_container(sections: &[([u8; 4], &[u8])]) -> Vec<u8> {
     let mut table = Vec::new();
-    table.extend_from_slice(SECTION_THEM);
-    table.extend_from_slice(&(12u32 + 16).to_le_bytes());
-    table.extend_from_slice(&(them.len() as u32).to_le_bytes());
-    table.extend_from_slice(&crc(&them).to_le_bytes());
-    let mut out = Vec::new();
+    let mut off = 12 + 16 * sections.len();
+    for (tag, data) in sections {
+        table.extend_from_slice(tag);
+        table.extend_from_slice(&(off as u32).to_le_bytes());
+        table.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        table.extend_from_slice(&crc(data).to_le_bytes());
+        off += data.len();
+    }
+    let mut out = Vec::with_capacity(off);
     out.extend_from_slice(MAGIC);
     out.extend_from_slice(&VERSION.to_le_bytes());
-    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&(sections.len() as u16).to_le_bytes());
     out.extend_from_slice(&crc(&table).to_le_bytes());
     out.extend_from_slice(&table);
-    out.extend_from_slice(&them);
-    Ok(out)
+    for (_, data) in sections {
+        out.extend_from_slice(data);
+    }
+    out
+}
+
+/// The whole `tau-assets.bin` for these themes alone (a container with one `THEM` section). Refuses any theme that
+/// fails `check_theme`. Use [`pack_assets_keeping`] whenever a file is being replaced or re-saved.
+pub fn pack_assets(themes: &[ThemeInput]) -> Result<Vec<u8>, TauError> {
+    let them = pack_them(themes)?;
+    Ok(pack_container(&[(*SECTION_THEM, &them)]))
+}
+
+/// True when `blob` is a Tau assets container of a version this reader does not know (made by a newer Tau).
+fn is_newer_container(blob: &[u8]) -> bool {
+    blob.len() >= 6 && &blob[..4] == MAGIC && u16le(blob, 4) != VERSION
+}
+
+/// The `tau-assets.bin` for these themes, keeping every other section of `existing` byte for byte and in place
+/// (the `THEM` section is replaced where it was, or put first when there was none). `existing` that is absent or
+/// damaged gives the themes-only file (a damaged file is backed up by the install, nothing in it can be carried).
+/// Refuses an `existing` file of a newer container version (it may hold data this reader cannot keep) and a result
+/// over the firmware's limits (8 sections, 64 KiB), which the device would not read at all.
+pub fn pack_assets_keeping(
+    themes: &[ThemeInput],
+    existing: Option<&[u8]>,
+) -> Result<Vec<u8>, TauError> {
+    let them = pack_them(themes)?;
+    let Some(old) = existing else {
+        return Ok(pack_container(&[(*SECTION_THEM, &them)]));
+    };
+    if is_newer_container(old) {
+        return Err(bad_file(format!(
+            "The theme file already there was made by a newer Tau (assets version {}). Omega cannot keep what is in it, so it was not replaced. Update Omega first.",
+            u16le(old, 4)
+        )));
+    }
+    let Ok(sections) = read_sections(old) else {
+        return Ok(pack_container(&[(*SECTION_THEM, &them)]));
+    };
+    let mut out: Vec<([u8; 4], &[u8])> = Vec::with_capacity(sections.len() + 1);
+    if !sections.iter().any(|(tag, _)| tag == SECTION_THEM) {
+        out.push((*SECTION_THEM, &them));
+    }
+    for (tag, data) in &sections {
+        out.push(if tag == SECTION_THEM {
+            (*SECTION_THEM, &them[..])
+        } else {
+            (*tag, *data)
+        });
+    }
+    if out.len() > MAX_SECTIONS {
+        return Err(bad_file(format!(
+            "The file would have {} sections; the Pocket reads at most {MAX_SECTIONS}.",
+            out.len()
+        )));
+    }
+    let blob = pack_container(&out);
+    if blob.len() > MAX_FILE_BYTES {
+        return Err(bad_file(format!(
+            "The file would be {} bytes; the Pocket reads at most {MAX_FILE_BYTES}. Remove a theme or some presets.",
+            blob.len()
+        )));
+    }
+    Ok(blob)
+}
+
+/// The non-`THEM` sections of a readable file, as (tag, bytes), in file order (empty for anything unreadable).
+pub fn kept_sections(blob: &[u8]) -> Vec<([u8; 4], Vec<u8>)> {
+    read_sections(blob)
+        .map(|s| {
+            s.into_iter()
+                .filter(|(t, _)| t != SECTION_THEM)
+                .map(|(t, d)| (t, d.to_vec()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn u16le(b: &[u8], at: usize) -> u16 {
@@ -492,7 +577,8 @@ pub struct ExistingAssets {
     pub sha256: String,
     /// Names of the themes in it (empty when it has none or cannot be read).
     pub themes: Vec<String>,
-    /// Sections other than `THEM` (for example `METR` meter presets): they are **not** carried over by an install.
+    /// Sections other than `THEM` (for example `METR` meter presets, `PRST` EQ presets): an install keeps them
+    /// unchanged.
     pub other_sections: Vec<String>,
     /// False when the file does not parse; it is still backed up before being replaced.
     pub readable: bool,
@@ -625,9 +711,10 @@ pub fn plan_install(
     media_root: &Path,
 ) -> Result<AssetsInstallPlan, TauError> {
     sync::validate_media_root(media_root)?;
-    let blob = pack_assets(themes)?;
     let destination = media_root.join(FILE_NAME);
-    let existing = fs::read(&destination).ok().map(|b| describe_existing(&b));
+    let old = fs::read(&destination).ok();
+    let blob = pack_assets_keeping(themes, old.as_deref())?;
+    let existing = old.as_deref().map(describe_existing);
     let sha256 = sync::sha256_bytes(&blob);
     let readers = readers_for(media_root);
     let interrupted_install = !destination.is_file() && media_root.join(PREVIOUS_NAME).is_file();
@@ -641,7 +728,7 @@ pub fn plan_install(
     }
     if let Some(e) = &existing {
         if !e.other_sections.is_empty() {
-            warnings.push(format!("The file already there also holds {}, which is not carried over: it will be gone after this install (the backup keeps it).", e.other_sections.join(", ")));
+            warnings.push(format!("The file already there also holds {}: kept unchanged, only the themes are replaced.", e.other_sections.join(", ")));
         }
         if !e.readable {
             warnings.push("The file already there cannot be read as a Tau assets file. It will still be backed up before it is replaced.".into());
@@ -723,8 +810,9 @@ pub fn execute_install(
             "the theme file on the card or the themes changed since the plan was reviewed",
         ));
     }
-    let blob = pack_assets(themes)?;
     let live = media_root.join(FILE_NAME);
+    let old = fs::read(&live).ok();
+    let blob = pack_assets_keeping(themes, old.as_deref())?;
     let mut backup = None;
     if live.is_file()
         && let Some(root) = backup_root
@@ -747,7 +835,11 @@ pub fn execute_install(
     let result = (|| -> Result<(), TauError> {
         sync::write_durable(&temp, &blob)?;
         let back = sync::read_back_bytes(&temp)?;
-        if back != blob || pack_assets(&parse_assets(&back)?)? != blob {
+        let kept = old.as_deref().map(kept_sections).unwrap_or_default();
+        if back != blob
+            || pack_assets_keeping(&parse_assets(&back)?, old.as_deref())? != blob
+            || kept_sections(&back) != kept
+        {
             return Err(TauError::e(
                 ErrorCode::VerificationFailed,
                 "the theme file written to the card did not read back the same",
@@ -989,29 +1081,144 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
-    #[test]
-    fn replacing_backs_up_the_old_file_and_warns_about_what_is_lost() {
-        let (root, media) = card("replace");
-        // An existing file that also carries a meter-preset section this writer cannot keep.
+    /// A file carrying meter presets (`METR`) and Halcyon user EQ presets (`PRST`) around an older theme section.
+    fn file_with_presets(order_them_middle: bool) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let mut other = sunset();
         other.name = "OLDER".into();
-        let first = pack_assets(&[other]).unwrap();
-        // Rebuild the container with an extra METR section by hand (tag + bytes), CRCs valid.
-        let them = parse_assets(&first).unwrap();
-        assert_eq!(them.len(), 1);
+        let them = pack_them(&[other]).unwrap();
+        let metr = b"TMTR\x01\x00\x00\x01meter-preset-bytes".to_vec();
+        let prst = b"TPRS\x01\x00\x00\x02user-eq-preset-bytes".to_vec();
+        let file = if order_them_middle {
+            pack_container(&[(*b"METR", &metr), (*SECTION_THEM, &them), (*b"PRST", &prst)])
+        } else {
+            pack_container(&[(*b"METR", &metr), (*b"PRST", &prst)])
+        };
+        (file, metr, prst)
+    }
+
+    #[test]
+    fn replacing_keeps_meter_and_eq_presets_byte_for_byte_and_backs_up() {
+        let (root, media) = card("replace");
+        let (first, metr, prst) = file_with_presets(true);
         fs::write(media.join(FILE_NAME), &first).unwrap();
         let backups = root.with_extension("backups");
         let plan = plan_install(&[sunset()], &media).unwrap();
         let e = plan.existing.as_ref().unwrap();
         assert_eq!(e.themes, vec!["OLDER"]);
-        assert!(e.readable);
+        assert_eq!(e.other_sections, vec!["METR", "PRST"]);
+        assert!(plan.warnings.iter().any(|w| w.contains("kept unchanged")));
         let report = execute_install(&[sunset()], &media, &plan, &plan.id, Some(&backups)).unwrap();
         assert!(report.replaced);
         assert_eq!(fs::read(report.backup.unwrap()).unwrap(), first);
         let _ = fs::remove_dir_all(&backups);
-        assert_eq!(fs::read(media.join(FILE_NAME)).unwrap(), SUNSET_BIN);
+        let now = fs::read(media.join(FILE_NAME)).unwrap();
+        let tags: Vec<_> = read_sections(&now)
+            .unwrap()
+            .into_iter()
+            .map(|(t, _)| t)
+            .collect();
+        assert_eq!(
+            tags,
+            vec![*b"METR", *SECTION_THEM, *b"PRST"],
+            "section order kept, THEM replaced in place"
+        );
+        assert_eq!(
+            kept_sections(&now),
+            vec![(*b"METR", metr), (*b"PRST", prst)],
+            "preset bytes changed"
+        );
+        assert_eq!(parse_assets(&now).unwrap()[0].name, "SUNSET");
+        assert_eq!(
+            plan.sha256,
+            sync::sha256_bytes(&now),
+            "the plan's hash is the file written"
+        );
         assert!(!media.join(PREVIOUS_NAME).exists());
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_file_without_themes_gets_them_first_and_keeps_the_rest() {
+        let (file, metr, prst) = file_with_presets(false);
+        let out = pack_assets_keeping(&[sunset()], Some(&file)).unwrap();
+        let tags: Vec<_> = read_sections(&out)
+            .unwrap()
+            .into_iter()
+            .map(|(t, _)| t)
+            .collect();
+        assert_eq!(tags, vec![*SECTION_THEM, *b"METR", *b"PRST"]);
+        assert_eq!(
+            kept_sections(&out),
+            vec![(*b"METR", metr), (*b"PRST", prst)]
+        );
+        // With no other sections the result is exactly the reference single-section file.
+        assert_eq!(
+            pack_assets_keeping(&[sunset()], Some(SUNSET_BIN)).unwrap(),
+            SUNSET_BIN
+        );
+        assert_eq!(pack_assets_keeping(&[sunset()], None).unwrap(), SUNSET_BIN);
+    }
+
+    #[test]
+    fn a_newer_container_is_refused_and_left_alone() {
+        let (root, media) = card("newer");
+        let mut newer = file_with_presets(true).0;
+        newer[4] = 2; // container version 2
+        fs::write(media.join(FILE_NAME), &newer).unwrap();
+        let err = plan_install(&[sunset()], &media).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::InvalidAssetsFile);
+        assert!(err.to_string().contains("newer Tau"), "{err}");
+        assert_eq!(fs::read(media.join(FILE_NAME)).unwrap(), newer);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_result_over_the_firmware_limits_is_refused() {
+        let them = pack_them(&[sunset()]).unwrap();
+        let big = vec![0u8; MAX_FILE_BYTES];
+        let file = pack_container(&[(*SECTION_THEM, &them), (*b"PRST", &big)]);
+        assert!(
+            pack_assets_keeping(&[sunset()], Some(&file))
+                .unwrap_err()
+                .to_string()
+                .contains("at most 65536")
+        );
+        let parts: Vec<([u8; 4], &[u8])> = (0..8u8)
+            .map(|i| ([b'X', b'X', b'X', b'0' + i], &b"x"[..]))
+            .collect();
+        let full = pack_container(&parts);
+        assert!(
+            pack_assets_keeping(&[sunset()], Some(&full))
+                .unwrap_err()
+                .to_string()
+                .contains("at most 8")
+        );
+    }
+
+    /// Tau Alpha's shared fixture (`docs/schemas/fixtures/tau-assets-roundtrip.bin`, THEM + METR + PRST from the reference
+    /// packers): referenced in place, never copied (cross-project rule). Skipped when the sibling checkout is absent.
+    #[test]
+    fn tau_alpha_round_trip_fixture_keeps_metr_and_prst() {
+        let base = std::env::var("TAU_ALPHA_ROOT").unwrap_or_else(|_| {
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../../tau-alpha").to_string()
+        });
+        let path = Path::new(&base).join("docs/schemas/fixtures/tau-assets-roundtrip.bin");
+        let Ok(fixture) = fs::read(&path) else {
+            eprintln!("skipped: {} not found (set TAU_ALPHA_ROOT)", path.display());
+            return;
+        };
+        let before = kept_sections(&fixture);
+        assert_eq!(
+            before.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
+            vec![*b"METR", *b"PRST"]
+        );
+        let out = pack_assets_keeping(&[sunset()], Some(&fixture)).unwrap();
+        assert_eq!(
+            kept_sections(&out),
+            before,
+            "METR/PRST bytes changed on a theme edit"
+        );
+        assert_eq!(parse_assets(&out).unwrap()[0].name, "SUNSET");
     }
 
     #[test]

@@ -689,13 +689,20 @@ fn appearance_open(path: String) -> Result<Vec<tau_core::assets::ThemeInput>, Ta
 }
 
 /// Appearance: writes `tau-assets.bin` to a file the user chose (not to the card), then reads it back and checks it
-/// parses to the same themes. Returns the file's size in bytes.
+/// parses to the same themes. Every non-theme section (meter presets, EQ presets) is kept: from `keep_from` (the file
+/// the themes were opened from) when given, else from the file being overwritten. Returns the file's size in bytes.
 #[tauri::command(async)]
-fn appearance_export(themes: Vec<tau_core::assets::ThemeInput>, path: String) -> Result<u64, TauError> {
-    let bytes = tau_core::assets::pack_assets(&themes)?;
+fn appearance_export(themes: Vec<tau_core::assets::ThemeInput>, path: String, keep_from: Option<String>) -> Result<u64, TauError> {
+    let source = match &keep_from {
+        Some(k) => Some(std::fs::read(k)?),
+        None => std::fs::read(&path).ok(),
+    };
+    let bytes = tau_core::assets::pack_assets_keeping(&themes, source.as_deref())?;
     std::fs::write(&path, &bytes)?;
-    let back = tau_core::assets::parse_assets(&std::fs::read(&path)?)?;
-    if tau_core::assets::pack_assets(&back)? != bytes {
+    let written = std::fs::read(&path)?;
+    let back = tau_core::assets::parse_assets(&written)?;
+    let kept = source.as_deref().map(tau_core::assets::kept_sections).unwrap_or_default();
+    if written != bytes || tau_core::assets::pack_assets_keeping(&back, source.as_deref())? != bytes || tau_core::assets::kept_sections(&written) != kept {
         return Err(TauError { code: ErrorCode::VerificationFailed, message: "The saved file did not read back the same, so it should not be used.".into() });
     }
     Ok(bytes.len() as u64)

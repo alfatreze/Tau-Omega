@@ -57,6 +57,8 @@
   function setColor(key: string, value: string) { pol.colors[key] = value.toUpperCase(); changed(); }
   function setLuma(value: number) { pol.bg_luma = value; changed(); }
 
+  // The file the themes were opened from: saving keeps its other sections (meter and EQ presets).
+  let openedPath: string | null = null;
   async function openFile() {
     notice = '';
     const picked = await open({ multiple: false, filters: [{ name: 'Tau assets', extensions: ['bin'] }] });
@@ -65,8 +67,8 @@
     try {
       const loaded = await appearanceOpen(picked);
       if (!loaded.length) { notice = 'That file has no themes in it.'; return; }
-      themes = loaded.slice(0, MAX_THEMES); pick(0);
-      notice = `Opened ${loaded.length} theme${loaded.length === 1 ? '' : 's'}. Saving writes a new file; anything else in the original file (such as meter presets) is not carried over.`;
+      themes = loaded.slice(0, MAX_THEMES); pick(0); openedPath = picked;
+      notice = `Opened ${loaded.length} theme${loaded.length === 1 ? '' : 's'}. Saving keeps everything else in the file (meter and EQ presets) unchanged.`;
     } catch (error) { notice = errorMessage(error); } finally { busy = false; }
   }
   async function exportFile() {
@@ -74,7 +76,7 @@
     const dest = await save({ defaultPath: 'tau-assets.bin', filters: [{ name: 'Tau assets', extensions: ['bin'] }] });
     if (!dest) return;
     busy = true;
-    try { const bytes = await appearanceExport(themes, dest); notice = `Saved ${bytes} bytes to ${dest}, read back and checked.`; }
+    try { const bytes = await appearanceExport(themes, dest, openedPath); notice = `Saved ${bytes} bytes to ${dest}, read back and checked${openedPath ? ' (presets from the opened file kept)' : ''}.`; }
     catch (error) { notice = errorMessage(error); } finally { busy = false; }
   }
   // ---- install to the card: plan, review, confirm ----
