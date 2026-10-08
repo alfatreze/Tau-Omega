@@ -447,6 +447,11 @@ fn prefs_view(app: &tauri::AppHandle) -> Result<PrefsView, TauError> {
     })
 }
 
+/// Release manifests (`tau-compat.json`) seen so far, kept so an install plan knows them even when offline.
+fn manifest_cache(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
+    Ok(app.path().app_cache_dir().map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?.join("manifests"))
+}
+
 /// Looks for a newer Tau release on GitHub, comparing with the Tau core on `card` when one is given. Does nothing
 /// (returns `None`) when the user turned the check off. Never downloads or installs anything.
 #[tauri::command(async)]
@@ -454,7 +459,7 @@ fn update_check(app: tauri::AppHandle, card: Option<String>) -> Result<Option<ta
     if !read_prefs(&app)?.check_updates {
         return Ok(None);
     }
-    updates::check(card.as_deref())
+    updates::check(card.as_deref(), &manifest_cache(&app)?)
 }
 
 /// Downloads the chosen zips of one release into the app's cache, verified against the release's checksums. Only
@@ -462,7 +467,7 @@ fn update_check(app: tauri::AppHandle, card: Option<String>) -> Result<Option<ta
 #[tauri::command(async)]
 fn update_download(app: tauri::AppHandle, tag: String, names: Vec<String>) -> Result<Vec<updates::Downloaded>, TauError> {
     let cache = app.path().app_cache_dir().map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?;
-    updates::download(&tag, &names, cache.join("updates"))
+    updates::download(&tag, &names, cache.join("updates"), &manifest_cache(&app)?)
 }
 
 /// Where install backups go: the user's chosen backup folder, else a folder in the app's data directory.
@@ -475,8 +480,9 @@ fn install_backup_root(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
 
 /// Plans installing or updating a core package on a card: verdict, backups, cleanup, space, refusals. Writes nothing.
 #[tauri::command(async)]
-fn plan_core_update(zip: String, card: String, allow_downgrade: bool) -> Result<tau_core::install_plan::InstallPlan, TauError> {
-    tau_core::install_plan::plan(Path::new(&zip), Path::new(&card), &[], allow_downgrade)
+fn plan_core_update(app: tauri::AppHandle, zip: String, card: String, allow_downgrade: bool) -> Result<tau_core::install_plan::InstallPlan, TauError> {
+    let docs = tau_core::release_check::manifests_for_install(&manifest_cache(&app)?, Path::new(&zip));
+    tau_core::install_plan::plan(Path::new(&zip), Path::new(&card), &docs, allow_downgrade)
 }
 
 /// Runs a reviewed install plan: verified backup outside the card, the writes, cleanup, the post-install check. Rolls
@@ -485,8 +491,10 @@ fn plan_core_update(zip: String, card: String, allow_downgrade: bool) -> Result<
 fn execute_core_update(app: tauri::AppHandle, zip: String, card: String, allow_downgrade: bool, confirmation: String) -> Result<tau_core::install_exec::InstallReport, TauError> {
     let _write = card_write_guard()?;
     let (zip, card) = (Path::new(&zip), Path::new(&card));
-    let plan = tau_core::install_plan::plan(zip, card, &[], allow_downgrade)?;
-    tau_core::install_exec::execute(zip, card, &plan, &confirmation, &install_backup_root(&app)?, &[])
+    // The same manifests the plan was made with (so the confirmation token matches), unless the cache changed meanwhile.
+    let docs = tau_core::release_check::manifests_for_install(&manifest_cache(&app)?, zip);
+    let plan = tau_core::install_plan::plan(zip, card, &docs, allow_downgrade)?;
+    tau_core::install_exec::execute(zip, card, &plan, &confirmation, &install_backup_root(&app)?, &docs)
 }
 
 /// Puts a card back as it was before an install, from that install's backup folder.

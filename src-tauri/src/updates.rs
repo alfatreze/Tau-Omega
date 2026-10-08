@@ -60,7 +60,7 @@ fn get(url: &str, limit: u64) -> Result<Vec<u8>, TauError> {
 }
 
 /// Manifests of the newest releases that publish one; a malformed or unknown-schema file is skipped, not fatal.
-fn manifests(releases: &[release_check::GithubRelease]) -> Vec<CompatDoc> {
+fn manifests(releases: &[release_check::GithubRelease], cache: &std::path::Path) -> Vec<CompatDoc> {
     let mut newest: Vec<_> = releases.iter().collect();
     newest.sort_by(|a, b| compat::compare_tags(&b.tag, &a.tag));
     newest
@@ -68,17 +68,18 @@ fn manifests(releases: &[release_check::GithubRelease]) -> Vec<CompatDoc> {
         .take(MANIFEST_RELEASES)
         .filter_map(|r| r.assets.iter().find(|a| a.name == "tau-compat.json"))
         .filter_map(|a| get(&a.url, MANIFEST_LIMIT).ok())
-        .filter_map(|bytes| compat::parse_compat(&bytes).ok())
+        // Kept in the cache so an install plan made later (maybe offline) knows these releases.
+        .filter_map(|bytes| release_check::save_cached(cache, &bytes).ok())
         .collect()
 }
 
 /// The check. `card` (optional) is a card folder whose Tau core is compared with the newest release.
-pub fn check(card: Option<&str>) -> Result<Option<UpdateCheck>, TauError> {
+pub fn check(card: Option<&str>, manifest_cache: &std::path::Path) -> Result<Option<UpdateCheck>, TauError> {
     let releases = release_check::parse_releases(&get(RELEASES_URL, LIST_LIMIT)?)?;
     let installed = card
         .and_then(|card| installed_tau(std::path::Path::new(card)))
         .map(|identity| {
-            let release = update::release_of(&identity, &manifests(&releases));
+            let release = update::release_of(&identity, &manifests(&releases, manifest_cache));
             Installed { release, date_release: Some(identity.date_release) }
         })
         .unwrap_or_default();
@@ -107,7 +108,7 @@ pub struct Downloaded {
 
 /// Downloads the named zips of release `tag` into `cache_dir/<tag>/`, each verified against `SHA256SUMS.txt` (and
 /// the release manifest when there is one). Asset URLs come from a fresh release list, never from the caller.
-pub fn download(tag: &str, names: &[String], cache_dir: PathBuf) -> Result<Vec<Downloaded>, TauError> {
+pub fn download(tag: &str, names: &[String], cache_dir: PathBuf, manifest_cache: &std::path::Path) -> Result<Vec<Downloaded>, TauError> {
     let releases = release_check::parse_releases(&get(RELEASES_URL, LIST_LIMIT)?)?;
     let release = releases
         .iter()
@@ -122,14 +123,19 @@ pub fn download(tag: &str, names: &[String], cache_dir: PathBuf) -> Result<Vec<D
     };
     let sums_text = get(&asset("SHA256SUMS.txt")?.url, MANIFEST_LIMIT)?;
     let sums = release_check::parse_sums(&String::from_utf8_lossy(&sums_text));
-    let doc = release
+    let manifest_bytes = release
         .assets
         .iter()
         .find(|a| a.name == "tau-compat.json")
-        .and_then(|a| get(&a.url, MANIFEST_LIMIT).ok())
-        .and_then(|bytes| compat::parse_compat(&bytes).ok());
+        .and_then(|a| get(&a.url, MANIFEST_LIMIT).ok());
+    let doc = manifest_bytes.as_deref().and_then(|bytes| compat::parse_compat(bytes).ok());
     let folder = cache_dir.join(tag);
     std::fs::create_dir_all(&folder)?;
+    if let (Some(bytes), Some(_)) = (&manifest_bytes, &doc) {
+        // Beside the zips (the install plan finds it there) and in the shared cache (it knows this release afterwards).
+        std::fs::write(folder.join("tau-compat.json"), bytes)?;
+        let _ = release_check::save_cached(manifest_cache, bytes);
+    }
     let mut out = Vec::new();
     for name in names {
         if !name.ends_with(".zip") {
@@ -162,7 +168,7 @@ mod tests {
     fn download_refuses_anything_but_a_zip_before_touching_the_network_for_it() {
         // (The release list fetch comes first; with no network this fails earlier, which is also a refusal.)
         let dir = std::env::temp_dir().join("tau-updates-test");
-        assert!(download("v0.0.0", &["tau.rom".into()], dir).is_err());
+        assert!(download("v0.0.0", &["tau.rom".into()], dir.clone(), &dir).is_err());
     }
 }
 
@@ -174,11 +180,11 @@ mod live {
     #[test]
     #[ignore]
     fn live_check_finds_the_latest_release_and_downloads_one_verified_zip() {
-        let found = check(None).unwrap().expect("a release");
+        let found = check(None, &std::env::temp_dir().join("tau-manifests-live")).unwrap().expect("a release");
         println!("{} | newer={:?} | zips={:?} | manifest={}", found.message, found.newer, found.zips.iter().map(|z| &z.name).collect::<Vec<_>>(), found.manifest.is_some());
         let dir = std::env::temp_dir().join("tau-updates-live");
         let name = found.zips[0].name.clone();
-        let got = download(&found.latest.tag, &[name], dir.clone()).unwrap();
+        let got = download(&found.latest.tag, &[name], dir.clone(), &dir.join("m")).unwrap();
         println!("downloaded {} bytes to {}", got[0].bytes, got[0].path);
         assert!(tau_core::package::inspect(std::path::Path::new(&got[0].path)).is_ok());
         let _ = std::fs::remove_dir_all(dir);
