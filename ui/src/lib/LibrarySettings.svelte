@@ -4,11 +4,25 @@
   // can never disagree.
   import { onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { clearHistory, errorMessage, getPrefs, listHistory, pruneHistory, setPrefs, setReportsDir } from './tau-api';
-  import type { Prefs, PrefsView } from './types';
+  import { cardMarkerStatus, removeCardMarker, setCardMarker, clearHistory, errorMessage, getPrefs, listHistory, pruneHistory, setPrefs, setReportsDir } from './tau-api';
+  import type { MarkerStatus, Prefs, PrefsView } from './types';
 
   /** Opens the sync history page. */
   export let openHistory: () => void = () => {};
+  /** The card folder open in the app, for the Spotlight marker. */
+  export let card = '';
+  let marker: MarkerStatus | null = null;
+  async function loadMarker() { try { marker = card ? await cardMarkerStatus(card) : null; } catch { marker = null; } }
+  async function toggleMarker() {
+    if (!prefs) return;
+    const on = prefs.card_marker !== 'on';
+    try { marker = await setCardMarker(on ? 'on' : 'off', card || null); prefs = await getPrefs(); notice = on ? 'Spotlight will be kept off Pocket cards.' : 'Cards will no longer get the marker.'; }
+    catch (error) { notice = `Could not save: ${errorMessage(error)}`; }
+  }
+  async function dropMarker() {
+    try { marker = await removeCardMarker(card); notice = 'The marker was removed from this card.'; }
+    catch (error) { notice = `Could not remove it: ${errorMessage(error)}`; }
+  }
 
   let prefs: PrefsView | null = null;
   let notice = '';
@@ -18,6 +32,7 @@
   onMount(async () => {
     try { prefs = await getPrefs(); } catch (error) { notice = `Could not read preferences: ${errorMessage(error)}`; }
     await refreshCount();
+    await loadMarker();
   });
 
   async function update(change: Partial<Prefs>, message = 'Saved.') {
@@ -92,8 +107,11 @@
     <div class="ls-row"><div><b>Check for Tau updates</b><small>When the app starts, ask GitHub for the public release list (nothing about you or your card is sent). Installing is always your action.</small></div>
       <div><button class="quiet" on:click={() => { const on = !prefs?.check_updates; void update({ check_updates: on, update_notice_shown: true }, on ? 'Update checks are on.' : 'Update checks are off.'); }}>{prefs.check_updates ? 'Turn off' : 'Turn on'}</button></div></div>
 
+    <div class="ls-row"><div><b>Keep Spotlight off Pocket cards</b><small>Adds an empty <code>.metadata_never_index</code> file at the card’s root when Tau Omega writes to a card, so macOS stops scanning it (faster writes, fewer “in use” errors). {prefs.card_marker === 'ask' ? 'Not decided yet.' : prefs.card_marker === 'on' ? 'On.' : 'Off.'}{#if marker?.is_card}{' '}This card: {marker.present ? 'has the marker' : 'no marker'}.{/if}</small></div>
+      <div class="ls-btns"><button class="quiet" on:click={toggleMarker}>{prefs.card_marker === 'on' ? 'Turn off' : 'Turn on'}</button>{#if marker?.present}<button class="quiet" on:click={dropMarker}>Remove from this card</button>{/if}</div></div>
+
     <div class="ls-row"><div><b>Notices</b><small>Show the one-time messages again.</small></div>
-      <div><button class="quiet" disabled={!prefs.remove_explained && !prefs.slow_alert_suppressed} on:click={() => update({ remove_explained: false, slow_alert_suppressed: false }, 'Notices will show again.')}>Reset notices</button></div></div>
+      <div><button class="quiet" disabled={!prefs.remove_explained && !prefs.slow_alert_suppressed && prefs.card_marker === 'ask' && !prefs.update_notice_shown} on:click={() => update({ remove_explained: false, slow_alert_suppressed: false, update_notice_shown: false, card_marker: 'ask' }, 'Notices will show again.')}>Reset notices</button></div></div>
     <p class="ls-notice" role="status">{notice}</p>
   {:else}<p>{notice || 'Loading…'}</p>{/if}
 </section>

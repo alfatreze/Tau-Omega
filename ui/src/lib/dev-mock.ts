@@ -40,7 +40,7 @@ let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voy
 });
 let mounted = true;
 let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
-let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, speeds: {} as Record<string, number>, connections: {} as Record<string, string> };
+let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', speeds: {} as Record<string, number>, connections: {} as Record<string, string> };
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
@@ -225,6 +225,9 @@ const handlers: Record<string, (args: any) => unknown> = {
     renames: [{ from: 'Beyoncé', to: 'Beyonce' }], playlist_fixes: [{ file: 'All.m3u', lines: 2 }], stubs_to_remove: 3, refused: null, nothing_to_do: false }),
   execute_library_refresh: () => ({ backup_dir: '/backups/refresh-rp', renamed: 1, playlists_rewritten: 1, stubs_removed: 3, before: { present: true, valid: true, tracks: 120, root: '', root_matches: false, missing_files: 120 }, after: { present: true, valid: true, tracks: 122, root: '/Assets/tau/common/', root_matches: true, missing_files: 0 }, index_path: '/x/tau-library.tdb', nothing_to_do: false }),
   rollback_library_refresh: () => null,
+  card_marker_status: () => ({ setting: prefs.card_marker, is_card: true, present: prefs.card_marker === 'on' }),
+  set_card_marker: (a) => { prefs.card_marker = a.setting; return { setting: a.setting, is_card: true, present: a.setting === 'on' }; },
+  remove_card_marker: () => ({ setting: prefs.card_marker, is_card: true, present: false }),
   update_check: () => null,
   update_download: () => [],
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),

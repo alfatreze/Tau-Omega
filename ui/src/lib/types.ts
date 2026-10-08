@@ -110,7 +110,7 @@ export type CardBreakdown = { total_bytes: number; available_bytes: number; unit
 export type EjectResult = { ok: boolean; message: string };
 /** Whether read-backs after a write are checked against the card itself, not memory. */
 export type ReadbackStatus = { checks_the_device: boolean; failed_evictions: number };
-export type Prefs = { history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; speeds: Record<string, number>; connections: Record<string, string> };
+export type Prefs = { history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */
@@ -199,3 +199,6 @@ export type RefreshFinding = { rel: string; reason: RefreshReason; message: stri
 export type IndexState = { present: boolean; valid: boolean; tracks: number | null; root: string | null; root_matches: boolean; missing_files: number };
 export type RefreshPlan = { id: string; media_root: string; root_prefix: string; before: IndexState; media_files: number; would_index: number; findings: RefreshFinding[]; renames: { from: string; to: string }[]; playlist_fixes: { file: string; lines: number }[]; stubs_to_remove: number; refused: string | null; nothing_to_do: boolean };
 export type RefreshReport = { backup_dir: string; renamed: number; playlists_rewritten: number; stubs_removed: number; before: IndexState; after: IndexState; index_path: string; nothing_to_do: boolean };
+
+/** The Spotlight setting and whether the card holding a path has the `.metadata_never_index` marker. */
+export type MarkerStatus = { setting: 'ask' | 'on' | 'off'; is_card: boolean; present: boolean };

@@ -19,6 +19,7 @@
   import { tick } from 'svelte';
   import PackageView from './lib/PackageView.svelte';
   import UpdateBanner from './lib/UpdateBanner.svelte';
+  import CardMarkerPrompt from './lib/CardMarkerPrompt.svelte';
   import RefreshLibrary from './lib/RefreshLibrary.svelte';
   let page: 'cards' | 'workbench' | 'compare' | 'history' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'diagnostics' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
@@ -330,6 +331,8 @@
       </div>
     {/if}
   </nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
+  <div class="content">
+  <CardMarkerPrompt card={path} />
   <UpdateBanner card={path} openPackage={(zip) => { packageZipPath = zip; if (!packageCardPath) packageCardPath = path; page = 'package'; void inspectPackageZip(); }} />
   {#if page === 'cards'}<section class="page" id="cards"><header><div><p class="eyebrow">CARD LIBRARY</p><h1>Start with a card</h1><p class="lede">Inspect a Pocket card or a staging folder. Your music stays untouched.</p></div><button class="primary" on:click={() => chooseFolder('card')}>Open folder</button></header>
     {#if cardMounted === false}<div class="ejected-banner" role="status"><span>{ejectedSafely && ejectedSafely === path ? 'Safely ejected. You can unplug it now.' : 'This card is no longer connected.'}</span><button class="quiet" on:click={() => openKnownCard(path)}>Reconnect</button></div>{/if}
@@ -390,8 +393,9 @@
   {:else if page === 'appearance'}
     <AppearanceView {mediaRoot} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'settings'}
-    <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings openHistory={() => openHistory()} /></SettingsView>
+    <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings card={path} openHistory={() => openHistory()} /></SettingsView>
   {/if}
+  </div>
 </main>
 
 <button class="help-fab" aria-label="Help" title="Help" on:click={() => showHelp = !showHelp}>?</button>
@@ -446,6 +450,8 @@
 {/if}
 
 <style>
+  .content { grid-column: 2; min-width: 0; }
+  @media (max-width: 720px) { .content { grid-column: 1; } }
   /* .picker-row/.picker/.jobs-panel/.settings-card/.settings-values/
      .comparison-counts live in styles.css, not here: they're rendered by
      child view components (JobsView, PlaylistsView, ProblemsView,
