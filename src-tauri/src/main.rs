@@ -137,6 +137,57 @@ fn card_write_guard() -> Result<std::sync::MutexGuard<'static, ()>, TauError> {
     }
 }
 
+/// Takes the card write lock and, if the user chose to keep Spotlight off Pocket cards, makes sure the card holding
+/// `path` carries the `.metadata_never_index` marker (best effort: a failure here never blocks the write itself).
+fn begin_card_write(app: &tauri::AppHandle, path: &str) -> Result<std::sync::MutexGuard<'static, ()>, TauError> {
+    let guard = card_write_guard()?;
+    if read_prefs(app).map(|p| p.card_marker == "on").unwrap_or(false) {
+        let _ = tau_core::marker::ensure(Path::new(path));
+    }
+    Ok(guard)
+}
+
+#[derive(Serialize)]
+struct MarkerStatus { setting: String, is_card: bool, present: bool }
+
+/// The Spotlight setting and whether the card holding `path` has the marker. Read-only.
+#[tauri::command(async)]
+fn card_marker_status(app: tauri::AppHandle, path: String) -> Result<MarkerStatus, TauError> {
+    let present = tau_core::marker::is_present(Path::new(&path));
+    Ok(MarkerStatus { setting: read_prefs(&app)?.card_marker, is_card: present.is_some(), present: present.unwrap_or(false) })
+}
+
+/// Saves the user's answer (`"on"`, `"off"`) and, for `"on"`, adds the marker to the card holding `path` now (the
+/// user just agreed to this write).
+#[tauri::command(async)]
+fn set_card_marker(app: tauri::AppHandle, setting: String, path: Option<String>) -> Result<MarkerStatus, TauError> {
+    if !matches!(setting.as_str(), "on" | "off") {
+        return Err(TauError { code: ErrorCode::InvalidPathReference, message: "card_marker must be on or off".into() });
+    }
+    let mut prefs = read_prefs(&app)?;
+    prefs.card_marker = setting.clone();
+    let dir = config_dir(&app)?;
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(PREFS_FILE), serde_json::to_vec_pretty(&prefs).map_err(|e| TauError { code: ErrorCode::Json, message: e.to_string() })?)?;
+    if setting == "on" {
+        if let Some(path) = &path {
+            let _write = card_write_guard()?;
+            tau_core::marker::ensure(Path::new(path))?;
+        }
+    }
+    card_marker_status(app, path.unwrap_or_default())
+}
+
+/// Removes the marker from the card holding `path` (the user's explicit action; the setting is not changed).
+#[tauri::command(async)]
+fn remove_card_marker(app: tauri::AppHandle, path: String) -> Result<MarkerStatus, TauError> {
+    {
+        let _write = card_write_guard()?;
+        tau_core::marker::remove(Path::new(&path))?;
+    }
+    card_marker_status(app, path)
+}
+
 #[derive(Default)]
 struct JobRegistry(Mutex<HashMap<String, Arc<AtomicBool>>>);
 
@@ -390,6 +441,9 @@ struct Prefs {
     check_updates: bool,
     /// The one-time note about what the update check sends was shown.
     update_notice_shown: bool,
+    /// Keep macOS Spotlight from scanning Pocket cards: `"ask"` (not decided yet), `"on"` (add the marker file when
+    /// writing to a card) or `"off"`.
+    card_marker: String,
 }
 impl Default for Prefs {
     fn default() -> Self {
@@ -404,6 +458,7 @@ impl Default for Prefs {
             history_keep_days: 365,
             check_updates: true,
             update_notice_shown: false,
+            card_marker: "ask".into(),
         }
     }
 }
@@ -486,7 +541,7 @@ fn plan_library_refresh(media_root: String) -> Result<tau_core::refresh::Refresh
 /// verifies the index; rolls back by itself on any failure.
 #[tauri::command(async)]
 fn execute_library_refresh(app: tauri::AppHandle, media_root: String, confirmation: String) -> Result<tau_core::refresh::RefreshReport, TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &media_root)?;
     let root = Path::new(&media_root);
     let plan = tau_core::refresh::plan_refresh(root)?;
     tau_core::refresh::execute_refresh(root, &plan, &confirmation, &refresh_backup_root(&app)?)
@@ -494,8 +549,8 @@ fn execute_library_refresh(app: tauri::AppHandle, media_root: String, confirmati
 
 /// Undoes a refresh from its backup folder.
 #[tauri::command(async)]
-fn rollback_library_refresh(media_root: String, backup_dir: String) -> Result<(), TauError> {
-    let _write = card_write_guard()?;
+fn rollback_library_refresh(app: tauri::AppHandle, media_root: String, backup_dir: String) -> Result<(), TauError> {
+    let _write = begin_card_write(&app, &media_root)?;
     tau_core::refresh::rollback_refresh(Path::new(&media_root), Path::new(&backup_dir))
 }
 
@@ -525,7 +580,7 @@ fn plan_core_update(app: tauri::AppHandle, zip: String, card: String, allow_down
 /// back by itself if a step fails.
 #[tauri::command(async)]
 fn execute_core_update(app: tauri::AppHandle, zip: String, card: String, allow_downgrade: bool, confirmation: String) -> Result<tau_core::install_exec::InstallReport, TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &card)?;
     let (zip, card) = (Path::new(&zip), Path::new(&card));
     // The same manifests the plan was made with (so the confirmation token matches), unless the cache changed meanwhile.
     let docs = tau_core::release_check::manifests_for_install(&manifest_cache(&app)?, zip);
@@ -535,8 +590,8 @@ fn execute_core_update(app: tauri::AppHandle, zip: String, card: String, allow_d
 
 /// Puts a card back as it was before an install, from that install's backup folder.
 #[tauri::command(async)]
-fn rollback_core_update(card: String, backup_dir: String) -> Result<tau_core::install_exec::RollbackReport, TauError> {
-    let _write = card_write_guard()?;
+fn rollback_core_update(app: tauri::AppHandle, card: String, backup_dir: String) -> Result<tau_core::install_exec::RollbackReport, TauError> {
+    let _write = begin_card_write(&app, &card)?;
     tau_core::install_exec::rollback(Path::new(&card), Path::new(&backup_dir))
 }
 
@@ -642,13 +697,13 @@ fn plan_playlist_write(
 }
 
 #[tauri::command(async)]
-fn execute_playlist_write(
+fn execute_playlist_write(app: tauri::AppHandle, 
     path: String,
     file: String,
     tracks: Vec<String>,
     confirmation: String,
 ) -> Result<(), TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &path)?;
     let plan = make_playlist_write_plan(&path, &file, &tracks)?;
     tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
 }
@@ -663,13 +718,13 @@ fn plan_playlist_rename(
 }
 
 #[tauri::command(async)]
-fn execute_playlist_rename(
+fn execute_playlist_rename(app: tauri::AppHandle, 
     path: String,
     old_file: String,
     new_file: String,
     confirmation: String,
 ) -> Result<(), TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &path)?;
     let plan = tau_core::playlist::plan_rename(Path::new(&path), &old_file, &new_file)?;
     tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
 }
@@ -694,13 +749,13 @@ fn plan_playlist_import(
 }
 
 #[tauri::command(async)]
-fn execute_playlist_import(
+fn execute_playlist_import(app: tauri::AppHandle, 
     path: String,
     source: String,
     dest_file: String,
     confirmation: String,
 ) -> Result<(), TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &path)?;
     let plan = make_playlist_import_plan(&path, &source, &dest_file)?;
     tau_core::playlist::execute(Path::new(&path), &plan, &confirmation)
 }
@@ -820,13 +875,13 @@ fn appearance_plan_install(
 /// Appearance: writes a reviewed theme-file install. Takes the card write lock, backs up any file it replaces
 /// (when `backup` is given), verifies by reading back from the device, and swaps the file in recoverably.
 #[tauri::command(async)]
-fn appearance_install(
+fn appearance_install(app: tauri::AppHandle, 
     themes: Vec<tau_core::assets::ThemeInput>,
     media_root: String,
     confirmation: String,
     backup: Option<String>,
 ) -> Result<tau_core::assets::AssetsInstallReport, TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &media_root)?;
     let root = Path::new(&media_root);
     let plan = tau_core::assets::plan_install(&themes, root)?;
     tau_core::assets::execute_install(&themes, root, &plan, &confirmation, backup.as_deref().map(Path::new))
@@ -1010,12 +1065,12 @@ fn plan_package_install(path: String, card: String) -> Result<tau_core::package:
 }
 
 #[tauri::command(async)]
-fn execute_package_install(
+fn execute_package_install(app: tauri::AppHandle, 
     path: String,
     card: String,
     confirmation: String,
 ) -> Result<tau_core::package::PackageReport, TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &card)?;
     let zip_path = Path::new(&path);
     let card_root = Path::new(&card);
     let plan = tau_core::package::plan_install(zip_path, card_root)?;
@@ -1033,20 +1088,20 @@ fn plan_remove_core(card: String, core_id: String) -> Result<tau_core::remove::R
 }
 
 #[tauri::command(async)]
-fn execute_remove_core(
+fn execute_remove_core(app: tauri::AppHandle, 
     card: String,
     core_id: String,
     confirmation: String,
 ) -> Result<tau_core::remove::RemoveReport, TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &card)?;
     let card = tau_core::inspect_card(Path::new(&card))?;
     let plan = tau_core::remove::plan_remove(&card, &core_id)?;
     tau_core::remove::execute_remove(&plan, &confirmation)
 }
 
 #[tauri::command(async)]
-fn execute_sync(sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, art_sidecar_pal256: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
-    let _write = card_write_guard()?;
+fn execute_sync(app: tauri::AppHandle, sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, art_sidecar_pal256: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
+    let _write = begin_card_write(&app, &destination)?;
     let plan = make_plan(sources, destination, embed_covers, art_sidecar_pal256)?;
     let manifest = PathBuf::from(manifest_path);
     with_job(&window, &jobs, job_id, |progress| {
@@ -1055,8 +1110,8 @@ fn execute_sync(sources: Vec<String>, destination: String, confirmation: String,
 }
 
 #[tauri::command(async)]
-fn execute_core_copy(source: String, destination: String, confirmation: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
-    let _write = card_write_guard()?;
+fn execute_core_copy(app: tauri::AppHandle, source: String, destination: String, confirmation: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
+    let _write = begin_card_write(&app, &destination)?;
     let plan = make_core_copy_plan(source, destination)?;
     with_job(&window, &jobs, job_id, |progress| {
         tau_core::journal::execute_to_journal(&plan, &confirmation, "core_copy", Path::new(&manifest_path), progress)
@@ -1064,8 +1119,8 @@ fn execute_core_copy(source: String, destination: String, confirmation: String, 
 }
 
 #[tauri::command(async)]
-fn execute_core_move(source: String, destination: String, confirmation: String, delete_confirmation: String, backup_path: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
-    let _write = card_write_guard()?;
+fn execute_core_move(app: tauri::AppHandle, source: String, destination: String, confirmation: String, delete_confirmation: String, backup_path: String, manifest_path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
+    let _write = begin_card_write(&app, &destination)?;
     let plan = make_core_copy_plan(source.clone(), destination)?;
     let source_path = PathBuf::from(&source);
     let source_root_prefix = tau_core::root_prefix(&source_path)?;
@@ -1165,7 +1220,7 @@ fn prune_history_best_effort(app: &tauri::AppHandle) {
 /// written to the reports directory before anything changes.
 #[tauri::command(async)]
 fn execute_changes(app: tauri::AppHandle, request: tau_core::changes::ChangeRequest, destination: String, confirmation: String, backup: Option<String>, context: Option<Value>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<ChangeResult, TauError> {
-    let _write = card_write_guard()?;
+    let _write = begin_card_write(&app, &destination)?;
     let dest = PathBuf::from(&destination);
     let plan = tau_core::changes::plan_changes(&dest, &request, &mut None)?;
     let reports = resolved_reports_dir(&app)?;
@@ -1227,7 +1282,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, appearance_check, appearance_open, appearance_export, appearance_plan_install, appearance_install, diag_read, diag_zip, get_prefs, set_prefs, update_check, update_download, plan_core_update, execute_core_update, rollback_core_update, library_health, plan_library_refresh, execute_library_refresh, rollback_library_refresh, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, appearance_check, appearance_open, appearance_export, appearance_plan_install, appearance_install, diag_read, diag_zip, get_prefs, set_prefs, update_check, update_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, library_health, plan_library_refresh, execute_library_refresh, rollback_library_refresh, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

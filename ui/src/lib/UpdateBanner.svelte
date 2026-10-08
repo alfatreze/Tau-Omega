@@ -49,7 +49,7 @@
   </div>
 {/if}
 <style>
-  .update-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin:0 0 14px;padding:12px 16px;border:1px solid #3b5a58;border-radius:10px;background:#16292a;color:#dce6e4;font-size:13px;line-height:1.5}
+  .update-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin:12px 16px 14px;padding:12px 56px 12px 16px;border:1px solid #3b5a58;border-radius:10px;background:#16292a;color:#dce6e4;font-size:13px;line-height:1.5}
   .update-actions{display:flex;gap:8px}
   .update-error{flex-basis:100%;color:#ff9b9b}
 </style>

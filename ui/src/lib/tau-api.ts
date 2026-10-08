@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView } from './types';
+import type { MarkerStatus, IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -64,6 +64,9 @@ export const libraryHealth = (mediaRoot: string) => invoke<IndexState>('library_
 export const planLibraryRefresh = (mediaRoot: string) => invoke<RefreshPlan>('plan_library_refresh', { mediaRoot });
 export const executeLibraryRefresh = (mediaRoot: string, confirmation: string) => invoke<RefreshReport>('execute_library_refresh', { mediaRoot, confirmation });
 export const rollbackLibraryRefresh = (mediaRoot: string, backupDir: string) => invoke<void>('rollback_library_refresh', { mediaRoot, backupDir });
+export const cardMarkerStatus = (path: string) => invoke<MarkerStatus>('card_marker_status', { path });
+export const setCardMarker = (setting: 'on' | 'off', path: string | null) => invoke<MarkerStatus>('set_card_marker', { setting, path });
+export const removeCardMarker = (path: string) => invoke<MarkerStatus>('remove_card_marker', { path });
 export const setPrefs = (prefs: Prefs) => invoke<PrefsView>('set_prefs', { prefs });
 export const albumThumbnails = (path: string, ids: string[]) => invoke<Thumbnail[]>('album_thumbnails', { path, ids });
 export const imageThumbnail = (path: string, longSide: number) => invoke<string>('image_thumbnail', { path, longSide });
