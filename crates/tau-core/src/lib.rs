@@ -25,6 +25,7 @@ pub mod diagnostics;
 pub mod duplicates;
 pub mod icon;
 pub mod image;
+pub mod install_plan;
 pub mod journal;
 pub mod ledger;
 pub mod package;

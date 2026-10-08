@@ -460,6 +460,14 @@ pub fn installed_identity(card_root: &Path, core_id: &str) -> Option<BuildIdenti
         .flatten()
 }
 
+/// The identity of a core inside a package zip (`None` when it has no readable `core.json`).
+pub fn package_identity(zip_path: &Path, core_id: &str) -> Option<BuildIdentity> {
+    let reader = ZipReader::open(zip_path).ok()?;
+    identity_from(core_id, |path| reader.read(path))
+        .ok()
+        .flatten()
+}
+
 /// Reads a core's identity through `read`, which maps a card-relative path to
 /// its bytes (a zip entry or a card file). `None` when the core has no readable
 /// `core.json`.
