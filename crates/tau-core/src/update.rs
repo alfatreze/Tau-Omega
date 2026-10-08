@@ -847,7 +847,7 @@ fn data_slot_problems(
             } else {
                 common
             };
-            if required && !folder.join(filename).is_file() {
+            if required && !folder.join(filename).is_file() && !core_dir.join(filename).is_file() {
                 problems.push(format!("required file {filename} is not on the card."));
             }
         }
