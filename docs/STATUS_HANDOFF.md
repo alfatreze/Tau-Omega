@@ -27,6 +27,21 @@ the HTTPS client for the GitHub check (recommend `ureq`; measure and flag its co
 
 **`tau-assets.bin` read-modify-write (2026-10-08, branch `taua-roundtrip`, worktree `../tau-omega-taua-roundtrip`, not merged).** Roadmap item 3's first half: saving themes, by install or Export, no longer deletes the card's meter presets (`METR`) or Halcyon user EQ presets (`PRST`). `pack_assets_keeping`/`kept_sections` in `assets.rs`; `appearance_export` gained an optional `keep_from` (the opened file); a newer container version is refused; the 8-section and 64 KiB limits are enforced. 185 Rust tests with serde, strict clippy, fmt and svelte-check clean. Built from a Tau Alpha session at the owner's request (Tau Alpha review `RELEASE_SYSTEM_REVIEW_2026-10-08.md` H1); merge is the owner's call.
 
+**Release manifests and the new card layout (2026-10-08, branch `release-compat`, stacked on `taua-roundtrip`, worktree `../tau-omega-release-compat`, not merged).** Built from a Tau Alpha session at the owner's request (Tau Alpha review `RELEASE_SYSTEM_REVIEW_2026-10-08.md`), engine only, no UI wiring yet. **`tau_core::compat`:**
+- `parse_compat` reads `tau-compat.json` schemas 1 and 2. It refuses any other schema (new error code 54, `InvalidReleaseManifest`) and ignores unknown keys.
+- `identify_installed` names the installed release by hashing its owned files. It removes the guesswork behind `SameDateDifferentBuild` once releases carry the file.
+- `persist_changed_since` implements the union rule over skipped releases from `persist_registry`.
+- `check_card` follows the same rules as Tau's reference `tau_compat.py check-card`.
+- `compare_tags` gives SemVer precedence (`dev < preview < rc < release`).
+
+**Paths for Tau's layout change (H4).** `tau.rom`, `tau-cold.bin` and `tau-loading.bin` move to `Assets/<platform>/<core>/` with core-specific data slots. Omega accepts both places:
+- `update.rs`: the build identity, and the required-slot check, which now honours parameter bit 1;
+- `diagnostics.rs`: the file list.
+
+**Tests:** 7 new; 191 Rust tests with serde, strict clippy and fmt clean. **Cross-implementation check:** a real Tau dev-package manifest parsed and checked clean in both implementations, and both reported the same single error after a one-byte ROM change (`TAU_COMPAT_CASE=<dir>` runs it).
+
+**Gate:** H4 is on Tau's `release-system` branch, not on Tau `main` (D-015) and not yet confirmed on a Pocket. Merging this is safe either way (old layout still read), but the Tau layout itself waits for the card probe.
+
 **How to run things.** `cargo test --workspace --features tau-core/serde`; `cargo clippy --workspace -- -D warnings`; `cargo fmt --all -- --check`; `cd ui && npm run check`; test build: `tools/dev-build.sh` (next number automatic).
 Browser suite: needs Playwright and a Chromium: `npm i -g playwright` (or any install), `cd ui && npx vite --port 5199 --strictPort &`, then `CHROMIUM_PATH=<headless chromium> URL=http://localhost:5199 NODE_PATH=$(npm root -g) node scripts/workbench-test.cjs`
 (expect 174 checks; the install the last session used lived in a temporary folder and is gone). Real-card tests are `#[ignore]`d and gated by environment variables, read-only unless stated: `TAU_REAL_CARD=/Volumes/Pock cargo test -p tau-core real_card -- --ignored --nocapture`
