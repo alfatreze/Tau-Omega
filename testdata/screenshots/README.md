@@ -65,3 +65,33 @@ the 2026-09-21 set above. Expected values in the `taud.rs` tests were cross-chec
 | `20260929_000253.png` | decode-stage split, **7-field** form (after B-381, adds worst LPC call) | 0.5.0 |
 
 No capture exists yet for tag 15 (Blit Test results), 17 (Winamp config export) or 18 (Meter Sweep); those stay "not decoded" until one does.
+
+## TPG1 pixel-grid captures (2026-10-04)
+
+Three real Pocket screenshots of the **same** USER CHECK report (231-byte record), from `TAU_DEV_BARCODE_02` (tau-alpha branch
+`barcode-study`, `TAU_TPG=1`), copied byte-for-byte from the card's `Memories/Screenshots`:
+
+| File | Shows |
+|---|---|
+| `20261004_190900.png` | the ordinary QR code (the reference: decodes with `--qr`) |
+| `20261004_190911.png` | TPG1 **mode L** (lossless): the record in the first pixel row, RGB565 values |
+| `20261004_190919.png` | TPG1 **mode R** (robust): 4x4 cells, 2 bits per channel, 24 pixel rows at the top |
+
+tau-alpha's `tools/decode_tau_suite.py --grid <file>` decodes both grids to the same record as the QR code, byte for byte (checked
+2026-10-04). The format is defined in tau-alpha's `tools/tpg.py` docstring and `docs/features/BARCODE_STUDY.md`; it is **not frozen**
+until more real captures exist. A Rust decoder here must be tested against these files, not against a fixture written from the doc.
+
+## TPG2 captures (2026-10-04, `TAU_DEV_BARCODE_04`)
+
+tau-alpha moved from `TPG1` (stream from pixel (0, 0), the three captures above) to `TPG2`: the stream is a **centred square block** whose side
+comes from a fixed ladder, and **robust mode is the default view** (lossless when the report is bigger than 6,059 B). Six real captures, two reports,
+each shown in all three views, copied byte-for-byte from the card's `Memories/Screenshots`:
+
+| Report | Robust grid | Lossless grid | QR code |
+|---|---|---|---|
+| Info page export (883-byte record, all 34 Info rows) | `20261004_194758.png` (160 px block) | `20261004_194804.png` (64 px block) | `20261004_194810.png` (QR version 25) |
+| USER CHECK with context (421-byte record) | `20261004_194856.png` (112 px block) | `20261004_194901.png` (64 px block) | `20261004_194907.png` (QR version 16) |
+
+For each report the three records are byte-identical (checked with tau-alpha's `tools/decode_tau_suite.py --grid` and `--qr`, 2026-10-04); the
+Info export decodes to 34 rows (`--grid <file> --table`), the Check one carries the now-playing entry. An Omega decoder should support both
+layouts and be tested against these files. Format: tau-alpha `tools/tpg.py` docstring and `docs/features/BARCODE_STUDY.md`; still **not frozen**.
