@@ -19,6 +19,7 @@
   import { tick } from 'svelte';
   import PackageView from './lib/PackageView.svelte';
   import UpdateBanner from './lib/UpdateBanner.svelte';
+  import RefreshLibrary from './lib/RefreshLibrary.svelte';
   let page: 'cards' | 'workbench' | 'compare' | 'history' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'diagnostics' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
   let packageZipPath = ''; let packageCardPath = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
@@ -422,6 +423,7 @@
       <div><span>Index</span><strong>{detailCore.index_status}</strong></div>
       <div><span>Tracks</span><strong>{detailCore.tracks ?? '—'}</strong></div>
     </div>
+    {#if detailCore.library_capable && detailCore.platform}{#key detailCore.id}<RefreshLibrary mediaRoot={`${path.replace(/\/$/, '')}/Assets/${detailCore.platform}/common`} coreName={detailCore.shortname || detailCore.id} onChanged={() => { void openFolder(); }} />{/key}{/if}
     <button class="primary" on:click={() => { if (detailCore) openCoreLibrary(detailCore); closeCoreDetail(); }}>Open library</button>
   </div>
 {/if}

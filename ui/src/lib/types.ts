@@ -192,3 +192,10 @@ export type CheckItem = { name: string; status: 'pass' | 'warn' | 'fail'; detail
 export type PostInstallReport = { core_id: string; items: CheckItem[]; verdict: 'pass' | 'warn' | 'fail'; summary: string };
 export type InstallReport = { backup_dir: string; files_written: number; bytes_written: number; files_backed_up: number; obsolete_removed: number; caches_cleared: number; stubs_swept: number; nothing_to_do: boolean; checks: PostInstallReport[] };
 export type RollbackReport = { restored: number; created_removed: number };
+
+/** Mirrors `tau_core::refresh`. */
+export type RefreshReason = 'unsupported_format' | 'non_ascii_name' | 'name_collision' | 'path_too_long' | 'tags_unreadable' | 'old_tag_version' | 'over_capacity';
+export type RefreshFinding = { rel: string; reason: RefreshReason; message: string; fix: string | null; skipped: boolean };
+export type IndexState = { present: boolean; valid: boolean; tracks: number | null; root: string | null; root_matches: boolean; missing_files: number };
+export type RefreshPlan = { id: string; media_root: string; root_prefix: string; before: IndexState; media_files: number; would_index: number; findings: RefreshFinding[]; renames: { from: string; to: string }[]; playlist_fixes: { file: string; lines: number }[]; stubs_to_remove: number; refused: string | null; nothing_to_do: boolean };
+export type RefreshReport = { backup_dir: string; renamed: number; playlists_rewritten: number; stubs_removed: number; before: IndexState; after: IndexState; index_path: string; nothing_to_do: boolean };
