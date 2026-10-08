@@ -1,0 +1,11 @@
+Tau Omega test build 0.4.0-alpha.8   (NOT a release)
+Release goal : 0.4.0
+Built        : 2026-10-08 08:40 WEST
+Branch       : main
+Commit       : 94c9687   testdata: nine real Pocket pixel-grid captures (TPG1 and TPG2, 2026-10-04) with provenance, kept from the tau-alpha barcode session
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 2edc67c00a8f291adb904b40bfa813a93eb470789d694c7de8b9a3457aba1f61  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
