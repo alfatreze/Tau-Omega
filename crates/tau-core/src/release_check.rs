@@ -255,14 +255,18 @@ pub fn evaluate_for_core(
                 .collect(),
         }
     };
-    let latest = match &installed.core_id {
-        // The newest release that carries this core, listed or not (an unlisted zip then shows "no verifiable download").
-        Some(id) => releases
+    let carrying = installed.core_id.as_ref().and_then(|id| {
+        releases
             .iter()
             .filter(|r| !zips_for_core(r, id, docs).is_empty())
             .max_by(|a, b| compat::compare_tags(&a.tag, &b.tag))
-            .or_else(|| latest(releases))?
-            .clone(),
+    });
+    // No release carries this core (for example a Stable user while only a Preview release exists): nothing is newer
+    // for it, and the newest release is shown only as information.
+    let nothing_for_core = installed.core_id.is_some() && carrying.is_none();
+    let latest = match carrying {
+        // The newest release that carries this core, listed or not (an unlisted zip then shows "no verifiable download").
+        Some(r) => r.clone(),
         None => latest(releases)?.clone(),
     };
     let channel = installed
@@ -291,8 +295,13 @@ pub fn evaluate_for_core(
         (None, Some(date)) => Some(latest.published.as_str() > date.as_str()),
         (None, None) => None,
     };
+    let newer = if nothing_for_core { Some(false) } else { newer };
     let version = latest.tag.trim_start_matches('v').to_string();
-    let mut zips = own_zips(&latest);
+    let mut zips = if nothing_for_core {
+        Vec::new()
+    } else {
+        own_zips(&latest)
+    };
     // The zip named for the release itself and not the Diagnostics core goes first.
     zips.sort_by_key(|a| {
         (
@@ -307,6 +316,10 @@ pub fn evaluate_for_core(
         _ => "Tau".to_string(),
     };
     let message = match newer {
+        _ if nothing_for_core => format!(
+            "No published release carries {} yet.",
+            installed.core_id.as_deref().unwrap_or("this core")
+        ),
         Some(true) => format!(
             "{what} {} is available{}.",
             latest.tag,
@@ -639,6 +652,28 @@ mod tests {
     }
 
     #[test]
+    fn a_core_no_release_carries_gets_no_update_only_information() {
+        let releases = vec![rel(
+            "v0.6.0-preview.1",
+            &["alfatreze.TAU_Preview_0.6.0-preview.1_2026-10-09.zip"],
+        )];
+        let check = evaluate_for_core(
+            &releases,
+            &core("alfatreze.TAU", "0.6.0", Some("v0.6.0-alpha.3")),
+            None,
+            &[],
+        )
+        .unwrap();
+        assert_eq!(check.newer, Some(false));
+        assert!(check.zips.is_empty());
+        assert_eq!(
+            check.message,
+            "No published release carries alfatreze.TAU yet."
+        );
+        assert_eq!(check.others.len(), 1, "{:?}", check.others);
+    }
+
+    #[test]
     fn a_preview_user_is_checked_and_offered_the_preview_zip_only() {
         let installed = core(
             "alfatreze.TAU Preview",
@@ -753,12 +788,11 @@ mod tests {
     fn same_day_dev_builds_are_ordered_by_the_full_core_version() {
         let releases = vec![rel(
             "v0.7.0-dev.386",
-            &["alfatreze.TAU_DEV_0.7.0-dev.386.zip"],
+            &["alfatreze.TAU_DEV_385_0.7.0-dev.386.zip"],
         )];
         let mut installed = core("alfatreze.TAU DEV 385", "0.7.0-dev.385", None);
         installed.date_release = Some("2026-11-01".into());
         let check = evaluate_for_core(&releases, &installed, None, &[]).unwrap();
-        // The dev zip name starts with a different stem, so no zip matches, but the version order is still used.
         assert_eq!(check.newer, Some(true));
         assert_eq!(check.channel, Some(Channel::Dev));
     }
