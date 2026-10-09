@@ -70,7 +70,7 @@
     detectConnection(card).then((c) => (connectionKinds = { ...connectionKinds, [card]: c.kind })).catch(() => {});
   }
   $: ensureConnectionKind(path);
-  $: mediaRoot = path && activeCore?.platform ? `${path.replace(/\/+$/, '')}/Assets/${activeCore.platform}/common` : '';
+  $: mediaRoot = path && activeCore?.media_platform ? `${path.replace(/\/+$/, '')}/Assets/${activeCore.media_platform}/common` : '';
   // Below 720 px the sidebar is a menu opened with the button at the top left (it used to disappear
   // completely, which at 200% zoom removed all navigation).
   let navOpen = false; let navToggleEl: HTMLButtonElement;
@@ -269,7 +269,7 @@
   function closeCoreDetail() { detailCore = null; }
   function openCoreLibrary(core: Core) {
     activeCore = core;
-    if (!core.platform) { notice = `${core.id} has no declared platform, so its media root can't be located.`; return; }
+    if (!core.media_platform) { notice = `${core.id} has no declared platform, so its media root can't be located.`; return; }
     page = 'workbench';
   }
 
@@ -370,7 +370,7 @@
       {/if}
     {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}</section>
   {:else if page === 'workbench'}
-    <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} mediaRoot={mediaRoot} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
+    <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, media_platform: c.media_platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} mediaRoot={mediaRoot} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
   {:else if page === 'compare'}<section class="page compare-page"><header><div><p class="eyebrow">CORE TRANSFER</p><h1>Compare, then copy safely</h1><p class="lede">Compare two Tau media roots before copying the complete library to the second core.</p></div></header><section class="wizard" aria-labelledby="compare-title"><h2 id="compare-title">Compare two cores</h2><label for="left-core">Source media root</label><div class="picker-row"><input id="left-core" bind:value={leftCore} placeholder="/Volumes/Pocket/Assets/tau/common"/><button class="picker" on:click={() => chooseFolder('left')}>Choose</button></div><label for="right-core">Destination media root</label><div class="picker-row"><input id="right-core" bind:value={rightCore} placeholder="/Volumes/Pocket/Assets/tau-test/common"/><button class="picker" on:click={() => chooseFolder('right')}>Choose</button></div><label for="copy-report">Copy report location on this computer</label><div class="picker-row"><input id="copy-report" bind:value={copyReportPath} placeholder="/Users/me/Documents/tau-core-copy.json"/><button class="picker" on:click={() => chooseFolder('copyReport')}>Choose</button></div><button class="primary" on:click={compareCores}>Compare safely</button></section><p class="notice" role="status">{compareNotice}</p>{#if comparison}<section class="comparison" aria-labelledby="comparison-title"><div class="section-title"><div><p class="eyebrow">RESULT</p><h2 id="comparison-title">{comparison.differences.length} files compared</h2></div><span>Read-only</span></div><div class="comparison-counts"><span><b>{comparison.only_left}</b> only in source</span><span><b>{comparison.only_right}</b> only in destination</span><span><b>{comparison.different}</b> different</span><span><b>{comparison.identical}</b> matching</span></div><ul class="difference-list">{#each comparison.differences as item}<li><span class={`difference ${item.state}`}>{item.state === 'only_left' ? 'Source only' : item.state === 'only_right' ? 'Destination only' : item.state === 'different' ? 'Different' : 'Matching'}</span><span>{item.relative}</span><span>{item.left_bytes === null ? '—' : size(item.left_bytes)} / {item.right_bytes === null ? '—' : size(item.right_bytes)}</span></li>{/each}</ul><button class="primary" on:click={reviewCoreCopy}>Review full-library copy</button>{#if coreCopyPlan}<div class="copy-plan"><p class="eyebrow">READY FOR CONFIRMATION</p><h3>{coreCopyPlan.id}</h3><p>{coreCopyPlan.new_files} new · {coreCopyPlan.updates} updated · {coreCopyPlan.unchanged} unchanged · {size(coreCopyPlan.bytes_to_write)} to write</p>{#if coreCopyCapacity}<p class:capacity-ok={coreCopyCapacity.fits} class:capacity-bad={!coreCopyCapacity.fits}>{coreCopyCapacity.fits ? 'Fits' : 'Does not fit'} on the destination volume — {size(coreCopyCapacity.space.available_bytes)} free.</p>{/if}<button class="danger" on:click={runCoreCopy}>Confirm and copy</button></div>{/if}<p class="safety">The source is never changed. The destination files are verified and its index is rebuilt last. Move remains unavailable until its separate backup and deletion review is ready.</p></section>{/if}</section>
   {:else if page === 'history'}
     <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} refresh={loadHistory} openSettings={() => { moreOpen = true; page = 'settings'; }} startSync={() => page = 'workbench'} />
@@ -427,7 +427,7 @@
       <div><span>Index</span><strong>{detailCore.index_status}</strong></div>
       <div><span>Tracks</span><strong>{detailCore.tracks ?? '—'}</strong></div>
     </div>
-    {#if detailCore.library_capable && detailCore.platform}{#key detailCore.id}<RefreshLibrary mediaRoot={`${path.replace(/\/$/, '')}/Assets/${detailCore.platform}/common`} coreName={detailCore.shortname || detailCore.id} onChanged={() => { void openFolder(); }} />{/key}{/if}
+    {#if detailCore.library_capable && detailCore.media_platform}{#key detailCore.id}<RefreshLibrary mediaRoot={`${path.replace(/\/$/, '')}/Assets/${detailCore.media_platform}/common`} coreName={detailCore.shortname || detailCore.id} onChanged={() => { void openFolder(); }} />{/key}{/if}
     <button class="primary" on:click={() => { if (detailCore) openCoreLibrary(detailCore); closeCoreDetail(); }}>Open library</button>
   </div>
 {/if}

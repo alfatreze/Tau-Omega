@@ -80,6 +80,13 @@ pub struct BuildIdentity {
     pub version: String,
     pub date_release: String,
     pub platform: String,
+    /// Platform whose `common/` holds the library and media (see
+    /// [`crate::cardlayout::media_platform`]); equals `platform` for a plain core.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub media_platform: String,
+    /// Every declared platform id, in order.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub platforms: Vec<String>,
     pub bitstream_sha256: Option<String>,
     pub rom_sha256: Option<String>,
     pub cold_sha256: Option<String>,
@@ -270,14 +277,14 @@ pub fn assess_update_with(
         cores.push(assessment);
         let common = card_root
             .join("Assets")
-            .join(&package_identity.platform)
+            .join(&package_identity.media_platform)
             .join("common");
         for name in USER_FILES {
             let in_package = manifest
                 .entries
                 .iter()
                 .any(|entry| entry.path.ends_with(&format!("/{name}")));
-            let relative = format!("Assets/{}/common/{name}", package_identity.platform);
+            let relative = format!("Assets/{}/common/{name}", package_identity.media_platform);
             if !in_package && common.join(name).is_file() && !user_files_kept.contains(&relative) {
                 user_files_kept.push(relative);
             }
@@ -491,6 +498,12 @@ fn identity_from(
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
+    let media_platform = crate::cardlayout::media_platform(
+        &crate::cardlayout::platform_ids(&json),
+        read(&format!("Cores/{core_id}/data.json"))
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            .as_ref(),
+    );
     let hash = |path: String| read(&path).map(|bytes| sha256_hex(&bytes));
     // Build-bound files are core-specific since Tau's layout change (Assets/<platform>/<core>/, data slots 1/4/6 with
     // parameter bit 1); packages and cards made before keep them in common/.
@@ -510,6 +523,8 @@ fn identity_from(
         rom_accepts: rom.as_deref().and_then(rom_pair_marker),
         rom_needs: rom.as_deref().and_then(rom_needs_marker),
         platform,
+        media_platform,
+        platforms: crate::cardlayout::platform_ids(&json),
     }))
 }
 
@@ -756,9 +771,18 @@ pub fn post_install_check_with(
     }
 
     // 4. Declared data slots and their files.
-    let common = card_root.join("Assets").join(&platform).join("common");
+    let media_platform = identity.media_platform.clone();
+    let common = card_root
+        .join("Assets")
+        .join(&media_platform)
+        .join("common");
     let core_assets = card_root.join("Assets").join(&platform).join(core_id);
-    let slot_report = data_slot_problems(&core_dir, &common, &core_assets);
+    let commons: Vec<PathBuf> = crate::cardlayout::core_platforms(card_root, core_id)
+        .0
+        .iter()
+        .map(|p| card_root.join("Assets").join(p).join("common"))
+        .collect();
+    let slot_report = data_slot_problems(&core_dir, &commons, &core_assets);
     match slot_report {
         Err(detail) => push("data slots", CheckStatus::Fail, detail),
         Ok(report) if report.problems.is_empty() => push(
@@ -773,7 +797,7 @@ pub fn post_install_check_with(
     }
 
     // 5. The library index, when the core serves one.
-    push_library_check(&mut push, &core_dir, &common, &platform);
+    push_library_check(&mut push, &core_dir, &common, &media_platform);
 
     // 6. Catalog caches must be cleared so the Pocket rescans.
     let stale: Vec<&str> = CATALOG_CACHES
@@ -963,26 +987,11 @@ struct SlotReport {
     problems: Vec<String>,
 }
 
-/// Data-slot parameter bit 1: the file is specific to this core (`Assets/<platform>/<core>/`), not the platform's `common/`.
-const SLOT_CORE_SPECIFIC: u64 = 0x2;
-
-fn slot_parameters(slot: &Value) -> u64 {
-    match slot.get("parameters") {
-        Some(Value::Number(n)) => n.as_u64().unwrap_or(0),
-        Some(Value::String(s)) => {
-            let t = s.trim();
-            t.strip_prefix("0x")
-                .or_else(|| t.strip_prefix("0X"))
-                .map_or_else(|| t.parse().ok(), |h| u64::from_str_radix(h, 16).ok())
-                .unwrap_or(0)
-        }
-        _ => 0,
-    }
-}
+use crate::cardlayout::{SLOT_CORE_SPECIFIC, slot_parameters};
 
 fn data_slot_problems(
     core_dir: &Path,
-    common: &Path,
+    commons: &[PathBuf],
     core_assets: &Path,
 ) -> Result<SlotReport, String> {
     let bytes =
@@ -1026,7 +1035,11 @@ fn data_slot_problems(
             let folder = if slot_parameters(slot) & SLOT_CORE_SPECIFIC != 0 {
                 core_assets
             } else {
-                common
+                let index = crate::cardlayout::slot_platform_index(slot);
+                commons
+                    .get(index)
+                    .or_else(|| commons.first())
+                    .map_or(core_assets, PathBuf::as_path)
             };
             if required && !folder.join(filename).is_file() && !core_dir.join(filename).is_file() {
                 problems.push(format!("required file {filename} is not on the card."));
@@ -1166,7 +1179,7 @@ mod tests {
         }
         fs::write(core_dir.join("data.json"), br#"{"data":{"data_slots":[{"name":"Firmware","id":1,"required":true,"parameters":"0x10A","filename":"tau.rom"}]}}"#).unwrap();
         fs::write(common.join("tau.rom"), b"old place").unwrap();
-        let r = data_slot_problems(&core_dir, &common, &core_assets).unwrap();
+        let r = data_slot_problems(&core_dir, std::slice::from_ref(&common), &core_assets).unwrap();
         assert!(
             r.problems.iter().any(|p| p.contains("tau.rom")),
             "a core-specific slot is not satisfied by common/: {:?}",
@@ -1174,7 +1187,7 @@ mod tests {
         );
         fs::write(core_assets.join("tau.rom"), b"rom").unwrap();
         assert!(
-            data_slot_problems(&core_dir, &common, &core_assets)
+            data_slot_problems(&core_dir, std::slice::from_ref(&common), &core_assets)
                 .unwrap()
                 .problems
                 .is_empty()

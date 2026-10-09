@@ -15,9 +15,9 @@ const MB = 1e6;
 const GB = 1e9;
 
 const cores = [
-  { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'ok', tracks: 7180 },
-  { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
-  { id: 'agg23.SNES', author: 'agg23', shortname: 'SNES', version: '1.4.0', platform: 'snes', platform_category: 'Console', library_capable: false, index_status: 'n/a', tracks: null },
+  { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platforms: ['tau'], media_platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'ok', tracks: 7180 },
+  { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platforms: ['tau2'], media_platform: 'tau2', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
+  { id: 'agg23.SNES', author: 'agg23', shortname: 'SNES', version: '1.4.0', platform: 'snes', platforms: ['snes'], media_platform: 'snes', platform_category: 'Console', library_capable: false, index_status: 'n/a', tracks: null },
 ];
 
 type Album = { id: string; dest_id: string; title: string; artist: string; year: string | null; tracks: number; bytes: number; has_cover: boolean };

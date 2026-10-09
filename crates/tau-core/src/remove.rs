@@ -56,46 +56,59 @@ pub fn plan_remove(card: &Card, core_id: &str) -> Result<RemovePlan, TauError> {
             )
         })?;
     let platform = core.platform.clone();
-    let platform_shared = !platform.is_empty()
-        && card
-            .cores
+    // A platform is shared when any other core lists it, in any position: a
+    // Preview or Dev core builds on its own platform but also names `tau`.
+    let uses = |platform: &str| {
+        card.cores
             .iter()
-            .any(|other| other.id != core_id && other.platform == platform);
+            .any(|other| other.id != core_id && other.platforms.iter().any(|p| p == platform))
+    };
+    let platform_shared = !platform.is_empty() && uses(&platform);
+    let mut declared = core.platforms.clone();
+    if declared.is_empty() && !platform.is_empty() {
+        declared.push(platform.clone());
+    }
 
     let mut candidates = vec![PathBuf::from("Cores").join(core_id)];
-    if !platform.is_empty() {
-        let per_core_assets = PathBuf::from("Assets").join(&platform).join(core_id);
-        if !platform_shared {
-            // This core's own asset folder and the shared `common` folder are
-            // normally the only two entries under `Assets/<platform>`; when
-            // that holds, remove the whole platform folder in one path
-            // instead of leaving an empty `Assets/<platform>` behind. If
-            // something else is in there too, fall back to only the two
-            // recognised sub-paths and leave the rest untouched.
-            let platform_dir = PathBuf::from("Assets").join(&platform);
-            let platform_dir_absolute = card.root.join(&platform_dir);
-            let only_known_entries = fs::read_dir(&platform_dir_absolute)
-                .map(|entries| {
-                    entries.filter_map(Result::ok).all(|entry| {
-                        matches!(entry.file_name().to_str(), Some(name) if name == core_id || name == "common")
-                    })
+    for declared_platform in declared.iter().filter(|p| !p.is_empty()) {
+        let per_core_assets = PathBuf::from("Assets")
+            .join(declared_platform)
+            .join(core_id);
+        if uses(declared_platform) {
+            candidates.push(per_core_assets);
+            continue;
+        }
+        // This core's own asset folder and the shared `common` folder are
+        // normally the only two entries under `Assets/<platform>`; when
+        // that holds, remove the whole platform folder in one path
+        // instead of leaving an empty `Assets/<platform>` behind. If
+        // something else is in there too, fall back to only the two
+        // recognised sub-paths and leave the rest untouched.
+        let platform_dir = PathBuf::from("Assets").join(declared_platform);
+        let platform_dir_absolute = card.root.join(&platform_dir);
+        let only_known_entries = fs::read_dir(&platform_dir_absolute)
+            .map(|entries| {
+                entries.filter_map(Result::ok).all(|entry| {
+                    matches!(entry.file_name().to_str(), Some(name) if name == core_id || name == "common")
                 })
-                .unwrap_or(false);
-            if only_known_entries {
-                candidates.push(platform_dir);
-            } else {
-                candidates.push(per_core_assets);
-                candidates.push(PathBuf::from("Assets").join(&platform).join("common"));
-            }
-            candidates.push(PathBuf::from("Platforms").join(format!("{platform}.json")));
-            candidates.push(
-                PathBuf::from("Platforms")
-                    .join("_images")
-                    .join(format!("{platform}.bin")),
-            );
+            })
+            .unwrap_or(false);
+        if only_known_entries {
+            candidates.push(platform_dir);
         } else {
             candidates.push(per_core_assets);
+            candidates.push(
+                PathBuf::from("Assets")
+                    .join(declared_platform)
+                    .join("common"),
+            );
         }
+        candidates.push(PathBuf::from("Platforms").join(format!("{declared_platform}.json")));
+        candidates.push(
+            PathBuf::from("Platforms")
+                .join("_images")
+                .join(format!("{declared_platform}.bin")),
+        );
     }
 
     let mut paths = Vec::new();
