@@ -222,7 +222,7 @@ pub fn plan(
     }
 
     let kept = update.user_files_kept.clone();
-    let superseded_candidates = superseded(card_root, &update);
+    let superseded_candidates = superseded(card_root, &update, docs);
 
     let mut hasher = Sha256::new();
     hasher.update(files.id.as_bytes());
@@ -259,8 +259,10 @@ pub fn plan(
     })
 }
 
-/// Numbered Tau test builds (`alfatreze.TAU_DEV_*`, `alfatreze.TAU_0_6_0_A_*`) other than the cores in this package.
-fn superseded(card_root: &Path, update: &UpdateReport) -> Vec<String> {
+/// Cores on the card that this install makes redundant, suggested for removal (never removed automatically):
+/// numbered Tau test builds (`alfatreze.TAU_DEV_*`, `alfatreze.TAU DEV NN`, `alfatreze.TAU_0_6_0_A_*`) other than the
+/// cores in this package, and any core the release manifest says a package `replaces`.
+fn superseded(card_root: &Path, update: &UpdateReport, docs: &[CompatDoc]) -> Vec<String> {
     let ours: Vec<&str> = update
         .cores
         .iter()
@@ -269,14 +271,33 @@ fn superseded(card_root: &Path, update: &UpdateReport) -> Vec<String> {
     let Ok(read) = fs::read_dir(card_root.join("Cores")) else {
         return Vec::new();
     };
+    let mut replaced: Vec<&str> = Vec::new();
+    for core in &update.cores {
+        let Some(doc) = core
+            .package_release
+            .as_deref()
+            .and_then(|tag| docs.iter().find(|d| d.release == tag))
+        else {
+            continue;
+        };
+        for package in doc
+            .packages
+            .iter()
+            .filter(|p| p.core_id == core.package.core_id)
+        {
+            replaced.extend(package.replaces.iter().map(String::as_str));
+        }
+    }
     let mut out: Vec<String> = read
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|id| !ours.contains(&id.as_str()))
         .filter(|id| {
-            id.strip_prefix("alfatreze.TAU_").is_some_and(|rest| {
-                rest.starts_with("DEV_") || rest.starts_with(|c: char| c.is_ascii_digit())
-            })
+            replaced.contains(&id.as_str())
+                || id.strip_prefix("alfatreze.TAU DEV ").is_some()
+                || id.strip_prefix("alfatreze.TAU_").is_some_and(|rest| {
+                    rest.starts_with("DEV_") || rest.starts_with(|c: char| c.is_ascii_digit())
+                })
         })
         .collect();
     out.sort();
@@ -515,6 +536,44 @@ mod tests {
             plan.backup
                 .iter()
                 .any(|b| b.path == "Assets/tau/alfatreze.TAU/tau-old.bin" && b.bytes == 9)
+        );
+        fs::remove_dir_all(card).unwrap();
+    }
+
+    #[test]
+    fn a_manifest_replaces_list_and_numbered_dev_cores_become_removal_suggestions() {
+        let card = scratch("replaces");
+        install(&alpha3(), &card);
+        for id in [
+            "alfatreze.TAU_DIAGNOSTIC",
+            "alfatreze.TAU DEV 385",
+            "alfatreze.TAU Preview",
+        ] {
+            fs::create_dir_all(card.join("Cores").join(id)).unwrap();
+        }
+        let reader = package::inspect(&alpha4()).unwrap();
+        let layout: Vec<_> = reader.entries.iter()
+            .map(|e| serde_json::json!({"path": e.path, "role": "owned", "sha256": e.sha256, "slot": null, "required": false}))
+            .collect();
+        let doc = crate::compat::parse_compat(
+            serde_json::json!({"schema": 2, "release": "v0.6.0-alpha.4", "date_release": "2026-10-07",
+                "packages": [{"zip": "x.zip", "zip_sha256": "00", "core_id": "alfatreze.TAU",
+                    "replaces": ["alfatreze.TAU_DIAGNOSTIC"],
+                    "bitstream_sha256": update::package_identity(&alpha4(), "alfatreze.TAU").unwrap().bitstream_sha256,
+                    "bitstream_core_version": "4D50331A",
+                    "rom_sha256": update::package_identity(&alpha4(), "alfatreze.TAU").unwrap().rom_sha256,
+                    "cold_sha256": update::package_identity(&alpha4(), "alfatreze.TAU").unwrap().cold_sha256,
+                    "rom_accepts": ["4D50331A"], "rom_needs": [], "layout": layout}],
+                "requires_omega": {"min_omega": "0.4.0"}})
+            .to_string()
+            .as_bytes(),
+        )
+        .unwrap();
+        let plan = plan(&alpha4(), &card, &[doc], false).unwrap();
+        assert_eq!(
+            plan.superseded_candidates,
+            vec!["alfatreze.TAU DEV 385", "alfatreze.TAU_DIAGNOSTIC"],
+            "a different channel's core (Preview) is not superseded"
         );
         fs::remove_dir_all(card).unwrap();
     }

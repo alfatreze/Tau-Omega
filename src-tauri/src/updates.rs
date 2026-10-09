@@ -73,30 +73,59 @@ fn manifests(releases: &[release_check::GithubRelease], cache: &std::path::Path)
         .collect()
 }
 
-/// The check. `card` (optional) is a card folder whose Tau core is compared with the newest release.
+/// The check. `card` (optional) is a card folder whose Tau cores are compared with the releases of their own channel.
 pub fn check(card: Option<&str>, manifest_cache: &std::path::Path) -> Result<Option<UpdateCheck>, TauError> {
     let releases = release_check::parse_releases(&get(RELEASES_URL, LIST_LIMIT)?)?;
-    let installed = card
-        .and_then(|card| installed_tau(std::path::Path::new(card)))
-        .map(|identity| {
-            let release = update::release_of(&identity, &manifests(&releases, manifest_cache));
-            Installed { release, date_release: Some(identity.date_release) }
+    let docs = manifests(&releases, manifest_cache);
+    // Offer only zips the chosen release's own checksum file lists (a missing or unreadable file leaves them all, and
+    // the download then refuses what it cannot verify).
+    let sums_of = |release: &release_check::GithubRelease| {
+        release
+            .assets
+            .iter()
+            .find(|a| a.name == "SHA256SUMS.txt")
+            .and_then(|a| get(&a.url, MANIFEST_LIMIT).ok())
+            .map(|bytes| release_check::parse_sums(&String::from_utf8_lossy(&bytes)))
+    };
+    let cores = card.map(|card| installed_tau_cores(std::path::Path::new(card))).unwrap_or_default();
+    if cores.is_empty() {
+        let sums = release_check::latest(&releases).and_then(sums_of);
+        return Ok(release_check::evaluate_with_sums(&releases, &Installed::default(), sums.as_ref()));
+    }
+    // Every installed Tau core is judged against its own channel; an Update is reported for the first one that has
+    // one, otherwise the first core's answer ("up to date").
+    let mut checks: Vec<UpdateCheck> = cores
+        .iter()
+        .filter_map(|identity| {
+            let installed = Installed {
+                core_id: Some(identity.core_id.clone()),
+                version: Some(identity.version.clone()).filter(|v| !v.is_empty()),
+                release: update::release_of(identity, &docs),
+                date_release: Some(identity.date_release.clone()),
+            };
+            release_check::evaluate_for_core(&releases, &installed, None, &docs)
         })
-        .unwrap_or_default();
-    // Offer only zips the release's own checksum file lists (a missing or unreadable file leaves them all, and the
-    // download then refuses what it cannot verify).
-    let sums = release_check::latest(&releases)
-        .and_then(|r| r.assets.iter().find(|a| a.name == "SHA256SUMS.txt"))
-        .and_then(|a| get(&a.url, MANIFEST_LIMIT).ok())
-        .map(|bytes| release_check::parse_sums(&String::from_utf8_lossy(&bytes)));
-    Ok(release_check::evaluate_with_sums(&releases, &installed, sums.as_ref()))
+        .collect();
+    let position = checks.iter().position(|c| c.newer == Some(true)).unwrap_or(0);
+    if checks.is_empty() {
+        return Ok(None);
+    }
+    let mut check = checks.swap_remove(position);
+    if let Some(sums) = sums_of(&check.latest) {
+        check.zips.retain(|z| sums.contains_key(&z.name));
+    }
+    Ok(Some(check))
 }
 
-/// The normal Tau core on a card (the first library-capable core named TAU), if any.
-fn installed_tau(card: &std::path::Path) -> Option<update::BuildIdentity> {
-    let cores = tau_core::inspect_card(card).ok()?.cores;
-    let core = cores.iter().find(|c| c.shortname == "TAU")?;
-    update::installed_identity(card, &core.id)
+/// Every Tau-family core on a card (folder id starts `alfatreze.TAU`, as the storage breakdown groups them), in
+/// folder order.
+fn installed_tau_cores(card: &std::path::Path) -> Vec<update::BuildIdentity> {
+    let Ok(card) = tau_core::inspect_card(card) else { return Vec::new() };
+    card.cores
+        .iter()
+        .filter(|c| c.id.to_ascii_lowercase().starts_with("alfatreze.tau"))
+        .filter_map(|c| update::installed_identity(&card.root, &c.id))
+        .collect()
 }
 
 #[derive(serde::Serialize)]

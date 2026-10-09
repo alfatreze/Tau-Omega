@@ -81,6 +81,9 @@ pub struct CompatPackage {
     pub cold_sha256: String,
     pub rom_accepts: Vec<String>,
     pub rom_needs: Vec<String>,
+    /// Core ids this package replaces (e.g. `alfatreze.TAU_DIAGNOSTIC` for `alfatreze.TAU Diagnostics`).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub replaces: Vec<String>,
     /// Empty for schema 1.
     pub layout: Vec<LayoutEntry>,
 }
@@ -222,6 +225,7 @@ pub fn parse_compat(bytes: &[u8]) -> Result<CompatDoc, TauError> {
             cold_sha256: s(p, "cold_sha256")?,
             rom_accepts: str_list(p.get("rom_accepts")),
             rom_needs: str_list(p.get("rom_needs")),
+            replaces: str_list(p.get("replaces")),
             layout,
         });
     }

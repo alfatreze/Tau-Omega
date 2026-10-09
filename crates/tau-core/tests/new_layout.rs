@@ -311,7 +311,7 @@ fn migration_from_the_old_layout_and_what_a_dev_core_sees() {
         &releases,
         &tau_core::release_check::Installed {
             release: Some("v0.6.0".into()),
-            date_release: None,
+            ..Default::default()
         },
     )
     .unwrap();
