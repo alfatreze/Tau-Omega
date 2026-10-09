@@ -52,13 +52,13 @@ identifiers, results explained in plain words (rate limit, offline, no newer rel
 
 ### 1e. Adapt to Tau Alpha's new release system (DONE 2026-10-09/10; evaluation and plan in `docs/RELEASE_SYSTEM_IMPACT_2026-10-08.md`)
 
-Tau's format is fixed, Omega adapted (no change on Tau Alpha). Built, tested and pushed except the last commit noted below:
+Tau's format is fixed, Omega adapted (no change on Tau Alpha). Built, tested and pushed:
 - **A** each core's media platform (the platform its library slot reads, `tau` for Preview and Dev cores) is used for the card list, workbench, sync, Appearance, Refresh, health badge and post-install check; removal keeps `Assets/<platform>` while any other core lists it in any position.
 - **B** a manifest's obsolete paths are acted on only inside the core's own areas (or a build file moved out of `common/` that no other core reads); everything else is left alone with a caution. Same filter in `check_card`.
 - **C** channel-aware update check (a Stable user is never offered the Preview core; other channels are information), zips chosen from the manifest (`core_id` or `replaces`), every `alfatreze.TAU*` core on the card is checked, removal suggestions from `replaces` and `TAU DEV NN`.
 - **D** feature pairing (`TAUFWNEED` against `bitstream_features`), same-day builds ordered by the full `core.json` version, firmware version and dirty-tree notes, persist names from the manifest registry.
 - **E** settings migration for a replaced core (only when no saved setting changed meaning) and an uninstall that keeps the library, music and theme file (checkbox, default on).
-- Proven on the real `CARDWRITE` card (install, remove with and without keep-media, migration, card restored byte-identical) and against the real `v0.6.0-preview.1` release (installs, all checks pass, offered to the right channel). Local commit `dff8405` (real-release test and the "no release carries this core" fix) is not pushed until the owner says.
+- Proven on the real `CARDWRITE` card (install, remove with and without keep-media, migration, card restored byte-identical) and against the real `v0.6.0-preview.1` release (installs, all checks pass, offered to the right channel).
 - **Still open:** a real release whose manifest carries `replaces` (v0.6.0-preview.1 has none); a Pocket boot test of a core installed by Omega in the new layout; without a manifest, keep-media leaves the old-layout `tau.rom`/`tau-cold.bin`/`tau-loading.bin` in `common/`.
 
 ### 2. Read the pixel-grid report codes (needed because the Tau Alpha default changed)
