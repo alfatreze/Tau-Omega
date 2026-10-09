@@ -52,7 +52,7 @@ identifiers, results explained in plain words (rate limit, offline, no newer rel
 
 ### 1e. Adapt to Tau Alpha's new release system (on Tau Alpha `main` since 2026-10-08; evaluation in `docs/RELEASE_SYSTEM_IMPACT_2026-10-08.md`)
 
-Seven reproduced findings, three of them unsafe (removing TAU can delete the library that Preview and Dev cores read; media paths use the first platform only, so
+Eight reproduced findings (plus one recalibrated), the unsafe ones being (own-platform media paths, shared-platform removal, and a manifest able to delete any file); the plan assumes **no change on Tau Alpha** (removing TAU can delete the library that Preview and Dev cores read; media paths use the first platform only, so
 Preview/Dev cores get music, themes and refreshes in the wrong folder; obsolete `common/` files are removed without Tau's "another core still reads it" rule),
 then channel-blind update checks, zip names, `replaces`, feature pairing. Order and detail are in that document. **Do this before the next Tau release is installed from Omega.**
 
