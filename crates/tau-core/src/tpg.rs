@@ -112,7 +112,9 @@ fn robust_stream(rgb: &[u8], x0: usize, y0: usize, side: usize, cells: usize) ->
             bits.push(l & 1);
         }
     }
-    bits.chunks_exact(8)
+    bits.as_chunks::<8>()
+        .0
+        .iter()
         .map(|b| b.iter().fold(0u8, |a, &bit| (a << 1) | bit))
         .collect()
 }
@@ -170,7 +172,9 @@ pub fn decode_rgb(width: usize, height: usize, rgb: &[u8]) -> Result<Option<Vec<
         }
     }
     let f: Vec<u8> = bits
-        .chunks_exact(8)
+        .as_chunks::<8>()
+        .0
+        .iter()
         .map(|b| b.iter().fold(0u8, |a, &bit| (a << 1) | bit))
         .collect();
     if let Some((n, crc)) = parse_header(&f, MODE_R, b"TPG1", gw * gh * 6 / 8 - HDR)? {
@@ -283,5 +287,36 @@ mod tests {
         let i = (((h - 64) / 2) * w + (w - 64) / 2 + 10) * 3;
         rgb[i] ^= 0xF8;
         assert!(decode_rgb(w, h, &rgb).is_err());
+    }
+
+    // The only real capture with the final tag numbers (26 Info rows, 27 now playing): the Info
+    // export of 2026-10-08, from tau-alpha's probe-2 folder. Expected values cross-checked with
+    // decode_tau_suite.py --grid --json.
+    #[test]
+    fn decodes_info_rows_and_now_playing_from_a_real_grid() {
+        let r = taud::read_screenshot_report(fixture("20261008_223548.png")).unwrap();
+        assert_eq!(r.profile, "none");
+        assert!(r.unknown.is_empty());
+        assert_eq!(r.entries.info_rows.len(), 37);
+        let first = &r.entries.info_rows[0];
+        assert_eq!(
+            (first.row, first.label.as_str(), first.value.as_str()),
+            (0, "FIRMWARE", "0.6.0")
+        );
+        let last = r.entries.info_rows.last().unwrap();
+        assert_eq!(
+            (last.row, last.label.as_str(), last.value.as_str()),
+            (36, "GAP LATENCY", "-")
+        );
+        let np = r.entries.now_playing.as_ref().unwrap();
+        assert_eq!(
+            (
+                np.state.as_str(),
+                np.queue_pos,
+                np.queue_len,
+                np.title.as_str()
+            ),
+            ("nothing loaded", 0, 0, "")
+        );
     }
 }
