@@ -151,6 +151,61 @@ pub struct TaudDecodeSweepEntry {
     pub title: String,
 }
 
+/// Heap high-water mark (tag 23, `SR_T_HEAP`): peak bytes in use since boot and the heap size.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudHeap {
+    pub peak_bytes: u64,
+    pub heap_size: u64,
+    pub free_bytes: u64,
+}
+
+/// CPU load over the Check audio window (tag 24, `SR_T_LOAD`), percent of real time. The two
+/// `sub_*` shares are MP3 only on a profile build (0 otherwise).
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudLoad {
+    pub busy_pct: u64,
+    pub busy_worst_pct: u64,
+    pub io_pct: u64,
+    pub secs: u64,
+    pub sub_fdct_pct: u64,
+    pub sub_hw_pct: u64,
+}
+
+/// Where the MP3 loop's non-decode CPU goes (tag 25, `SR_T_LOAD2`), percent of the window; 0 on FLAC.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudLoad2 {
+    pub dec_pct: u64,
+    pub feed_pct: u64,
+    pub push_pct: u64,
+    pub ui_pct: u64,
+    pub wait_pct: u64,
+}
+
+/// One Info page row exactly as shown on screen (tag 26, `SR_T_INFOTEXT`, repeatable).
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudInfoRow {
+    pub row: u8,
+    pub label: String,
+    pub value: String,
+}
+
+/// What was playing when the report was made (tag 27, `SR_T_NOWPLAYING`).
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaudNowPlaying {
+    /// "nothing loaded", "stopped", "paused" or "playing".
+    pub state: String,
+    pub queue_pos: u16,
+    pub queue_len: u16,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+}
+
 /// Stack high-water mark (entry tag 16, B-204): bytes used at the worst point and the stack's size.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -247,6 +302,14 @@ pub struct TaudEntries {
     pub info_export: Option<TaudInfoExport>,
     pub meter_config: Option<TaudMeterConfig>,
     pub meter_trace: Vec<TaudTraceFrame>,
+    pub heap: Option<TaudHeap>,
+    pub heap_raw: Vec<u64>,
+    pub load: Option<TaudLoad>,
+    pub load_raw: Vec<u64>,
+    pub load2: Option<TaudLoad2>,
+    pub load2_raw: Vec<u64>,
+    pub info_rows: Vec<TaudInfoRow>,
+    pub now_playing: Option<TaudNowPlaying>,
 }
 
 /// An entry whose tag this decoder does not recognise -- kept, not dropped,
@@ -294,8 +357,8 @@ fn le_to_u64(chunk: &[u8]) -> u64 {
 
 fn tag_width(tag: u8) -> usize {
     match tag {
-        2 | 4 | 5 | 6 | 8 | 22 => 2,
-        7 | 9 | 16 => 4,
+        2 | 4 | 5 | 6 | 8 | 22 | 24 | 25 => 2,
+        7 | 9 | 16 | 23 => 4,
         _ => 1,
     }
 }
@@ -399,6 +462,34 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
                     wave: value[18..82].iter().map(|b| *b as i8).collect(),
                 });
             }
+            26 if n >= 2 && value[1..].contains(&0) => {
+                let z = 1 + value[1..].iter().position(|b| *b == 0).expect("checked");
+                entries.info_rows.push(TaudInfoRow {
+                    row: value[0],
+                    label: String::from_utf8_lossy(&value[1..z]).into_owned(),
+                    value: String::from_utf8_lossy(&value[z + 1..]).into_owned(),
+                });
+            }
+            27 if n >= 5 => {
+                let mut parts = value[5..].split(|b| *b == 0);
+                let mut text = || {
+                    parts
+                        .next()
+                        .map(|p| String::from_utf8_lossy(p).into_owned())
+                        .unwrap_or_default()
+                };
+                let (title, artist, album) = (text(), text(), text());
+                entries.now_playing = Some(TaudNowPlaying {
+                    state: ["nothing loaded", "stopped", "paused", "playing"]
+                        [value[0].min(3) as usize]
+                        .to_string(),
+                    queue_pos: u16::from_le_bytes([value[1], value[2]]),
+                    queue_len: u16::from_le_bytes([value[3], value[4]]),
+                    title,
+                    artist,
+                    album,
+                });
+            }
             1 => {
                 if n < 16 {
                     return Err(bad_record("truncated build entry"));
@@ -419,7 +510,7 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
                     heap_gap,
                 });
             }
-            2 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 16 | 22 => {
+            2 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 16 | 22 | 23 | 24 | 25 => {
                 let width = tag_width(tag);
                 let values: Vec<u64> = value.chunks_exact(width).map(le_to_u64).collect();
                 match tag {
@@ -494,6 +585,48 @@ pub fn parse_record(record: &[u8]) -> Result<TaudReport, TauError> {
                             entries.stack_raw = values;
                         }
                     }
+                    23 => match values.as_slice() {
+                        [peak, size] => {
+                            entries.heap = Some(TaudHeap {
+                                peak_bytes: *peak,
+                                heap_size: *size,
+                                free_bytes: size.saturating_sub(*peak),
+                            })
+                        }
+                        _ => entries.heap_raw = values,
+                    },
+                    24 => match values.as_slice() {
+                        [
+                            busy_pct,
+                            busy_worst_pct,
+                            io_pct,
+                            secs,
+                            sub_fdct_pct,
+                            sub_hw_pct,
+                        ] => {
+                            entries.load = Some(TaudLoad {
+                                busy_pct: *busy_pct,
+                                busy_worst_pct: *busy_worst_pct,
+                                io_pct: *io_pct,
+                                secs: *secs,
+                                sub_fdct_pct: *sub_fdct_pct,
+                                sub_hw_pct: *sub_hw_pct,
+                            })
+                        }
+                        _ => entries.load_raw = values,
+                    },
+                    25 => match values.as_slice() {
+                        [dec_pct, feed_pct, push_pct, ui_pct, wait_pct] => {
+                            entries.load2 = Some(TaudLoad2 {
+                                dec_pct: *dec_pct,
+                                feed_pct: *feed_pct,
+                                push_pct: *push_pct,
+                                ui_pct: *ui_pct,
+                                wait_pct: *wait_pct,
+                            })
+                        }
+                        _ => entries.load2_raw = values,
+                    },
                     22 => match values.as_slice() {
                         [d, a, x, u, t, c1, lpc] => {
                             entries.decode_profile2 = Some(TaudDecodeProfile2 {
@@ -860,5 +993,48 @@ mod tests {
                 .iter()
                 .all(|f| f.spec.len() == 16 && f.wave.len() == 64)
         );
+    }
+
+    // No real capture carries tags 23-25 yet (the owner's 2026-10-04 grids predate their final
+    // numbers), so this builds a record by hand from the layout in tau-alpha fw/suite_core.h.
+    #[test]
+    fn decodes_heap_load_and_load2_entries_from_a_constructed_record() {
+        let mut body = vec![b'T', b'D', FORMAT, 0];
+        let mut entry = |tag: u8, bytes: Vec<u8>| {
+            body.push(tag);
+            body.push(bytes.len() as u8);
+            body.extend(bytes);
+        };
+        entry(23, [3000u32.to_le_bytes(), 7456u32.to_le_bytes()].concat());
+        entry(
+            24,
+            [44u16, 51, 3, 10, 20, 5]
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect(),
+        );
+        entry(
+            25,
+            [30u16, 2, 7, 0, 4]
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect(),
+        );
+        let crc = crc32fast::hash(&body).to_le_bytes();
+        body.extend_from_slice(&crc);
+        let report = parse_record(&body).unwrap();
+        let heap = report.entries.heap.unwrap();
+        assert_eq!(
+            (heap.peak_bytes, heap.heap_size, heap.free_bytes),
+            (3000, 7456, 4456)
+        );
+        let load = report.entries.load.unwrap();
+        assert_eq!(
+            (load.busy_pct, load.busy_worst_pct, load.sub_hw_pct),
+            (44, 51, 5)
+        );
+        let load2 = report.entries.load2.unwrap();
+        assert_eq!((load2.dec_pct, load2.push_pct, load2.wait_pct), (30, 7, 4));
+        assert!(report.unknown.is_empty());
     }
 }

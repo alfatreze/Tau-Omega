@@ -99,6 +99,27 @@
                   {#if qrReport.entries.stack}
                     <div><span>Stack</span><strong>peak {qrReport.entries.stack.peak_bytes} of {qrReport.entries.stack.stack_size} B ({qrReport.entries.stack.free_bytes} B free)</strong></div>
                   {/if}
+                  {#if qrReport.entries.heap}
+                    <div><span>Heap</span><strong>peak {qrReport.entries.heap.peak_bytes} of {qrReport.entries.heap.heap_size} B ({qrReport.entries.heap.free_bytes} B free)</strong></div>
+                  {/if}
+                  {#if qrReport.entries.load}
+                    {@const l = qrReport.entries.load}
+                    <div><span>CPU load</span><strong>{l.busy_pct}% busy (worst second {l.busy_worst_pct}%) · file waits {l.io_pct}% · {l.secs} s measured</strong></div>
+                  {/if}
+                  {#if qrReport.entries.load2}
+                    {@const l = qrReport.entries.load2}
+                    <div><span>MP3 loop</span><strong>decode {l.dec_pct}% · meters {l.feed_pct}% · sample push {l.push_pct}% · screen {l.ui_pct}% · waiting {l.wait_pct}%</strong></div>
+                  {/if}
+                  {#if qrReport.entries.now_playing}
+                    {@const n = qrReport.entries.now_playing}
+                    <div><span>Now playing</span><strong>{n.state}{n.title ? ` · ${n.title} · ${n.artist} · ${n.album}` : ''}{n.queue_len ? ` · track ${n.queue_pos} of ${n.queue_len}` : ''}</strong></div>
+                  {/if}
+                  {#if qrReport.entries.info_rows.length}
+                    <div><span>Info page</span><strong>{qrReport.entries.info_rows.length} rows</strong></div>
+                    {#each qrReport.entries.info_rows as r}
+                      <div><span>{r.label}</span><strong>{r.value}</strong></div>
+                    {/each}
+                  {/if}
                   {#if qrReport.entries.decode_profile2}
                     {@const d = qrReport.entries.decode_profile2}
                     <div><span>Decode cost</span><strong>FLAC {d.t_pct}% of real time (channel 1 {d.c1_pct}%){d.lpc_max_ms === null ? '' : ` · worst LPC call ${d.lpc_max_ms >= 65535 ? '65 s or more' : `${d.lpc_max_ms} ms`}`} · MP3 dequantize {d.d_pct}%, anti-alias {d.a_pct}%, transform {d.x_pct}%</strong></div>
