@@ -1,6 +1,24 @@
 # Tau Omega — status handoff
 
-## START HERE (2026-10-08): fresh-session handoff
+## START HERE (2026-10-10): fresh-session handoff
+
+**Read `ROADMAP.md` first** (the one ordered list), then this block; the dated sections below are detail only.
+
+**Scope rule unchanged (owner):** Tau Omega work only; `../tau-alpha` is read-only (never edit, commit or reset there; read it for facts); plan a Tau feature only once it is on Tau Alpha `main`. Tau's release format is fixed: Omega adapts, nothing is asked of Tau.
+
+**State.** One worktree, `Tau Omega/`, branch `main`, pushed and clean (head `5527cd3`). 269 Rust tests, svelte-check 0 errors, fmt clean; `cargo clippy --all-targets -D warnings` still has 12 pre-existing errors (sync.rs, icon.rs, install_exec.rs, workbench.rs; newer toolchain lints), none in recent files.
+
+**Done this stretch (roadmap 1, install and update paths, all pushed):** install plan and executor with verified backup and rollback; GitHub update check (`ureq`, automatic check, never an automatic update); update from a zip; Refresh library; Spotlight marker setting; post-install check; **adaptation to Tau's new release system (steps A-E, `docs/RELEASE_SYSTEM_IMPACT_2026-10-08.md`)**: per-core media platform, shared-platform removal, bounded obsolete deletes, channel-aware update check and manifest-driven zip choice, feature pairing and persist names, settings migration for replaced cores, uninstall that keeps library and music. Proven on the real `CARDWRITE` card (install, both removals, migration, card restored byte-identical) and against the real `v0.6.0-preview.1` release (installs, every check passes, offered to the right channel). Real-card harness: `crates/tau-core/tests/real_card_e.rs`; real-release test: `tests/real_release.rs` (`TAU_REAL_RELEASE_DIR`, Tau's `release/` folder).
+
+**Next, in order:** (1) **read the pixel-grid report codes** (roadmap item 2): Rust decoder for both grid layouts (reference `tools/decode_tau_suite.py --grid shot.png --table` and `docs/features/BARCODE_STUDY.md` in tau-alpha, read-only), verified against real captures (`testdata/screenshots/20261004_*.png`; copy new ones from the card with provenance), plug into the QR viewer and Send diagnostics, then tags 23-27 and persist id 16 / polarity / ReplayGain bits in the settings viewer; (2) Halcyon `PRST` writer and APO/AutoEQ importer; (3) hardening (CI browser step, card speed numbers, Windows/Linux).
+
+**Open, needs the owner or a device:** a Pocket boot test of a core installed by Omega in the new layout (TAU Preview smoke test passed in Tau's own session); a real Tau release whose manifest carries `replaces` (v0.6.0-preview.1 has none, so that path is only tested on constructed manifests); whether the Spotlight marker takes effect (mdutil still reported indexing); without a manifest, keep-media leaves the old-layout `tau.rom`/`tau-cold.bin`/`tau-loading.bin` in `common/`.
+
+**Card rules that bit this stretch:** CARDWRITE (`/Volumes/CARDWRITE`) is a spare card that also holds Tau's SD-write research (`alfatreze.CARDWRITE02`, platform `cardwrite`, `Test Album`): never touch those, take a snapshot first, restore the five `System/*.bin` caches from the backup after an install test, remove `._` stubs, eject. Never use the owner's Pocket card (`Pock`) for tests. Real-card tests are `#[ignore]`d and refuse any volume not named `CARDWRITE`.
+
+**Previous START HERE block (2026-10-08, kept for history):**
+
+### (superseded) START HERE (2026-10-08)
 
 **Read `ROADMAP.md` (repo root) next: it is the one ordered list of Omega work.** Then this block, then the dated sections below only for detail.
 
