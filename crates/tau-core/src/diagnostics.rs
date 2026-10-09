@@ -205,7 +205,7 @@ pub fn read(card_root: &Path, screenshot_limit: usize) -> Result<DiagReading, Ta
     let examined = listed.len().min(limit);
     let mut shots = Vec::new();
     for entry in listed.into_iter().take(limit) {
-        match taud::read_qr_report(&entry.path) {
+        match taud::read_screenshot_report(&entry.path) {
             Ok(report) => shots.push(DiagShot {
                 filename: entry.filename,
                 captured_at: entry.captured_at,
@@ -218,7 +218,7 @@ pub fn read(card_root: &Path, screenshot_limit: usize) -> Result<DiagReading, Ta
                 captured_at: entry.captured_at,
                 report: None,
                 note: Some(format!(
-                    "A QR code was found but its report is damaged: {}",
+                    "A report code was found but it is damaged: {}",
                     e.message
                 )),
             }),
@@ -226,7 +226,7 @@ pub fn read(card_root: &Path, screenshot_limit: usize) -> Result<DiagReading, Ta
     }
     if shots.is_empty() {
         notes.push(format!(
-            "No Check QR code was found in the {examined} newest screenshot{}. On the Pocket, open the Check's QR page and press Menu+Start to take a screenshot.",
+            "No report code (pixel grid or QR) was found in the {examined} newest screenshot{}. On the Pocket, open a report page (Check, Info export) and press Menu+Start to take a screenshot.",
             if examined == 1 { "" } else { "s" }
         ));
     }
@@ -626,7 +626,7 @@ mod tests {
         );
         fs::remove_dir_all(root.join("Memories")).unwrap();
         let r = read(&root, 0).unwrap();
-        assert!(r.shots.is_empty() && r.notes.iter().any(|n| n.contains("No Check QR code")));
+        assert!(r.shots.is_empty() && r.notes.iter().any(|n| n.contains("No report code")));
         let _ = fs::remove_dir_all(root);
     }
 

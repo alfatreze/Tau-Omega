@@ -830,7 +830,7 @@ fn read_check_summary(path: String) -> Result<Option<tau_core::diag::CheckSummar
 /// anything that looks like a QR but fails to decode as a valid report.
 #[tauri::command(async)]
 fn read_qr_report(path: String) -> Result<Option<tau_core::taud::TaudReport>, TauError> {
-    match tau_core::taud::read_qr_report(Path::new(&path)) {
+    match tau_core::taud::read_screenshot_report(Path::new(&path)) {
         Ok(report) => Ok(Some(report)),
         Err(error) if error.code() == ErrorCode::NoQrCodeFound => Ok(None),
         Err(error) => Err(error),
