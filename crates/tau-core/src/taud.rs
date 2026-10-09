@@ -590,6 +590,17 @@ pub fn read_qr_report(path: impl AsRef<Path>) -> Result<TaudReport, TauError> {
     parse_text(&read_qr_text(path)?)
 }
 
+/// Reads a screenshot of any report page, whichever view the firmware showed: the pixel grid
+/// (the default since 2026-10-06, [`crate::tpg`]) first, then the QR code. A damaged grid is
+/// an error; an image with neither is [`ErrorCode::NoQrCodeFound`].
+pub fn read_screenshot_report(path: impl AsRef<Path>) -> Result<TaudReport, TauError> {
+    let path = path.as_ref();
+    if let Some(record) = crate::tpg::read_record(path)? {
+        return parse_record(&record);
+    }
+    read_qr_report(path)
+}
+
 fn decode_png_greyscale(path: &Path) -> Result<(usize, usize, Vec<u8>), TauError> {
     let file = File::open(path)?;
     let mut decoder = png::Decoder::new(BufReader::new(file));

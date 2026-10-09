@@ -61,7 +61,10 @@ Tau's format is fixed, Omega adapted (no change on Tau Alpha). Built, tested and
 - Proven on the real `CARDWRITE` card (install, remove with and without keep-media, migration, card restored byte-identical) and against the real `v0.6.0-preview.1` release (installs, all checks pass, offered to the right channel).
 - **Still open:** a real release whose manifest carries `replaces` (v0.6.0-preview.1 has none); a Pocket boot test of a core installed by Omega in the new layout; without a manifest, keep-media leaves the old-layout `tau.rom`/`tau-cold.bin`/`tau-loading.bin` in `common/`.
 
-### 2. Read the pixel-grid report codes (needed because the Tau Alpha default changed)
+### 2. Read the pixel-grid report codes (decoder + QR viewer + Send diagnostics DONE 2026-10-10; tags 23-27 and settings-viewer labels still open)
+
+**Built:** `tau_core::tpg` (TPG1 and TPG2, modes L and R, exact 400x360 screenshots only), checked against the six real 2026-10-04 grid captures: each grid record equals its QR record byte for byte; a damaged grid fails its CRC. `taud::read_screenshot_report` tries the grid then the QR; the QR viewer and Send diagnostics use it. Resized/recompressed copies are not read (tpg.py can resample them; not needed for real screenshots).
+
 
 Since 2026-10-06 the firmware shows reports as a pixel grid first and a QR second, so Omega's Send diagnostics and QR viewer see only the minority of screenshots. Build a Rust decoder for both grid layouts (robust: 4x4 cells, 2 bits per channel; lossless), reference `tools/decode_tau_suite.py --grid shot.png --table` and the format notes in `docs/features/BARCODE_STUDY.md` on Tau Alpha `main` (read-only).
 Verify against real captures first (the owner's card should hold grid screenshots from 2026-10-06 on: check, then copy a few with their provenance, per the rule that fixtures come from real artefacts), then plug it into the QR viewer and Send diagnostics so one "read this screenshot" works for either view.

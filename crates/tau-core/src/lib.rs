@@ -43,6 +43,7 @@ pub mod storage;
 pub mod sync;
 pub mod tagedit;
 pub mod taud;
+pub mod tpg;
 pub mod update;
 pub mod workbench;
 
