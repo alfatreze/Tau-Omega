@@ -1,11 +1,12 @@
 <script lang="ts">
+  import SettingsMigration from './SettingsMigration.svelte';
   import { planCoreUpdate, executeCoreUpdate, rollbackCoreUpdate } from './tau-api';
   import { errorMessage } from './backend';
   import type { InstallPlan, InstallReport, RollbackReport, UpdateVerdict } from './types';
   /** The package zip and the card folder chosen on the page above. */
   export let zipPath = ''; export let cardPath = '';
 
-  let plan: InstallPlan | null = null; let report: InstallReport | null = null; let undone: RollbackReport | null = null;
+  let migrateFrom: string[] = []; let migrateTo: string[] = []; let plan: InstallPlan | null = null; let report: InstallReport | null = null; let undone: RollbackReport | null = null;
   let allowDowngrade = false; let busy = false; let notice = ''; let confirmRollback = false;
 
   const size = (b: number) => b < 1024 ? `${b} B` : b < 1024 * 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
@@ -28,7 +29,7 @@
   async function install() {
     if (!plan || plan.refused) return;
     busy = true; notice = '';
-    try { report = await executeCoreUpdate(zipPath, cardPath, allowDowngrade, plan.id); plan = null; }
+    try { const replaced = plan.superseded_candidates.filter((id) => !/DEV|TAU_0_/.test(id)); const installed = plan.update.cores.map((c) => c.package.core_id); report = await executeCoreUpdate(zipPath, cardPath, allowDowngrade, plan.id); migrateFrom = replaced; migrateTo = installed; plan = null; }
     catch (error) { notice = `Nothing was left half-done. ${errorMessage(error)}`; }
     finally { busy = false; }
   }
@@ -102,6 +103,7 @@
   {/if}
 {/if}
 
+{#if report && !report.nothing_to_do}<SettingsMigration {cardPath} fromCores={migrateFrom} toCores={migrateTo} />{/if}
 {#if report}
   <section class="settings-card">
     <div style="width:100%">

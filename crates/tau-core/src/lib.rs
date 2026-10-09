@@ -38,6 +38,7 @@ pub mod refresh;
 pub mod release_check;
 pub mod remove;
 pub mod screenshots;
+pub mod settings_migrate;
 pub mod storage;
 pub mod sync;
 pub mod tagedit;

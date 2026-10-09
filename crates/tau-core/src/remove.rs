@@ -10,7 +10,7 @@
 //! Follows the same plan -> review -> confirm -> execute shape as
 //! [`crate::package`]/[`crate::playlist`].
 
-use crate::{Card, ErrorCode, TauError};
+use crate::{Card, ErrorCode, TauError, cardlayout, compat};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -32,6 +32,10 @@ pub struct RemovePlan {
     pub paths: Vec<String>,
     pub files_to_remove: usize,
     pub bytes_to_remove: u64,
+    /// True when the plan leaves a platform's library, music and theme file (`Assets/<platform>/common`) and its
+    /// platform files on the card although no other core uses them (the "keep my music" choice).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub media_kept: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +49,19 @@ pub struct RemoveReport {
 /// filesystem state beyond reading sizes; nothing is deleted until
 /// [`execute_remove`] is called with a matching confirmation token.
 pub fn plan_remove(card: &Card, core_id: &str) -> Result<RemovePlan, TauError> {
+    plan_remove_with(card, core_id, false, &[])
+}
+
+/// [`plan_remove`] with the choice to **keep the user's data**. With `keep_media`, a platform nobody else uses loses
+/// only this core's own files: `Assets/<platform>/<core>/`, plus (when `docs` identify the installed release) the
+/// files its layout marks `owned` in the platform's `common/` that no other core still reads. The library index,
+/// music, covers, theme file and the platform files stay, and the plan says so (`media_kept`).
+pub fn plan_remove_with(
+    card: &Card,
+    core_id: &str,
+    keep_media: bool,
+    docs: &[compat::CompatDoc],
+) -> Result<RemovePlan, TauError> {
     let core = card
         .cores
         .iter()
@@ -70,12 +87,31 @@ pub fn plan_remove(card: &Card, core_id: &str) -> Result<RemovePlan, TauError> {
     }
 
     let mut candidates = vec![PathBuf::from("Cores").join(core_id)];
+    let mut media_kept = false;
     for declared_platform in declared.iter().filter(|p| !p.is_empty()) {
         let per_core_assets = PathBuf::from("Assets")
             .join(declared_platform)
             .join(core_id);
         if uses(declared_platform) {
             candidates.push(per_core_assets);
+            continue;
+        }
+        if keep_media {
+            media_kept |= card
+                .root
+                .join("Assets")
+                .join(declared_platform)
+                .join("common")
+                .is_dir();
+            candidates.push(per_core_assets);
+            for name in owned_common_files(card, core_id, declared_platform, docs) {
+                candidates.push(
+                    PathBuf::from("Assets")
+                        .join(declared_platform)
+                        .join("common")
+                        .join(name),
+                );
+            }
             continue;
         }
         // This core's own asset folder and the shared `common` folder are
@@ -134,7 +170,33 @@ pub fn plan_remove(card: &Card, core_id: &str) -> Result<RemovePlan, TauError> {
         paths,
         files_to_remove,
         bytes_to_remove,
+        media_kept,
     })
+}
+
+/// Files the installed release's layout marks `owned` in `Assets/<platform>/common/` that no other core still reads
+/// from there (old-layout ROM, cold image, loading art). Empty when the release is not identified.
+fn owned_common_files(
+    card: &Card,
+    core_id: &str,
+    platform: &str,
+    docs: &[compat::CompatDoc],
+) -> Vec<String> {
+    let tags = compat::identify_installed(docs, &card.root, core_id);
+    let Some(tag) = tags.iter().max_by(|a, b| compat::compare_tags(a, b)) else {
+        return Vec::new();
+    };
+    let prefix = format!("Assets/{platform}/common/");
+    docs.iter()
+        .filter(|d| &d.release == tag)
+        .flat_map(|d| d.packages.iter().filter(|p| p.core_id == core_id))
+        .flat_map(|p| p.layout.iter())
+        .filter(|e| e.role == compat::Role::Owned && !e.pattern)
+        .filter_map(|e| e.path.strip_prefix(&prefix))
+        .filter(|name| !name.contains('/'))
+        .filter(|name| !cardlayout::read_from_common_by_other(&card.root, platform, name, core_id))
+        .map(str::to_string)
+        .collect()
 }
 
 /// Deletes every path in a reviewed [`RemovePlan`]. Refuses unless
@@ -335,6 +397,43 @@ mod tests {
         assert!(!card.join("Platforms/_images/tau.bin").exists());
 
         fs::remove_dir_all(card).unwrap();
+    }
+
+    #[test]
+    fn keeping_media_removes_only_the_cores_own_files() {
+        let card = scratch_card("keepmedia");
+        let plan = package::plan_install(&fixture_zip(), &card).unwrap();
+        package::execute_install(&fixture_zip(), &card, &plan, &plan.id).unwrap();
+        let common = card.join("Assets/tau/common");
+        fs::create_dir_all(&common).unwrap();
+        fs::write(common.join("song.mp3"), b"music").unwrap();
+        fs::write(common.join("tau-library.tdb"), b"index").unwrap();
+        let inspected = inspect_card(&card).unwrap();
+
+        let keep = plan_remove_with(&inspected, "alfatreze.TAU", true, &[]).unwrap();
+        assert!(keep.media_kept);
+        assert!(keep.paths.iter().any(|p| p == "Cores/alfatreze.TAU"));
+        assert!(
+            keep.paths.iter().all(|p| p != "Assets/tau"
+                && p != "Assets/tau/common"
+                && !p.starts_with("Platforms")),
+            "{:?}",
+            keep.paths
+        );
+        execute_remove(&keep, &keep.id).unwrap();
+        assert!(!card.join("Cores/alfatreze.TAU").exists());
+        assert_eq!(fs::read(common.join("song.mp3")).unwrap(), b"music");
+        assert_eq!(fs::read(common.join("tau-library.tdb")).unwrap(), b"index");
+
+        // The default plan still removes the whole platform (nothing else uses it).
+        let card2 = scratch_card("keepmedia-default");
+        let plan = package::plan_install(&fixture_zip(), &card2).unwrap();
+        package::execute_install(&fixture_zip(), &card2, &plan, &plan.id).unwrap();
+        let all = plan_remove(&inspect_card(&card2).unwrap(), "alfatreze.TAU").unwrap();
+        assert!(!all.media_kept);
+        assert!(all.paths.iter().any(|p| p == "Assets/tau"));
+        fs::remove_dir_all(card).unwrap();
+        fs::remove_dir_all(card2).unwrap();
     }
 
     #[test]
