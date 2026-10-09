@@ -507,6 +507,27 @@ fn manifest_cache(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
     Ok(app.path().app_cache_dir().map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?.join("manifests"))
 }
 
+/// Whether a replaced core's saved settings may be carried to its successor (read-only; see `settings_migrate`).
+#[tauri::command(async)]
+fn plan_settings_migration(app: tauri::AppHandle, card: String, from_core: String, to_core: String) -> Result<tau_core::settings_migrate::MigrationPlan, TauError> {
+    let docs = tau_core::release_check::load_cached(&manifest_cache(&app)?);
+    tau_core::settings_migrate::plan(Path::new(&card), &from_core, &to_core, &docs)
+}
+
+#[tauri::command(async)]
+fn execute_settings_migration(app: tauri::AppHandle, card: String, from_core: String, to_core: String, confirmation: String) -> Result<tau_core::settings_migrate::MigrationReport, TauError> {
+    let _write = begin_card_write(&app, &card)?;
+    let docs = tau_core::release_check::load_cached(&manifest_cache(&app)?);
+    let plan = tau_core::settings_migrate::plan(Path::new(&card), &from_core, &to_core, &docs)?;
+    tau_core::settings_migrate::execute(&plan, &confirmation)
+}
+
+#[tauri::command(async)]
+fn rollback_settings_migration(app: tauri::AppHandle, card: String, report: tau_core::settings_migrate::MigrationReport) -> Result<(), TauError> {
+    let _write = begin_card_write(&app, &card)?;
+    tau_core::settings_migrate::rollback(Path::new(&card), &report)
+}
+
 /// Names of the persisted settings ids, from the release manifests seen so far (empty before any was cached); the
 /// settings viewer falls back to its own table for ids not listed.
 #[tauri::command(async)]
@@ -1089,20 +1110,24 @@ fn execute_package_install(app: tauri::AppHandle,
 /// be holding stale (the same "safe to re-derive, cheap to re-check" choice
 /// `execute_package_install` already makes for its own plan).
 #[tauri::command(async)]
-fn plan_remove_core(card: String, core_id: String) -> Result<tau_core::remove::RemovePlan, TauError> {
+fn plan_remove_core(app: tauri::AppHandle, card: String, core_id: String, keep_media: Option<bool>) -> Result<tau_core::remove::RemovePlan, TauError> {
     let card = tau_core::inspect_card(Path::new(&card))?;
-    tau_core::remove::plan_remove(&card, &core_id)
+    let docs = tau_core::release_check::load_cached(&manifest_cache(&app)?);
+    // Default: keep the library, music and theme file; only the core's own files go.
+    tau_core::remove::plan_remove_with(&card, &core_id, keep_media.unwrap_or(true), &docs)
 }
 
 #[tauri::command(async)]
 fn execute_remove_core(app: tauri::AppHandle, 
     card: String,
     core_id: String,
+    keep_media: Option<bool>,
     confirmation: String,
 ) -> Result<tau_core::remove::RemoveReport, TauError> {
     let _write = begin_card_write(&app, &card)?;
     let card = tau_core::inspect_card(Path::new(&card))?;
-    let plan = tau_core::remove::plan_remove(&card, &core_id)?;
+    let docs = tau_core::release_check::load_cached(&manifest_cache(&app)?);
+    let plan = tau_core::remove::plan_remove_with(&card, &core_id, keep_media.unwrap_or(true), &docs)?;
     tau_core::remove::execute_remove(&plan, &confirmation)
 }
 
@@ -1289,7 +1314,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, appearance_check, appearance_open, appearance_export, appearance_plan_install, appearance_install, diag_read, diag_zip, get_prefs, set_prefs, persist_names, update_check, update_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, library_health, plan_library_refresh, execute_library_refresh, rollback_library_refresh, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, appearance_check, appearance_open, appearance_export, appearance_plan_install, appearance_install, diag_read, diag_zip, get_prefs, set_prefs, persist_names, plan_settings_migration, execute_settings_migration, rollback_settings_migration, update_check, update_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, library_health, plan_library_refresh, execute_library_refresh, rollback_library_refresh, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

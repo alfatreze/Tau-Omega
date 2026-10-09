@@ -8,7 +8,7 @@
   export let confirm: () => void; export let report: PackageReport | null = null; export let confirmNotice = '';
 
   export let loadCoresToRemove: () => void; export let removeCores: Core[] = []; export let removeCoresNotice = '';
-  export let removeCoreId = ''; export let reviewRemove: () => void; export let removePlan: RemovePlan | null = null; export let removePlanNotice = '';
+  export let removeKeepMedia = true; export let removeCoreId = ''; export let reviewRemove: () => void; export let removePlan: RemovePlan | null = null; export let removePlanNotice = '';
   export let confirmRemove: () => void; export let removeReport: RemoveReport | null = null; export let removeConfirmNotice = '';
 
   const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
@@ -89,6 +89,7 @@
           <option value="" disabled>Choose a core…</option>
           {#each removeCores as core}<option value={core.id}>{core.id} ({core.platform}, v{core.version})</option>{/each}
         </select>
+        <label class="keep-media"><input type="checkbox" bind:checked={removeKeepMedia} /> Keep my library, music and theme file (only the core's own files are removed)</label>
         <button class="primary" disabled={!removeCoreId} on:click={reviewRemove}>Plan removal</button>
         <p class="notice" role="status">{removePlanNotice}</p>
       </div>
@@ -99,6 +100,9 @@
     <section class="settings-card">
       <div style="width:100%">
         <h2>{removePlan.files_to_remove} files · {size(removePlan.bytes_to_remove)} to delete</h2>
+        {#if removePlan.media_kept}
+          <p class="safety">Your library, music, covers and theme file under <code>Assets/{removePlan.platform}/common</code> stay on the card.</p>
+        {/if}
         {#if removePlan.platform_shared}
           <p class="safety">Another installed core still uses platform <code>{removePlan.platform}</code>, so its shared <code>Assets/{removePlan.platform}/common</code> and <code>Platforms</code> files are kept.</p>
         {:else if removePlan.platform}

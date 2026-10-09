@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { MarkerStatus, IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView } from './types';
+import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -35,8 +35,8 @@ export const planBackup = (source: string, destination: string) => invoke<Backup
 export const inspectPackage = (path: string) => invoke<PackageManifest>('inspect_package', { path });
 export const planPackageInstall = (path: string, card: string) => invoke<PackagePlan>('plan_package_install', { path, card });
 export const executePackageInstall = (path: string, card: string, confirmation: string) => invoke<PackageReport>('execute_package_install', { path, card, confirmation });
-export const planRemoveCore = (card: string, coreId: string) => invoke<RemovePlan>('plan_remove_core', { card, coreId });
-export const executeRemoveCore = (card: string, coreId: string, confirmation: string) => invoke<RemoveReport>('execute_remove_core', { card, coreId, confirmation });
+export const planRemoveCore = (card: string, coreId: string, keepMedia = true) => invoke<RemovePlan>('plan_remove_core', { card, coreId, keepMedia });
+export const executeRemoveCore = (card: string, coreId: string, confirmation: string, keepMedia = true) => invoke<RemoveReport>('execute_remove_core', { card, coreId, keepMedia, confirmation });
 export const readQrReport = (path: string) => invoke<TaudReport | null>('read_qr_report', { path });
 export const listScreenshots = (card: string) => invoke<ScreenshotEntry[]>('list_screenshots', { card });
 export const readImageDataUrl = (path: string) => invoke<string>('read_image_data_url', { path });
@@ -78,3 +78,6 @@ export const appearancePlanInstall = (themes: ThemeInput[], mediaRoot: string) =
 export const appearanceInstall = (themes: ThemeInput[], mediaRoot: string, confirmation: string, backup: string | null) => invoke<AssetsInstallReport>('appearance_install', { themes, mediaRoot, confirmation, backup });
 export const diagRead = (card: string) => invoke<DiagView>('diag_read', { card });
 export const diagZip = (card: string, destDir: string) => invoke<string>('diag_zip', { card, destDir });
+export const planSettingsMigration = (card: string, fromCore: string, toCore: string) => invoke<MigrationPlan>('plan_settings_migration', { card, fromCore, toCore });
+export const executeSettingsMigration = (card: string, fromCore: string, toCore: string, confirmation: string) => invoke<MigrationReport>('execute_settings_migration', { card, fromCore, toCore, confirmation });
+export const rollbackSettingsMigration = (card: string, report: MigrationReport) => invoke<void>('rollback_settings_migration', { card, report });

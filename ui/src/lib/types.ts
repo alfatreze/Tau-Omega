@@ -60,7 +60,7 @@ export type PackageReport = { written: number; unchanged: number; bytes_written:
  * would delete. `platform_shared` is true when another installed core still
  * uses the same platform, in which case the shared `Assets/<platform>`
  * files are deliberately left out of `paths`. */
-export type RemovePlan = { id: string; card_root: string; core_id: string; platform: string; platform_shared: boolean; paths: string[]; files_to_remove: number; bytes_to_remove: number };
+export type RemovePlan = { id: string; card_root: string; core_id: string; platform: string; platform_shared: boolean; paths: string[]; files_to_remove: number; bytes_to_remove: number ; media_kept: boolean };
 /** Mirrors `tau_core::remove::RemoveReport`, the result of `execute_remove_core`. */
 export type RemoveReport = { removed_files: number; bytes_removed: number };
 /** Mirrors `tau_core::taud::TaudTest`: one Check test's id, name, result and
@@ -202,3 +202,7 @@ export type RefreshReport = { backup_dir: string; renamed: number; playlists_rew
 
 /** The Spotlight setting and whether the card holding a path has the `.metadata_never_index` marker. */
 export type MarkerStatus = { setting: 'ask' | 'on' | 'off'; is_card: boolean; present: boolean };
+
+/** Mirrors `tau_core::settings_migrate`. */
+export type MigrationPlan = { id: string; card_root: string; from_core: string; to_core: string; source: string; dest: string; allowed: boolean; reasons: string[]; changed_ids: [number, string][]; bytes: number };
+export type MigrationReport = { dest: string; bytes: number; created_dirs: string[] };
