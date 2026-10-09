@@ -96,6 +96,11 @@ pub fn parse_releases(bytes: &[u8]) -> Result<Vec<GithubRelease>, TauError> {
 /// What the app knows about the installed Tau, for deciding "is there something newer".
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Installed {
+    /// The installed core's folder name (`alfatreze.TAU`, `alfatreze.TAU Preview`, ...). With it the check offers only
+    /// releases that carry this core (or replace it); without it, any Tau zip.
+    pub core_id: Option<String>,
+    /// `core.json`'s full version (`0.7.0-preview.1`).
+    pub version: Option<String>,
     /// The release tag, when a manifest identified the installed build by hash.
     pub release: Option<String>,
     /// `core.json`'s `date_release`, as a fallback.
@@ -115,6 +120,91 @@ pub struct UpdateCheck {
     pub sums: Option<ReleaseAsset>,
     /// One plain sentence for the alert.
     pub message: String,
+    /// The installed core's channel, when known.
+    pub channel: Option<Channel>,
+    /// Releases of other channels that are newer than what is installed: information, never an Update.
+    pub others: Vec<String>,
+}
+
+/// Tau's three release channels. A channel is a different core (own id, own platform), not a version range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum Channel {
+    Stable,
+    Preview,
+    Dev,
+}
+
+impl Channel {
+    pub fn label(self) -> &'static str {
+        match self {
+            Channel::Stable => "Stable",
+            Channel::Preview => "Preview",
+            Channel::Dev => "Dev",
+        }
+    }
+}
+
+/// The channel of a core id or a zip name (`alfatreze.TAU Preview`, `alfatreze.TAU_Preview_0.7.0-...zip`).
+pub fn channel_of_name(name: &str) -> Channel {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("preview") {
+        Channel::Preview
+    } else if lower.contains("dev") && !lower.contains("diagnostic") || lower.contains("tau dev") {
+        Channel::Dev
+    } else {
+        Channel::Stable
+    }
+}
+
+/// The channel a `core.json` version names: `X.Y.Z` Stable, `-dev.` Dev, any other suffix Preview.
+pub fn channel_of_version(version: &str) -> Channel {
+    match version.split_once('-') {
+        None => Channel::Stable,
+        Some((_, pre)) if pre.starts_with("dev") => Channel::Dev,
+        Some(_) => Channel::Preview,
+    }
+}
+
+/// Whether a zip asset name is a Diagnostics core (new `TAU_Diagnostics_` and old `TAU_DIAGNOSTIC_`).
+pub fn is_diagnostics_zip(name: &str) -> bool {
+    name.to_ascii_lowercase().contains("diagnostic")
+}
+
+/// A core id as it appears in a zip name: spaces become underscores.
+fn zip_stem(core_id: &str) -> String {
+    core_id.replace(' ', "_")
+}
+
+/// The zips of `release` that carry `core_id`. A manifest answers exactly (the package's `core_id`, or `replaces`
+/// naming it); without one the zip name must be `<core id>_<version>...` (so `alfatreze.TAU_` does not match
+/// `alfatreze.TAU_Diagnostics_`).
+pub fn zips_for_core<'a>(
+    release: &'a GithubRelease,
+    core_id: &str,
+    docs: &[compat::CompatDoc],
+) -> Vec<&'a ReleaseAsset> {
+    if let Some(doc) = docs.iter().find(|d| d.release == release.tag) {
+        return doc
+            .packages
+            .iter()
+            .filter(|p| p.core_id == core_id || p.replaces.iter().any(|r| r == core_id))
+            .filter_map(|p| release.assets.iter().find(|a| a.name == p.zip))
+            .collect();
+    }
+    let stem = zip_stem(core_id);
+    release
+        .assets
+        .iter()
+        .filter(|a| a.name.ends_with(".zip"))
+        .filter(|a| {
+            a.name
+                .strip_prefix(&stem)
+                .and_then(|rest| rest.strip_prefix('_'))
+                .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+        })
+        .collect()
 }
 
 /// The newest release by SemVer precedence (pre-releases count: every Tau release so far is one).
@@ -136,42 +226,130 @@ pub fn evaluate_with_sums(
     installed: &Installed,
     sums: Option<&BTreeMap<String, String>>,
 ) -> Option<UpdateCheck> {
-    let latest = latest(releases)?.clone();
+    evaluate_for_core(releases, installed, sums, &[])
+}
+
+/// The full judgement. With `installed.core_id` set, only releases that carry that core (by manifest `core_id` or
+/// `replaces` when `docs` knows the release, else by zip name) count, so a Stable user is never offered the Preview
+/// core as an update; newer releases of other channels are reported in `others`.
+pub fn evaluate_for_core(
+    releases: &[GithubRelease],
+    installed: &Installed,
+    sums: Option<&BTreeMap<String, String>>,
+    docs: &[compat::CompatDoc],
+) -> Option<UpdateCheck> {
+    let listed = |a: &ReleaseAsset| sums.is_none_or(|s| s.contains_key(&a.name));
+    let own_zips = |r: &GithubRelease| -> Vec<ReleaseAsset> {
+        match &installed.core_id {
+            Some(id) => zips_for_core(r, id, docs)
+                .into_iter()
+                .filter(|a| listed(a))
+                .cloned()
+                .collect(),
+            None => r
+                .assets
+                .iter()
+                .filter(|a| a.name.starts_with("alfatreze.TAU") && a.name.ends_with(".zip"))
+                .filter(|a| listed(a))
+                .cloned()
+                .collect(),
+        }
+    };
+    let latest = match &installed.core_id {
+        // The newest release that carries this core, listed or not (an unlisted zip then shows "no verifiable download").
+        Some(id) => releases
+            .iter()
+            .filter(|r| !zips_for_core(r, id, docs).is_empty())
+            .max_by(|a, b| compat::compare_tags(&a.tag, &b.tag))
+            .or_else(|| latest(releases))?
+            .clone(),
+        None => latest(releases)?.clone(),
+    };
+    let channel = installed
+        .version
+        .as_deref()
+        .map(channel_of_version)
+        .or_else(|| installed.core_id.as_deref().map(channel_of_name));
+    let installed_tag = installed
+        .release
+        .clone()
+        .or_else(|| installed.version.as_ref().map(|v| format!("v{v}")));
     let newer = match (&installed.release, &installed.date_release) {
         (Some(tag), _) => Some(compat::compare_tags(&latest.tag, tag) == Ordering::Greater),
+        // Same-day builds: the full version in core.json orders them (`0.7.0-dev.385` before `.386`).
+        (None, _)
+            if installed
+                .version
+                .as_deref()
+                .is_some_and(|v| v.contains('-')) =>
+        {
+            installed_tag
+                .as_deref()
+                .map(|t| compat::compare_tags(&latest.tag, t) == Ordering::Greater)
+        }
         // Published dates are never earlier than the build date, so a strictly later publication is newer.
         (None, Some(date)) => Some(latest.published.as_str() > date.as_str()),
         (None, None) => None,
     };
     let version = latest.tag.trim_start_matches('v').to_string();
-    let mut zips: Vec<ReleaseAsset> = latest
-        .assets
-        .iter()
-        .filter(|a| a.name.starts_with("alfatreze.TAU") && a.name.ends_with(".zip"))
-        .filter(|a| sums.is_none_or(|s| s.contains_key(&a.name)))
-        .cloned()
-        .collect();
-    // The zip named for the release itself ("...0.6.0-alpha.3...") and not the Diagnostic Build goes first.
+    let mut zips = own_zips(&latest);
+    // The zip named for the release itself and not the Diagnostics core goes first.
     zips.sort_by_key(|a| {
         (
-            a.name.contains("TAU_DIAGNOSTIC"),
+            is_diagnostics_zip(&a.name),
             !a.name.contains(&version),
             a.name.clone(),
         )
     });
     let find = |name: &str| latest.assets.iter().find(|a| a.name == name).cloned();
+    let what = match (&installed.core_id, channel) {
+        (Some(_), Some(c)) if c != Channel::Stable => format!("Tau {}", c.label()),
+        _ => "Tau".to_string(),
+    };
     let message = match newer {
         Some(true) => format!(
-            "Tau {} is available{}.",
+            "{what} {} is available{}.",
             latest.tag,
             installed
                 .release
                 .as_ref()
                 .map_or(String::new(), |t| format!(" (you have {t})"))
         ),
-        Some(false) => format!("Tau is up to date ({}).", latest.tag),
-        None => format!("The newest Tau release is {}.", latest.tag),
+        Some(false) => format!("{what} is up to date ({}).", latest.tag),
+        None => format!("The newest {what} release is {}.", latest.tag),
     };
+    // Other channels: the newest release per other channel that is newer than what is installed.
+    let mut others = Vec::new();
+    if let (Some(own), Some(_)) = (channel, &installed.core_id) {
+        for other in [Channel::Stable, Channel::Preview, Channel::Dev] {
+            if other == own {
+                continue;
+            }
+            let newest = releases
+                .iter()
+                .filter(|r| {
+                    r.assets.iter().any(|a| {
+                        a.name.starts_with("alfatreze.TAU")
+                            && a.name.ends_with(".zip")
+                            && !is_diagnostics_zip(&a.name)
+                            && channel_of_name(&a.name) == other
+                    })
+                })
+                .filter(|r| {
+                    installed_tag
+                        .as_deref()
+                        .is_none_or(|t| compat::compare_tags(&r.tag, t) == Ordering::Greater)
+                })
+                .max_by(|a, b| compat::compare_tags(&a.tag, &b.tag));
+            if let Some(r) = newest {
+                others.push(format!(
+                    "{} {} is also available. Installing it adds a separate core; it does not update this one.",
+                    other.label(),
+                    r.tag
+                ));
+            }
+        }
+    }
     Some(UpdateCheck {
         manifest: find("tau-compat.json"),
         sums: find("SHA256SUMS.txt"),
@@ -179,6 +357,8 @@ pub fn evaluate_with_sums(
         newer,
         zips,
         message,
+        channel,
+        others,
         latest,
     })
 }
@@ -324,6 +504,7 @@ mod tests {
                 &Installed {
                     release: release.map(str::to_string),
                     date_release: date.map(str::to_string),
+                    ..Default::default()
                 },
             )
             .unwrap()
@@ -378,6 +559,212 @@ mod tests {
             ],
             "the labelled zip is not in the real SHA256SUMS.txt, so it cannot be verified and is not offered"
         );
+    }
+
+    fn rel(tag: &str, names: &[&str]) -> GithubRelease {
+        GithubRelease {
+            tag: tag.into(),
+            title: String::new(),
+            prerelease: tag.contains('-'),
+            published: "2026-11-01".into(),
+            assets: names
+                .iter()
+                .map(|n| ReleaseAsset {
+                    name: (*n).into(),
+                    url: format!("{DOWNLOAD_PREFIX}{tag}/{n}"),
+                    size: 1,
+                })
+                .collect(),
+        }
+    }
+
+    fn channels() -> Vec<GithubRelease> {
+        vec![
+            rel(
+                "v0.6.0",
+                &[
+                    "alfatreze.TAU_0.6.0_2026-10-20.zip",
+                    "alfatreze.TAU_Diagnostics_0.6.0_2026-10-20.zip",
+                ],
+            ),
+            rel(
+                "v0.7.0-preview.1",
+                &[
+                    "alfatreze.TAU_Preview_0.7.0-preview.1_2026-11-02.zip",
+                    "alfatreze.TAU_Preview_Diagnostics_0.7.0-preview.1_2026-11-02.zip",
+                ],
+            ),
+        ]
+    }
+
+    fn core(id: &str, version: &str, release: Option<&str>) -> Installed {
+        Installed {
+            core_id: Some(id.into()),
+            version: Some(version.into()),
+            release: release.map(str::to_string),
+            date_release: None,
+        }
+    }
+
+    #[test]
+    fn a_stable_user_is_never_offered_the_preview_core_as_an_update() {
+        let check = evaluate_for_core(
+            &channels(),
+            &core("alfatreze.TAU", "0.6.0", Some("v0.6.0")),
+            None,
+            &[],
+        )
+        .unwrap();
+        assert_eq!(check.latest.tag, "v0.6.0");
+        assert_eq!(check.newer, Some(false));
+        assert_eq!(check.channel, Some(Channel::Stable));
+        let names: Vec<_> = check.zips.iter().map(|z| z.name.as_str()).collect();
+        assert_eq!(names, ["alfatreze.TAU_0.6.0_2026-10-20.zip"]);
+        assert_eq!(check.others.len(), 1);
+        assert!(check.others[0].starts_with("Preview v0.7.0-preview.1 is also available"));
+    }
+
+    #[test]
+    fn a_preview_user_is_checked_and_offered_the_preview_zip_only() {
+        let installed = core(
+            "alfatreze.TAU Preview",
+            "0.7.0-preview.0",
+            Some("v0.7.0-preview.0"),
+        );
+        let check = evaluate_for_core(&channels(), &installed, None, &[]).unwrap();
+        assert_eq!(check.latest.tag, "v0.7.0-preview.1");
+        assert_eq!(check.newer, Some(true));
+        assert_eq!(check.channel, Some(Channel::Preview));
+        assert!(
+            check
+                .message
+                .starts_with("Tau Preview v0.7.0-preview.1 is available")
+        );
+        let names: Vec<_> = check.zips.iter().map(|z| z.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["alfatreze.TAU_Preview_0.7.0-preview.1_2026-11-02.zip"]
+        );
+        // SemVer orders the Stable release above the preview of the same X.Y.Z only once it exists; v0.6.0 is older.
+        assert!(check.others.is_empty(), "{:?}", check.others);
+    }
+
+    #[test]
+    fn a_preview_user_is_told_when_the_stable_release_overtakes_the_preview() {
+        let mut releases = channels();
+        releases.push(rel("v0.7.0", &["alfatreze.TAU_0.7.0_2026-12-01.zip"]));
+        let installed = core(
+            "alfatreze.TAU Preview",
+            "0.7.0-preview.1",
+            Some("v0.7.0-preview.1"),
+        );
+        let check = evaluate_for_core(&releases, &installed, None, &[]).unwrap();
+        assert_eq!(
+            check.newer,
+            Some(false),
+            "Preview updates stay on the Preview channel"
+        );
+        assert!(check.others.iter().any(|o| o.starts_with("Stable v0.7.0")));
+    }
+
+    #[test]
+    fn diagnostics_cores_match_their_own_zip_not_the_normal_one() {
+        let diag = core("alfatreze.TAU Diagnostics", "0.6.0", Some("v0.6.0"));
+        let check = evaluate_for_core(&channels(), &diag, None, &[]).unwrap();
+        let names: Vec<_> = check.zips.iter().map(|z| z.name.as_str()).collect();
+        assert_eq!(names, ["alfatreze.TAU_Diagnostics_0.6.0_2026-10-20.zip"]);
+        let old = core("alfatreze.TAU_DIAGNOSTIC", "0.4.0", None);
+        let releases = vec![rel(
+            "v0.4.0",
+            &[
+                "alfatreze.TAU_0.4.0_2026-09-22.zip",
+                "alfatreze.TAU_DIAGNOSTIC_0.4.0_2026-09-22.zip",
+            ],
+        )];
+        let check = evaluate_for_core(&releases, &old, None, &[]).unwrap();
+        assert_eq!(check.zips.len(), 1);
+        assert!(check.zips[0].name.contains("TAU_DIAGNOSTIC"));
+    }
+
+    fn doc_replacing(tag: &str, zip: &str, core_id: &str, replaces: &[&str]) -> compat::CompatDoc {
+        compat::CompatDoc {
+            schema: 2,
+            release: tag.into(),
+            date_release: "2026-11-01".into(),
+            prerelease: false,
+            previous_release: None,
+            packages: vec![compat::CompatPackage {
+                zip: zip.into(),
+                zip_sha256: String::new(),
+                core_id: core_id.into(),
+                bitstream_sha256: String::new(),
+                bitstream_core_version: String::new(),
+                bitstream_features: None,
+                rom_sha256: String::new(),
+                cold_sha256: String::new(),
+                rom_accepts: vec![],
+                rom_needs: vec![],
+                replaces: replaces.iter().map(|s| s.to_string()).collect(),
+                layout: vec![],
+            }],
+            persist_ids_changed: vec![],
+            persist_registry: Default::default(),
+            min_omega: "0.3.0".into(),
+            notes: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_manifest_replaces_list_routes_an_old_core_to_its_successor_zip() {
+        let releases = channels();
+        let doc = doc_replacing(
+            "v0.6.0",
+            "alfatreze.TAU_Diagnostics_0.6.0_2026-10-20.zip",
+            "alfatreze.TAU Diagnostics",
+            &["alfatreze.TAU_DIAGNOSTIC"],
+        );
+        let old = core("alfatreze.TAU_DIAGNOSTIC", "0.4.0", None);
+        let check = evaluate_for_core(&releases, &old, None, std::slice::from_ref(&doc)).unwrap();
+        let names: Vec<_> = check.zips.iter().map(|z| z.name.as_str()).collect();
+        assert_eq!(names, ["alfatreze.TAU_Diagnostics_0.6.0_2026-10-20.zip"]);
+        // Without the manifest the name rule cannot know the successor.
+        let check = evaluate_for_core(&releases, &old, None, &[]).unwrap();
+        assert!(check.zips.is_empty());
+    }
+
+    #[test]
+    fn same_day_dev_builds_are_ordered_by_the_full_core_version() {
+        let releases = vec![rel(
+            "v0.7.0-dev.386",
+            &["alfatreze.TAU_DEV_0.7.0-dev.386.zip"],
+        )];
+        let mut installed = core("alfatreze.TAU DEV 385", "0.7.0-dev.385", None);
+        installed.date_release = Some("2026-11-01".into());
+        let check = evaluate_for_core(&releases, &installed, None, &[]).unwrap();
+        // The dev zip name starts with a different stem, so no zip matches, but the version order is still used.
+        assert_eq!(check.newer, Some(true));
+        assert_eq!(check.channel, Some(Channel::Dev));
+    }
+
+    #[test]
+    fn channel_rules() {
+        assert_eq!(channel_of_version("0.6.0"), Channel::Stable);
+        assert_eq!(channel_of_version("0.7.0-preview.1"), Channel::Preview);
+        assert_eq!(channel_of_version("0.7.0-rc.1"), Channel::Preview);
+        assert_eq!(channel_of_version("0.7.0-dev.385"), Channel::Dev);
+        assert_eq!(channel_of_name("alfatreze.TAU"), Channel::Stable);
+        assert_eq!(
+            channel_of_name("alfatreze.TAU Diagnostics"),
+            Channel::Stable
+        );
+        assert_eq!(
+            channel_of_name("alfatreze.TAU Preview Diagnostics"),
+            Channel::Preview
+        );
+        assert_eq!(channel_of_name("alfatreze.TAU DEV 385"), Channel::Dev);
+        assert!(is_diagnostics_zip("alfatreze.TAU_Diagnostics_0.6.0_x.zip"));
+        assert!(is_diagnostics_zip("alfatreze.TAU_DIAGNOSTIC_0.4.0_x.zip"));
+        assert!(!is_diagnostics_zip("alfatreze.TAU_0.6.0_x.zip"));
     }
 
     #[test]

@@ -173,7 +173,7 @@ export type DiagView = { reading: DiagReading; summary: string };
 export type ReleaseAsset = { name: string; url: string; size: number };
 export type GithubRelease = { tag: string; title: string; prerelease: boolean; published: string; assets: ReleaseAsset[] };
 /** The answer to "is there a newer Tau release". `newer` is null when no card was open to compare with. */
-export type UpdateCheck = { latest: GithubRelease; newer: boolean | null; installed_release: string | null; zips: ReleaseAsset[]; manifest: ReleaseAsset | null; sums: ReleaseAsset | null; message: string };
+export type UpdateCheck = { latest: GithubRelease; newer: boolean | null; installed_release: string | null; zips: ReleaseAsset[]; manifest: ReleaseAsset | null; sums: ReleaseAsset | null; message: string; channel: 'stable' | 'preview' | 'dev' | null; others: string[] };
 export type Downloaded = { name: string; path: string; bytes: number };
 
 /** Mirrors `tau_core::update` / `install_plan` / `install_exec` (serde output). */

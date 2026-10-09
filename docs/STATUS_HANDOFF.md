@@ -1118,3 +1118,11 @@ Read-only on the card, zip written outside it, no track names, no other cores' s
 - A: removing a core keeps `Assets/<p>` for every platform another core lists in any position; a dev/preview platform goes with its last core.
 - B: a manifest's obsolete paths are acted on only inside the core's own areas (its `Cores/` folder, `Assets/<platform>/<core>/`, platform files nobody else uses) or for a build file moved out of `common/` that the package now owns and no other core reads. Anything else is left alone with a caution; same filter in `compat::check_card`.
 - Tested on unit fixtures and the five packages built with Tau's own tools (`tests/new_layout.rs`: removing each core from a five-core card). Still to do: C-E.
+
+## 2026-10-09: adaptation step C (channels and zip choice)
+
+- `release_check::evaluate_for_core`: with the installed core's id, only releases that carry that core count (manifest `core_id` or `replaces` when the release's manifest is known, else the zip name `<core id with _>_<digit...>`, so `alfatreze.TAU_` never matches `TAU_Diagnostics_`/`TAU_Preview_`). A Stable user is no longer offered the Preview core as an Update; newer releases of other channels come back as `others` (information; installing one adds a separate core). Preview updates stay on Preview; a Stable release that overtakes it is reported in `others`.
+- Same-day builds without a manifest are ordered by `core.json`'s full version (`0.7.0-dev.385` before `.386`). Channel is read from the version (`X.Y.Z` Stable, `-dev.` Dev, other suffix Preview), else from the core id.
+- `compat` parses package `replaces`; the install plan suggests (never performs) removing replaced cores and `alfatreze.TAU DEV NN` builds. Diagnostics zips are recognised case-insensitively (old `TAU_DIAGNOSTIC`, new `TAU_Diagnostics`).
+- Host: every Tau-family core on the card (`alfatreze.TAU` prefix) is checked, not only shortname `TAU`; the first with an Update wins. Checksum filtering uses the chosen release's own `SHA256SUMS.txt`. Banner shows `others`.
+- Tested on constructed release lists (7 new unit tests) and a plan test for `replaces`. Not yet against a real published manifest (none carries `replaces` yet). Next: D.
