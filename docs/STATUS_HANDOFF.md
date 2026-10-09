@@ -1141,3 +1141,8 @@ Read-only on the card, zip written outside it, no track names, no other cores' s
 - `remove::plan_remove_with(card, core, keep_media, docs)`: with `keep_media` (the UI default, a checkbox), removing a core on a platform nobody else uses deletes only its own files (`Cores/<id>`, `Assets/<platform>/<id>`, plus the old-layout owned files in `common/` that the installed release's layout lists and no other core reads); the library, music, covers, theme file and platform files stay (`RemovePlan.media_kept`). `plan_remove` (whole-platform removal) is unchanged for callers that want it.
 - Tests: 3 migration tests (copy + rollback, refusals, stale source), 1 removal test. Not yet run on a real card (use CARDWRITE; nothing here writes without a confirmed plan).
 - This completes the adaptation plan A-E from `RELEASE_SYSTEM_IMPACT_2026-10-08.md`; open: a real card proof of E, and real published manifests carrying `replaces` and `bitstream_features`.
+
+## 2026-10-10: CARDWRITE proof of step E, prepared
+
+- `crates/tau-core/tests/real_card_e.rs` (ignored, refuses any volume not named `CARDWRITE`): modes `snapshot`, `remove-plan`, `remove-keep`, `remove-all`, `migrate`. `migrate` plants and removes its own namespace (`alfatreze.TAU_OMEGA_E_OLD/NEW`) and asserts the card is unchanged afterwards; checked on a throwaway folder named CARDWRITE. The `remove-*` modes need `alfatreze.TAU` installed first (the existing `real_card_install_run`).
+- CARDWRITE as mounted holds the SD-write research content (`alfatreze.CARDWRITE02`, platform `cardwrite`, `Test Album`, `._` stubs, 69 files in the snapshot): none of it is in any test's namespace. Read-only snapshot and install plan taken; nothing written to the card.
