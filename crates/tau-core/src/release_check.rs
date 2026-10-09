@@ -458,6 +458,20 @@ pub fn load_cached(dir: &Path) -> Vec<compat::CompatDoc> {
     docs
 }
 
+/// Persisted-setting names from the manifests' `persist_registry`: the newest release's name wins, older releases fill
+/// ids the newest no longer lists. Empty when no known manifest carries a registry.
+pub fn persist_names(docs: &[compat::CompatDoc]) -> BTreeMap<u64, String> {
+    let mut sorted: Vec<&compat::CompatDoc> = docs.iter().collect();
+    sorted.sort_by(|a, b| compat::compare_tags(&b.release, &a.release));
+    let mut names = BTreeMap::new();
+    for doc in sorted {
+        for (id, meaning) in &doc.persist_registry {
+            names.entry(*id).or_insert_with(|| meaning.name.clone());
+        }
+    }
+    names
+}
+
 /// The manifests a plan for `zip_path` should know: those cached from GitHub plus the zip's own sibling manifest
 /// (which wins over a cached one for the same release).
 pub fn manifests_for_install(cache_dir: &Path, zip_path: &Path) -> Vec<compat::CompatDoc> {
@@ -705,12 +719,15 @@ mod tests {
                 rom_accepts: vec![],
                 rom_needs: vec![],
                 replaces: replaces.iter().map(|s| s.to_string()).collect(),
+                rom_version: None,
                 layout: vec![],
             }],
             persist_ids_changed: vec![],
             persist_registry: Default::default(),
             min_omega: "0.3.0".into(),
             notes: String::new(),
+            source_commit: None,
+            source_dirty: false,
         }
     }
 
@@ -744,6 +761,40 @@ mod tests {
         // The dev zip name starts with a different stem, so no zip matches, but the version order is still used.
         assert_eq!(check.newer, Some(true));
         assert_eq!(check.channel, Some(Channel::Dev));
+    }
+
+    #[test]
+    fn persist_names_come_from_the_newest_registry() {
+        let mut old = doc_replacing("v0.6.0", "a.zip", "alfatreze.TAU", &[]);
+        old.persist_registry.insert(
+            16,
+            compat::PersistMeaning {
+                name: "EQ".into(),
+                meaning: 1,
+                since: "v0.1.0".into(),
+            },
+        );
+        old.persist_registry.insert(
+            9,
+            compat::PersistMeaning {
+                name: "Old only".into(),
+                meaning: 1,
+                since: "v0.1.0".into(),
+            },
+        );
+        let mut new = doc_replacing("v0.7.0", "a.zip", "alfatreze.TAU", &[]);
+        new.persist_registry.insert(
+            16,
+            compat::PersistMeaning {
+                name: "Halcyon EQ preset".into(),
+                meaning: 2,
+                since: "v0.6.0".into(),
+            },
+        );
+        let names = persist_names(&[old, new]);
+        assert_eq!(names[&16], "Halcyon EQ preset");
+        assert_eq!(names[&9], "Old only");
+        assert!(persist_names(&[]).is_empty());
     }
 
     #[test]

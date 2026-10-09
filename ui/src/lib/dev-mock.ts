@@ -230,6 +230,7 @@ const handlers: Record<string, (args: any) => unknown> = {
   remove_card_marker: () => ({ setting: prefs.card_marker, is_card: true, present: false }),
   update_check: () => null,
   update_download: () => [],
+  persist_names: () => ({ 16: 'Halcyon EQ preset' }),
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
   set_prefs: (a) => { prefs = { ...a.prefs }; return { ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }; },
   plan_sync: () => ({ id: 'mock-plan-1', new_files: 42, updates: 5, unchanged: 7133, bytes_to_write: 412_000_000, art_sidecars: 3, art_sidecar_previews: [], warnings: [] }),

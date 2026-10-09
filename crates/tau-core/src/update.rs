@@ -113,6 +113,12 @@ pub enum PairStatus {
         accepts: Vec<String>,
         bitstream: String,
     },
+    /// The ROM uses bitstream features (`TAUFWNEED`) the release says the bitstream lacks: the unit would answer
+    /// "NO UNIT".
+    MissingFeature {
+        missing: Vec<String>,
+        bitstream_has: Vec<String>,
+    },
 }
 
 /// Pairing from the built-in table only; see [`pair_status_with`].
@@ -154,6 +160,26 @@ pub fn release_of(identity: &BuildIdentity, docs: &[CompatDoc]) -> Option<String
 /// Whether the ROM and bitstream are a pair the Pocket accepts. A release manifest that names these exact files gives
 /// the bitstream's `CORE_VERSION` (and vouches for a ROM without a marker); otherwise the built-in table is used.
 pub fn pair_status_with(identity: &BuildIdentity, docs: &[CompatDoc]) -> PairStatus {
+    let status = pair_version_status(identity, docs);
+    // The CORE_VERSION pairing decides first; features are judged only for a pair that otherwise passes, and only
+    // when both sides state them (a manifest's `bitstream_features` and the ROM's `TAUFWNEED`).
+    if matches!(status, PairStatus::Verified { .. })
+        && let (Some(needs), Some((_, package))) =
+            (&identity.rom_needs, manifest_package(identity, docs))
+        && let Some(has) = &package.bitstream_features
+    {
+        let missing: Vec<String> = needs.iter().filter(|n| !has.contains(n)).cloned().collect();
+        if !missing.is_empty() {
+            return PairStatus::MissingFeature {
+                missing,
+                bitstream_has: has.clone(),
+            };
+        }
+    }
+    status
+}
+
+fn pair_version_status(identity: &BuildIdentity, docs: &[CompatDoc]) -> PairStatus {
     let (Some(_), Some(bitstream)) = (&identity.rom_sha256, &identity.bitstream_sha256) else {
         return PairStatus::CannotVerify;
     };
@@ -344,6 +370,13 @@ pub fn assess_with(
         ));
         return finish(UpdateVerdict::Mismatch, reasons, installed, package, pair);
     }
+    if let PairStatus::MissingFeature { missing, .. } = &pair {
+        reasons.push(format!(
+            "The firmware in this package uses {} but its bitstream does not have it: the Pocket would show \"NO UNIT\". Do not install it.",
+            missing.join(", ")
+        ));
+        return finish(UpdateVerdict::Mismatch, reasons, installed, package, pair);
+    }
     match &pair {
         PairStatus::NoMarker => reasons.push(
             "This firmware has no pairing marker (an older build), so its match with the bitstream cannot be checked."
@@ -395,7 +428,8 @@ pub fn assess_with(
     // Release tags order two builds exactly; without them the package's version and date are all there is.
     let ordering = match (&package_release, &installed_release) {
         (Some(new), Some(old_tag)) if new != old_tag => compat::compare_tags(new, old_tag),
-        _ => compare_versions(&package.version, &old.version)
+        // core.json's full SemVer orders same-day pre-release builds (`0.7.0-dev.385` before `.386`).
+        _ => full_version_order(&package.version, &old.version)
             .then_with(|| package.date_release.cmp(&old.date_release)),
     };
     let verdict = match ordering {
@@ -434,7 +468,28 @@ pub fn assess_with(
         ),
     };
     reasons.insert(0, line);
+    reasons.extend(package_notes(&package, docs));
     finish(verdict, reasons, installed, package, pair)
+}
+
+/// What the release manifest says about the package's build: the firmware's stamped version and a dirty tree.
+fn package_notes(package: &BuildIdentity, docs: &[CompatDoc]) -> Vec<String> {
+    let Some((doc, p)) = manifest_package(package, docs) else {
+        return Vec::new();
+    };
+    let mut notes = Vec::new();
+    if let Some(version) = &p.rom_version {
+        notes.push(format!("Firmware {version}."));
+    }
+    if doc.source_dirty {
+        notes.push(format!(
+            "This release was built from a working tree with uncommitted changes{}, so it cannot be reproduced from the repository.",
+            doc.source_commit
+                .as_ref()
+                .map_or(String::new(), |c| format!(" (commit {c})"))
+        ));
+    }
+    notes
 }
 
 fn same_hash(a: &Option<String>, b: &Option<String>) -> bool {
@@ -443,6 +498,17 @@ fn same_hash(a: &Option<String>, b: &Option<String>) -> bool {
         // A file the package does not carry cannot make the build differ.
         (_, None) => true,
         (None, Some(_)) => false,
+    }
+}
+
+/// SemVer order of two `core.json` versions when both are release-shaped (`X.Y.Z[-suffix]`), else the numeric
+/// dotted-prefix comparison.
+fn full_version_order(a: &str, b: &str) -> std::cmp::Ordering {
+    let (ta, tb) = (format!("v{a}"), format!("v{b}"));
+    if compat::is_release_tag(&ta) && compat::is_release_tag(&tb) {
+        compat::compare_tags(&ta, &tb)
+    } else {
+        compare_versions(a, b)
     }
 }
 
@@ -766,6 +832,14 @@ pub fn post_install_check_with(
             format!(
                 "the firmware accepts core version {} but the bitstream is {bitstream}: the Pocket would show a black screen.",
                 accepts.join(", ")
+            ),
+        ),
+        PairStatus::MissingFeature { missing, .. } => push(
+            "firmware pairing",
+            CheckStatus::Fail,
+            format!(
+                "the firmware uses {} but the bitstream does not have it: the Pocket would show \"NO UNIT\".",
+                missing.join(", ")
             ),
         ),
     }
@@ -1653,6 +1727,88 @@ mod tests {
                 "4D50331A",
             ),
         ]
+    }
+
+    fn doc_with(id: &BuildIdentity, features: Option<&[&str]>, dirty: bool) -> CompatDoc {
+        let doc = serde_json::json!({
+            "schema": 2, "release": "v0.7.0-preview.1", "date_release": "2026-11-01", "prerelease": true,
+            "source": {"commit": "abc1234", "dirty": dirty},
+            "packages": [{"zip": "x.zip", "zip_sha256": "00", "core_id": id.core_id,
+                "bitstream_sha256": id.bitstream_sha256, "bitstream_core_version": "4D50331A",
+                "bitstream_features": features, "rom_version": "0.7.0-preview.1+abc1234",
+                "rom_sha256": id.rom_sha256, "cold_sha256": id.cold_sha256,
+                "rom_accepts": ["4D50331A"], "rom_needs": ["HALCYON"],
+                "layout": [{"path": "Cores/x/core.json", "role": "owned", "sha256": "00", "slot": null, "required": false}]}],
+            "requires_omega": {"min_omega": "0.4.0"}
+        });
+        compat::parse_compat(&serde_json::to_vec(&doc).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn a_rom_needing_a_feature_the_bitstream_lacks_is_refused() {
+        let mut id = package_identity(&alpha4(), "alfatreze.TAU").unwrap();
+        id.rom_accepts = Some(vec!["4D50331A".into()]);
+        id.rom_needs = Some(vec!["HALCYON".into(), "LPC".into()]);
+        let lacking = doc_with(&id, Some(&["LPC"]), false);
+        assert_eq!(
+            pair_status_with(&id, std::slice::from_ref(&lacking)),
+            PairStatus::MissingFeature {
+                missing: vec!["HALCYON".into()],
+                bitstream_has: vec!["LPC".into()]
+            }
+        );
+        let a = assess_with(None, id.clone(), std::slice::from_ref(&lacking));
+        assert_eq!(a.verdict, UpdateVerdict::Mismatch);
+        assert!(a.reasons[0].contains("HALCYON") && a.reasons[0].contains("NO UNIT"));
+        // The bitstream has everything, or the manifest does not say: not refused.
+        let full = doc_with(&id, Some(&["HALCYON", "LPC", "CYMO"]), false);
+        assert!(matches!(
+            pair_status_with(&id, std::slice::from_ref(&full)),
+            PairStatus::Verified { .. }
+        ));
+        let silent = doc_with(&id, None, false);
+        assert!(matches!(
+            pair_status_with(&id, std::slice::from_ref(&silent)),
+            PairStatus::Verified { .. }
+        ));
+    }
+
+    #[test]
+    fn a_release_notes_its_firmware_version_and_a_dirty_tree() {
+        let mut id = package_identity(&alpha4(), "alfatreze.TAU").unwrap();
+        id.rom_accepts = Some(vec!["4D50331A".into()]);
+        let dirty = doc_with(&id, Some(&["HALCYON"]), true);
+        let a = assess_with(Some(id.clone()), id.clone(), std::slice::from_ref(&dirty));
+        // Same build: notes only appear when there is something to compare; check the new-install path instead.
+        assert_eq!(a.verdict, UpdateVerdict::SameBuild);
+        let mut older = id.clone();
+        older.bitstream_sha256 = Some("00".repeat(32));
+        older.version = "0.6.0".into();
+        let a = assess_with(Some(older), id, std::slice::from_ref(&dirty));
+        let joined = a.reasons.join(" | ");
+        assert!(
+            joined.contains("Firmware 0.7.0-preview.1+abc1234."),
+            "{joined}"
+        );
+        assert!(
+            joined.contains("uncommitted changes") && joined.contains("abc1234"),
+            "{joined}"
+        );
+    }
+
+    #[test]
+    fn same_day_builds_are_ordered_by_the_full_core_version() {
+        let mut old = package_identity(&alpha4(), "alfatreze.TAU").unwrap();
+        old.version = "0.7.0-dev.385".into();
+        old.bitstream_sha256 = Some("11".repeat(32));
+        let mut new = old.clone();
+        new.version = "0.7.0-dev.386".into();
+        new.bitstream_sha256 = Some("22".repeat(32));
+        assert_eq!(
+            assess(Some(old.clone()), new.clone()).verdict,
+            UpdateVerdict::Update
+        );
+        assert_eq!(assess(Some(new), old).verdict, UpdateVerdict::Older);
     }
 
     #[test]
