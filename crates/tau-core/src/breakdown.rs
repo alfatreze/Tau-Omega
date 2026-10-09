@@ -17,7 +17,20 @@ pub struct CoreRef {
     pub id: String,
     pub shortname: String,
     pub platform: String,
+    /// Platform whose `common/` holds the core's media; empty means `platform`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub media_platform: String,
     pub library_capable: bool,
+}
+
+impl CoreRef {
+    fn media(&self) -> &str {
+        if self.media_platform.is_empty() {
+            &self.platform
+        } else {
+            &self.media_platform
+        }
+    }
 }
 
 /// The Tau family: a core that serves the library index, or whose id starts with
@@ -115,9 +128,9 @@ pub fn card_breakdown(
         std::collections::BTreeMap::new();
     for core in cores
         .iter()
-        .filter(|c| is_tau_core(c) && !c.platform.is_empty())
+        .filter(|c| is_tau_core(c) && !c.media().is_empty())
     {
-        let entry = platforms.entry(core.platform.clone()).or_default();
+        let entry = platforms.entry(core.media().to_string()).or_default();
         entry.0.push(core.id.clone());
         entry.1.push(core.shortname.clone());
     }
@@ -161,6 +174,7 @@ mod tests {
             id: id.into(),
             shortname: shortname.into(),
             platform: platform.into(),
+            media_platform: String::new(),
             library_capable: library,
         }
     }
@@ -294,5 +308,13 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.code(), crate::ErrorCode::Cancelled);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_core_on_its_own_platform_counts_toward_the_media_platform_it_reads() {
+        let mut dev = core("alfatreze.TAU DEV 385", "TAU DEV 385", "tau_dev", true);
+        dev.media_platform = "tau".into();
+        assert_eq!(dev.media(), "tau");
+        assert_eq!(core("a", "a", "tau", true).media(), "tau");
     }
 }

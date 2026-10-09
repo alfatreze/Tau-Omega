@@ -147,11 +147,32 @@ pub fn plan(
             .iter()
             .filter(|p| p.core_id == core.package.core_id)
         {
+            let owned: Vec<String> = package
+                .layout
+                .iter()
+                .filter(|e| e.role == Role::Owned)
+                .map(|e| e.path.clone())
+                .collect();
             for entry in package
                 .layout
                 .iter()
                 .filter(|e| e.role == Role::Obsolete && !e.pattern)
             {
+                if !crate::cardlayout::obsolete_path_allowed(
+                    card_root,
+                    &core.package.core_id,
+                    &core.package.platforms,
+                    &owned,
+                    &entry.path,
+                ) {
+                    if card_root.join(&entry.path).exists() {
+                        cautions.push(format!(
+                            "{} is marked obsolete but is outside {}'s own files, so it was left alone.",
+                            entry.path, core.package.core_id
+                        ));
+                    }
+                    continue;
+                }
                 if card_root.join(&entry.path).is_file()
                     && !obsolete_to_remove.contains(&entry.path)
                 {
@@ -452,11 +473,19 @@ mod tests {
     fn a_manifest_marks_obsolete_files_for_backup_and_removal() {
         let card = scratch("obsolete");
         install(&alpha3(), &card);
-        fs::write(card.join("Assets/tau/common/tau-old.bin"), b"left over").unwrap();
+        fs::create_dir_all(card.join("Assets/tau/alfatreze.TAU")).unwrap();
+        fs::write(
+            card.join("Assets/tau/alfatreze.TAU/tau-old.bin"),
+            b"left over",
+        )
+        .unwrap();
+        fs::write(card.join("Assets/tau/common/song.mp3"), b"music").unwrap();
+        fs::create_dir_all(card.join("Saves/tau")).unwrap();
+        fs::write(card.join("Saves/tau/keep.sav"), b"save").unwrap();
         let reader = package::inspect(&alpha4()).unwrap();
         let layout: Vec<_> = reader.entries.iter()
             .map(|e| serde_json::json!({"path": e.path, "role": "owned", "sha256": e.sha256, "slot": null, "required": false}))
-            .chain([serde_json::json!({"path": "Assets/tau/common/tau-old.bin", "role": "obsolete", "slot": null, "required": false})])
+            .chain(["Assets/tau/alfatreze.TAU/tau-old.bin", "Assets/tau/common/song.mp3", "Saves/tau/keep.sav"].map(|p| serde_json::json!({"path": p, "role": "obsolete", "slot": null, "required": false})))
             .collect();
         let doc = crate::compat::parse_compat(
             serde_json::json!({"schema": 2, "release": "v0.6.0-alpha.4", "date_release": "2026-10-07",
@@ -474,12 +503,18 @@ mod tests {
         let plan = plan(&alpha4(), &card, &[doc], false).unwrap();
         assert_eq!(
             plan.obsolete_to_remove,
-            vec!["Assets/tau/common/tau-old.bin"]
+            vec!["Assets/tau/alfatreze.TAU/tau-old.bin"],
+            "only the core's own files are ever removed; media and saves are left alone"
+        );
+        assert!(
+            plan.cautions
+                .iter()
+                .any(|c| c.contains("song.mp3") && c.contains("left alone"))
         );
         assert!(
             plan.backup
                 .iter()
-                .any(|b| b.path == "Assets/tau/common/tau-old.bin" && b.bytes == 9)
+                .any(|b| b.path == "Assets/tau/alfatreze.TAU/tau-old.bin" && b.bytes == 9)
         );
         fs::remove_dir_all(card).unwrap();
     }

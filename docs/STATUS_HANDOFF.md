@@ -1109,3 +1109,12 @@ so I cannot say macOS would have left stubs on this particular write (the theme 
 Built per `DIAGNOSTICS_COLLECTOR.md` (see its "As built" section): `tau_core::diagnostics`, `diag_read`/`diag_zip`, a Send diagnostics page under Tools & settings.
 Read-only on the card, zip written outside it, no track names, no other cores' settings. Tests: 5 engine, 4 browser, one ignored real-card test
 (`real_card_diagnostics_read_and_zip_without_touching_the_card`) that passed on the owner's card. Open: `tau diag` CLI, an owner trial of the zip.
+
+
+## 2026-10-09: adaptation steps A and B (Tau's release layout)
+
+- New `tau_core::cardlayout`: one place for a core's declared platforms, `media_platform` (platform picked by the `tau-library.tdb` slot's bits [25:24]), "platform used by another core in any position", and "another core still reads this file from `common/`".
+- `Core`/`CoreView`/`BuildIdentity`/`CoreRef` carry `platforms` and `media_platform`; library index status, the post-install library and data-slot checks, the card breakdown, and every UI media root now use the media platform (a Preview or Dev core reads `Assets/tau/common`).
+- A: removing a core keeps `Assets/<p>` for every platform another core lists in any position; a dev/preview platform goes with its last core.
+- B: a manifest's obsolete paths are acted on only inside the core's own areas (its `Cores/` folder, `Assets/<platform>/<core>/`, platform files nobody else uses) or for a build file moved out of `common/` that the package now owns and no other core reads. Anything else is left alone with a caution; same filter in `compat::check_card`.
+- Tested on unit fixtures and the five packages built with Tau's own tools (`tests/new_layout.rs`: removing each core from a five-core card). Still to do: C-E.

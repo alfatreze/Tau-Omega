@@ -16,6 +16,7 @@ pub(crate) fn test_uniq() -> u128 {
 }
 
 pub mod breakdown;
+pub mod cardlayout;
 pub mod changes;
 pub mod compare;
 pub mod compat;
@@ -387,7 +388,14 @@ pub struct Core {
     pub author: String,
     pub shortname: String,
     pub version: String,
+    /// The build platform: the first `platform_ids` entry.
     pub platform: String,
+    /// Every declared platform id, in order.
+    pub platforms: Vec<String>,
+    /// Platform whose `common/` holds this core's library, covers and music
+    /// (data-slot bits [25:24] of the library slot; equals `platform` for a
+    /// plain core).
+    pub media_platform: String,
     pub library_capable: bool,
     pub index_status: IndexStatus,
     /// The declaring platform's own `category` (`Platforms/<platform>.json`'s
@@ -451,20 +459,15 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
                     .unwrap_or_default()
                     .to_string()
             };
-            let platform = metadata
-                .get("platform_ids")
-                .and_then(Value::as_array)
-                .and_then(|a| a.first())
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
+            let platforms = cardlayout::platform_ids(&json);
+            let platform = platforms.first().cloned().unwrap_or_default();
             let data_json = folder.path().join("data.json");
-            let library_capable = fs::read(&data_json)
+            let data_value = fs::read(&data_json)
                 .ok()
-                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-                .map(|value| slots_have_library(&value))
-                .unwrap_or(false);
-            let index_status = index_status_for(&root, &platform);
+                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+            let library_capable = data_value.as_ref().map(slots_have_library).unwrap_or(false);
+            let media_platform = cardlayout::media_platform(&platforms, data_value.as_ref());
+            let index_status = index_status_for(&root, &media_platform);
             let platform_category = platform_category_for(&root, &platform);
             cores.push(Core {
                 id,
@@ -472,6 +475,8 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
                 shortname: string("shortname"),
                 version: string("version"),
                 platform,
+                platforms,
+                media_platform,
                 library_capable,
                 index_status,
                 platform_category,

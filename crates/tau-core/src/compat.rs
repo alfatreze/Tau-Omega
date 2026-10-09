@@ -532,6 +532,13 @@ pub fn check_card(doc: &CompatDoc, card_root: &Path, core_id: &str) -> Vec<Findi
     }
     let mut out = Vec::new();
     let mut listed: BTreeSet<&str> = BTreeSet::new();
+    let (core_platforms, _) = crate::cardlayout::core_platforms(card_root, core_id);
+    let owned: Vec<String> = p
+        .layout
+        .iter()
+        .filter(|e| e.role == Role::Owned)
+        .map(|e| e.path.clone())
+        .collect();
     for e in &p.layout {
         listed.insert(&e.path);
         let f = card_root.join(&e.path);
@@ -549,6 +556,21 @@ pub fn check_card(doc: &CompatDoc, card_root: &Path, core_id: &str) -> Vec<Findi
                 Some(_) => {}
             },
             Role::Obsolete => {
+                if !crate::cardlayout::obsolete_path_allowed(
+                    card_root,
+                    core_id,
+                    &core_platforms,
+                    &owned,
+                    &e.path,
+                ) {
+                    if f.exists() {
+                        out.push(warn(format!(
+                            "{} is listed obsolete but is outside this core's own files; it is not touched.",
+                            e.path
+                        )));
+                    }
+                    continue;
+                }
                 if f.exists() {
                     out.push(warn(format!(
                         "{} is obsolete and should be removed.",

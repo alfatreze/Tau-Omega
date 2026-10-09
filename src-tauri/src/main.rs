@@ -31,7 +31,7 @@ use tauri::{Emitter, Manager, State, Window};
 // front-end needs, no DTO layer earns its keep there.
 
 #[derive(Serialize)]
-struct CoreView { id: String, author: String, shortname: String, version: String, platform: String, platform_category: Option<String>, library_capable: bool, index_status: String, tracks: Option<usize> }
+struct CoreView { id: String, author: String, shortname: String, version: String, platform: String, platforms: Vec<String>, media_platform: String, platform_category: Option<String>, library_capable: bool, index_status: String, tracks: Option<usize> }
 
 /// One album's worth of `plan_sync`'s discovered `art_sidecars`: enough for
 /// the Sync screen to list what would be written and to ask
@@ -976,7 +976,7 @@ fn inspect_card(path: String) -> Result<Vec<CoreView>, TauError> {
             IndexStatus::Ready { tracks } => ("Index ready".to_string(), Some(tracks as usize)),
             IndexStatus::NeedsRepair => ("Index needs repair".to_string(), None),
         };
-        CoreView { id: core.id, author: core.author, shortname: core.shortname, version: core.version, platform: core.platform, platform_category: core.platform_category, library_capable: core.library_capable, index_status, tracks }
+        CoreView { id: core.id, author: core.author, shortname: core.shortname, version: core.version, platform: core.platform, platforms: core.platforms, media_platform: core.media_platform, platform_category: core.platform_category, library_capable: core.library_capable, index_status, tracks }
     }).collect())
 }
 

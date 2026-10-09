@@ -1,5 +1,5 @@
 export type Warning = { code: string; message: string };
-export type Core = { id: string; author: string; shortname: string; version: string; platform: string; platform_category: string | null; library_capable: boolean; index_status: string; tracks: number | null };
+export type Core = { id: string; author: string; shortname: string; version: string; platform: string; platforms: string[]; media_platform: string; platform_category: string | null; library_capable: boolean; index_status: string; tracks: number | null };
 export type ArtSidecarPreview = { folder: string; cover_source: string };
 export type Plan = { id: string; new_files: number; updates: number; unchanged: number; bytes_to_write: number; art_sidecars: number; art_sidecar_previews: ArtSidecarPreview[]; warnings: Warning[] };
 export type Setting = { id: number; kind: string; value: unknown };
@@ -101,7 +101,7 @@ export type ChangeReport = { phase: string; plan_id: string; copied: number; unc
 export type ConnectionKind = 'direct_usb' | 'card_reader' | 'unknown';
 export type ConnectionInfo = { kind: ConnectionKind; detail: string };
 /** What the app tells the engine about a core, so the card breakdown does not re-read every index. */
-export type CoreRef = { id: string; shortname: string; platform: string; library_capable: boolean };
+export type CoreRef = { id: string; shortname: string; platform: string; media_platform: string; library_capable: boolean };
 /** One Tau platform folder's share of the card (cores sharing a platform share a segment). */
 export type MediaSegment = { platform: string; core_ids: string[]; shortnames: string[]; bytes_on_disk: number; files: number };
 /** Where the card's space goes: Tau media per platform versus everything else (sizes on disk). */

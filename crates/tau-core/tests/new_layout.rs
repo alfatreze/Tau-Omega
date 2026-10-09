@@ -354,8 +354,30 @@ fn removing_channel_cores_from_a_shared_card() {
             "  remove {:<36} shared-platform {:<5} paths {:?}",
             core.id, rp.platform_shared, rp.paths
         );
+        // Every channel core names `tau`, so no removal may touch the shared media folder.
+        assert!(
+            !rp.paths
+                .iter()
+                .any(|p| p == "Assets/tau" || p == "Assets/tau/common"),
+            "{}: {:?}",
+            core.id,
+            rp.paths
+        );
+        assert_eq!(core.media_platform, "tau", "{}", core.id);
     }
-    let _ = card;
+    // The dev platform goes with its own (last) core.
+    let dev = inspected
+        .cores
+        .iter()
+        .find(|c| c.id.contains("DEV"))
+        .unwrap();
+    let rp = tau_core::remove::plan_remove(&inspected, &dev.id).unwrap();
+    assert!(
+        rp.paths.iter().any(|p| p == "Assets/tau_dev"),
+        "{:?}",
+        rp.paths
+    );
+    let _ = std::fs::remove_dir_all(&card);
 }
 
 /// Differential check: Omega's `check_card` on a card the Python reference (`tau_compat.py check-card`) was also run on.
