@@ -178,7 +178,7 @@ export type Downloaded = { name: string; path: string; bytes: number };
 
 /** Mirrors `tau_core::update` / `install_plan` / `install_exec` (serde output). */
 export type UpdateVerdict = 'new_install' | 'same_build' | 'update' | 'same_date_different_build' | 'older' | 'mismatch';
-export type PairStatus = 'no_marker' | 'cannot_verify' | { verified: { core_version: string } } | { mismatch: { accepts: string[]; bitstream: string } };
+export type PairStatus = 'no_marker' | 'cannot_verify' | { verified: { core_version: string } } | { mismatch: { accepts: string[]; bitstream: string } } | { missing_feature: { missing: string[]; bitstream_has: string[] } };
 export type BuildIdentity = { core_id: string; shortname: string; version: string; date_release: string; platform: string };
 export type UpdateAssessment = { verdict: UpdateVerdict; reasons: string[]; installed: BuildIdentity | null; package: BuildIdentity; pair: PairStatus; installed_release: string | null; package_release: string | null };
 export type BackupFile = { path: string; bytes: number };

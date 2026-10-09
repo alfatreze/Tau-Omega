@@ -55,6 +55,7 @@ export const ledgerForget = (mediaRoot: string) => invoke<boolean>('ledger_forge
 export const ejectCard = (path: string) => invoke<EjectResult>('eject_card', { path });
 export const readbackStatus = () => invoke<ReadbackStatus>('readback_status');
 export const getPrefs = () => invoke<PrefsView>('get_prefs');
+export const persistNames = () => invoke<Record<string, string>>('persist_names');
 export const updateCheck = (card: string | null) => invoke<UpdateCheck | null>('update_check', { card });
 export const updateDownload = (tag: string, names: string[]) => invoke<Downloaded[]>('update_download', { tag, names });
 export const planCoreUpdate = (zip: string, card: string, allowDowngrade: boolean) => invoke<InstallPlan>('plan_core_update', { zip, card, allowDowngrade });

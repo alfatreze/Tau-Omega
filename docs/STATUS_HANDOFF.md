@@ -1126,3 +1126,11 @@ Read-only on the card, zip written outside it, no track names, no other cores' s
 - `compat` parses package `replaces`; the install plan suggests (never performs) removing replaced cores and `alfatreze.TAU DEV NN` builds. Diagnostics zips are recognised case-insensitively (old `TAU_DIAGNOSTIC`, new `TAU_Diagnostics`).
 - Host: every Tau-family core on the card (`alfatreze.TAU` prefix) is checked, not only shortname `TAU`; the first with an Update wins. Checksum filtering uses the chosen release's own `SHA256SUMS.txt`. Banner shows `others`.
 - Tested on constructed release lists (7 new unit tests) and a plan test for `replaces`. Not yet against a real published manifest (none carries `replaces` yet). Next: D.
+
+## 2026-10-09: adaptation step D (pairing, ordering, display)
+
+- Pairing: `pair_status_with` also checks the ROM's `TAUFWNEED` against the manifest package's `bitstream_features`; a missing feature is `PairStatus::MissingFeature`, refused like a CORE_VERSION mismatch (verdict Mismatch in the plan, Fail in the post-install check). Judged only when both sides state them; a manifest without `bitstream_features` (the current Tau packages) is not refused.
+- Same-day pre-release builds without a manifest are ordered by `core.json`'s full SemVer (`0.7.0-dev.385` before `.386`), then by date.
+- The manifest's `source` and per-package `rom_version` are parsed; an update's reasons now say "Firmware <stamped version>" and warn when the release was built from a dirty tree.
+- The settings viewer takes persisted-id names from the newest cached manifest's `persist_registry` (new command `persist_names`), falling back to the built-in table.
+- Tests: 5 new unit tests (feature refusal, notes, ordering, persist names). Still open: E (settings migration, uninstall by owned entries); real manifests with `bitstream_features` do not exist yet.

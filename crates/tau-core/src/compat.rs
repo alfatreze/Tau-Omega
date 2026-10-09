@@ -84,6 +84,9 @@ pub struct CompatPackage {
     /// Core ids this package replaces (e.g. `alfatreze.TAU_DIAGNOSTIC` for `alfatreze.TAU Diagnostics`).
     #[cfg_attr(feature = "serde", serde(default))]
     pub replaces: Vec<String>,
+    /// The firmware's full stamped version (`0.7.0-preview.1+6423e42`), when the release records it.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub rom_version: Option<String>,
     /// Empty for schema 1.
     pub layout: Vec<LayoutEntry>,
 }
@@ -110,6 +113,11 @@ pub struct CompatDoc {
     pub persist_registry: BTreeMap<u64, PersistMeaning>,
     pub min_omega: String,
     pub notes: String,
+    /// The commit the release was built from, and whether the tree had uncommitted changes.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub source_commit: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub source_dirty: bool,
 }
 
 fn bad(msg: impl Into<String>) -> TauError {
@@ -226,6 +234,10 @@ pub fn parse_compat(bytes: &[u8]) -> Result<CompatDoc, TauError> {
             rom_accepts: str_list(p.get("rom_accepts")),
             rom_needs: str_list(p.get("rom_needs")),
             replaces: str_list(p.get("replaces")),
+            rom_version: p
+                .get("rom_version")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             layout,
         });
     }
@@ -275,6 +287,14 @@ pub fn parse_compat(bytes: &[u8]) -> Result<CompatDoc, TauError> {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string(),
+        source_commit: v
+            .pointer("/source/commit")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        source_dirty: v
+            .pointer("/source/dirty")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         release,
     })
 }
