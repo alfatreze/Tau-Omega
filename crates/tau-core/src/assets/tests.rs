@@ -1,4 +1,9 @@
 use super::*;
+use crate::sync;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 const SUNSET_JSON: &str = include_str!("../../testdata/assets/sunset.json");
 const SUNSET_BIN: &[u8] = include_bytes!("../../testdata/assets/sunset.tau-assets.bin");
