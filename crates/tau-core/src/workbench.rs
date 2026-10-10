@@ -817,6 +817,7 @@ mod tests {
         assert!(plan.items.iter().all(|i| {
             i.destination
                 .to_string_lossy()
+                .replace('\\', "/")
                 .contains("Miles Davis/Kind of Blue")
         }));
         sync::execute(&plan, &plan.id, &mut None).unwrap();
