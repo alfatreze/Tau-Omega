@@ -1,4 +1,5 @@
 mod app_verbs;
+mod write_verbs;
 use std::{
     env, fmt, fs,
     path::{Path, PathBuf},
@@ -44,7 +45,7 @@ impl fmt::Display for CliError {
 
 fn usage() {
     eprintln!(
-        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare, diag\nApp parity (all take --json; errors then print an error object (code, message) as JSON on stderr): report-code <png> | screenshots <card> | settings <interact_persist.json> | package-inspect <zip> | package-plan <zip> --card <root> | package-install <zip> --card <root> --confirm <plan-id> --yes | library-health <media-root> | library-refresh-plan <media-root> | halcyon-import <apo.txt> --name N | halcyon-show <tau-assets.bin>\nDiagnostics: tau diag <card-root> [--limit N] [--zip <host-folder>]   (reads Check results, QR/pixel-grid screenshots and core checksums; --zip writes the diagnostics zip to a folder OUTSIDE the card, nothing is uploaded)\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--art-sidecar]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover] [--art-sidecar]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. --art-sidecar writes a tau-art/cover_128.pal256.timg per album (tau-alpha's decided format, no firmware reader yet)."
+        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare, diag\nApp parity (all take --json; errors then print an error object (code, message) as JSON on stderr): report-code <png> | screenshots <card> | settings <interact_persist.json> | package-inspect <zip> | package-plan <zip> --card <root> | package-install <zip> --card <root> --confirm <plan-id> --yes | library-health <media-root> | library-refresh-plan <media-root> | halcyon-import <apo.txt> --name N | halcyon-show <tau-assets.bin>\nChanging things (plan first, then the same command with --confirm <plan-id> --yes; replacing files needs --backup-dir <folder outside the card>): remove-plan|remove <card> --core <id> [--delete-media] | update-plan|update <zip> --card <root> [--allow-downgrade] | library-refresh <media-root> | changes-plan|changes <media-root> [--request r.json] [--library <dir>] [--add <album>] [--remove <album>] (changes also needs --manifest <journal.json>) | theme-check <theme.json> | theme-show <tau-assets.bin> | assets-plan|assets-install <media-root> [--themes t.json] [--presets p.json]\nDiagnostics: tau diag <card-root> [--limit N] [--zip <host-folder>]   (reads Check results, QR/pixel-grid screenshots and core checksums; --zip writes the diagnostics zip to a folder OUTSIDE the card, nothing is uploaded)\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--art-sidecar]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover] [--art-sidecar]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. --art-sidecar writes a tau-art/cover_128.pal256.timg per album (tau-alpha's decided format, no firmware reader yet)."
     );
 }
 fn main() -> ExitCode {
@@ -72,6 +73,17 @@ fn main() -> ExitCode {
         "library-refresh-plan" => app_verbs::library_refresh_plan(&args, json),
         "halcyon-import" => app_verbs::halcyon_import(&args, json),
         "halcyon-show" => app_verbs::halcyon_show(&args, json),
+        "remove-plan" => write_verbs::remove_plan(&args, json),
+        "remove" => write_verbs::remove_core(&args, json),
+        "update-plan" => write_verbs::update_plan(&args, json),
+        "update" => write_verbs::update_core(&args, json),
+        "library-refresh" => write_verbs::library_refresh(&args, json),
+        "changes-plan" => write_verbs::changes_plan(&args, json),
+        "changes" => write_verbs::changes_apply(&args, json),
+        "theme-check" => write_verbs::theme_check(&args, json),
+        "theme-show" => write_verbs::theme_show(&args, json),
+        "assets-plan" => write_verbs::assets_plan(&args, json),
+        "assets-install" => write_verbs::assets_install(&args, json),
         "compare" => compare_media(&args, json),
         "core-copy-plan" => core_copy_plan(&args, json),
         "core-copy" => core_copy_execute(&args, json),

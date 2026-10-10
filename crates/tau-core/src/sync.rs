@@ -939,7 +939,7 @@ pub(crate) fn resolve_for_compare(path: &Path) -> PathBuf {
 
 /// Whether a backup folder lies inside `root` (the card media root), compared
 /// after resolving symlinks on both sides.
-pub(crate) fn backup_is_inside(backup: &Path, root: &Path) -> bool {
+pub fn backup_is_inside(backup: &Path, root: &Path) -> bool {
     resolve_for_compare(backup).starts_with(resolve_for_compare(root))
 }
 
