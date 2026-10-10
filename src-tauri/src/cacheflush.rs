@@ -22,9 +22,15 @@ pub const SUPPORTED: bool = cfg!(any(target_os = "macos", target_os = "linux"));
 #[cfg(target_os = "macos")]
 pub fn evict(path: &Path) -> bool {
     use std::os::fd::AsRawFd;
-    let Ok(file) = std::fs::File::open(path) else { return false };
-    let Ok(meta) = file.metadata() else { return false };
-    let Ok(len) = usize::try_from(meta.len()) else { return false };
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let Ok(meta) = file.metadata() else {
+        return false;
+    };
+    let Ok(len) = usize::try_from(meta.len()) else {
+        return false;
+    };
     if len == 0 {
         return true;
     }
@@ -32,7 +38,14 @@ pub fn evict(path: &Path) -> bool {
     // file's current length, and is unmapped before returning; no reference into it
     // escapes.
     unsafe {
-        let addr = libc::mmap(std::ptr::null_mut(), len, libc::PROT_READ, libc::MAP_SHARED, file.as_raw_fd(), 0);
+        let addr = libc::mmap(
+            std::ptr::null_mut(),
+            len,
+            libc::PROT_READ,
+            libc::MAP_SHARED,
+            file.as_raw_fd(),
+            0,
+        );
         if addr == libc::MAP_FAILED {
             return false;
         }
@@ -46,7 +59,9 @@ pub fn evict(path: &Path) -> bool {
 #[cfg(target_os = "linux")]
 pub fn evict(path: &Path) -> bool {
     use std::os::fd::AsRawFd;
-    let Ok(file) = std::fs::File::open(path) else { return false };
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
     // SAFETY: plain advisory call on a descriptor this function owns.
     unsafe { libc::posix_fadvise(file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED) == 0 }
 }
@@ -86,10 +101,23 @@ mod real_device_checks {
         fs::create_dir_all(&dir).unwrap();
         let image: PathBuf = dir.join("t.dmg");
         let ok = |c: &mut Command| c.output().map(|o| o.status.success()).unwrap_or(false);
-        assert!(ok(Command::new("hdiutil").args(["create", "-size", "32m", "-fs", "MS-DOS", "-volname", "TAUEVICT", "-type", "UDIF"]).arg(&image)));
-        let attach = Command::new("hdiutil").args(["attach", "-nobrowse"]).arg(&image).output().unwrap();
+        assert!(ok(Command::new("hdiutil")
+            .args([
+                "create", "-size", "32m", "-fs", "MS-DOS", "-volname", "TAUEVICT", "-type", "UDIF"
+            ])
+            .arg(&image)));
+        let attach = Command::new("hdiutil")
+            .args(["attach", "-nobrowse"])
+            .arg(&image)
+            .output()
+            .unwrap();
         let text = String::from_utf8_lossy(&attach.stdout).into_owned();
-        let device = text.lines().find(|l| l.contains("/Volumes/TAUEVICT")).and_then(|l| l.split_whitespace().next()).unwrap().to_string();
+        let device = text
+            .lines()
+            .find(|l| l.contains("/Volumes/TAUEVICT"))
+            .and_then(|l| l.split_whitespace().next())
+            .unwrap()
+            .to_string();
         let result = std::panic::catch_unwind(|| {
             let file = Path::new("/Volumes/TAUEVICT/probe.bin");
             let mut f = fs::File::create(file).unwrap();
@@ -98,16 +126,29 @@ mod real_device_checks {
             drop(f);
             assert_eq!(first_byte(file), 0x11); // now cached
             let bytes = fs::read(&image).unwrap();
-            let offset = bytes.windows(65536).position(|w| w.iter().all(|b| *b == 0x11)).expect("pattern in image");
+            let offset = bytes
+                .windows(65536)
+                .position(|w| w.iter().all(|b| *b == 0x11))
+                .expect("pattern in image");
             let mut f = fs::OpenOptions::new().write(true).open(&image).unwrap();
             std::io::Seek::seek(&mut f, std::io::SeekFrom::Start(offset as u64)).unwrap();
             f.write_all(&[0x22u8; 4096]).unwrap();
             f.sync_all().unwrap();
-            assert_eq!(first_byte(file), 0x11, "a plain read is served from the cache (stale)");
+            assert_eq!(
+                first_byte(file),
+                0x11,
+                "a plain read is served from the cache (stale)"
+            );
             assert!(evict(file));
-            assert_eq!(first_byte(file), 0x22, "after evict the read reaches the device");
+            assert_eq!(
+                first_byte(file),
+                0x22,
+                "after evict the read reaches the device"
+            );
         });
-        let _ = Command::new("hdiutil").args(["detach", &device, "-force"]).output();
+        let _ = Command::new("hdiutil")
+            .args(["detach", &device, "-force"])
+            .output();
         let _ = fs::remove_dir_all(&dir);
         result.unwrap();
     }
