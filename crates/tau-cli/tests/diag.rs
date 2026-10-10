@@ -8,7 +8,7 @@ fn scratch(name: &str) -> PathBuf {
     p
 }
 
-fn card(root: &PathBuf) {
+fn card(root: &std::path::Path) {
     let core = root.join("Cores/alfatreze.TAU_TEST");
     fs::create_dir_all(&core).unwrap();
     fs::write(core.join("core.json"), r#"{"core":{"metadata":{"platform_ids":["tau_test"],"shortname":"TAU_TEST","author":"alfatreze","version":"0.6.0","date_release":"2026-09-30"}}}"#).unwrap();
