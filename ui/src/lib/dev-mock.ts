@@ -211,6 +211,8 @@ const handlers: Record<string, (args: any) => unknown> = {
     warnings: mockAssetsOnCard ? ['The file already there also holds METR, which is not carried over: it will be gone after this install (the backup keeps it).'] : [],
   }),
   appearance_install: (a) => { mockAssetsOnCard = true; return { destination: `${a.mediaRoot}/tau-assets.bin`, bytes_written: 144, replaced: false, backup: a.backup ?? null }; },
+  omega_update_check: () => null,
+  omega_update_install: () => undefined,
   halcyon_open: () => [],
   halcyon_import_apo: (a) => ({ preset: { kind: 'raw', name: a.name as string, preamp: 3000000, stages: [[4194304, 0, 0, 0, 0]] }, preamp_db: -2.9, peak_gain_db: 2.9, filters: 1 }),
   halcyon_curve: () => Array.from({ length: 200 }, (_, i) => [20 * 1000 ** (i / 199), 0]),

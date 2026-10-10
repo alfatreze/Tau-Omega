@@ -217,3 +217,6 @@ export type HalcyonPreset =
   | { kind: 'control'; name: string; controls: [number, number, number, number, number, number] }
   | { kind: 'raw'; name: string; preamp: number; stages: number[][] };
 export type ApoImport = { preset: HalcyonPreset; preamp_db: number; peak_gain_db: number; filters: number };
+
+/** Mirrors `omega_update::OmegaUpdate` (Tau Omega's own updater, not the Tau core update check). */
+export type OmegaUpdate = { current: string; version: string; notes: string | null; date: string | null };
