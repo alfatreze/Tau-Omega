@@ -7,6 +7,7 @@
 # Test-build binaries (their BUILD.txt and SHA256SUMS.txt are tracked; see releases/dev-builds/README.md)
 /releases/dev-builds/*/*.zip
 /releases/dev-builds/*/*.app/
+/releases/v*/*.dmg
 
 # private keys (updater signing key backup): never commit
 /secrets/

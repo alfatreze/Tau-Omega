@@ -107,7 +107,8 @@ App: Library workbench with one card-space bar and sync progress, Appearance edi
 1. **Tau Omega only.** Never edit the Tau Alpha repository from here; read it for integration facts. Anything Omega needs changed there goes to the owner as a note, not a patch.
 2. **Integrate with Tau Alpha `main` only.** A format, tag or file layout is planned here when it ships on `main` and has a real captured artefact to verify against (the project rule: fixtures are copied from real artefacts, never written from memory).
 3. This is the only file that orders Omega work; specs and handoffs say what exists. Update `docs/STATUS_HANDOFF.md` when a fact changes.
-4. Card writes only after a shown plan and the owner's approval; new dependencies are flagged with their real cost before they are added.
+4. **Always put the latest version to test in `releases/`** (owner, 2026-10-10): every build the owner should try goes into `releases/` before it is announced: a release candidate or release in `releases/v<version>/` (installer(s), `RELEASE_NOTES.md`, `SHA256SUMS.txt`; the binaries are git-ignored), a test build via `tools/dev-build.sh` in `releases/dev-builds/<goal>-alpha.<n>/`. After a release ships, move `releases/dev-builds/TARGET` to the next goal.
+5. Card writes only after a shown plan and the owner's approval; new dependencies are flagged with their real cost before they are added.
 
 ---
 *Everything below is the original 2026-09-22 roadmap, kept for the ideas it lists. Where it disagrees with the tables above, the tables win.*
