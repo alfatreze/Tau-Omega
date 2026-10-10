@@ -3,7 +3,54 @@
   "productName": "Tau Omega",
   "version": "0.3.0",
   "identifier": "dev.tau.omega",
-  "build": { "beforeDevCommand": { "script": "npm run dev", "cwd": "../ui" }, "beforeBuildCommand": { "script": "npm run build", "cwd": "../ui" }, "devUrl": "http://localhost:5173", "frontendDist": "../ui/dist" },
-  "app": { "windows": [{ "title": "Tau Omega", "width": 1120, "height": 760, "minWidth": 900, "minHeight": 620 }] },
-  "bundle": { "active": true, "targets": ["app"], "icon": ["../assets/appicon.png"] }
+  "build": {
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "../ui"
+    },
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": "../ui"
+    },
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../ui/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Tau Omega",
+        "width": 1120,
+        "height": 760,
+        "minWidth": 900,
+        "minHeight": 620
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg",
+      "nsis",
+      "msi",
+      "appimage",
+      "deb"
+    ],
+    "icon": [
+      "../assets/appicon.png"
+    ],
+    "publisher": "alfatreze",
+    "category": "Music",
+    "shortDescription": "Library and card manager for the Tau music core on the Analogue Pocket",
+    "longDescription": "Tau Omega manages the music, themes, Halcyon EQ presets and Tau cores on an Analogue Pocket SD card: it builds and verifies the library index, syncs music, installs and updates Tau, and reads the Pocket's diagnostic reports.",
+    "copyright": "alfatreze",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
 }
