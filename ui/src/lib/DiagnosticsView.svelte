@@ -42,11 +42,8 @@
   $: anyEvidence = !!reading && (reading.shots.length > 0 || reading.cores.some((c) => c.check));
 </script>
 
-<section class="dg" aria-labelledby="dg-title">
-  <div class="dg-head">
-    <h2 id="dg-title">Send diagnostics</h2>
-    <p class="muted">Gathers what a Tau Check left on {cardLabel || 'the card'} (its saved results and any screenshots of the Check’s QR code) into one zip for a bug report. Nothing is uploaded, nothing is written to the card, and it never includes track names or other cores’ settings.</p>
-  </div>
+<section class="page dg" aria-labelledby="dg-title">
+  <header><div><p class="eyebrow">SUPPORT</p><h1 id="dg-title">Send diagnostics</h1><p class="lede">Gathers what a Tau Check left on {cardLabel || 'the card'} (its saved results and any screenshots of the Check’s QR code) into one zip for a bug report. Nothing is uploaded, nothing is written to the card, and it never includes track names or other cores’ settings.</p></div></header>
 
   {#if !cardPath}
     <p class="dg-note" role="status">Open a card in Cards first.</p>
@@ -94,9 +91,8 @@
 </section>
 
 <style>
-  .dg{display:grid;gap:12px;max-width:900px;align-content:start}
-  .dg h2,.dg h3,.dg p{margin:0}
-  .dg-head p{margin-top:6px}
+  .dg{display:grid;gap:12px;align-content:start}
+  .dg h3,.dg p:not(.eyebrow){margin:0}
   .dg-actions{display:flex;gap:8px;flex-wrap:wrap}
   .dg button{padding:8px 12px;font-size:13px;background:#202b2d;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;cursor:pointer}
   .dg button.quiet{background:transparent}.dg button.primary{background:#c1f0ad;color:#142015;font-weight:700;border-color:#c1f0ad}

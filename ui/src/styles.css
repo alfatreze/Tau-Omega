@@ -101,10 +101,19 @@ nav button{padding:10px 12px;border-radius:8px;color:#a4b0b0;font-size:14px;text
 
 button:disabled{opacity:.45;cursor:not-allowed}
 .nav-toggle,.nav-backdrop{display:none}
+/* One page frame for every screen, matching the Library workbench: eyebrow, 26px title, one quiet line, 24px/40px padding. */
+.page{max-width:1280px;padding:24px 40px 28px}
+.page>header{margin:0 0 18px;gap:12px}
+.page>header>div{flex:1 1 360px}
+.page>header .eyebrow{margin:0 0 2px}
+.page>header h1{font-size:26px;margin:0 0 4px}
+.page h2{font-size:17px;margin-bottom:6px}
+.page .settings-card h2{font-size:15px}
+.page>header .lede{font-size:13px;color:#9cacab;line-height:1.5;max-width:78ch}
 @media(max-width:720px){
   .nav-toggle{display:flex;position:fixed;top:10px;left:10px;z-index:95;align-items:center;justify-content:center;width:40px;height:40px;background:#161f20;border:1px solid #2c393a;border-radius:10px;color:#e8ecec;padding:0}
   .nav-backdrop{display:block;position:fixed;inset:0;background:rgba(5,9,10,.6);z-index:96}
   aside.open{display:flex;position:fixed;top:0;left:0;bottom:0;width:min(300px,86vw);height:100vh;z-index:97;box-shadow:12px 0 40px rgba(0,0,0,.5)}
-  .page{padding-top:64px}
+  .page{padding:64px 22px 28px}
   .wb{padding-top:60px}
 }

@@ -15,7 +15,7 @@
   const STATE_LABEL: Record<string, string> = { only_left: 'New', different: 'Update', identical: 'Unchanged', only_right: 'Card only' };
 </script>
 <section class="page" aria-labelledby="package-title">
-  <header><div><p class="eyebrow">CORE PACKAGES</p><h1 id="package-title">Install a core package</h1><p class="lede">Inspect a release zip, plan what installing or updating it would change, then confirm. Every write is verified against the zip immediately before and after.</p></div></header>
+  <header><div><p class="eyebrow">CORE PACKAGES</p><h1 id="package-title">Packages</h1><p class="lede">Inspect a release zip, plan what installing or updating it would change, then confirm. Every write is verified against the zip immediately before and after.</p></div></header>
 
   <section class="settings-card">
     <div style="width:100%">
@@ -69,7 +69,7 @@
     <section class="settings-card"><div><h2>Installed</h2><p>{report.written} files written · {report.unchanged} already up to date · {size(report.bytes_written)} written</p></div><span class="chip capable">Verified</span></section>
   {/if}
 
-  <header><div><p class="eyebrow">CORE PACKAGES</p><h1>Remove an installed core</h1><p class="lede">Checks every other installed core on this card first. Files shared with another core (the platform's <code>Assets/&lt;platform&gt;/common</code> media root and its <code>Platforms</code> entry) are only removed when no sibling core still needs them.</p></div></header>
+  <header><div><p class="eyebrow">REMOVE</p><h2>Remove an installed core</h2><p class="lede">Checks every other installed core on this card first. Files shared with another core (the platform's <code>Assets/&lt;platform&gt;/common</code> media root and its <code>Platforms</code> entry) are only removed when no sibling core still needs them.</p></div></header>
 
   <section class="settings-card">
     <div style="width:100%">
