@@ -1,0 +1,2 @@
+a32bcb8d4ff6d9721ec3fd818e9755de9264662a89dbd363e5434bb11cbb1567  Tau_Omega_0.4.1_aarch64.dmg
+f20f020fc1d6268550fb9408de3de67ad57a26c4c6ed61b5fca88eb7ee370941  Tau_Omega_0.4.1_x64.dmg
