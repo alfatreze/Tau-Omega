@@ -1,3 +1,4 @@
+mod app_verbs;
 use std::{
     env, fmt, fs,
     path::{Path, PathBuf},
@@ -43,7 +44,7 @@ impl fmt::Display for CliError {
 
 fn usage() {
     eprintln!(
-        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare, diag\nDiagnostics: tau diag <card-root> [--limit N] [--zip <host-folder>]   (reads Check results, QR/pixel-grid screenshots and core checksums; --zip writes the diagnostics zip to a folder OUTSIDE the card, nothing is uploaded)\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--art-sidecar]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover] [--art-sidecar]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. --art-sidecar writes a tau-art/cover_128.pal256.timg per album (tau-alpha's decided format, no firmware reader yet)."
+        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare, diag\nApp parity (all take --json; errors then print an error object (code, message) as JSON on stderr): report-code <png> | screenshots <card> | settings <interact_persist.json> | package-inspect <zip> | package-plan <zip> --card <root> | package-install <zip> --card <root> --confirm <plan-id> --yes | library-health <media-root> | library-refresh-plan <media-root> | halcyon-import <apo.txt> --name N | halcyon-show <tau-assets.bin>\nDiagnostics: tau diag <card-root> [--limit N] [--zip <host-folder>]   (reads Check results, QR/pixel-grid screenshots and core checksums; --zip writes the diagnostics zip to a folder OUTSIDE the card, nothing is uploaded)\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--art-sidecar]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover] [--art-sidecar]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. --art-sidecar writes a tau-art/cover_128.pal256.timg per album (tau-alpha's decided format, no firmware reader yet)."
     );
 }
 fn main() -> ExitCode {
@@ -61,6 +62,16 @@ fn main() -> ExitCode {
         "verify" => check(&args, json),
         "report" => report(&args, json),
         "diag" => diag(&args, json),
+        "report-code" => app_verbs::report_code(&args, json),
+        "screenshots" => app_verbs::screenshots(&args, json),
+        "settings" => app_verbs::settings(&args, json),
+        "package-inspect" => app_verbs::package_inspect(&args, json),
+        "package-plan" => app_verbs::package_plan(&args, json),
+        "package-install" => app_verbs::package_install(&args, json),
+        "library-health" => app_verbs::library_health(&args, json),
+        "library-refresh-plan" => app_verbs::library_refresh_plan(&args, json),
+        "halcyon-import" => app_verbs::halcyon_import(&args, json),
+        "halcyon-show" => app_verbs::halcyon_show(&args, json),
         "compare" => compare_media(&args, json),
         "core-copy-plan" => core_copy_plan(&args, json),
         "core-copy" => core_copy_execute(&args, json),
@@ -73,11 +84,26 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(CliError::Usage(message)) => {
-            eprintln!("error: {message}");
+            if json {
+                eprintln!(
+                    r#"{{"error":{{"code":"usage","message":{}}}}}"#,
+                    q(&message)
+                );
+            } else {
+                eprintln!("error: {message}");
+            }
             ExitCode::from(2)
         }
         Err(CliError::Engine(error)) => {
-            eprintln!("error {}: {}", error.code(), error.message);
+            if json {
+                eprintln!(
+                    r#"{{"error":{{"code":{},"message":{}}}}}"#,
+                    q(&error.code().to_string()),
+                    q(&error.message)
+                );
+            } else {
+                eprintln!("error {}: {}", error.code(), error.message);
+            }
             ExitCode::from(u8::try_from(error.code().as_u16()).unwrap_or(255))
         }
     }
@@ -479,7 +505,7 @@ fn show_plan(p: &SyncPlan, j: bool) {
         );
     }
 }
-fn value<'a>(a: &'a [String], key: &str) -> Option<&'a str> {
+pub(crate) fn value<'a>(a: &'a [String], key: &str) -> Option<&'a str> {
     a.iter()
         .position(|x| x == key)
         .and_then(|i| a.get(i + 1))
@@ -512,7 +538,7 @@ fn num(a: &[String], key: &str) -> Result<usize, CliError> {
         .parse()
         .map_err(|_| CliError::Usage(format!("invalid {key}")))
 }
-fn yes(a: &[String]) -> Result<(), CliError> {
+pub(crate) fn yes(a: &[String]) -> Result<(), CliError> {
     if a.iter().any(|x| x == "--yes") {
         Ok(())
     } else {
