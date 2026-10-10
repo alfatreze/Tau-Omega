@@ -1,11 +1,8 @@
 name: Build app
-# Builds downloadable desktop apps. Run it from the Actions tab (Run workflow),
-# or it runs on every push to the session branch. Artifacts appear at the
-# bottom of the run page. These builds are unsigned.
+# Builds unsigned test apps. Run it from the Actions tab (Run workflow); artifacts appear at the
+# bottom of the run page. Real installers, signed when the secrets exist, come from release.yml.
 on:
   workflow_dispatch:
-  push:
-    branches: [claude/jolly-meitner-jwdzwx]
 jobs:
   build:
     strategy:
