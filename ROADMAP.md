@@ -88,9 +88,9 @@ The `METR` section (per-meter presets) waits: its meaning depends on the meter w
 
 - Prove the CI browser-suite step on GitHub (it was added locally and has not been seen to run) and keep `cargo fmt`, `clippy` and the 174-check suite green.
 - Ledger follow-ups: per-volume I/O governor, hash-while-copy for plain copies, a Library fit bar that counts whole clusters, a card-speed benchmark (`tau-cli bench-card`); first real card timing numbers are the gate.
-- Send diagnostics trial by the owner (zip contents) and its `tau diag` CLI verb.
+- Send diagnostics trial by the owner (zip contents). **`tau diag <card> [--limit N] [--zip <folder outside the card>]` built 2026-10-10** (`crates/tau-cli`, tests in `tests/diag.rs`; the CLI now builds `tau-core` with its `serde` feature).
 - Windows and Linux: only macOS has been exercised; the card write lock, eject and cache-bypass read-back need a pass on each.
-- Split the large engine and host files (`sync.rs`, `lib.rs`, `main.rs`, the pre-workbench state in `App.svelte`) in small behaviour-preserving commits, after CI is proven.
+- Split the large engine and host files: **first pass done 2026-10-10** (unit tests of `sync`/`assets`/`update`/`install_exec`/`workbench` moved to `tests.rs` files, ID3/FLAC readers to `tags.rs`, Appearance/Halcyon commands to `asset_cmds.rs`; all behaviour-preserving, 298 `tau-core` tests identical). Still large: the production code of `sync.rs`, `update.rs`, `assets.rs`, `lib.rs`, `main.rs`; `App.svelte` is 496 lines.
 - Keep `docs/FIRMWARE_SYNC.md` current after every Tau Alpha release (this roadmap's section 0 is the live summary).
 
 ### 5. Later
