@@ -3,6 +3,7 @@ mod device;
 mod ledger_host;
 mod updates;
 mod asset_cmds;
+mod omega_update;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -127,7 +128,10 @@ struct ProgressEvent {
 /// clear message rather than queued silently behind a long copy.
 static CARD_WRITE: Mutex<()> = Mutex::new(());
 
-fn card_write_guard() -> Result<std::sync::MutexGuard<'static, ()>, TauError> {
+pub(crate) fn card_write_guard() -> Result<std::sync::MutexGuard<'static, ()>, TauError> {
+    if omega_update::UPDATING.load(Ordering::SeqCst) {
+        return Err(TauError { code: ErrorCode::Io, message: "Tau Omega is updating itself; try again in a moment".into() });
+    }
     match CARD_WRITE.try_lock() {
         Ok(guard) => Ok(guard),
         Err(std::sync::TryLockError::Poisoned(poisoned)) => Ok(poisoned.into_inner()),
@@ -1250,6 +1254,7 @@ fn main() {
     cacheflush::register();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(JobRegistry::default())
         .setup(|app| {
             // What the app remembers about each card lives in its own cache folder, never on the card.
@@ -1258,7 +1263,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, asset_cmds::appearance_check, asset_cmds::appearance_open, asset_cmds::appearance_export, asset_cmds::appearance_plan_install, asset_cmds::appearance_install, asset_cmds::halcyon_open, asset_cmds::halcyon_import_apo, asset_cmds::halcyon_curve, asset_cmds::halcyon_validate, asset_cmds::halcyon_export, asset_cmds::halcyon_plan_install, asset_cmds::halcyon_install, diag_read, diag_zip, get_prefs, set_prefs, persist_names, plan_settings_migration, execute_settings_migration, rollback_settings_migration, update_check, update_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, library_health, plan_library_refresh, execute_library_refresh, rollback_library_refresh, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, read_persisted_settings, read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, plan_playlist_write, execute_playlist_write, plan_playlist_rename, execute_playlist_rename, plan_playlist_import, execute_playlist_import, check_storage_capacity, plan_backup, inspect_package, plan_package_install, execute_package_install, plan_remove_core, execute_remove_core, read_qr_report, list_screenshots, read_image_data_url, read_core_icon, read_platform_image, preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, asset_cmds::appearance_check, asset_cmds::appearance_open, asset_cmds::appearance_export, asset_cmds::appearance_plan_install, asset_cmds::appearance_install, asset_cmds::halcyon_open, asset_cmds::halcyon_import_apo, asset_cmds::halcyon_curve, asset_cmds::halcyon_validate, asset_cmds::halcyon_export, asset_cmds::halcyon_plan_install, asset_cmds::halcyon_install, omega_update::omega_update_check, omega_update::omega_update_install, diag_read, diag_zip, get_prefs, set_prefs, persist_names, plan_settings_migration, execute_settings_migration, rollback_settings_migration, update_check, update_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, library_health, plan_library_refresh, execute_library_refresh, rollback_library_refresh, list_library, plan_changes, execute_changes, list_history, prune_history, clear_history, album_thumbnails, image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

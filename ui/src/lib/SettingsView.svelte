@@ -1,4 +1,5 @@
 <script lang="ts">
+  import OmegaUpdate from './OmegaUpdate.svelte';
   import type { CheckSummary, ScreenshotEntry, Setting, TaudReport } from './types';
   export let settingsPath = '';
   export let settings: Setting[] = [];
@@ -158,6 +159,7 @@
       {/if}
     </div>
   </section>
+  <OmegaUpdate manual />
   <section class="settings-card"><div><h2>Safety defaults</h2><p>Card writes are disabled until you review and confirm an explicit plan. Move operations require a verified external backup and a second confirmation.</p></div><span class="chip capable">Enabled</span></section>
   <section class="settings-card"><div><h2>Data handling</h2><p>Paths, reports, and job journals stay on this computer. Tau Omega does not upload your media or metadata.</p></div><span class="chip capable">Local only</span></section>
   <button class="primary" on:click={done}>Done</button>

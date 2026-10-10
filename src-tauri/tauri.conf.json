@@ -52,5 +52,13 @@
         "installMode": "currentUser"
       }
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE4M0MxMTY0QTg1NDFCNTIKUldSU0cxU29aQkU4cUl0aVBhbHRRWTdjdXMxY3BwdmU4Q3JzVEw1di90K2N0SGpMWG1VdWYrV0oK",
+      "endpoints": [
+        "https://github.com/alfatreze/Tau-Omega/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport } from './types';
+import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -89,3 +89,5 @@ export const halcyonValidate = (presets: HalcyonPreset[]) => invoke<number>('hal
 export const halcyonExport = (presets: HalcyonPreset[], path: string, keepFrom: string | null = null) => invoke<number>('halcyon_export', { presets, path, keepFrom });
 export const halcyonPlanInstall = (presets: HalcyonPreset[], mediaRoot: string) => invoke<AssetsInstallPlan>('halcyon_plan_install', { presets, mediaRoot });
 export const halcyonInstall = (presets: HalcyonPreset[], mediaRoot: string, confirmation: string, backup: string | null) => invoke<AssetsInstallReport>('halcyon_install', { presets, mediaRoot, confirmation, backup });
+export const omegaUpdateCheck = () => invoke<OmegaUpdate | null>('omega_update_check');
+export const omegaUpdateInstall = () => invoke<void>('omega_update_install');
