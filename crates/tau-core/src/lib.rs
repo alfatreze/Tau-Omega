@@ -24,6 +24,7 @@ pub mod cover;
 pub mod diag;
 pub mod diagnostics;
 pub mod duplicates;
+pub mod halcyon;
 pub mod icon;
 pub mod image;
 pub mod install_exec;

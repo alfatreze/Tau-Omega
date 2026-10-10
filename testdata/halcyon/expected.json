@@ -1,0 +1,14 @@
+{
+ "cans.txt": {
+  "name": "CANS",
+  "preamp_db": -6.2,
+  "peak_gain_db": 5.467,
+  "stages": 4
+ },
+ "bright.txt": {
+  "name": "BRIGHT",
+  "preamp_db": -7.883,
+  "peak_gain_db": 7.883,
+  "stages": 4
+ }
+}

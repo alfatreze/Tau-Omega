@@ -13,12 +13,14 @@
 //! background ramp behind every accent the device offers). Colours are RGB565 on the device, so every colour is
 //! snapped first and the report shows what will really appear.
 
+use crate::halcyon::{self, HalcyonPreset};
 use crate::{ErrorCode, TauError};
 use std::collections::BTreeMap;
 
 const MAGIC: &[u8; 4] = b"TAUA";
 /// Section tag in the container table, and the magic inside the section (they differ in the firmware format).
 const SECTION_THEM: &[u8; 4] = b"THEM";
+const SECTION_PRST: &[u8; 4] = b"PRST";
 const THEM_MAGIC: &[u8; 4] = b"TTHM";
 const VERSION: u16 = 1;
 const NAME_LEN: usize = 16;
@@ -396,6 +398,57 @@ fn is_newer_container(blob: &[u8]) -> bool {
     blob.len() >= 6 && &blob[..4] == MAGIC && u16le(blob, 4) != VERSION
 }
 
+/// The themes and presets an [`AssetsEdit`] reads back from a file (`None` where the edit leaves that part alone).
+type EditContent = (Option<Vec<ThemeInput>>, Option<Vec<HalcyonPreset>>);
+
+/// What to change in a `tau-assets.bin`. `None` leaves that part of the existing file exactly as it is.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AssetsEdit<'a> {
+    /// Replace the `THEM` section with these themes.
+    pub themes: Option<&'a [ThemeInput]>,
+    /// Replace the `PRST` section with these Halcyon presets (an empty list removes the section).
+    pub presets: Option<&'a [HalcyonPreset]>,
+}
+
+impl<'a> AssetsEdit<'a> {
+    pub fn themes(themes: &'a [ThemeInput]) -> Self {
+        Self {
+            themes: Some(themes),
+            presets: None,
+        }
+    }
+    pub fn presets(presets: &'a [HalcyonPreset]) -> Self {
+        Self {
+            themes: None,
+            presets: Some(presets),
+        }
+    }
+    /// The edit that would reproduce `blob` from `old`: what the install reads back and checks.
+    fn read_back(&self, blob: &[u8]) -> Result<EditContent, TauError> {
+        let themes = if self.themes.is_some() {
+            Some(parse_assets(blob)?)
+        } else {
+            None
+        };
+        let presets = if self.presets.is_some() {
+            Some(read_presets(blob)?)
+        } else {
+            None
+        };
+        Ok((themes, presets))
+    }
+}
+
+/// The Halcyon user presets in a `tau-assets.bin` (empty when it has no `PRST` section), every CRC checked first.
+pub fn read_presets(blob: &[u8]) -> Result<Vec<HalcyonPreset>, TauError> {
+    for (tag, data) in read_sections(blob)? {
+        if &tag == SECTION_PRST {
+            return halcyon::parse_presets(data);
+        }
+    }
+    Ok(Vec::new())
+}
+
 /// The `tau-assets.bin` for these themes, keeping every other section of `existing` byte for byte and in place
 /// (the `THEM` section is replaced where it was, or put first when there was none). `existing` that is absent or
 /// damaged gives the themes-only file (a damaged file is backed up by the install, nothing in it can be carried).
@@ -405,9 +458,31 @@ pub fn pack_assets_keeping(
     themes: &[ThemeInput],
     existing: Option<&[u8]>,
 ) -> Result<Vec<u8>, TauError> {
-    let them = pack_them(themes)?;
+    pack_assets_edit(AssetsEdit::themes(themes), existing)
+}
+
+/// Generalises [`pack_assets_keeping`]: replaces the `THEM` and/or `PRST` section as asked and carries every other
+/// section byte for byte. A section that was not asked for is left exactly as it was; a requested one is replaced in
+/// place, or added (`THEM` first, `PRST` last) when absent.
+pub fn pack_assets_edit(edit: AssetsEdit, existing: Option<&[u8]>) -> Result<Vec<u8>, TauError> {
+    let them = edit.themes.map(pack_them).transpose()?;
+    let prst = match edit.presets {
+        Some([]) => Some(None),
+        Some(p) => Some(Some(halcyon::pack_presets(p)?)),
+        None => None,
+    };
+    let fresh = |them: &Option<Vec<u8>>, prst: &Option<Option<Vec<u8>>>| {
+        let mut out: Vec<([u8; 4], &[u8])> = Vec::new();
+        if let Some(t) = them {
+            out.push((*SECTION_THEM, t));
+        }
+        if let Some(Some(p)) = prst {
+            out.push((*SECTION_PRST, p));
+        }
+        pack_container(&out)
+    };
     let Some(old) = existing else {
-        return Ok(pack_container(&[(*SECTION_THEM, &them)]));
+        return Ok(fresh(&them, &prst));
     };
     if is_newer_container(old) {
         return Err(bad_file(format!(
@@ -416,18 +491,31 @@ pub fn pack_assets_keeping(
         )));
     }
     let Ok(sections) = read_sections(old) else {
-        return Ok(pack_container(&[(*SECTION_THEM, &them)]));
+        return Ok(fresh(&them, &prst));
     };
-    let mut out: Vec<([u8; 4], &[u8])> = Vec::with_capacity(sections.len() + 1);
-    if !sections.iter().any(|(tag, _)| tag == SECTION_THEM) {
-        out.push((*SECTION_THEM, &them));
+    let mut out: Vec<([u8; 4], &[u8])> = Vec::with_capacity(sections.len() + 2);
+    if let Some(t) = &them
+        && !sections.iter().any(|(tag, _)| tag == SECTION_THEM)
+    {
+        out.push((*SECTION_THEM, t));
     }
     for (tag, data) in &sections {
-        out.push(if tag == SECTION_THEM {
-            (*SECTION_THEM, &them[..])
+        if tag == SECTION_THEM {
+            out.push((*tag, them.as_deref().unwrap_or(data)));
+        } else if tag == SECTION_PRST {
+            match &prst {
+                Some(Some(p)) => out.push((*tag, p)),
+                Some(None) => {}
+                None => out.push((*tag, data)),
+            }
         } else {
-            (*tag, *data)
-        });
+            out.push((*tag, *data));
+        }
+    }
+    if let Some(Some(p)) = &prst
+        && !sections.iter().any(|(tag, _)| tag == SECTION_PRST)
+    {
+        out.push((*SECTION_PRST, p));
     }
     if out.len() > MAX_SECTIONS {
         return Err(bad_file(format!(
@@ -443,6 +531,21 @@ pub fn pack_assets_keeping(
         )));
     }
     Ok(blob)
+}
+
+/// The sections of a readable file that an edit of this kind would carry unchanged, as (tag, bytes), in file order.
+fn carried_sections(blob: &[u8], edit: &AssetsEdit) -> Vec<([u8; 4], Vec<u8>)> {
+    read_sections(blob)
+        .map(|s| {
+            s.into_iter()
+                .filter(|(t, _)| {
+                    !(t == SECTION_THEM && edit.themes.is_some())
+                        && !(t == SECTION_PRST && edit.presets.is_some())
+                })
+                .map(|(t, d)| (t, d.to_vec()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// The non-`THEM` sections of a readable file, as (tag, bytes), in file order (empty for anything unreadable).
@@ -603,6 +706,8 @@ pub struct AssetsInstallPlan {
     pub bytes: u64,
     pub sha256: String,
     pub themes: Vec<String>,
+    /// Names of the Halcyon presets being written (empty when the edit leaves them alone).
+    pub presets: Vec<String>,
     pub existing: Option<ExistingAssets>,
     pub readers: Vec<ThemeFileReader>,
     /// A previous install was interrupted; running this one first puts the old file back.
@@ -710,10 +815,18 @@ pub fn plan_install(
     themes: &[ThemeInput],
     media_root: &Path,
 ) -> Result<AssetsInstallPlan, TauError> {
+    plan_install_edit(AssetsEdit::themes(themes), media_root)
+}
+
+/// [`plan_install`] for any [`AssetsEdit`] (themes, Halcyon presets, or both).
+pub fn plan_install_edit(
+    edit: AssetsEdit,
+    media_root: &Path,
+) -> Result<AssetsInstallPlan, TauError> {
     sync::validate_media_root(media_root)?;
     let destination = media_root.join(FILE_NAME);
     let old = fs::read(&destination).ok();
-    let blob = pack_assets_keeping(themes, old.as_deref())?;
+    let blob = pack_assets_edit(edit, old.as_deref())?;
     let existing = old.as_deref().map(describe_existing);
     let sha256 = sync::sha256_bytes(&blob);
     let readers = readers_for(media_root);
@@ -728,7 +841,10 @@ pub fn plan_install(
     }
     if let Some(e) = &existing {
         if !e.other_sections.is_empty() {
-            warnings.push(format!("The file already there also holds {}: kept unchanged, only the themes are replaced.", e.other_sections.join(", ")));
+            warnings.push(format!(
+                "The file already there also holds {}: kept unchanged.",
+                e.other_sections.join(", ")
+            ));
         }
         if !e.readable {
             warnings.push("The file already there cannot be read as a Tau assets file. It will still be backed up before it is replaced.".into());
@@ -748,7 +864,18 @@ pub fn plan_install(
         destination,
         bytes: blob.len() as u64,
         sha256,
-        themes: themes.iter().map(|t| t.name.clone()).collect(),
+        themes: edit
+            .themes
+            .unwrap_or(&[])
+            .iter()
+            .map(|t| t.name.clone())
+            .collect(),
+        presets: edit
+            .presets
+            .unwrap_or(&[])
+            .iter()
+            .map(|p| p.name().to_string())
+            .collect(),
         existing,
         readers,
         interrupted_install,
@@ -782,6 +909,23 @@ pub fn execute_install(
     confirmation: &str,
     backup_root: Option<&Path>,
 ) -> Result<AssetsInstallReport, TauError> {
+    execute_install_edit(
+        AssetsEdit::themes(themes),
+        media_root,
+        plan,
+        confirmation,
+        backup_root,
+    )
+}
+
+/// [`execute_install`] for any [`AssetsEdit`].
+pub fn execute_install_edit(
+    edit: AssetsEdit,
+    media_root: &Path,
+    plan: &AssetsInstallPlan,
+    confirmation: &str,
+    backup_root: Option<&Path>,
+) -> Result<AssetsInstallReport, TauError> {
     if confirmation != plan.id {
         return Err(TauError::e(
             ErrorCode::ConfirmationMismatch,
@@ -803,7 +947,7 @@ pub fn execute_install(
         ));
     }
     recover(media_root)?;
-    let fresh = plan_install(themes, media_root)?;
+    let fresh = plan_install_edit(edit, media_root)?;
     if fresh.id != plan.id {
         return Err(TauError::e(
             ErrorCode::SourceChangedSincePlan,
@@ -812,7 +956,7 @@ pub fn execute_install(
     }
     let live = media_root.join(FILE_NAME);
     let old = fs::read(&live).ok();
-    let blob = pack_assets_keeping(themes, old.as_deref())?;
+    let blob = pack_assets_edit(edit, old.as_deref())?;
     let mut backup = None;
     if live.is_file()
         && let Some(root) = backup_root
@@ -835,10 +979,18 @@ pub fn execute_install(
     let result = (|| -> Result<(), TauError> {
         sync::write_durable(&temp, &blob)?;
         let back = sync::read_back_bytes(&temp)?;
-        let kept = old.as_deref().map(kept_sections).unwrap_or_default();
+        let kept = old
+            .as_deref()
+            .map(|o| carried_sections(o, &edit))
+            .unwrap_or_default();
+        let (themes_back, presets_back) = edit.read_back(&back)?;
+        let again = AssetsEdit {
+            themes: themes_back.as_deref(),
+            presets: presets_back.as_deref(),
+        };
         if back != blob
-            || pack_assets_keeping(&parse_assets(&back)?, old.as_deref())? != blob
-            || kept_sections(&back) != kept
+            || pack_assets_edit(again, old.as_deref())? != blob
+            || carried_sections(&back, &edit) != kept
         {
             return Err(TauError::e(
                 ErrorCode::VerificationFailed,
@@ -1437,5 +1589,102 @@ mod tests {
             );
         }
         assert!(!media.join(TEMP_NAME).exists() && !media.join(PREVIOUS_NAME).exists());
+    }
+
+    fn two_presets() -> Vec<HalcyonPreset> {
+        vec![
+            HalcyonPreset::Control {
+                name: "MY CONTROLS".into(),
+                controls: [2, 1, 0, -1, 3, -2],
+            },
+            HalcyonPreset::Raw {
+                name: "FLATISH".into(),
+                preamp: 1 << 21,
+                stages: vec![[1 << 22, 0, 0, 0, 0]],
+            },
+        ]
+    }
+
+    #[test]
+    fn a_preset_edit_keeps_themes_and_meter_presets_byte_for_byte() {
+        let (file, metr, _old_prst) = file_with_presets(true);
+        let before_them = read_sections(&file)
+            .unwrap()
+            .into_iter()
+            .find(|(t, _)| t == SECTION_THEM)
+            .unwrap()
+            .1
+            .to_vec();
+        let presets = two_presets();
+        let out = pack_assets_edit(AssetsEdit::presets(&presets), Some(&file)).unwrap();
+        let sections = read_sections(&out).unwrap();
+        assert_eq!(
+            sections.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
+            vec![*b"METR", *SECTION_THEM, *b"PRST"],
+            "order kept, PRST replaced in place"
+        );
+        assert_eq!(sections[0].1, &metr[..]);
+        assert_eq!(sections[1].1, &before_them[..]);
+        assert_eq!(read_presets(&out).unwrap(), presets);
+        // the other direction: a theme edit keeps the new presets
+        let again = pack_assets_keeping(&parse_assets(&out).unwrap(), Some(&out)).unwrap();
+        assert_eq!(again, out);
+    }
+
+    #[test]
+    fn presets_are_added_to_a_file_without_them_and_can_be_removed() {
+        let presets = two_presets();
+        let added = pack_assets_edit(AssetsEdit::presets(&presets), Some(SUNSET_BIN)).unwrap();
+        assert_eq!(
+            parse_assets(&added).unwrap(),
+            parse_assets(SUNSET_BIN).unwrap(),
+            "themes untouched"
+        );
+        assert_eq!(read_presets(&added).unwrap(), presets);
+        let removed = pack_assets_edit(AssetsEdit::presets(&[]), Some(&added)).unwrap();
+        assert_eq!(
+            removed, SUNSET_BIN,
+            "removing the presets gives the original file back"
+        );
+        // no existing file: a presets-only container
+        let alone = pack_assets_edit(AssetsEdit::presets(&presets), None).unwrap();
+        assert_eq!(read_presets(&alone).unwrap(), presets);
+        assert!(parse_assets(&alone).unwrap().is_empty());
+    }
+
+    #[test]
+    fn preset_install_on_a_card_verifies_and_keeps_the_themes() {
+        let (root, media) = card("presets");
+        fs::write(media.join(FILE_NAME), SUNSET_BIN).unwrap();
+        let presets = two_presets();
+        let plan = plan_install_edit(AssetsEdit::presets(&presets), &media).unwrap();
+        assert_eq!(plan.presets, vec!["MY CONTROLS", "FLATISH"]);
+        assert!(plan.themes.is_empty());
+        let backups = root.with_extension("backups");
+        let report = execute_install_edit(
+            AssetsEdit::presets(&presets),
+            &media,
+            &plan,
+            &plan.id,
+            Some(&backups),
+        )
+        .unwrap();
+        assert!(report.replaced && report.backup.is_some());
+        let now = fs::read(media.join(FILE_NAME)).unwrap();
+        assert_eq!(read_presets(&now).unwrap(), presets);
+        assert_eq!(
+            parse_assets(&now).unwrap(),
+            parse_assets(SUNSET_BIN).unwrap()
+        );
+        // a changed preset list invalidates the reviewed plan
+        let other = vec![HalcyonPreset::Control {
+            name: "OTHER".into(),
+            controls: [0; 6],
+        }];
+        assert!(
+            execute_install_edit(AssetsEdit::presets(&other), &media, &plan, &plan.id, None)
+                .is_err()
+        );
+        let _ = fs::remove_dir_all(root);
     }
 }

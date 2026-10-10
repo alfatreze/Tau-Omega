@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView } from './types';
+import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -81,3 +81,11 @@ export const diagZip = (card: string, destDir: string) => invoke<string>('diag_z
 export const planSettingsMigration = (card: string, fromCore: string, toCore: string) => invoke<MigrationPlan>('plan_settings_migration', { card, fromCore, toCore });
 export const executeSettingsMigration = (card: string, fromCore: string, toCore: string, confirmation: string) => invoke<MigrationReport>('execute_settings_migration', { card, fromCore, toCore, confirmation });
 export const rollbackSettingsMigration = (card: string, report: MigrationReport) => invoke<void>('rollback_settings_migration', { card, report });
+
+export const halcyonOpen = (path: string) => invoke<HalcyonPreset[]>('halcyon_open', { path });
+export const halcyonImportApo = (name: string, text: string) => invoke<ApoImport>('halcyon_import_apo', { name, text });
+export const halcyonCurve = (preset: HalcyonPreset) => invoke<[number, number][] | null>('halcyon_curve', { preset });
+export const halcyonValidate = (presets: HalcyonPreset[]) => invoke<number>('halcyon_validate', { presets });
+export const halcyonExport = (presets: HalcyonPreset[], path: string, keepFrom: string | null = null) => invoke<number>('halcyon_export', { presets, path, keepFrom });
+export const halcyonPlanInstall = (presets: HalcyonPreset[], mediaRoot: string) => invoke<AssetsInstallPlan>('halcyon_plan_install', { presets, mediaRoot });
+export const halcyonInstall = (presets: HalcyonPreset[], mediaRoot: string, confirmation: string, backup: string | null) => invoke<AssetsInstallReport>('halcyon_install', { presets, mediaRoot, confirmation, backup });
