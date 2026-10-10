@@ -163,7 +163,7 @@ export type ContrastCheck = { polarity: 'dark' | 'light'; text: string; against:
 export type ThemeReport = { problems: string[]; checks: ContrastCheck[]; dark_snapped: Record<string, string>; light_snapped: Record<string, string> };
 export type ExistingAssets = { bytes: number; sha256: string; themes: string[]; other_sections: string[]; readable: boolean };
 export type ThemeFileReader = { core_id: string; version: string; declares_slot: boolean };
-export type AssetsInstallPlan = { id: string; destination: string; bytes: number; sha256: string; themes: string[]; existing: ExistingAssets | null; readers: ThemeFileReader[]; interrupted_install: boolean; warnings: string[] };
+export type AssetsInstallPlan = { id: string; destination: string; bytes: number; sha256: string; themes: string[]; presets: string[]; existing: ExistingAssets | null; readers: ThemeFileReader[]; interrupted_install: boolean; warnings: string[] };
 export type AssetsInstallReport = { destination: string; bytes_written: number; replaced: boolean; backup: string | null };
 
 // ---- Send diagnostics ----
@@ -211,3 +211,9 @@ export type MarkerStatus = { setting: 'ask' | 'on' | 'off'; is_card: boolean; pr
 /** Mirrors `tau_core::settings_migrate`. */
 export type MigrationPlan = { id: string; card_root: string; from_core: string; to_core: string; source: string; dest: string; allowed: boolean; reasons: string[]; changed_ids: [number, string][]; bytes: number };
 export type MigrationReport = { dest: string; bytes: number; created_dirs: string[] };
+
+/** Mirrors `tau_core::halcyon::HalcyonPreset`: six control positions, or raw Q2.22 biquads (`[b0, b1, b2, a1, a2]`). */
+export type HalcyonPreset =
+  | { kind: 'control'; name: string; controls: [number, number, number, number, number, number] }
+  | { kind: 'raw'; name: string; preamp: number; stages: number[][] };
+export type ApoImport = { preset: HalcyonPreset; preamp_db: number; peak_gain_db: number; filters: number };
