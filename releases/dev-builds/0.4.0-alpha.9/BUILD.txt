@@ -1,0 +1,11 @@
+Tau Omega test build 0.4.0-alpha.9   (NOT a release)
+Release goal : 0.4.0
+Built        : 2026-10-10 15:14 WEST
+Branch       : main
+Commit       : 5fd525f   One page frame for every screen (eyebrow, 26px title, quiet lede, Library padding); Appearance, Halcyon EQ and Send diagnostics use the shared header; page titles match the nav; one h1 per page
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : b4550ab2f3fa33ac6e5781014b0b16bb36cdbe3e3ad0dfd1d948c575c1a31732  (of Contents/MacOS/tau-omega)
+
+What is in it: the unified page layout (one header and frame on every screen, titles match the nav), on top of everything in v0.4.0 (Halcyon EQ page, pixel-grid reports, CLI verbs, self-updater).
