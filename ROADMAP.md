@@ -84,6 +84,8 @@ The `METR` section (per-meter presets) waits: its meaning depends on the meter w
 
 ### 4. Hardening what is built (small, no new surface)
 
+**2026-10-10:** `cargo clippy --all-targets -D warnings` is clean (the 12+3 lints were tests and doc lists). CI on GitHub has been **red on Windows only** since at least 2026-10-09 (macOS, Linux and the UI job pass): four tests assumed `/` in paths (`install_exec` snapshots, one `workbench` assertion); fixed in the tests, not yet seen green on GitHub (needs a push). So the browser step cannot be called proven until the Windows job passes and the whole run is green.
+
 - Prove the CI browser-suite step on GitHub (it was added locally and has not been seen to run) and keep `cargo fmt`, `clippy` and the 174-check suite green.
 - Ledger follow-ups: per-volume I/O governor, hash-while-copy for plain copies, a Library fit bar that counts whole clusters, a card-speed benchmark (`tau-cli bench-card`); first real card timing numbers are the gate.
 - Send diagnostics trial by the owner (zip contents) and its `tau diag` CLI verb.

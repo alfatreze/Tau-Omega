@@ -484,7 +484,10 @@ mod tests {
                     walk(&p, root, out);
                 } else {
                     out.push((
-                        p.strip_prefix(root).unwrap().to_string_lossy().into_owned(),
+                        p.strip_prefix(root)
+                            .unwrap()
+                            .to_string_lossy()
+                            .replace('\\', "/"),
                         sync::sha256_bytes(&fs::read(&p).unwrap()),
                     ));
                 }
