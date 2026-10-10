@@ -56,3 +56,65 @@ fn real_card_halcyon_install() {
         back.iter().map(|p| p.name()).collect::<Vec<_>>()
     );
 }
+
+/// Syncs a folder on the card into `Assets/tau/common` and builds `tau-library.tdb` there (the app's sync path, journalled outside
+/// the card). `TAU_REAL_H_SYNC_SRC` is the source folder; `TAU_REAL_H_JOURNAL` a file path outside the card. Same CARDWRITE guard.
+#[test]
+#[ignore]
+fn real_card_halcyon_sync() {
+    let card = std::env::var("TAU_REAL_H_CARD").expect("TAU_REAL_H_CARD");
+    let src = std::env::var("TAU_REAL_H_SYNC_SRC").expect("TAU_REAL_H_SYNC_SRC");
+    let journal = std::env::var("TAU_REAL_H_JOURNAL").expect("TAU_REAL_H_JOURNAL");
+    let card = Path::new(&card);
+    assert_eq!(
+        card.file_name().and_then(|n| n.to_str()),
+        Some("CARDWRITE"),
+        "refusing: only a volume called CARDWRITE"
+    );
+    assert!(
+        !Path::new(&journal).starts_with(card),
+        "journal must be outside the card"
+    );
+    let common = card.join("Assets/tau/common");
+    let root = tau_core::root_prefix(&common).unwrap();
+    let opts = tau_core::sync::PlanOptions {
+        mirror: false,
+        embed_covers: false,
+        art_sidecar_pal256: false,
+    };
+    let plan = tau_core::sync::plan(
+        &[Path::new(&src).to_path_buf()],
+        &common,
+        &root,
+        opts,
+        &mut None,
+    )
+    .unwrap();
+    println!(
+        "plan {}: {} items, {} bytes, root {}, warnings {:?}",
+        plan.id,
+        plan.items.len(),
+        plan.bytes_to_write,
+        plan.root_prefix,
+        plan.warnings
+    );
+    for i in &plan.items {
+        println!("  {}", i.destination.strip_prefix(card).unwrap().display());
+    }
+    let report = tau_core::journal::execute_to_journal(
+        &plan,
+        &plan.id,
+        "sync",
+        Path::new(&journal),
+        &mut None,
+    )
+    .unwrap();
+    println!(
+        "copied {} unchanged {} bytes {} index {} ({})",
+        report.copied,
+        report.unchanged,
+        report.bytes_written,
+        report.index_path.display(),
+        report.index_sha256
+    );
+}
