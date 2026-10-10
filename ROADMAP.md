@@ -95,7 +95,7 @@ The `METR` section (per-meter presets) waits: its meaning depends on the meter w
 
 ### 5. Later
 
-`tau-cli` parity with `--json` everywhere (also the Pocket Sync surface); installers, signing and the opt-in updater for Omega itself; Pocket Sync adoption (TP2); watch mode, smart playlists, loudness tags, localisation; the `TIM1` container freeze when the owner decides (D-I05); Meter Lab on the real meter registry and the `METR` writer, **only after the meter work is on Tau Alpha `main`**.
+`tau-cli` parity with `--json` everywhere (also the Pocket Sync surface) **(built 2026-10-10: `report-code`, `screenshots`, `settings`, `package-inspect`/`-plan`/`-install`, `library-health`, `library-refresh-plan`, `halcyon-import`/`-show`, errors as JSON on stderr; `serde` + `serde_json` added to `tau-cli`, both already in the lockfile; not yet verbs: remove, workbench edits, library refresh execute, theme editing, update check)**; installers, signing and the opt-in updater for Omega itself; Pocket Sync adoption (TP2); watch mode, smart playlists, loudness tags, localisation; the `TIM1` container freeze when the owner decides (D-I05); Meter Lab on the real meter registry and the `METR` writer, **only after the meter work is on Tau Alpha `main`**.
 
 ## 2. Built and verified (so it is not re-derived)
 
