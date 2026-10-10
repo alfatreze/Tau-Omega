@@ -20,17 +20,26 @@ const ZIP_LIMIT: u64 = 64 * 1024 * 1024;
 const MANIFEST_RELEASES: usize = 5;
 
 fn err(code: ErrorCode, message: impl Into<String>) -> TauError {
-    TauError { code, message: message.into() }
+    TauError {
+        code,
+        message: message.into(),
+    }
 }
 
 /// Plain-words explanation of a failed request.
 fn explain(error: &ureq::Error) -> String {
     match error {
-        ureq::Error::StatusCode(403 | 429) => "GitHub is limiting requests from this connection right now. Try again later.".into(),
+        ureq::Error::StatusCode(403 | 429) => {
+            "GitHub is limiting requests from this connection right now. Try again later.".into()
+        }
         ureq::Error::StatusCode(404) => "That release or file is no longer on GitHub.".into(),
         ureq::Error::StatusCode(code) => format!("GitHub answered with an error ({code})."),
-        ureq::Error::Timeout(_) => "GitHub did not answer in time. Check the connection and try again.".into(),
-        ureq::Error::Io(_) | ureq::Error::HostNotFound | ureq::Error::ConnectionFailed => "Could not reach GitHub. Are you offline?".into(),
+        ureq::Error::Timeout(_) => {
+            "GitHub did not answer in time. Check the connection and try again.".into()
+        }
+        ureq::Error::Io(_) | ureq::Error::HostNotFound | ureq::Error::ConnectionFailed => {
+            "Could not reach GitHub. Are you offline?".into()
+        }
         other => format!("The request failed: {other}"),
     }
 }
@@ -38,7 +47,10 @@ fn explain(error: &ureq::Error) -> String {
 /// One GET, only to the Tau repository, capped at `limit` bytes.
 fn get(url: &str, limit: u64) -> Result<Vec<u8>, TauError> {
     if !(url == RELEASES_URL || url.starts_with(DOWNLOAD_PREFIX)) {
-        return Err(err(ErrorCode::InvalidPathReference, "Omega only fetches from the Tau release page."));
+        return Err(err(
+            ErrorCode::InvalidPathReference,
+            "Omega only fetches from the Tau release page.",
+        ));
     }
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_connect(Some(Duration::from_secs(8)))
@@ -74,7 +86,10 @@ fn manifests(releases: &[release_check::GithubRelease], cache: &std::path::Path)
 }
 
 /// The check. `card` (optional) is a card folder whose Tau cores are compared with the releases of their own channel.
-pub fn check(card: Option<&str>, manifest_cache: &std::path::Path) -> Result<Option<UpdateCheck>, TauError> {
+pub fn check(
+    card: Option<&str>,
+    manifest_cache: &std::path::Path,
+) -> Result<Option<UpdateCheck>, TauError> {
     let releases = release_check::parse_releases(&get(RELEASES_URL, LIST_LIMIT)?)?;
     let docs = manifests(&releases, manifest_cache);
     // Offer only zips the chosen release's own checksum file lists (a missing or unreadable file leaves them all, and
@@ -87,10 +102,16 @@ pub fn check(card: Option<&str>, manifest_cache: &std::path::Path) -> Result<Opt
             .and_then(|a| get(&a.url, MANIFEST_LIMIT).ok())
             .map(|bytes| release_check::parse_sums(&String::from_utf8_lossy(&bytes)))
     };
-    let cores = card.map(|card| installed_tau_cores(std::path::Path::new(card))).unwrap_or_default();
+    let cores = card
+        .map(|card| installed_tau_cores(std::path::Path::new(card)))
+        .unwrap_or_default();
     if cores.is_empty() {
         let sums = release_check::latest(&releases).and_then(sums_of);
-        return Ok(release_check::evaluate_with_sums(&releases, &Installed::default(), sums.as_ref()));
+        return Ok(release_check::evaluate_with_sums(
+            &releases,
+            &Installed::default(),
+            sums.as_ref(),
+        ));
     }
     // Every installed Tau core is judged against its own channel; an Update is reported for the first one that has
     // one, otherwise the first core's answer ("up to date").
@@ -106,7 +127,10 @@ pub fn check(card: Option<&str>, manifest_cache: &std::path::Path) -> Result<Opt
             release_check::evaluate_for_core(&releases, &installed, None, &docs)
         })
         .collect();
-    let position = checks.iter().position(|c| c.newer == Some(true)).unwrap_or(0);
+    let position = checks
+        .iter()
+        .position(|c| c.newer == Some(true))
+        .unwrap_or(0);
     if checks.is_empty() {
         return Ok(None);
     }
@@ -120,7 +144,9 @@ pub fn check(card: Option<&str>, manifest_cache: &std::path::Path) -> Result<Opt
 /// Every Tau-family core on a card (folder id starts `alfatreze.TAU`, as the storage breakdown groups them), in
 /// folder order.
 fn installed_tau_cores(card: &std::path::Path) -> Vec<update::BuildIdentity> {
-    let Ok(card) = tau_core::inspect_card(card) else { return Vec::new() };
+    let Ok(card) = tau_core::inspect_card(card) else {
+        return Vec::new();
+    };
     card.cores
         .iter()
         .filter(|c| c.id.to_ascii_lowercase().starts_with("alfatreze.tau"))
@@ -137,12 +163,19 @@ pub struct Downloaded {
 
 /// Downloads the named zips of release `tag` into `cache_dir/<tag>/`, each verified against `SHA256SUMS.txt` (and
 /// the release manifest when there is one). Asset URLs come from a fresh release list, never from the caller.
-pub fn download(tag: &str, names: &[String], cache_dir: PathBuf, manifest_cache: &std::path::Path) -> Result<Vec<Downloaded>, TauError> {
+pub fn download(
+    tag: &str,
+    names: &[String],
+    cache_dir: PathBuf,
+    manifest_cache: &std::path::Path,
+) -> Result<Vec<Downloaded>, TauError> {
     let releases = release_check::parse_releases(&get(RELEASES_URL, LIST_LIMIT)?)?;
-    let release = releases
-        .iter()
-        .find(|r| r.tag == tag)
-        .ok_or_else(|| err(ErrorCode::NotFound, format!("{tag} is not on GitHub any more.")))?;
+    let release = releases.iter().find(|r| r.tag == tag).ok_or_else(|| {
+        err(
+            ErrorCode::NotFound,
+            format!("{tag} is not on GitHub any more."),
+        )
+    })?;
     let asset = |name: &str| {
         release
             .assets
@@ -157,7 +190,9 @@ pub fn download(tag: &str, names: &[String], cache_dir: PathBuf, manifest_cache:
         .iter()
         .find(|a| a.name == "tau-compat.json")
         .and_then(|a| get(&a.url, MANIFEST_LIMIT).ok());
-    let doc = manifest_bytes.as_deref().and_then(|bytes| compat::parse_compat(bytes).ok());
+    let doc = manifest_bytes
+        .as_deref()
+        .and_then(|bytes| compat::parse_compat(bytes).ok());
     let folder = cache_dir.join(tag);
     std::fs::create_dir_all(&folder)?;
     if let (Some(bytes), Some(_)) = (&manifest_bytes, &doc) {
@@ -168,7 +203,10 @@ pub fn download(tag: &str, names: &[String], cache_dir: PathBuf, manifest_cache:
     let mut out = Vec::new();
     for name in names {
         if !name.ends_with(".zip") {
-            return Err(err(ErrorCode::InvalidPathReference, "Only the release zips are downloaded."));
+            return Err(err(
+                ErrorCode::InvalidPathReference,
+                "Only the release zips are downloaded.",
+            ));
         }
         let bytes = get(&asset(name)?.url, ZIP_LIMIT)?;
         release_check::verify_download(name, &bytes, &sums, doc.as_ref())?;
@@ -176,7 +214,11 @@ pub fn download(tag: &str, names: &[String], cache_dir: PathBuf, manifest_cache:
         let temp = folder.join(format!("{name}.part"));
         std::fs::write(&temp, &bytes)?;
         std::fs::rename(&temp, &path)?;
-        out.push(Downloaded { name: name.clone(), path: path.to_string_lossy().into_owned(), bytes: bytes.len() as u64 });
+        out.push(Downloaded {
+            name: name.clone(),
+            path: path.to_string_lossy().into_owned(),
+            bytes: bytes.len() as u64,
+        });
     }
     Ok(out)
 }
@@ -187,9 +229,17 @@ mod tests {
 
     #[test]
     fn only_the_tau_release_page_is_ever_fetched() {
-        for url in ["https://example.com/a.zip", "http://api.github.com/repos/alfatreze/Tau-Alpha/releases", "file:///etc/passwd",
-                    "https://github.com/someone-else/Tau-Alpha/releases/download/v1/a.zip"] {
-            assert_eq!(get(url, 10).unwrap_err().code, ErrorCode::InvalidPathReference, "{url}");
+        for url in [
+            "https://example.com/a.zip",
+            "http://api.github.com/repos/alfatreze/Tau-Alpha/releases",
+            "file:///etc/passwd",
+            "https://github.com/someone-else/Tau-Alpha/releases/download/v1/a.zip",
+        ] {
+            assert_eq!(
+                get(url, 10).unwrap_err().code,
+                ErrorCode::InvalidPathReference,
+                "{url}"
+            );
         }
     }
 
@@ -209,8 +259,16 @@ mod live {
     #[test]
     #[ignore]
     fn live_check_finds_the_latest_release_and_downloads_one_verified_zip() {
-        let found = check(None, &std::env::temp_dir().join("tau-manifests-live")).unwrap().expect("a release");
-        println!("{} | newer={:?} | zips={:?} | manifest={}", found.message, found.newer, found.zips.iter().map(|z| &z.name).collect::<Vec<_>>(), found.manifest.is_some());
+        let found = check(None, &std::env::temp_dir().join("tau-manifests-live"))
+            .unwrap()
+            .expect("a release");
+        println!(
+            "{} | newer={:?} | zips={:?} | manifest={}",
+            found.message,
+            found.newer,
+            found.zips.iter().map(|z| &z.name).collect::<Vec<_>>(),
+            found.manifest.is_some()
+        );
         let dir = std::env::temp_dir().join("tau-updates-live");
         let name = found.zips[0].name.clone();
         let got = download(&found.latest.tag, &[name], dir.clone(), &dir.join("m")).unwrap();

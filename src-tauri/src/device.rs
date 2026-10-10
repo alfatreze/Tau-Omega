@@ -38,7 +38,10 @@ fn classify(name: &str, bus: &str) -> ConnectionInfo {
     } else {
         ConnectionKind::Unknown
     };
-    ConnectionInfo { kind, detail: format!("{} ({})", name.trim(), bus.trim()) }
+    ConnectionInfo {
+        kind,
+        detail: format!("{} ({})", name.trim(), bus.trim()),
+    }
 }
 
 /// The real Analogue Pocket's USB descriptor, read from a real device on
@@ -103,7 +106,11 @@ pub fn usb_disk_is_pocket(usb_tree_text: &str, whole_disk: &str) -> bool {
 pub fn parse_diskutil(text: &str) -> ConnectionInfo {
     let field = |key: &str| {
         text.lines()
-            .find_map(|l| l.trim().strip_prefix(key).map(|v| v.trim_start_matches(':').trim().to_string()))
+            .find_map(|l| {
+                l.trim()
+                    .strip_prefix(key)
+                    .map(|v| v.trim_start_matches(':').trim().to_string())
+            })
             .unwrap_or_default()
     };
     let name = format!("{} {}", field("Device / Media Name"), field("Volume Name"));
@@ -115,7 +122,10 @@ pub fn parse_diskutil(text: &str) -> ConnectionInfo {
 pub fn parse_windows_disk(text: &str) -> ConnectionInfo {
     match text.trim().split_once('|') {
         Some((name, bus)) => classify(name, bus),
-        None => ConnectionInfo { kind: ConnectionKind::Unknown, detail: text.trim().to_string() },
+        None => ConnectionInfo {
+            kind: ConnectionKind::Unknown,
+            detail: text.trim().to_string(),
+        },
     }
 }
 
@@ -126,7 +136,10 @@ pub fn linux_device_for(mounts: &str, path: &Path) -> Option<String> {
         .lines()
         .filter_map(|l| {
             let mut parts = l.split_whitespace();
-            Some((parts.next()?.to_string(), parts.next()?.replace("\\040", " ")))
+            Some((
+                parts.next()?.to_string(),
+                parts.next()?.replace("\\040", " "),
+            ))
         })
         .filter(|(dev, mount)| dev.starts_with("/dev/") && path.starts_with(mount))
         .max_by_key(|(_, mount)| mount.len())
@@ -135,18 +148,31 @@ pub fn linux_device_for(mounts: &str, path: &Path) -> Option<String> {
 
 #[cfg(target_os = "linux")]
 fn detect(path: &Path) -> ConnectionInfo {
-    let unknown = |why: &str| ConnectionInfo { kind: ConnectionKind::Unknown, detail: why.into() };
-    let Ok(mounts) = std::fs::read_to_string("/proc/mounts") else { return unknown("no /proc/mounts") };
-    let Some(dev) = linux_device_for(&mounts, path) else { return unknown("volume not found") };
+    let unknown = |why: &str| ConnectionInfo {
+        kind: ConnectionKind::Unknown,
+        detail: why.into(),
+    };
+    let Ok(mounts) = std::fs::read_to_string("/proc/mounts") else {
+        return unknown("no /proc/mounts");
+    };
+    let Some(dev) = linux_device_for(&mounts, path) else {
+        return unknown("volume not found");
+    };
     let name = dev.trim_start_matches("/dev/");
     if name.starts_with("mmcblk") {
         return classify("Built-in SD card reader", "sd");
     }
     // /sys/class/block/sdb1 resolves into the USB device tree; the USB device
     // directory (a few levels up) carries `manufacturer` and `product`.
-    let Ok(mut dir) = std::fs::canonicalize(format!("/sys/class/block/{name}")) else { return unknown("no sysfs entry") };
+    let Ok(mut dir) = std::fs::canonicalize(format!("/sys/class/block/{name}")) else {
+        return unknown("no sysfs entry");
+    };
     for _ in 0..8 {
-        let read = |f: &str| std::fs::read_to_string(dir.join(f)).map(|s| s.trim().to_string()).ok();
+        let read = |f: &str| {
+            std::fs::read_to_string(dir.join(f))
+                .map(|s| s.trim().to_string())
+                .ok()
+        };
         if let Some(product) = read("product") {
             let maker = read("manufacturer").unwrap_or_default();
             return classify(&format!("{maker} {product}"), "usb");
@@ -160,20 +186,35 @@ fn detect(path: &Path) -> ConnectionInfo {
 
 #[cfg(target_os = "macos")]
 fn detect(path: &Path) -> ConnectionInfo {
-    let text = match std::process::Command::new("diskutil").arg("info").arg(path).output() {
+    let text = match std::process::Command::new("diskutil")
+        .arg("info")
+        .arg(path)
+        .output()
+    {
         Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).into_owned(),
-        _ => return ConnectionInfo { kind: ConnectionKind::Unknown, detail: "diskutil unavailable".into() },
+        _ => {
+            return ConnectionInfo {
+                kind: ConnectionKind::Unknown,
+                detail: "diskutil unavailable".into(),
+            };
+        }
     };
     let mut info = parse_diskutil(&text);
     // The name-based reading above is a guess. For USB disks, confirm it (or
     // catch a Pocket whose name differs) against the real USB descriptor.
     if diskutil_field(&text, "Protocol").as_deref() == Some("USB")
-        && let Some(whole_disk) = diskutil_field(&text, "Part of Whole").or_else(|| diskutil_field(&text, "Device Identifier"))
-        && let Ok(tree) = std::process::Command::new("ioreg").args(["-l", "-w0"]).output()
+        && let Some(whole_disk) = diskutil_field(&text, "Part of Whole")
+            .or_else(|| diskutil_field(&text, "Device Identifier"))
+        && let Ok(tree) = std::process::Command::new("ioreg")
+            .args(["-l", "-w0"])
+            .output()
     {
         if usb_disk_is_pocket(&String::from_utf8_lossy(&tree.stdout), &whole_disk) {
             info.kind = ConnectionKind::DirectUsb;
-            info.detail = format!("{} - USB {:04X}:{:04X}", info.detail, POCKET_USB_VENDOR, POCKET_USB_PRODUCT);
+            info.detail = format!(
+                "{} - USB {:04X}:{:04X}",
+                info.detail, POCKET_USB_VENDOR, POCKET_USB_PRODUCT
+            );
         } else if info.kind == ConnectionKind::DirectUsb {
             // Name said Pocket but the descriptor does not: do not warn on a guess.
             info.kind = ConnectionKind::CardReader;
@@ -184,20 +225,40 @@ fn detect(path: &Path) -> ConnectionInfo {
 
 #[cfg(target_os = "windows")]
 fn detect(path: &Path) -> ConnectionInfo {
-    let letter = path.to_string_lossy().chars().next().filter(char::is_ascii_alphabetic);
+    let letter = path
+        .to_string_lossy()
+        .chars()
+        .next()
+        .filter(char::is_ascii_alphabetic);
     let Some(letter) = letter else {
-        return ConnectionInfo { kind: ConnectionKind::Unknown, detail: "no drive letter".into() };
+        return ConnectionInfo {
+            kind: ConnectionKind::Unknown,
+            detail: "no drive letter".into(),
+        };
     };
-    let script = format!("$d = Get-Partition -DriveLetter {letter} | Get-Disk; \"$($d.FriendlyName)|$($d.BusType)\"");
-    match std::process::Command::new("powershell").args(["-NoProfile", "-Command", &script]).output() {
-        Ok(out) if out.status.success() => parse_windows_disk(&String::from_utf8_lossy(&out.stdout)),
-        _ => ConnectionInfo { kind: ConnectionKind::Unknown, detail: "PowerShell unavailable".into() },
+    let script = format!(
+        "$d = Get-Partition -DriveLetter {letter} | Get-Disk; \"$($d.FriendlyName)|$($d.BusType)\""
+    );
+    match std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .output()
+    {
+        Ok(out) if out.status.success() => {
+            parse_windows_disk(&String::from_utf8_lossy(&out.stdout))
+        }
+        _ => ConnectionInfo {
+            kind: ConnectionKind::Unknown,
+            detail: "PowerShell unavailable".into(),
+        },
     }
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn detect(_path: &Path) -> ConnectionInfo {
-    ConnectionInfo { kind: ConnectionKind::Unknown, detail: "unsupported OS".into() }
+    ConnectionInfo {
+        kind: ConnectionKind::Unknown,
+        detail: "unsupported OS".into(),
+    }
 }
 
 pub fn detect_connection(path: &Path) -> ConnectionInfo {
@@ -221,12 +282,22 @@ pub fn eject_message(success: bool, tool_output: &str) -> String {
     let text = tool_output.to_ascii_lowercase();
     if success {
         "Safe to remove. The card is unmounted; you can unplug the reader or leave USB mode on the Pocket.".into()
-    } else if text.contains("dissented") || text.contains("busy") || text.contains("in use") || text.contains("target is busy") {
+    } else if text.contains("dissented")
+        || text.contains("busy")
+        || text.contains("in use")
+        || text.contains("target is busy")
+    {
         "Something on this computer is still using the card, so it was not ejected. Close any window or program showing it and try again. Do not unplug it yet.".into()
-    } else if text.contains("not mounted") || text.contains("no such") || text.contains("could not find") {
+    } else if text.contains("not mounted")
+        || text.contains("no such")
+        || text.contains("could not find")
+    {
         "The card is not mounted any more (it was already ejected or removed).".into()
     } else {
-        format!("The card could not be ejected, so do not unplug it yet. ({})", tool_output.trim())
+        format!(
+            "The card could not be ejected, so do not unplug it yet. ({})",
+            tool_output.trim()
+        )
     }
 }
 
@@ -234,33 +305,73 @@ pub fn eject_message(success: bool, tool_output: &str) -> String {
 /// still holding for it. Never forces: a refusal is reported, not overridden.
 #[cfg(target_os = "macos")]
 pub fn eject(path: &Path) -> EjectResult {
-    match std::process::Command::new("diskutil").arg("eject").arg(path).output() {
+    match std::process::Command::new("diskutil")
+        .arg("eject")
+        .arg(path)
+        .output()
+    {
         Ok(out) => {
-            let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-            EjectResult { ok: out.status.success(), message: eject_message(out.status.success(), &text) }
+            let text = format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            EjectResult {
+                ok: out.status.success(),
+                message: eject_message(out.status.success(), &text),
+            }
         }
-        Err(error) => EjectResult { ok: false, message: format!("The card could not be ejected, so do not unplug it yet. (diskutil: {error})") },
+        Err(error) => EjectResult {
+            ok: false,
+            message: format!(
+                "The card could not be ejected, so do not unplug it yet. (diskutil: {error})"
+            ),
+        },
     }
 }
 
 #[cfg(target_os = "linux")]
 pub fn eject(path: &Path) -> EjectResult {
     let Ok(mounts) = std::fs::read_to_string("/proc/mounts") else {
-        return EjectResult { ok: false, message: "The card could not be ejected, so do not unplug it yet. (no /proc/mounts)".into() };
+        return EjectResult {
+            ok: false,
+            message: "The card could not be ejected, so do not unplug it yet. (no /proc/mounts)"
+                .into(),
+        };
     };
     let Some(device) = linux_device_for(&mounts, path) else {
-        return EjectResult { ok: false, message: eject_message(false, "not mounted") };
+        return EjectResult {
+            ok: false,
+            message: eject_message(false, "not mounted"),
+        };
     };
-    match std::process::Command::new("udisksctl").args(["unmount", "-b", &device]).output() {
+    match std::process::Command::new("udisksctl")
+        .args(["unmount", "-b", &device])
+        .output()
+    {
         Ok(out) => {
-            let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            let text = format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
             if out.status.success() {
                 // Powering the device off is a courtesy; the unmount is what makes it safe.
-                let _ = std::process::Command::new("udisksctl").args(["power-off", "-b", &device]).output();
+                let _ = std::process::Command::new("udisksctl")
+                    .args(["power-off", "-b", &device])
+                    .output();
             }
-            EjectResult { ok: out.status.success(), message: eject_message(out.status.success(), &text) }
+            EjectResult {
+                ok: out.status.success(),
+                message: eject_message(out.status.success(), &text),
+            }
         }
-        Err(error) => EjectResult { ok: false, message: format!("The card could not be ejected, so do not unplug it yet. (udisksctl: {error})") },
+        Err(error) => EjectResult {
+            ok: false,
+            message: format!(
+                "The card could not be ejected, so do not unplug it yet. (udisksctl: {error})"
+            ),
+        },
     }
 }
 
@@ -280,7 +391,11 @@ pub fn mounted_cards() -> Vec<String> {
     #[cfg(target_os = "linux")]
     {
         let user = std::env::var("USER").unwrap_or_default();
-        for base in [format!("/media/{user}"), format!("/run/media/{user}"), "/mnt".to_string()] {
+        for base in [
+            format!("/media/{user}"),
+            format!("/run/media/{user}"),
+            "/mnt".to_string(),
+        ] {
             if let Ok(entries) = std::fs::read_dir(base) {
                 roots.extend(entries.flatten().map(|e| e.path()));
             }
@@ -304,7 +419,10 @@ mod tests {
     #[test]
     fn eject_messages_tell_a_person_what_to_do() {
         assert!(eject_message(true, "").starts_with("Safe to remove"));
-        let busy = eject_message(false, "Volume Pock on disk6s1 failed to unmount: dissented by PID 412 (/usr/libexec/mds)");
+        let busy = eject_message(
+            false,
+            "Volume Pock on disk6s1 failed to unmount: dissented by PID 412 (/usr/libexec/mds)",
+        );
         assert!(busy.contains("still using the card") && busy.contains("Do not unplug"));
         assert!(eject_message(false, "target is busy").contains("still using"));
         assert!(eject_message(false, "Volume is not mounted").contains("not mounted any more"));
@@ -328,9 +446,18 @@ mod tests {
     }
     #[test]
     fn windows_disk_lines_are_classified() {
-        assert_eq!(parse_windows_disk("Analogue Pocket|USB\n").kind, ConnectionKind::DirectUsb);
-        assert_eq!(parse_windows_disk("Mass Storage Device|USB").kind, ConnectionKind::CardReader);
-        assert_eq!(parse_windows_disk("Samsung SSD|NVMe").kind, ConnectionKind::Unknown);
+        assert_eq!(
+            parse_windows_disk("Analogue Pocket|USB\n").kind,
+            ConnectionKind::DirectUsb
+        );
+        assert_eq!(
+            parse_windows_disk("Mass Storage Device|USB").kind,
+            ConnectionKind::CardReader
+        );
+        assert_eq!(
+            parse_windows_disk("Samsung SSD|NVMe").kind,
+            ConnectionKind::Unknown
+        );
     }
     #[test]
     fn the_longest_matching_mount_wins_on_linux() {
@@ -339,7 +466,10 @@ mod tests {
             linux_device_for(mounts, Path::new("/media/u/POCKET CARD/Assets")).as_deref(),
             Some("/dev/sdb1")
         );
-        assert_eq!(linux_device_for(mounts, Path::new("/home/u")).as_deref(), Some("/dev/sda1"));
+        assert_eq!(
+            linux_device_for(mounts, Path::new("/home/u")).as_deref(),
+            Some("/dev/sda1")
+        );
     }
     #[test]
     fn matches_the_real_confirmed_pocket_descriptor() {
@@ -382,7 +512,10 @@ mod tests {
     fn diskutil_fields_are_read_by_name() {
         let text = "   Protocol:                  USB\n   Part of Whole:             disk6\n";
         assert_eq!(diskutil_field(text, "Protocol").as_deref(), Some("USB"));
-        assert_eq!(diskutil_field(text, "Part of Whole").as_deref(), Some("disk6"));
+        assert_eq!(
+            diskutil_field(text, "Part of Whole").as_deref(),
+            Some("disk6")
+        );
         assert_eq!(diskutil_field(text, "Nope"), None);
     }
 }
@@ -399,14 +532,20 @@ mod real_hardware_checks {
     #[test]
     #[ignore]
     fn real_pocket_is_detected_right_now() {
-        assert_eq!(detect_connection(Path::new("/Volumes/Pock")).kind, ConnectionKind::DirectUsb);
+        assert_eq!(
+            detect_connection(Path::new("/Volumes/Pock")).kind,
+            ConnectionKind::DirectUsb
+        );
     }
 
     /// A Raspberry Pi Pico in mass-storage mode: the real contrasting device.
     #[test]
     #[ignore]
     fn a_different_real_usb_device_is_not_detected_as_pocket() {
-        assert_ne!(detect_connection(Path::new("/Volumes/DSPICO")).kind, ConnectionKind::DirectUsb);
+        assert_ne!(
+            detect_connection(Path::new("/Volumes/DSPICO")).kind,
+            ConnectionKind::DirectUsb
+        );
     }
 }
 
@@ -421,14 +560,24 @@ mod real_eject_check {
         let dir = std::env::temp_dir().join(format!("tau-eject-dmg-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let image = dir.join("e.dmg");
-        let ok = |c: &mut std::process::Command| c.output().map(|o| o.status.success()).unwrap_or(false);
-        assert!(ok(std::process::Command::new("hdiutil").args(["create", "-size", "16m", "-fs", "MS-DOS", "-volname", "TAUEJECT", "-type", "UDIF"]).arg(&image)));
-        assert!(ok(std::process::Command::new("hdiutil").args(["attach", "-nobrowse"]).arg(&image)));
+        let ok =
+            |c: &mut std::process::Command| c.output().map(|o| o.status.success()).unwrap_or(false);
+        assert!(ok(std::process::Command::new("hdiutil")
+            .args([
+                "create", "-size", "16m", "-fs", "MS-DOS", "-volname", "TAUEJECT", "-type", "UDIF"
+            ])
+            .arg(&image)));
+        assert!(ok(std::process::Command::new("hdiutil")
+            .args(["attach", "-nobrowse"])
+            .arg(&image)));
         let volume = Path::new("/Volumes/TAUEJECT");
         assert!(volume.is_dir());
         let first = eject(volume);
         assert!(first.ok, "{}", first.message);
-        assert!(!volume.exists(), "the volume must be gone after a successful eject");
+        assert!(
+            !volume.exists(),
+            "the volume must be gone after a successful eject"
+        );
         let second = eject(volume);
         assert!(!second.ok);
         let _ = std::fs::remove_dir_all(dir);

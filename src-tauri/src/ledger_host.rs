@@ -27,14 +27,28 @@ pub fn init(cache_dir: PathBuf) {
 /// `Assets/tau/common` -> `tau_common`: the part of a media root that names it, or `None` when the folder is
 /// not under an `Assets` folder (so it is not a card media root).
 pub fn media_root_tail(root: &Path) -> Option<String> {
-    let parts: Vec<String> = root.components().filter_map(|c| match c { Component::Normal(n) => Some(n.to_string_lossy().into_owned()), _ => None }).collect();
+    let parts: Vec<String> = root
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(n) => Some(n.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect();
     let at = parts.iter().rposition(|p| p == "Assets")?;
     let tail = &parts[at + 1..];
     (!tail.is_empty()).then(|| sanitize(&tail.join("_")))
 }
 
 fn sanitize(text: &str) -> String {
-    text.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect()
+    text.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 /// The `Volume UUID` line of `diskutil info` output.
@@ -42,14 +56,22 @@ fn sanitize(text: &str) -> String {
 pub fn parse_volume_uuid(text: &str) -> Option<String> {
     text.lines().find_map(|line| {
         let value = line.trim().strip_prefix("Volume UUID:")?.trim();
-        (value.len() >= 8 && value.chars().all(|c| c.is_ascii_hexdigit() || c == '-')).then(|| value.to_string())
+        (value.len() >= 8 && value.chars().all(|c| c.is_ascii_hexdigit() || c == '-'))
+            .then(|| value.to_string())
     })
 }
 
 #[cfg(target_os = "macos")]
 fn volume_uuid(root: &Path) -> Option<String> {
-    let out = std::process::Command::new("diskutil").arg("info").arg(root).output().ok()?;
-    out.status.success().then(|| parse_volume_uuid(&String::from_utf8_lossy(&out.stdout))).flatten()
+    let out = std::process::Command::new("diskutil")
+        .arg("info")
+        .arg(root)
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| parse_volume_uuid(&String::from_utf8_lossy(&out.stdout)))
+        .flatten()
 }
 
 /// Linux: the volume's UUID is the `/dev/disk/by-uuid` link that points at its device.
@@ -58,9 +80,13 @@ fn volume_uuid(root: &Path) -> Option<String> {
     let mounts = std::fs::read_to_string("/proc/mounts").ok()?;
     let device = crate::device::linux_device_for(&mounts, root)?;
     let device = std::fs::canonicalize(&device).ok()?;
-    std::fs::read_dir("/dev/disk/by-uuid").ok()?.flatten().find_map(|e| {
-        (std::fs::canonicalize(e.path()).ok()? == device).then(|| e.file_name().to_string_lossy().into_owned())
-    })
+    std::fs::read_dir("/dev/disk/by-uuid")
+        .ok()?
+        .flatten()
+        .find_map(|e| {
+            (std::fs::canonicalize(e.path()).ok()? == device)
+                .then(|| e.file_name().to_string_lossy().into_owned())
+        })
 }
 
 /// Other systems: no way to identify a volume here yet, so no ledger.
@@ -96,13 +122,19 @@ fn mount_point(path: &Path) -> PathBuf {
 fn volume_key(root: &Path) -> Option<String> {
     let mount = mount_point(root);
     let id = (mount.clone(), device_id(&mount));
-    let cached = VOLUMES.lock().ok()?.get_or_insert_with(HashMap::new).get(&id).cloned();
+    let cached = VOLUMES
+        .lock()
+        .ok()?
+        .get_or_insert_with(HashMap::new)
+        .get(&id)
+        .cloned();
     let uuid = match cached {
         Some(known) => known,
         None => {
             let found = volume_uuid(&mount);
             if let Ok(mut map) = VOLUMES.lock() {
-                map.get_or_insert_with(HashMap::new).insert(id, found.clone());
+                map.get_or_insert_with(HashMap::new)
+                    .insert(id, found.clone());
             }
             found
         }
@@ -114,7 +146,11 @@ fn volume_key(root: &Path) -> Option<String> {
 /// The engine's locator: the ledger file for the card holding this media root, or `None` for "no ledger".
 fn locate(root: &Path) -> Option<PathBuf> {
     let dir = CACHE_DIR.get()?;
-    Some(dir.join(format!("{}-{}.tauledger", volume_key(root)?, media_root_tail(root)?)))
+    Some(dir.join(format!(
+        "{}-{}.tauledger",
+        volume_key(root)?,
+        media_root_tail(root)?
+    )))
 }
 
 #[cfg(test)]
@@ -123,17 +159,34 @@ mod tests {
 
     #[test]
     fn the_media_folder_names_the_ledger_and_other_folders_get_none() {
-        assert_eq!(media_root_tail(Path::new("/Volumes/Pock/Assets/tau/common")).as_deref(), Some("tau_common"));
-        assert_eq!(media_root_tail(Path::new("/Volumes/Pock/Assets/tau_dev_63/common/")).as_deref(), Some("tau_dev_63_common"));
-        assert_eq!(media_root_tail(Path::new("/Users/me/Documents/Music")), None, "a local library is not a card media root");
+        assert_eq!(
+            media_root_tail(Path::new("/Volumes/Pock/Assets/tau/common")).as_deref(),
+            Some("tau_common")
+        );
+        assert_eq!(
+            media_root_tail(Path::new("/Volumes/Pock/Assets/tau_dev_63/common/")).as_deref(),
+            Some("tau_dev_63_common")
+        );
+        assert_eq!(
+            media_root_tail(Path::new("/Users/me/Documents/Music")),
+            None,
+            "a local library is not a card media root"
+        );
         assert_eq!(media_root_tail(Path::new("/Volumes/Pock/Assets")), None);
     }
 
     #[test]
     fn the_volume_uuid_is_read_from_diskutil_output_and_nothing_else_counts() {
         let real = "   Device Identifier:         disk4s1\n   Volume Name:               Pock\n   Volume UUID:               4A5B6C7D-1234-5678-9ABC-DEF012345678\n   Disk / Partition UUID:     11111111-2222-3333-4444-555555555555\n";
-        assert_eq!(parse_volume_uuid(real).as_deref(), Some("4A5B6C7D-1234-5678-9ABC-DEF012345678"), "the volume's UUID, not the partition's");
-        assert_eq!(parse_volume_uuid("   Volume UUID:               Not applicable\n"), None);
+        assert_eq!(
+            parse_volume_uuid(real).as_deref(),
+            Some("4A5B6C7D-1234-5678-9ABC-DEF012345678"),
+            "the volume's UUID, not the partition's"
+        );
+        assert_eq!(
+            parse_volume_uuid("   Volume UUID:               Not applicable\n"),
+            None
+        );
         assert_eq!(parse_volume_uuid("nonsense"), None);
     }
 }
@@ -153,20 +206,56 @@ mod real_volume_check {
         fs::create_dir_all(&dir).unwrap();
         let image = dir.join("l.dmg");
         let ok = |c: &mut Command| c.output().map(|o| o.status.success()).unwrap_or(false);
-        assert!(ok(Command::new("hdiutil").args(["create", "-size", "16m", "-fs", "MS-DOS", "-volname", "TAULEDGER", "-type", "UDIF"]).arg(&image)));
-        let attach = Command::new("hdiutil").args(["attach", "-nobrowse"]).arg(&image).output().unwrap();
+        assert!(ok(Command::new("hdiutil")
+            .args([
+                "create",
+                "-size",
+                "16m",
+                "-fs",
+                "MS-DOS",
+                "-volname",
+                "TAULEDGER",
+                "-type",
+                "UDIF"
+            ])
+            .arg(&image)));
+        let attach = Command::new("hdiutil")
+            .args(["attach", "-nobrowse"])
+            .arg(&image)
+            .output()
+            .unwrap();
         let text = String::from_utf8_lossy(&attach.stdout).into_owned();
-        let device = text.lines().find(|l| l.contains("/Volumes/TAULEDGER")).and_then(|l| l.split_whitespace().next()).unwrap().to_string();
+        let device = text
+            .lines()
+            .find(|l| l.contains("/Volumes/TAULEDGER"))
+            .and_then(|l| l.split_whitespace().next())
+            .unwrap()
+            .to_string();
         let result = std::panic::catch_unwind(|| {
             let root = Path::new("/Volumes/TAULEDGER/Assets/tau/common");
             fs::create_dir_all(root).unwrap();
             let path = locate(root).expect("a real volume with a UUID gets a ledger");
-            assert!(path.to_string_lossy().ends_with("-tau_common.tauledger"), "{path:?}");
-            assert_eq!(locate(root), Some(path), "the same card gives the same answer every time");
-            assert!(locate(Path::new("/Volumes/TAULEDGER")).is_none(), "the volume root is not a media root");
-            assert!(locate(&std::env::temp_dir()).is_none(), "a local folder gets no ledger");
+            assert!(
+                path.to_string_lossy().ends_with("-tau_common.tauledger"),
+                "{path:?}"
+            );
+            assert_eq!(
+                locate(root),
+                Some(path),
+                "the same card gives the same answer every time"
+            );
+            assert!(
+                locate(Path::new("/Volumes/TAULEDGER")).is_none(),
+                "the volume root is not a media root"
+            );
+            assert!(
+                locate(&std::env::temp_dir()).is_none(),
+                "a local folder gets no ledger"
+            );
         });
-        let _ = Command::new("hdiutil").args(["detach", &device, "-force"]).output();
+        let _ = Command::new("hdiutil")
+            .args(["detach", &device, "-force"])
+            .output();
         let _ = fs::remove_dir_all(&dir);
         result.unwrap();
     }
@@ -205,14 +294,26 @@ mod real_pocket_check {
             let warm_time = t.elapsed();
             eprintln!(
                 "{:<18} {:>4} tracks   cold: read {:>4} in {:>8.1?}   warm: read {:>3}, reused {:>4} in {:>8.1?}   ledger {} bytes",
-                platform.file_name().to_string_lossy(), cold.entries.len(), cold.read, cold_time, warm.read, warm.reused, warm_time,
+                platform.file_name().to_string_lossy(),
+                cold.entries.len(),
+                cold.read,
+                cold_time,
+                warm.read,
+                warm.reused,
+                warm_time,
                 std::fs::metadata(&path).map_or(0, |m| m.len())
             );
-            assert_eq!(cold.entries, warm.entries, "the cached answer must equal the read one");
+            assert_eq!(
+                cold.entries, warm.entries,
+                "the cached answer must equal the read one"
+            );
             assert_eq!(warm.read, 0, "nothing needed reading the second time");
             checked += 1;
         }
         let _ = std::fs::remove_dir_all(cache);
-        assert!(checked > 0, "no Tau media folder with a library index was found on the Pocket");
+        assert!(
+            checked > 0,
+            "no Tau media folder with a library index was found on the Pocket"
+        );
     }
 }
