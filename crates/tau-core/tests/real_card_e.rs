@@ -6,10 +6,11 @@
 //!   `snapshot`      write `hash  path` lines for the card (needs `TAU_REAL_E_SNAPSHOT=<file>`), read only
 //!   `remove-plan`   plan removing `alfatreze.TAU` with and without keep-media; proves the card did not change
 //!   `remove-keep`   plant two small "music" files in `Assets/tau/common`, remove `alfatreze.TAU` keeping media, check the
-//!                   core is gone and the planted files are byte-identical, then delete the planted files
+//!   core is gone and the planted files are byte-identical, then delete the planted files
 //!   `remove-all`    remove `alfatreze.TAU` and its whole platform (the old behaviour)
 //!   `migrate`       plant `alfatreze.TAU_OMEGA_E_OLD` + settings, plan/execute/rollback a migration to
-//!                   `alfatreze.TAU_OMEGA_E_NEW` with a hand-made manifest, then remove everything it planted
+//!   `alfatreze.TAU_OMEGA_E_NEW` with a hand-made manifest, then remove everything it planted
+//!
 //! `remove-*` need `alfatreze.TAU` installed first (the existing `real_card_install_run` does that).
 
 use sha2::{Digest, Sha256};

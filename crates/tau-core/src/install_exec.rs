@@ -907,6 +907,7 @@ mod tests {
     /// - `TAU_REAL_INSTALL_MODE`   `plan` (prints the plan, proves nothing was written), `install` (executes it and
     ///   prints the post-install checks), or `rollback` (needs `TAU_REAL_INSTALL_JOURNAL`, the backup folder of the
     ///   install to undo, and compares the card with `TAU_REAL_INSTALL_BEFORE`, a file of `hash  path` lines).
+    ///
     /// `TAU_REAL_INSTALL_SNAPSHOT=<file>` writes such a file for the card as it is now.
     #[test]
     #[ignore]

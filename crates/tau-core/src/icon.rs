@@ -143,7 +143,9 @@ mod tests {
         assert_eq!(info.color_type, png::ColorType::GrayscaleAlpha);
         // Real artwork: some pixels fully on, some fully off, not blank.
         let alpha_values: Vec<u8> = buffer[..info.buffer_size()]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| pair[1])
             .collect();
         assert!(alpha_values.iter().any(|&a| a > 200));

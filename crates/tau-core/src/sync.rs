@@ -1908,7 +1908,7 @@ mod tests {
         fs::create_dir_all(&common).unwrap();
         fs::write(source.join("01.mp3"), b"music").unwrap();
         let sync_plan = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions::default(),
@@ -1931,7 +1931,7 @@ mod tests {
         fs::write(source.join("01 Nausicaä.mp3"), b"music").unwrap();
         let original = sha256_file(&source.join("01 Nausicaä.mp3")).unwrap();
         let sync_plan = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions::default(),
@@ -1954,7 +1954,7 @@ mod tests {
                 .is_file()
         );
         let retry = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions::default(),
@@ -1977,7 +1977,7 @@ mod tests {
         let media = source.join("01 Track.mp3");
         fs::write(&media, b"before").unwrap();
         let plan = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions::default(),
@@ -2004,7 +2004,7 @@ mod tests {
         fs::write(source.join("01 Keep.mp3"), b"keep").unwrap();
         fs::write(common.join("old.mp3"), b"old").unwrap();
         let plan = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions {
@@ -2042,7 +2042,7 @@ mod tests {
         fs::write(&track, b"audio").unwrap();
         fs::write(source.join("cover.jpg"), [0xff, 0xd8, 0xff, 0xd9]).unwrap();
         let sync_plan = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions {
@@ -2081,7 +2081,7 @@ mod tests {
         fs::copy(&real_cover, source.join("cover.jpg")).unwrap();
 
         let sync_plan = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions {
@@ -2106,7 +2106,7 @@ mod tests {
         // Re-planning and re-executing with nothing changed writes it again
         // (idempotent, not "only once ever") but the plan token is identical.
         let second_plan = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions {
@@ -2210,7 +2210,7 @@ mod tests {
         };
         let mut observer: Option<&mut dyn ProgressObserver> = Some(&mut observer);
         let error = plan(
-            &[source.clone()],
+            std::slice::from_ref(&source),
             &common,
             "/Assets/tau/common/",
             PlanOptions::default(),
