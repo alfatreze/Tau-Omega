@@ -5,8 +5,8 @@ use std::{
 };
 use tau_core::sync::{self, CopyState, SyncPlan};
 use tau_core::{
-    TauError, Warning, build_index, compare, inspect_card, parse, root_prefix, scan_dir, synth,
-    verify,
+    TauError, Warning, build_index, compare, diagnostics, inspect_card, parse, root_prefix,
+    scan_dir, synth, verify,
 };
 
 /// A CLI-boundary error: either an argument-parsing mistake (no engine code)
@@ -43,7 +43,7 @@ impl fmt::Display for CliError {
 
 fn usage() {
     eprintln!(
-        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--art-sidecar]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover] [--art-sidecar]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. --art-sidecar writes a tau-art/cover_128.pal256.timg per album (tau-alpha's decided format, no firmware reader yet)."
+        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare, diag\nDiagnostics: tau diag <card-root> [--limit N] [--zip <host-folder>]   (reads Check results, QR/pixel-grid screenshots and core checksums; --zip writes the diagnostics zip to a folder OUTSIDE the card, nothing is uploaded)\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--art-sidecar]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover] [--art-sidecar]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. --art-sidecar writes a tau-art/cover_128.pal256.timg per album (tau-alpha's decided format, no firmware reader yet)."
     );
 }
 fn main() -> ExitCode {
@@ -60,6 +60,7 @@ fn main() -> ExitCode {
         "index" => index(&args, json),
         "verify" => check(&args, json),
         "report" => report(&args, json),
+        "diag" => diag(&args, json),
         "compare" => compare_media(&args, json),
         "core-copy-plan" => core_copy_plan(&args, json),
         "core-copy" => core_copy_execute(&args, json),
@@ -318,6 +319,37 @@ fn report(a: &[String], j: bool) -> Result<(), CliError> {
             index.counts.playlists,
             index.build_id
         );
+    }
+    Ok(())
+}
+fn diag(a: &[String], j: bool) -> Result<(), CliError> {
+    let card = Path::new(a.first().ok_or("diag needs a card root")?);
+    let limit = match value(a, "--limit") {
+        Some(n) => n.parse::<usize>().map_err(|_| "--limit needs a number")?,
+        None => 0,
+    };
+    let reading = diagnostics::read(card, limit)?;
+    if let Some(dest) = value(a, "--zip") {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let zip = diagnostics::create_zip(&reading, card, Path::new(dest), now)?;
+        if j {
+            println!(r#"{{"zip":{}}}"#, q(&zip.to_string_lossy()));
+        } else {
+            println!(
+                "{}\nwrote {}",
+                diagnostics::summary_markdown(&reading),
+                zip.display()
+            );
+        }
+    } else if j {
+        return Err(
+            "--json needs --zip (the structured report is report.json inside the zip)".into(),
+        );
+    } else {
+        println!("{}", diagnostics::summary_markdown(&reading));
     }
     Ok(())
 }

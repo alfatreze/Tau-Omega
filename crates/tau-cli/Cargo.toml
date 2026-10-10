@@ -9,7 +9,7 @@ name = "tau"
 path = "src/main.rs"
 
 [dependencies]
-tau-core = { path = "../tau-core" }
+tau-core = { path = "../tau-core", features = ["serde"] }
 
 [lints]
 workspace = true
