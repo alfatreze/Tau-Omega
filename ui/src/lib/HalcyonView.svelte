@@ -123,11 +123,8 @@
   revalidate();
 </script>
 
-<section class="hx" aria-labelledby="hx-title">
-  <div class="hx-head">
-    <h2 id="hx-title">Halcyon EQ</h2>
-    <p class="muted">Your own sound presets for the Pocket. Make one from six simple controls, or import an Equalizer APO / AutoEQ headphone profile.</p>
-  </div>
+<section class="page hx" aria-labelledby="hx-title">
+  <header><div><p class="eyebrow">SOUND</p><h1 id="hx-title">Halcyon EQ</h1><p class="lede">Your own sound presets for the Pocket. Make one from six simple controls, or import an Equalizer APO / AutoEQ headphone profile.</p></div></header>
 
   <div class="hx-bar">
     <div role="tablist" aria-label="Presets" class="hx-tabs">
@@ -204,8 +201,7 @@
 {/if}
 
 <style>
-  .hx{display:grid;gap:14px;max-width:860px;align-content:start}
-  .hx h2{margin:0}.hx-head p{margin:0}
+  .hx{display:grid;gap:14px;align-content:start}
   .hx button{padding:8px 12px;font-size:13px;background:#202b2d;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;cursor:pointer}
   .hx button.quiet{background:transparent}
   .hx button.primary{background:#c1f0ad;color:#142015;font-weight:700;border-color:#c1f0ad}

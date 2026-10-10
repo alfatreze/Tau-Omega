@@ -109,11 +109,8 @@
   const label = (c: { text: string; against: string }) => `${c.text.replace('_', ' ')} on ${c.against.replace('ramp', 'background').replace(/\//g, ' / ')}`;
 </script>
 
-<section class="ap" aria-labelledby="ap-title">
-  <div class="ap-head">
-    <h2 id="ap-title">Appearance</h2>
-    <p class="muted">Design extra themes for the Pocket. Each has a Dark and a Light version. Colours are shown as the Pocket will draw them.</p>
-  </div>
+<section class="page ap" aria-labelledby="ap-title">
+  <header><div><p class="eyebrow">THEMES</p><h1 id="ap-title">Appearance</h1><p class="lede">Design extra themes for the Pocket. Each has a Dark and a Light version. Colours are shown as the Pocket will draw them.</p></div></header>
 
   <div class="ap-bar">
     <div role="tablist" aria-label="Themes" class="ap-tabs">
@@ -215,7 +212,6 @@
   .ap-modal button{padding:8px 14px;font-size:13px;background:#202b2d;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;cursor:pointer}
   .ap-modal button.quiet{background:transparent}.ap-modal button.primary{background:#c1f0ad;color:#142015;font-weight:700;border-color:#c1f0ad}
   .ap-modal button:disabled{opacity:.5;cursor:not-allowed}
-  .ap-head p{margin:0}
   .ap button{padding:8px 12px;font-size:13px;background:#202b2d;color:#e8ecec;border:1px solid #2c393a}
   .ap button.quiet{background:transparent}
   .ap button.primary{background:#c1f0ad;color:#142015;font-weight:700;border-color:#c1f0ad}
@@ -223,8 +219,7 @@
   .ap input[type=text]{width:100%;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:10px 12px;font:inherit;font-size:13px;box-sizing:border-box}
   .ap input[type=range]{width:100%;accent-color:#c1f0ad}
   .ap-field{font-size:12px;font-weight:650;color:#acbbbb}
-  .ap{display:grid;gap:14px;max-width:1100px;align-content:start}
-  .ap h2{margin:0}
+  .ap{display:grid;gap:14px;align-content:start}
   .ap-bar{display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between;align-items:center}
   .ap-tabs,.ap-pol,.ap-actions{display:flex;gap:6px;flex-wrap:wrap}
   .ap .ap-tabs button.on,.ap .ap-pol button.on{background:#c1f0ad;color:#142015;border-color:#c1f0ad;font-weight:700}
