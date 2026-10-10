@@ -22,7 +22,7 @@ jobs:
       matrix:
         include:
           - { name: macOS-Apple-silicon, os: macos-latest, target: aarch64-apple-darwin, bundles: 'app,dmg', arch: aarch64 }
-          - { name: macOS-Intel, os: macos-13, target: x86_64-apple-darwin, bundles: 'app,dmg', arch: x64 }
+          - { name: macOS-Intel, os: macos-15-intel, target: x86_64-apple-darwin, bundles: 'app,dmg', arch: x64 }
           - { name: Windows, os: windows-latest, target: x86_64-pc-windows-msvc, bundles: 'nsis,msi' }
           - { name: Linux, os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, bundles: 'appimage,deb' }
     runs-on: ${{ matrix.os }}
@@ -68,6 +68,7 @@ jobs:
         working-directory: src-tauri
       - name: Collect installers
         shell: bash
+        working-directory: src-tauri
         run: |
           mkdir -p out
           B=target/${{ matrix.target }}/release/bundle
@@ -82,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Tau-Omega-${{ matrix.name }}
-          path: out/*
+          path: src-tauri/out/*
           if-no-files-found: error
   draft-release:
     needs: build
