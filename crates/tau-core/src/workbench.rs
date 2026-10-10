@@ -742,7 +742,8 @@ mod tests {
         fs::write(lib.join("M/one/01.mp3"), mp3).unwrap();
         // FLAC: STREAMINFO then a PICTURE block
         let mut block = Vec::new();
-        for v in [3u32] {
+        {
+            let v = 3u32;
             block.extend_from_slice(&v.to_be_bytes());
         }
         block.extend_from_slice(&9u32.to_be_bytes());
