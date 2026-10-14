@@ -1,6 +1,6 @@
 # Tau Omega roadmap: the one ordered list of what is next
 
-**State 2026-10-10 (end of session): items 1-4 done and item 5's CLI parity, installers and updater built; v0.4.1 is PUBLISHED on GitHub (v0.4.0 was never public). Next: a real in-app update (0.4.2), installer signing (owner credentials). Start with `docs/STATUS_HANDOFF.md` (START HERE).**
+**State 2026-10-14: v0.4.2 published, in-app updater proven on macOS; signing parked; next a real conversion test on a Pocket. (Older state follows.) State 2026-10-10 (end of session): items 1-4 done and item 5's CLI parity, installers and updater built; v0.4.1 is PUBLISHED on GitHub (v0.4.0 was never public). Next: a real in-app update (0.4.2), installer signing (owner credentials). Start with `docs/STATUS_HANDOFF.md` (START HERE).**
 
 **Rewritten 2026-10-08. This is Tau Omega work only.** Tau Alpha (the firmware and RTL repository) is read-only from here: nothing in this document asks for a change there,
 and **a Tau Alpha feature enters this roadmap only once it is on Tau Alpha `main`** (not a branch, not a worktree, not a design doc). Features still in flight on other
