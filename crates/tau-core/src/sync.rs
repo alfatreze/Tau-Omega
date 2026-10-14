@@ -47,6 +47,9 @@ pub struct ArtSidecarItem {
     pub destination: PathBuf,
     pub cover_source: PathBuf,
     pub cover_sha256: String,
+    /// True when the picture is the cover embedded in `cover_source` (an audio file), not an image file.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub from_embedded: bool,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

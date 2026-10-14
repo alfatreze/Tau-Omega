@@ -845,3 +845,34 @@ fn a_confirmed_sync_leaves_no_appledouble_stubs_and_a_refused_one_touches_nothin
         "the copied file is missing"
     );
 }
+
+/// An album whose only art is embedded in its tracks still gets a cover file (Tau needs one for every
+/// album); the same picture as a folder image gives the identical sidecar.
+#[test]
+fn a_sidecar_is_made_from_embedded_art_when_there_is_no_folder_image() {
+    let jpg = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata/images/cover455.jpg");
+    let source = root("embedded-art-source");
+    let card = root("embedded-art-card");
+    let common = card.join("Assets/tau/common");
+    fs::create_dir_all(source.join("Album")).unwrap();
+    fs::create_dir_all(&common).unwrap();
+    let bare = source.join("bare.mp3");
+    fs::write(&bare, [b"ID3\x03\x00\x00\x00\x00\x00\x00".as_slice(), &[0u8; 64]].concat()).unwrap();
+    fs::write(
+        source.join("Album/01 Track.mp3"),
+        cover::embed_mp3_bytes(&bare, &jpg).unwrap(),
+    )
+    .unwrap();
+    fs::remove_file(&bare).unwrap();
+    let options = PlanOptions {
+        mirror: false,
+        embed_covers: false,
+        art_sidecar_pal256: true,
+    };
+    let sync_plan = plan(&[source], &common, "/Assets/tau/common/", options, &mut None).unwrap();
+    assert_eq!(sync_plan.art_sidecars.len(), 1);
+    assert!(sync_plan.art_sidecars[0].from_embedded);
+    execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
+    let written = fs::read(sync_plan.art_sidecars[0].destination.clone()).unwrap();
+    assert_eq!(written, image::encode_pal256_bytes(&fs::read(&jpg).unwrap(), 128).unwrap());
+}

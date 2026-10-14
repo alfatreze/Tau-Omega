@@ -73,7 +73,7 @@
   // Covers are always put inside the copied songs and always get the small fast-loading cover file: they
   // are what the Pocket shows, so there is nothing to ask. An album whose cover cannot be used is copied
   // without it and the finished sync says so.
-  const EMBED_COVERS = true;
+  const EMBED_COVERS = false; // Tau reads the cover files; the songs' own tags are left alone
   const ART_SIDECAR = true;
 
   let sourceSearch = '', pocketSearch = '';

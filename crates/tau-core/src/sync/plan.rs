@@ -180,7 +180,8 @@ pub(crate) fn plan_candidates(
             && audio_file(&source)
             && let Some(source_folder) = source.parent()
             && seen_art_folders.insert(source_folder.to_path_buf())
-            && let Some(cover_source) = cover::find_cover(source_folder)
+            && let Some((cover_source, cover_sha256, from_embedded)) =
+                art_source(source_folder, &source)?
         {
             let destination_folder = target.parent().ok_or_else(|| {
                 TauError::e(
@@ -191,8 +192,9 @@ pub(crate) fn plan_candidates(
             art_sidecars.push(ArtSidecarItem {
                 source_folder: source_folder.to_path_buf(),
                 destination: destination_folder.join(image::pal256_sidecar_name(128)),
-                cover_sha256: sha256_file(&cover_source)?,
+                cover_sha256,
                 cover_source,
+                from_embedded,
             });
         }
         // The ledger remembers files this tool wrote and verified itself: made from this exact source and
@@ -312,4 +314,19 @@ pub(crate) fn plan_candidates(
         warnings,
         bytes_to_write,
     })
+}
+
+/// Where a folder's cover sidecar comes from: a folder image first (`cover.jpg`, ...), else the picture
+/// embedded in the first track of the folder that has one (MP3 APIC, FLAC PICTURE). Returns the source
+/// path, its hash and whether it is embedded art.
+fn art_source(folder: &Path, first_track: &Path) -> Result<Option<(PathBuf, String, bool)>, TauError> {
+    if let Some(file) = cover::find_cover(folder) {
+        let hash = sha256_file(&file)?;
+        return Ok(Some((file, hash, false)));
+    }
+    if let Some(bytes) = cover::extract_embedded_cover(first_track) {
+        let hash = sha256_bytes(&bytes);
+        return Ok(Some((first_track.to_path_buf(), hash, true)));
+    }
+    Ok(None)
 }

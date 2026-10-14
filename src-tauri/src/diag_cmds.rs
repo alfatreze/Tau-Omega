@@ -89,7 +89,16 @@ pub fn diag_zip(card: String, dest_dir: String) -> Result<String, TauError> {
 #[tauri::command(async)]
 pub fn preview_art_sidecar(cover_source: String) -> Result<String, TauError> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
-    let bytes = std::fs::read(&cover_source)?;
+    // The source is a folder image, or an audio file whose embedded picture is the cover.
+    let is_audio = matches!(
+        Path::new(&cover_source).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(),
+        Some("mp3" | "flac")
+    );
+    let bytes = if is_audio {
+        tau_core::cover::extract_embedded_cover(Path::new(&cover_source)).unwrap_or_default()
+    } else {
+        std::fs::read(&cover_source)?
+    };
     let png = tau_core::image::preview_pal256_png(&bytes, 128)?;
     Ok(format!("data:image/png;base64,{}", STANDARD.encode(png)))
 }
