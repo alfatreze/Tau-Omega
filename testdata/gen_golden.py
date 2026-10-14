@@ -74,8 +74,14 @@ def main() -> None:
     common = HERE / "fixture" / "common"
     load_fixture_tree()(common)
     entries, playlists, warnings = library.scan(common, playlists=True)
-    fixture = library.build_index(entries, playlists, [])
-    (HERE / "fixture.tdb").write_bytes(fixture)
+    if hasattr(library, "tau_details"):
+        fixture = library.build_index(entries, playlists, [])
+        (HERE / "fixture.tdb").write_bytes(fixture)
+    else:
+        # A reference from before the optional track details section: the committed fixture index (which
+        # carries that section, made by a newer reference) stays as it is until the reference catches up.
+        print("reference has no track details section: keeping the committed fixture.tdb")
+        fixture = (HERE / "fixture.tdb").read_bytes()
     for tracks, albums, artists in ((400, 40, 20), (7180, 800, 300), (16384, 2048, 1024)):
         entries = library.synth(tracks, albums, artists)
         # The Rust conformance test receives these oracle inputs rather than
