@@ -196,6 +196,10 @@ pub fn assess_with(
         return finish(UpdateVerdict::Mismatch, reasons, installed, package, pair);
     }
 
+    if pair == PairStatus::NotApplicable {
+        return finish_generic(old, installed, package, pair, finish);
+    }
+
     let same_files = same_hash(&old.bitstream_sha256, &package.bitstream_sha256)
         && same_hash(&old.rom_sha256, &package.rom_sha256)
         && same_hash(&old.cold_sha256, &package.cold_sha256);
@@ -262,6 +266,55 @@ pub fn assess_with(
     reasons.insert(0, line);
     reasons.extend(package_notes(&package, docs));
     finish(verdict, reasons, installed, package, pair)
+}
+
+/// A community core is judged by its version alone (Tau's bitstream/ROM hashes do not exist for it); versions that
+/// cannot be ordered are never guessed.
+fn finish_generic(
+    old: BuildIdentity,
+    installed: Option<BuildIdentity>,
+    package: BuildIdentity,
+    pair: PairStatus,
+    finish: impl Fn(
+        UpdateVerdict,
+        Vec<String>,
+        Option<BuildIdentity>,
+        BuildIdentity,
+        PairStatus,
+    ) -> UpdateAssessment,
+) -> UpdateAssessment {
+    use crate::core_version::{Verdict, compare};
+    let (verdict, line) = match compare(&old.version, &package.version) {
+        Verdict::Newer => (
+            UpdateVerdict::Update,
+            format!(
+                "Update: {} {} replaces {} {}.",
+                package.version, package.date_release, old.version, old.date_release
+            ),
+        ),
+        Verdict::Same => (
+            UpdateVerdict::SameBuild,
+            format!(
+                "The card already has version {} of {}.",
+                package.version, package.shortname
+            ),
+        ),
+        Verdict::Older => (
+            UpdateVerdict::Older,
+            format!(
+                "The package ({} {}) is older than the installed core ({} {}); installing it is a downgrade.",
+                package.version, package.date_release, old.version, old.date_release
+            ),
+        ),
+        Verdict::Unknown => (
+            UpdateVerdict::SameDateDifferentBuild,
+            format!(
+                "The versions {} (installed) and {} (package) cannot be compared, so Omega cannot say which is newer. Review the file list.",
+                old.version, package.version
+            ),
+        ),
+    };
+    finish(verdict, vec![line], installed, package, pair)
 }
 
 /// What the release manifest says about the package's build: the firmware's stamped version and a dirty tree.

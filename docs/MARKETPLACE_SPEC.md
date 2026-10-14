@@ -60,6 +60,8 @@ Existing language: dark surface `#161f20`/`#1a2325`, border `#2c393a`, accent mi
 
 ## 5. Build order (each step host-tested, plan-first, no card write without approval)
 
+**M4 finding (2026-10-15):** Omega's update logic assumed Tau's `bitstream.rbf_r`/`tau.rom` pair, so a community core was judged wrongly (an installed generic core was always "repaired", and a newer package was reported as the same build). Fixed with `PairStatus::NotApplicable` and a version-based verdict (`core_version`, unordered versions are never guessed); proven by `tests/generic_core.rs` (new install, same build, update with the user's ROM and licence file kept, exact rollback, downgrade refused, unorderable versions). Real-card run still to do, with approval.
+
 **Status 2026-10-14:** M0, M1, M2 and M3 built (M3: `MarketplaceView.svelte`, `marketplace.ts`, mock backend; browser-checked at desktop and 375 px; nothing downloaded or installed against a real card yet).
 
 - **M0** engine `catalog` + fixture + `core_version`, tests (this commit series).

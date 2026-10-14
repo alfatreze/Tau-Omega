@@ -17,6 +17,7 @@
     if (typeof pair === 'object' && pair && 'verified' in pair) return 'Firmware and bitstream match.';
     if (typeof pair === 'object' && pair && 'missing_feature' in pair) return `The firmware needs a bitstream feature this build lacks: the Pocket would show "NO UNIT".`;
     if (typeof pair === 'object' && pair && 'mismatch' in pair) return 'Firmware and bitstream do NOT match: the Pocket would show a black screen.';
+    if (pair === 'not_applicable') return 'This core has no separate firmware to pair with its bitstream.';
     return pair === 'no_marker' ? 'An older firmware: its match with the bitstream cannot be checked.' : 'This bitstream is not a known build: the match cannot be checked.';
   }
 

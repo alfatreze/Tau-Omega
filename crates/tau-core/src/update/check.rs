@@ -161,6 +161,11 @@ pub fn post_install_check_with(
             CheckStatus::Pass,
             format!("the firmware accepts this bitstream (core version {core_version})."),
         ),
+        PairStatus::NotApplicable => push(
+            "firmware pairing",
+            CheckStatus::Pass,
+            "this core has no separate firmware to pair with its bitstream.".into(),
+        ),
         PairStatus::NoMarker => push(
             "firmware pairing",
             CheckStatus::Warn,
