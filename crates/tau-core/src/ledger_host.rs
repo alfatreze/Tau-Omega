@@ -16,7 +16,8 @@ use std::{
 static CACHE_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// (mount path, device id) -> volume UUID, so the OS tool runs once per mount, not once per scan. The device
 /// id changes when a card is unmounted and mounted again, so a swapped card never reuses an old answer.
-static VOLUMES: Mutex<Option<HashMap<(PathBuf, u64), Option<String>>>> = Mutex::new(None);
+type VolumeCache = HashMap<(PathBuf, u64), Option<String>>;
+static VOLUMES: Mutex<Option<VolumeCache>> = Mutex::new(None);
 
 /// The block device holding `path`, from `/proc/mounts` text (Linux).
 #[allow(dead_code)] // only called on Linux; unit-tested everywhere
