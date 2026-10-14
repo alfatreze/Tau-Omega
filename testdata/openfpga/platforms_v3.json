@@ -1,0 +1,291 @@
+{
+ "data": [
+  {
+   "id": "amiga",
+   "category": "Computer",
+   "name": "Amiga",
+   "manufacturer": "Commodore International",
+   "year": 1985
+  },
+  {
+   "id": "arduboy",
+   "category": "Handheld",
+   "name": "Arduboy",
+   "manufacturer": "Arduboy",
+   "year": 2016
+  },
+  {
+   "id": "berzerk",
+   "category": "Arcade",
+   "name": "Berzerk",
+   "manufacturer": "Stern",
+   "year": 1980
+  },
+  {
+   "id": "bublbobl",
+   "category": "Arcade",
+   "name": "Bubble Bobble",
+   "manufacturer": "Coin-Op Collection",
+   "year": 2026
+  },
+  {
+   "id": "chiskit",
+   "category": "Utility",
+   "name": "ChisKit",
+   "manufacturer": "Alius",
+   "year": 2026
+  },
+  {
+   "id": "darkmist",
+   "category": "Arcade",
+   "name": "The Lost Castle In Darkmist",
+   "manufacturer": "Coin-Op Collection",
+   "year": 2026
+  },
+  {
+   "id": "dstroy",
+   "category": "Others",
+   "name": "Dstroy",
+   "manufacturer": "Fully Bugged Software",
+   "year": 1995
+  },
+  {
+   "id": "gba",
+   "category": "Handheld",
+   "name": "Game Boy Advance",
+   "manufacturer": "Nintendo",
+   "year": 2001
+  },
+  {
+   "id": "gbprinter",
+   "category": "Others",
+   "name": "Game Boy Printer",
+   "manufacturer": "Nintendo",
+   "year": 1998
+  },
+  {
+   "id": "hiimpact",
+   "category": "Arcade",
+   "name": "High Impact Football",
+   "manufacturer": "pram0d",
+   "year": 2024
+  },
+  {
+   "id": "jt88game",
+   "category": "Arcade",
+   "name": "jt88game",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtcal50",
+   "category": "Arcade",
+   "name": "jtcal50",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtgals",
+   "category": "Arcade",
+   "name": "jtgals",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtgrad3",
+   "category": "Arcade",
+   "name": "jtgrad3",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtharier",
+   "category": "Arcade",
+   "name": "jtharier",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtktiger",
+   "category": "Arcade",
+   "name": "jtktiger",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtroller",
+   "category": "Arcade",
+   "name": "jtroller",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtsimson",
+   "category": "Arcade",
+   "name": "jtsimson",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtsuratk",
+   "category": "Arcade",
+   "name": "jtsuratk",
+   "manufacturer": "JT FPGA",
+   "year": 2025
+  },
+  {
+   "id": "jttaitox",
+   "category": "Arcade",
+   "name": "jttaitox",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "jtwardnr",
+   "category": "Arcade",
+   "name": "jtwardnr",
+   "manufacturer": "JT FPGA",
+   "year": 2026
+  },
+  {
+   "id": "mortalkombat",
+   "category": "Arcade",
+   "name": "Mortal Kombat",
+   "manufacturer": "pram0d",
+   "year": 2024
+  },
+  {
+   "id": "mp3player",
+   "category": "Others",
+   "name": "MP3 Player",
+   "manufacturer": "HarpMudd",
+   "year": 2026
+  },
+  {
+   "id": "mpatrol",
+   "category": "Arcade",
+   "name": "Moon Patrol",
+   "manufacturer": "Irem",
+   "year": 1982
+  },
+  {
+   "id": "narc",
+   "category": "Arcade",
+   "name": "NARC",
+   "manufacturer": "pram0d",
+   "year": 2024
+  },
+  {
+   "id": "ng",
+   "category": "Console",
+   "name": "Neo Geo",
+   "manufacturer": "SNK",
+   "year": 1990
+  },
+  {
+   "id": "nmk16",
+   "category": "Arcade",
+   "name": "Macross Ver.26",
+   "manufacturer": "Banpresto / NMK",
+   "year": 1992
+  },
+  {
+   "id": "paprium",
+   "category": "Others",
+   "name": "Paprium",
+   "manufacturer": "WaterMelon",
+   "year": 2020
+  },
+  {
+   "id": "pcecd",
+   "category": "Console",
+   "name": "PC Engine CD",
+   "manufacturer": "NEC Home Electronics",
+   "year": 1988
+  },
+  {
+   "id": "popeye",
+   "category": "Arcade",
+   "name": "Popeye",
+   "manufacturer": "Nintendo",
+   "year": 1982
+  },
+  {
+   "id": "ringking",
+   "category": "Arcade",
+   "name": "Ring King",
+   "manufacturer": "Woodplace / Data East",
+   "year": 1985
+  },
+  {
+   "id": "shollow",
+   "category": "Arcade",
+   "name": "Satan's Hollow",
+   "manufacturer": "Bally Midway",
+   "year": 1982
+  },
+  {
+   "id": "smashtv",
+   "category": "Arcade",
+   "name": "Smash T.V.",
+   "manufacturer": "Williams",
+   "year": 1990
+  },
+  {
+   "id": "spaceinvaders",
+   "category": "Arcade",
+   "name": "Space Invaders",
+   "manufacturer": "Taito",
+   "year": 1978
+  },
+  {
+   "id": "strikeforce",
+   "category": "Arcade",
+   "name": "Strike Force",
+   "manufacturer": "pram0d",
+   "year": 2024
+  },
+  {
+   "id": "superhiimpact",
+   "category": "Arcade",
+   "name": "Super High Impact",
+   "manufacturer": "pram0d",
+   "year": 2024
+  },
+  {
+   "id": "tapper",
+   "category": "Arcade",
+   "name": "Tapper",
+   "manufacturer": "Bally Midway",
+   "year": 1983
+  },
+  {
+   "id": "terminator2",
+   "category": "Arcade",
+   "name": "Terminator 2",
+   "manufacturer": "pram0d",
+   "year": 2024
+  },
+  {
+   "id": "totalcarnage",
+   "category": "Arcade",
+   "name": "Total Carnage",
+   "manufacturer": "pram0d",
+   "year": 2024
+  },
+  {
+   "id": "trog",
+   "category": "Arcade",
+   "name": "Trog",
+   "manufacturer": "pram0d",
+   "year": 2024
+  },
+  {
+   "id": "zaxxon",
+   "category": "Arcade",
+   "name": "Zaxxon",
+   "manufacturer": "Sega",
+   "year": 1982
+  }
+ ]
+}
