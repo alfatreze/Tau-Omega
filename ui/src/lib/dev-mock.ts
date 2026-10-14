@@ -14,23 +14,33 @@ const LIBRARY = '/Users/me/Music';
 const MB = 1e6;
 const GB = 1e9;
 
-const mc = (id: string, name: string, owner: string, repo: string, category: string, manufacturer: string, year: number, version: string, date: string, license = false) => ({
-  id, author: id.split('.')[0], name, repository: { owner, name: repo }, requires_license: license, license_filename: license ? 'beta.bin' : '', sponsor: { links: license ? [] : [`https://github.com/sponsors/${owner}`] },
-  replaces: [] as string[], version, release_date: date, category, manufacturer, year, assets: [{ platform: name.toLowerCase().replace(/\W/g, ''), filename: '', extensions: ['sfc', 'smc'], core_specific: false }],
+const mc = (id: string, name: string, owner: string, repo: string, category: string, manufacturer: string, year: number, version: string, date: string, license = false, extra: Record<string, unknown> = {}) => ({
+  id, author: id.split('.')[0], name, repository: { owner, name: repo }, requires_license: license, license_filename: license ? 'beta.bin' : '',
+  sponsor: { links: license ? [] : [`https://github.com/sponsors/${owner}`] }, replaces: [] as string[], declares_ai: [] as string[],
+  platform_id: name.toLowerCase().replace(/\W/g, ''), version, release_date: date, category, manufacturer, year,
+  download_url: version ? `https://github.com/${owner}/${repo}/releases/download/${version}/${id}.${version}.zip` : '',
+  firmware_required: '1.1', dock_supported: true, link_port: false, sleep_supported: false,
+  assets: [{ platform: name.toLowerCase().replace(/\W/g, ''), filename: '', extensions: ['sfc', 'smc'], core_specific: false }],
+  history: version ? [{ version, release_date: date, download_url: '' }, { version: '0.9.0', release_date: '2025-05-01', download_url: '' }] : [],
+  ...extra,
 });
 const marketCores = [
-  mc('agg23.SNES', 'SNES', 'agg23', 'openfpga-SNES', 'Console', 'Nintendo', 1990, '1.4.0', '2026-09-02'),
-  mc('agg23.Arduboy', 'Arduboy', 'agg23', 'openfpga-arduboy', 'Handheld', 'Arduboy', 2016, '0.9.0', '2022-09-03'),
-  mc('Alius.ChisKit', 'ChisKit', 'gpzi994', 'ChisKit', 'Utility', 'Alius', 2026, '0.01b', '2026-10-11'),
+  mc('agg23.SNES', 'SNES', 'agg23', 'openfpga-SNES', 'Console', 'Nintendo', 1990, '1.4.0', '2026-09-02', false, { firmware_required: '2.0' }),
+  mc('agg23.Arduboy', 'Arduboy', 'agg23', 'openfpga-arduboy', 'Handheld', 'Arduboy', 2016, '0.9.0', '2022-09-03', false, { history: [{ version: '0.9.0', release_date: '2022-09-03', download_url: '' }] }),
+  mc('Alius.ChisKit', 'ChisKit', 'gpzi994', 'ChisKit', 'Utility', 'Alius', 2026, '0.01b', '2026-10-11', false, { declares_ai: ['Claude'] }),
   mc('jotego.jtcps1', 'Capcom CPS1', 'jotego', 'jtcores', 'Arcade', 'Capcom', 1988, 'c68f02e', '2026-10-11', true),
   mc('coc.bublbobl', 'Bubble Bobble', 'coc', 'bublbobl', 'Arcade', 'Taito', 1986, '1.0.0', '2026-09-26', true),
-  mc('spiritualized.GB', 'Game Boy', 'spiritualized', 'gb', 'Handheld', 'Nintendo', 1989, '1.2.1', '2026-08-14'),
+  mc('spiritualized.GB', 'Game Boy', 'spiritualized', 'gb', 'Handheld', 'Nintendo', 1989, '1.2.1', '2026-08-14', false, { dock_supported: false }),
   mc('Mazamars312.PCE', 'PC Engine', 'Mazamars312', 'pce', 'Console', 'NEC', 1987, '2.0.3', '2025-12-01'),
   mc('zz.NoRelease', 'Unreleased', 'zz', 'none', 'Computer', 'Nobody', 2026, '', ''),
   ...['Amiga', 'C64', 'ZX Spectrum', 'NES', 'Genesis', 'Neo Geo', 'Atari 2600', 'Intellivision', 'Vectrex', 'MSX', 'CPC', 'Apple II'].map((n, i) =>
     mc(`pack.${n.replace(/\W/g, '')}`, n, 'pack', n.toLowerCase().replace(/\W/g, ''), i % 3 ? 'Computer' : 'Console', 'Various', 1977 + i * 2, `1.${i}.0`, `2025-0${1 + (i % 9)}-1${i % 9}`)),
 ];
-
+// Placeholder pictures for the dev mock: a square "icon" and a wide "banner" drawn from the id, none for one core.
+const svgUrl = (w: number, h: number, id: string) => {
+  let hue = 0; for (const c of id) hue = (hue * 31 + c.charCodeAt(0)) % 360;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="#000"/><circle cx="${w / 2}" cy="${h / 2}" r="${Math.min(w, h) / 3}" fill="hsl(${hue},0%,85%)"/></svg>`)}`;
+};
 const cores = [
   { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platforms: ['tau'], media_platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'ok', tracks: 7180 },
   { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platforms: ['tau2'], media_platform: 'tau2', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
@@ -263,18 +273,12 @@ const handlers: Record<string, (args: any) => unknown> = {
   set_card_marker: (a) => { prefs.card_marker = a.setting; return { setting: a.setting, is_card: true, present: a.setting === 'on' }; },
   remove_card_marker: () => ({ setting: prefs.card_marker, is_card: true, present: false }),
   marketplace_catalog: () => {
-    // Failure modes for checking the error states by hand: set window.__mkt = 'fail' | 'offline' | 'limit' in the console.
+    // Failure modes for checking the error states by hand: set window.__mkt = 'fail' | 'offline' in the console.
     const mode = (globalThis as { __mkt?: string }).__mkt;
     if (mode === 'fail') throw { code: 'E_IO', message: 'Could not reach the server. Are you offline?' };
     return { catalog: { cores: marketCores }, source: mode === 'offline' ? { Offline: 'Could not reach the server. Are you offline?' } : 'Network', fetched: Math.floor(Date.now() / 1000) - (mode === 'offline' ? 3 * 86400 : 120) };
   },
-  marketplace_release: (a) => {
-    const id = a.coreId as string;
-    if ((globalThis as { __mkt?: string }).__mkt === 'limit') throw { code: 'E_IO', message: 'GitHub allows 60 lookups an hour and that limit was reached. Try again in 23 minutes.' };
-    if (id === 'zz.NoRelease') throw { code: 'E_NOT_FOUND', message: 'The author has not published a download yet.' };
-    const c = marketCores.find((x) => x.id === id)!;
-    return { release: { tag: c.version, title: `${c.name} ${c.version}`, prerelease: false, published: c.release_date, notes: 'Fixes audio pops after a long session.\nAdds a save-state menu.', download: { name: `${c.id}.${c.version}.zip`, url: `https://github.com/${c.repository.owner}/${c.repository.name}/releases/download/${c.version}/${c.id}.zip`, size: 3.2 * MB, sha256: id === 'agg23.Arduboy' ? null : 'a'.repeat(64) } }, source: 'Network', fetched: Math.floor(Date.now() / 1000) };
-  },
+  marketplace_art: (a) => (a.coreId === 'zz.NoRelease' ? null : a.kind === 'Banner' ? svgUrl(521, 165, a.coreId as string) : svgUrl(36, 36, a.coreId as string)),
   marketplace_core_updates: () => ({ rows: [
     { id: 'agg23.SNES', installed_version: '1.2.0', latest_version: '1.4.0', release_date: '2026-09-02', status: 'UpdateAvailable' },
     { id: 'spiritualized.GB', installed_version: '1.0.0', latest_version: '1.2.1', release_date: '2026-08-14', status: 'UpdateAvailable' },

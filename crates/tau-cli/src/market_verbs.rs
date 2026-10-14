@@ -106,17 +106,18 @@ pub fn catalog(a: &[String], j: bool) -> Result<(), CliError> {
     })
 }
 
-/// `tau catalog-core <id> [--refresh]`: the catalog entry and the release it would install.
+/// `tau catalog-core <id> [--version v] [--refresh]`: the catalog entry (compatibility, where your files go) and the release it would
+/// install. Needs only the catalog: no GitHub lookup is made.
 pub fn catalog_core(a: &[String], j: bool) -> Result<(), CliError> {
     let id = a
         .first()
         .ok_or("catalog-core needs a core id (for example agg23.Arduboy)")?;
-    let (cat, _) = load_catalog(a)?;
+    let (cat, source) = load_catalog(a)?;
     let core = cat
         .find(id)
         .ok_or_else(|| format!("{id} is not in the catalog"))?
         .clone();
-    let rel = marketplace::fetch_release(&Http, &cache_dir(a), &core, now(), refresh(a))?;
+    let release = tau_core::catalog_release::release_from_catalog(&core, value(a, "--version"))?;
     #[derive(Serialize)]
     struct Out<'a> {
         core: &'a CatalogCore,
@@ -127,29 +128,46 @@ pub fn catalog_core(a: &[String], j: bool) -> Result<(), CliError> {
         j,
         &Out {
             core: &core,
-            release: &rel.release,
-            source: &rel.source,
+            release: &release,
+            source: &source,
         },
         || {
+            let yes_no = |v: Option<bool>| match v {
+                Some(true) => "yes",
+                Some(false) => "no",
+                None => "not stated",
+            };
             format!(
-                "{} {} ({}), {}\n  repository: github.com/{}/{}\n  download: {} ({} bytes), checksum: {}\n  {}",
+                "{} {} ({}), {}\n  repository: github.com/{}/{}\n  download: {}\n  needs Pocket firmware {} · Dock: {} · {}{}",
                 core.id,
-                rel.release.tag,
-                rel.release.published,
-                source_note(&rel.source),
+                release.version,
+                release.published,
+                source_note(&source),
                 core.repository.owner,
                 core.repository.name,
-                rel.release.download.name,
-                rel.release.download.size,
-                rel.release
-                    .download
-                    .sha256
-                    .as_deref()
-                    .unwrap_or("not published"),
+                release.download.url,
+                if core.firmware_required.is_empty() {
+                    "not stated"
+                } else {
+                    &core.firmware_required
+                },
+                yes_no(core.dock_supported),
                 if core.requires_license {
-                    format!("needs a licence file: {}", core.license_filename)
+                    if core.license_filename.is_empty() {
+                        "needs a licence file (the author names it)".to_string()
+                    } else {
+                        format!("needs a licence file: {}", core.license_filename)
+                    }
                 } else {
                     "no licence file needed".into()
+                },
+                if core.declares_ai.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "\n  author declares AI assistance: {}",
+                        core.declares_ai.join(", ")
+                    )
                 }
             )
         },
@@ -174,7 +192,7 @@ pub fn core_updates(a: &[String], j: bool) -> Result<(), CliError> {
     })
 }
 
-/// `tau core-download <id> --out <folder> [--refresh]`: downloads the core's newest release zip (size and checksum
+/// `tau core-download <id> --out <folder> [--version v] [--refresh]`: downloads the core's newest release zip (size and checksum
 /// checked), then vets it (paths, symlinks, size, identity). Leaves a zip for `package-plan`; writes nothing to a card.
 pub fn core_download(a: &[String], j: bool) -> Result<(), CliError> {
     let id = a.first().ok_or("core-download needs a core id")?;
@@ -184,7 +202,15 @@ pub fn core_download(a: &[String], j: bool) -> Result<(), CliError> {
         .find(id)
         .ok_or_else(|| format!("{id} is not in the catalog"))?
         .clone();
-    let rel = marketplace::fetch_release(&Http, &cache_dir(a), &core, now(), refresh(a))?;
+    // The address comes from the catalog; one best-effort lookup adds GitHub's checksum and size when it publishes them.
+    let rel = marketplace::resolve_release(
+        &Http,
+        &cache_dir(a),
+        &core,
+        value(a, "--version"),
+        now(),
+        true,
+    )?;
     let limits = Limits::default();
     let got = marketplace::download_core(
         &Http,

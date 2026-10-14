@@ -104,16 +104,25 @@ mod tests {
     }
 
     fn cat() -> Catalog {
-        catalog::parse(
-            br#"{"data":[
-              {"identifier":"a.New","platform":"New","repository":{"platform":"github","owner":"a","name":"n"},
-               "updaters":{"previous":[{"shortname":"Old","author":"a"}]},"release":{"version":"2.0","release_date":"2026-02-01"}},
-              {"identifier":"b.Same","platform":"S","repository":{"platform":"github","owner":"b","name":"s"},"release":{"version":"1.0","release_date":"2025-01-01"}},
-              {"identifier":"c.Odd","platform":"O","repository":{"platform":"github","owner":"c","name":"o"},"release":{"version":"final","release_date":"2025-01-01"}},
-              {"identifier":"d.None","platform":"N","repository":{"platform":"github","owner":"d","name":"n"}}
-            ]}"#,
-        )
-        .unwrap()
+        let release = |v: &str, d: &str| {
+            format!(
+                r#"{{"download_url":"https://github.com/x/y/releases/download/{v}/z.zip","core":{{"metadata":{{"platform_ids":["p"],"version":"{v}","date_release":"{d}"}}}}}}"#
+            )
+        };
+        let entry = |id: &str, owner: &str, releases: &str, updaters: &str| {
+            format!(
+                r#"{{"id":"{id}","repository":{{"platform":"github","owner":"{owner}","name":"y"}},"releases":[{releases}]{updaters}}}"#
+            )
+        };
+        // `updaters` lives inside the release in v3; build the replacement entry by hand.
+        let new_core = r#"{"id":"a.New","repository":{"platform":"github","owner":"a","name":"n"},"releases":[{"download_url":"https://github.com/a/n/releases/download/2.0/z.zip","core":{"metadata":{"platform_ids":["p"],"version":"2.0","date_release":"2026-02-01"}},"updaters":{"previous":[{"shortname":"Old","author":"a"}]}}]}"#;
+        let json = format!(
+            r#"{{"data":[{new_core},{},{},{}]}}"#,
+            entry("b.Same", "b", &release("1.0", "2025-01-01"), ""),
+            entry("c.Odd", "c", &release("final", "2025-01-01"), ""),
+            entry("d.None", "d", "", "")
+        );
+        catalog::parse(json.as_bytes(), br#"{"data":[]}"#).unwrap()
     }
 
     #[test]

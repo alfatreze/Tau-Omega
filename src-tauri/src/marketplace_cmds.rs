@@ -9,7 +9,7 @@ use tau_core::{
     core_package::{self, Limits, Vetted},
     core_update::{self, CoreStatus},
 };
-use tau_net::marketplace::{self, CatalogResult, CoreDownloaded, Http, ReleaseResult, Source};
+use tau_net::marketplace::{self, ArtKind, CatalogResult, CoreDownloaded, Http, Source};
 use tauri::Manager;
 
 fn now() -> u64 {
@@ -26,13 +26,15 @@ pub fn marketplace_catalog(app: tauri::AppHandle, force: bool) -> Result<Catalog
     marketplace::fetch_catalog(&Http, &cache(&app)?, now(), force)
 }
 
-/// The newest release of one catalog core (one GitHub request, cached for an hour).
+/// The icon (36x36) or the platform banner (521x165) of one catalog core as a PNG data URL, or `None` when the library has no
+/// picture for it. Cached for a week and revalidated, so a picture is downloaded again only when the library changes it.
 #[tauri::command(async)]
-pub fn marketplace_release(app: tauri::AppHandle, core_id: String, force: bool) -> Result<ReleaseResult, TauError> {
+pub fn marketplace_art(app: tauri::AppHandle, core_id: String, kind: ArtKind) -> Result<Option<String>, TauError> {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
     let dir = cache(&app)?;
     let catalog = marketplace::fetch_catalog(&Http, &dir, now(), false)?.catalog;
     let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
-    marketplace::fetch_release(&Http, &dir, core, now(), force)
+    Ok(marketplace::fetch_art(&Http, &dir, core, kind, now(), false)?.map(|png| format!("data:image/png;base64,{}", STANDARD.encode(png))))
 }
 
 #[derive(Serialize)]
@@ -63,7 +65,7 @@ pub fn marketplace_download(app: tauri::AppHandle, core_id: String) -> Result<Ma
     let dir = cache(&app)?;
     let catalog = marketplace::fetch_catalog(&Http, &dir, now(), false)?.catalog;
     let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
-    let release = marketplace::fetch_release(&Http, &dir, core, now(), false)?.release;
+    let release = marketplace::resolve_release(&Http, &dir, core, None, now(), true)?.release;
     let limits = Limits::default();
     let download = marketplace::download_core(&Http, core, &release, &dir.join("marketplace").join("downloads"), limits.max_zip_bytes)?;
     match core_package::vet_zip(Path::new(&download.path), &core.id, limits) {

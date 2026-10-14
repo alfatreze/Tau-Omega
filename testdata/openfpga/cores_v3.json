@@ -1,0 +1,8129 @@
+{
+ "data": [
+  {
+   "id": "Alius.ChisKit",
+   "repository": {
+    "platform": "github",
+    "owner": "gpzi994",
+    "name": "ChisKit",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/gpzi994/ChisKit/releases/download/v0.02b/ChisKit-0.02b-firmware.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "chiskit"
+       ],
+       "version": "0.01b",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "2.3",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/gpzi994/ChisKit/releases/download/v0.01b/ChisKit-0.01b-firmware.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "chiskit"
+       ],
+       "version": "0.01b",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "2.3",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "August.Macross",
+   "repository": {
+    "platform": "github",
+    "owner": "augustinwinter",
+    "name": "openfpga-nmk16",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/augustinwinter/openfpga-nmk16/releases/download/0.26.0/Macross-Ver26-Pocket.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "nmk16"
+       ],
+       "version": "0.26.0",
+       "date_release": "2026-10-03"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "ROM Set",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "macross.rom",
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "AwesomeDolphin.SpaceInvaders",
+   "repository": {
+    "platform": "github",
+    "owner": "AwesomeDolphin",
+    "name": "openFPGA-SpaceInvaders",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/KeithHenrickson-Retro/openFPGA-SpaceInvaders/releases/download/1.0.0/AwesomeDolphin.SpaceInvaders_1.0.0_2024-01-02.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "spaceinvaders"
+       ],
+       "version": "1.0.0",
+       "date_release": "2023-12-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Rom",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "invaders.rom"
+       },
+       {
+        "name": "SoundUFO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "0.raw"
+       },
+       {
+        "name": "PlayerShoot",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "1.raw"
+       },
+       {
+        "name": "PlayerDie",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "2.raw"
+       },
+       {
+        "name": "InvaderDie",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "3.raw"
+       },
+       {
+        "name": "FleetMove1",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "4.raw"
+       },
+       {
+        "name": "FleetMove2",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "5.raw"
+       },
+       {
+        "name": "FleetMove3",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "6.raw"
+       },
+       {
+        "name": "FleetMove4",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "7.raw"
+       },
+       {
+        "name": "UFOHit",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "8.raw"
+       },
+       {
+        "name": "ExtendedPlay",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "9.raw"
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/AwesomeDolphin/openFPGA-SpaceInvaders/releases/download/1.0.0/AwesomeDolphin.SpaceInvaders_1.0.0_2024-01-02.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "spaceinvaders"
+       ],
+       "version": "1.0.0",
+       "date_release": "2023-12-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Rom",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "invaders.rom"
+       },
+       {
+        "name": "SoundUFO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "0.raw"
+       },
+       {
+        "name": "PlayerShoot",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "1.raw"
+       },
+       {
+        "name": "PlayerDie",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "2.raw"
+       },
+       {
+        "name": "InvaderDie",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "3.raw"
+       },
+       {
+        "name": "FleetMove1",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "4.raw"
+       },
+       {
+        "name": "FleetMove2",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "5.raw"
+       },
+       {
+        "name": "FleetMove3",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "6.raw"
+       },
+       {
+        "name": "FleetMove4",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "7.raw"
+       },
+       {
+        "name": "UFOHit",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "8.raw"
+       },
+       {
+        "name": "ExtendedPlay",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "9.raw"
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "BananaWiFi.GBPrinter",
+   "repository": {
+    "platform": "github",
+    "owner": "BananaWiFi",
+    "name": "openFPGA-Game-Boy-Printer",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/BananaWiFi/openFPGA-Game-Boy-Printer/releases/download/v1.0.2/openFPGA-Game-Boy-Printer-v1.0.2.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "gbprinter"
+       ],
+       "version": "1.0.2",
+       "date_release": "2026-09-10"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": false,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": []
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/BananaWiFi/openFPGA-Game-Boy-Printer/releases/download/v1.0.1/openFPGA-Game-Boy-Printer-v1.0.1.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "gbprinter"
+       ],
+       "version": "1.0.1",
+       "date_release": "2026-09-09"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": false,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": []
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/BananaWiFi/openFPGA-Game-Boy-Printer/releases/download/v1.0.0/openFPGA-Game-Boy-Printer-v1.0.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "gbprinter"
+       ],
+       "version": "1.0.0",
+       "date_release": "2026-09-08"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": []
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HarpMudd.Berzerk",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.berzerk",
+    "funding": {
+     "custom": [
+      "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.berzerk/releases/download/v1.1.1/HarpMudd.Berzerk_1.1.1.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "berzerk"
+       ],
+       "version": "1.1.1",
+       "date_release": "2026-09-14"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.berzerk/releases/download/v1.1.0/HarpMudd.Berzerk_1.1.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "berzerk"
+       ],
+       "version": "1.1.0",
+       "date_release": "2026-09-14"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Berzerk ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HarpMudd.Mp3Player",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.mp3player",
+    "funding": {
+     "custom": [
+      "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.mp3player/releases/download/v1.7.0/HarpMudd.Mp3Player_v1.7.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mp3player"
+       ],
+       "version": "1.7.0",
+       "date_release": "2026-10-12"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Firmware",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "mp3player.rom"
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.mp3player/releases/download/v1.6.0/HarpMudd.Mp3Player_v1.6.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mp3player"
+       ],
+       "version": "1.6.0",
+       "date_release": "2026-10-06"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Firmware",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "mp3player.rom"
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.mp3player/releases/download/v1.5.1/HarpMudd.Mp3Player_v1.5.1.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mp3player"
+       ],
+       "version": "1.5.1",
+       "date_release": "2026-10-01"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Firmware",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "mp3player.rom"
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.mp3player/releases/download/v1.5.0/HarpMudd.Mp3Player_v1.5.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mp3player"
+       ],
+       "version": "1.5.0",
+       "date_release": "2026-09-18"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Firmware",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "mp3player.rom"
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HarpMudd.Mpatrol",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.mpatrol",
+    "funding": {
+     "custom": [
+      "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.mpatrol/releases/download/v1.0.0/HarpMudd.Mpatrol_v1.0.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mpatrol"
+       ],
+       "version": "1.0.0",
+       "date_release": "2026-06-10"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Moon Patrol (Irem, 1982) ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "mpatrol.rom"
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HarpMudd.Popeye",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.popeye",
+    "funding": {
+     "custom": [
+      "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.popeye/releases/download/v1.1.1/HarpMudd.Popeye_v1.1.1.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "popeye"
+       ],
+       "version": "1.1.1",
+       "date_release": "2026-07-10"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HarpMudd.Ringking",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.ringking",
+    "funding": {
+     "custom": [
+      "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.ringking/releases/download/v2.0.0/HarpMudd.Ringking_v2.0.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ringking"
+       ],
+       "version": "2.0.0",
+       "date_release": "2026-07-19"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "Ring King ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.ringking/releases/download/v1.3.0/HarpMudd.Ringking_v1.3.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ringking"
+       ],
+       "version": "1.3.0",
+       "date_release": "2026-07-16"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "Ring King ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.ringking/releases/download/v1.2.0/HarpMudd.Ringking_v1.2.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ringking"
+       ],
+       "version": "1.2.0",
+       "date_release": "2026-07-16"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "Ring King ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.ringking/releases/download/v1.1.0/HarpMudd.Ringking_v1.1.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ringking"
+       ],
+       "version": "1.1.0",
+       "date_release": "2026-07-16"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "Ring King ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HarpMudd.Shollow",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.shollow",
+    "funding": {
+     "custom": [
+      "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.shollow/releases/download/v1.1.0/HarpMudd.Shollow_v1.1.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "shollow"
+       ],
+       "version": "1.1.0",
+       "date_release": "2026-07-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "Satan's Hollow ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HarpMudd.Tapper",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.tapper",
+    "funding": {
+     "custom": [
+      "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.tapper/releases/download/v1.4.0/HarpMudd.tapper_1.4.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "tapper"
+       ],
+       "version": "1.4.0",
+       "date_release": "2026-06-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.tapper/releases/download/v1.1.0/HarpMudd.Tapper_1.1.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "tapper"
+       ],
+       "version": "1.1.0",
+       "date_release": "2026-06-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.tapper/releases/download/v1.2.0/HarpMudd.Tapper_1.2.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "tapper"
+       ],
+       "version": "1.2.0",
+       "date_release": "2026-06-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.tapper/releases/download/v1.3.0/HarpMudd.Tapper_1.3.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "tapper"
+       ],
+       "version": "1.3.0",
+       "date_release": "2026-06-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HarpMudd.Zaxxon",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.zaxxon",
+    "funding": {
+     "custom": [
+      "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.zaxxon/releases/download/v1.3.1/HarpMudd.Zaxxon_v1.3.1.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "zaxxon"
+       ],
+       "version": "1.3.1",
+       "date_release": "2026-06-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/harpmudd/HarpMudd.zaxxon/releases/download/v1.3.0/HarpMudd.Zaxxon_v1.3.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "zaxxon"
+       ],
+       "version": "1.3.0",
+       "date_release": "2026-06-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game Definition",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "HtheB.Dstroy",
+   "repository": {
+    "platform": "github",
+    "owner": "HtheB",
+    "name": "Dstroy-AnaloguePocket",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/HtheB/Dstroy-AnaloguePocket/releases/download/v1.0.0/HtheB.Dstroy_1.0.0_2026-10-12.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "dstroy"
+       ],
+       "version": "1.0.0",
+       "date_release": "2026-10-13"
+      },
+      "framework": {
+       "version_required": "2.2",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Dstroy Data",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "data"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "K3V.GBA",
+   "repository": {
+    "platform": "github",
+    "owner": "K3v-68",
+    "name": "k3v-gba",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/K3v-68/k3v-gba/releases/download/v0.1.5/K3V.GBA_0.1.5.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "gba"
+       ],
+       "version": "0.1.5",
+       "date_release": "2026-08-14"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": true,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "gba"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/K3v-68/k3v-gba/releases/download/v0.1.4/K3V.GBA_0.1.4.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "gba"
+       ],
+       "version": "0.1.4",
+       "date_release": "2026-08-13"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": true,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "gba"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/K3v-68/k3v-gba/releases/download/v0.1.3/K3V.GBA_0.1.3.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "gba"
+       ],
+       "version": "0.1.3",
+       "date_release": "2026-08-09"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": true,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "gba"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/K3v-68/k3v-gba/releases/download/v0.1.2/K3V.GBA_0.1.2.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "gba"
+       ],
+       "version": "0.1.2",
+       "date_release": "2026-08-08"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": true,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "gba"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "Koala_Koa.Paprium",
+   "repository": {
+    "platform": "github",
+    "owner": "thekoalakoa",
+    "name": "paprium-pocket",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/thekoalakoa"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/thekoalakoa/paprium-pocket/releases/download/0.2.6/openfpga-Paprium_0.2.6.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "paprium"
+       ],
+       "version": "0.2.6",
+       "date_release": "2026-10-12"
+      },
+      "framework": {
+       "version_required": "2.3",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Paprium ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "Paprium.md",
+        "extensions": [
+         "md",
+         "bin"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/thekoalakoa/paprium-pocket/releases/download/0.2.5/openfpga-Paprium_0.2.5.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "paprium"
+       ],
+       "version": "0.2.5",
+       "date_release": "2026-09-11"
+      },
+      "framework": {
+       "version_required": "2.3",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Paprium ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "Paprium.md",
+        "extensions": [
+         "md",
+         "bin"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/thekoalakoa/paprium-pocket/releases/download/0.2.4/openfpga-Paprium_0.2.4.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "paprium"
+       ],
+       "version": "0.2.4",
+       "date_release": "2026-09-10"
+      },
+      "framework": {
+       "version_required": "2.3",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Paprium ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "Paprium.md",
+        "extensions": [
+         "md",
+         "bin"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/thekoalakoa/paprium-pocket/releases/download/0.2.3/openfpga-Paprium_0.2.3.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "paprium"
+       ],
+       "version": "0.2.3",
+       "date_release": "2026-09-10"
+      },
+      "framework": {
+       "version_required": "2.3",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Paprium ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "Paprium.md",
+        "extensions": [
+         "md",
+         "bin"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "Mazamars312.Amiga",
+   "repository": {
+    "platform": "github",
+    "owner": "Mazamars312",
+    "name": "Analogue-Amiga",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/Mazamars312/Analogue-Amiga/releases/download/Analogue-Amiga-0.2.3/Analogue-Amiga-0.2.3.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "amiga"
+       ],
+       "version": "0.2.3",
+       "date_release": "2024-01-18"
+      },
+      "framework": {
+       "version_required": "2.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "MPU Bios",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "amiga_mpu_bios.bin",
+        "extensions": [
+         "bin"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "AmigaVision.rom",
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/Mazamars312/Analogue-Amiga/releases/download/Analogue-Amiga-0.2.2/Analogue-Amiga-0.2.2.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "amiga"
+       ],
+       "version": "0.2.1",
+       "date_release": "2024-01-18"
+      },
+      "framework": {
+       "version_required": "2.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "MPU Bios",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "amiga_mpu_bios.bin",
+        "extensions": [
+         "bin"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "AmigaVision.rom",
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/Mazamars312/Analogue-Amiga/releases/download/Mazamars312.Amiga.0.2.1/Analogue-Amiga-0.2.1.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "amiga"
+       ],
+       "version": "0.2.1",
+       "date_release": "2024-01-18"
+      },
+      "framework": {
+       "version_required": "2.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "MPU Bios",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "amiga_mpu_bios.bin",
+        "extensions": [
+         "bin"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "MegaAGS-Kickstart.rom",
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/Mazamars312/Analogue-Amiga/releases/download/Mazamars312.Amiga.0.1.2/Analogue-Amiga-0.1.2.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "amiga"
+       ],
+       "version": "0.1.2",
+       "date_release": "2023-12-29"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "MPU Bios",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "mpu.bin",
+        "extensions": [
+         "bin"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "MegaAGS-Kickstart.rom",
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "Mazamars312.Amiga_Analogizer",
+   "repository": {
+    "platform": "github",
+    "owner": "RndMnkIII",
+    "name": "Analogizer-Amiga",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/RndMnkIII/Analogizer-Amiga/releases/download/0.3.2/Analogizer_Amiga_Pocket_0.3.2.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "amiga",
+        "analogizer"
+       ],
+       "version": "0.3.2",
+       "date_release": "2025-02-01"
+      },
+      "framework": {
+       "version_required": "2.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": true
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "MPU Bios",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "amiga_mpu_bios.bin",
+        "extensions": [
+         "bin"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "MegaAGS-Kickstart.rom",
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "Mazamars312.NeoGeo",
+   "repository": {
+    "platform": "github",
+    "owner": "Mazamars312",
+    "name": "Analogue_Pocket_Neogeo",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/Mazamars312/Analogue_Pocket_Neogeo/releases/download/Mazamars312.Neogeo.0.8.1-17/01/2023/Mazamars312.Neogeo_0.8.1_2023_1_17.FinalRelease.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ng"
+       ],
+       "version": "0.8.1",
+       "date_release": "2023-01-17"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "uni-bios_4_0.rom",
+        "extensions": [
+         "rom",
+         "sp1",
+         "bin"
+        ]
+       },
+       {
+        "name": "LO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "000-lo.lo",
+        "extensions": [
+         "lo"
+        ]
+       },
+       {
+        "name": "SFIX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "sfix.sfix",
+        "extensions": [
+         "sfix"
+        ]
+       },
+       {
+        "name": "SROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "srom"
+        ]
+       },
+       {
+        "name": "PROG",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "bin",
+         "pbin",
+         "prom"
+        ]
+       },
+       {
+        "name": "CROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cbin",
+         "crom0"
+        ]
+       },
+       {
+        "name": "MROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "mbin",
+         "m1rom"
+        ]
+       },
+       {
+        "name": "VROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "vbin",
+         "vroma0"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/Mazamars312/Analogue_Pocket_Neogeo/releases/download/Mazamars312.Neogeo.0.8.0-14/01/2023/Mazamars312.Neogeo_0.8.0_2023_1_14.FinalRelease.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ng"
+       ],
+       "version": "Alpha 0.8.0",
+       "date_release": "2023-01-15"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "uni-bios_4_0.rom",
+        "extensions": [
+         "rom",
+         "sp1",
+         "bin"
+        ]
+       },
+       {
+        "name": "LO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "000-lo.lo",
+        "extensions": [
+         "lo"
+        ]
+       },
+       {
+        "name": "SFIX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "sfix.sfix",
+        "extensions": [
+         "sfix"
+        ]
+       },
+       {
+        "name": "SROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "srom"
+        ]
+       },
+       {
+        "name": "PROG",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "bin",
+         "pbin",
+         "prom"
+        ]
+       },
+       {
+        "name": "CROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cbin",
+         "crom0"
+        ]
+       },
+       {
+        "name": "MROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "mbin",
+         "m1rom"
+        ]
+       },
+       {
+        "name": "VROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "vbin",
+         "vroma0"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/Mazamars312/Analogue_Pocket_Neogeo/releases/download/Alpha_0.7.5_2022-19-09/Mazamars312.Neogeo_Alpha_0.7.5_2022_19_09.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ng"
+       ],
+       "version": "Alpha 0.7.5",
+       "date_release": "2022-09-19"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "uni-bios_1_0.rom",
+        "extensions": [
+         "rom",
+         "sp1",
+         "bin"
+        ]
+       },
+       {
+        "name": "LO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "000-lo.lo",
+        "extensions": [
+         "lo"
+        ]
+       },
+       {
+        "name": "SFIX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "sfix.sfix",
+        "extensions": [
+         "sfix"
+        ]
+       },
+       {
+        "name": "SROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "srom"
+        ]
+       },
+       {
+        "name": "PROG",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "bin",
+         "pbin",
+         "prom"
+        ]
+       },
+       {
+        "name": "CROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cbin",
+         "crom0"
+        ]
+       },
+       {
+        "name": "MROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "mbin",
+         "m1rom"
+        ]
+       },
+       {
+        "name": "VROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "vbin",
+         "vroma0"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/Mazamars312/Analogue_Pocket_Neogeo/releases/download/Alpha_0.6.0_2022-15-08/Alpha_0.6.0_2022-15-08.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ng"
+       ],
+       "version": "Alpha 0.6.0",
+       "date_release": "2022-08-15"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "uni-bios_1_0.rom",
+        "extensions": [
+         "rom",
+         "sp1",
+         "bin"
+        ]
+       },
+       {
+        "name": "LO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "000-lo.lo",
+        "extensions": [
+         "lo"
+        ]
+       },
+       {
+        "name": "SFIX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "sbin",
+         "srom"
+        ]
+       },
+       {
+        "name": "PROG",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "bin",
+         "pbin",
+         "prom"
+        ]
+       },
+       {
+        "name": "CROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cbin",
+         "crom0"
+        ]
+       },
+       {
+        "name": "MROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "mbin",
+         "m1rom"
+        ]
+       },
+       {
+        "name": "VROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "vbin",
+         "vroma0"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "Mazamars312.NeoGeo_Analogizer",
+   "repository": {
+    "platform": "github",
+    "owner": "RndMnkIII",
+    "name": "Analogizer_Mazamars312_Neogeo_0.8.1",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/RndMnkIII/Analogizer_Mazamars312_Neogeo_0.8.1/releases/download/1.1.3/Analogizer_NeoGeo_Core_Pocket_1.1.3.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ng",
+        "analogizer"
+       ],
+       "version": "1.1.3",
+       "date_release": "2025-02-04"
+      },
+      "framework": {
+       "version_required": "2.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "uni-bios_4_0.rom",
+        "extensions": [
+         "rom",
+         "sp1",
+         "bin"
+        ]
+       },
+       {
+        "name": "LO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "000-lo.lo",
+        "extensions": [
+         "lo"
+        ]
+       },
+       {
+        "name": "SFIX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "sfix.sfix",
+        "extensions": [
+         "sfix"
+        ]
+       },
+       {
+        "name": "SROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "srom"
+        ]
+       },
+       {
+        "name": "PROG",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "bin",
+         "pbin",
+         "prom"
+        ]
+       },
+       {
+        "name": "CROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cbin",
+         "crom0"
+        ]
+       },
+       {
+        "name": "MROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "mbin",
+         "m1rom"
+        ]
+       },
+       {
+        "name": "VROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "vbin",
+         "vroma0"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/RndMnkIII/Analogizer_Mazamars312_Neogeo_0.8.1/releases/download/1.1.2/Analogizer_NeoGeo_Core_Pocket_1.1.2.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ng"
+       ],
+       "version": "1.1.2",
+       "date_release": "2024-12-30"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "uni-bios_4_0.rom",
+        "extensions": [
+         "rom",
+         "sp1",
+         "bin"
+        ]
+       },
+       {
+        "name": "LO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "000-lo.lo",
+        "extensions": [
+         "lo"
+        ]
+       },
+       {
+        "name": "SFIX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "sfix.sfix",
+        "extensions": [
+         "sfix"
+        ]
+       },
+       {
+        "name": "SROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "srom"
+        ]
+       },
+       {
+        "name": "PROG",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "bin",
+         "pbin",
+         "prom"
+        ]
+       },
+       {
+        "name": "CROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cbin",
+         "crom0"
+        ]
+       },
+       {
+        "name": "MROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "mbin",
+         "m1rom"
+        ]
+       },
+       {
+        "name": "VROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "vbin",
+         "vroma0"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/RndMnkIII/Analogizer_Mazamars312_Neogeo_0.8.1/releases/download/1.1.1/Analogizer_NeoGeo_Core_Pocket_1.1.1.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ng"
+       ],
+       "version": "1.1.1",
+       "date_release": "2024-07-18"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "uni-bios_4_0.rom",
+        "extensions": [
+         "rom",
+         "sp1",
+         "bin"
+        ]
+       },
+       {
+        "name": "LO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "000-lo.lo",
+        "extensions": [
+         "lo"
+        ]
+       },
+       {
+        "name": "SFIX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "sfix.sfix",
+        "extensions": [
+         "sfix"
+        ]
+       },
+       {
+        "name": "SROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "srom"
+        ]
+       },
+       {
+        "name": "PROG",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "bin",
+         "pbin",
+         "prom"
+        ]
+       },
+       {
+        "name": "CROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cbin",
+         "crom0"
+        ]
+       },
+       {
+        "name": "MROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "mbin",
+         "m1rom"
+        ]
+       },
+       {
+        "name": "VROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "vbin",
+         "vroma0"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/RndMnkIII/Analogizer_Mazamars312_Neogeo_0.8.1/releases/download/1.1/Analogizer_NeoGeo_Core_Pocket_1.1.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "ng"
+       ],
+       "version": "1.1",
+       "date_release": "2024-05-31"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "BIOS",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "uni-bios_4_0.rom",
+        "extensions": [
+         "rom",
+         "sp1",
+         "bin"
+        ]
+       },
+       {
+        "name": "LO",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "000-lo.lo",
+        "extensions": [
+         "lo"
+        ]
+       },
+       {
+        "name": "SFIX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "sfix.sfix",
+        "extensions": [
+         "sfix"
+        ]
+       },
+       {
+        "name": "SROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "srom"
+        ]
+       },
+       {
+        "name": "PROG",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "bin",
+         "pbin",
+         "prom"
+        ]
+       },
+       {
+        "name": "CROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cbin",
+         "crom0"
+        ]
+       },
+       {
+        "name": "MROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "mbin",
+         "m1rom"
+        ]
+       },
+       {
+        "name": "VROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "vbin",
+         "vroma0"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "Mazamars312.PC Engine CD",
+   "repository": {
+    "platform": "github",
+    "owner": "Mazamars312",
+    "name": "openfpga-pcengine-cd",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/Mazamars312/openfpga-pcengine-cd/releases/download/Mazamars312.PCECD.0.2.3-BETA/OPENFPGA-PCECD-0.2.3-BETA.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "pcecd"
+       ],
+       "version": "0.2.3",
+       "date_release": "2024-11-12"
+      },
+      "framework": {
+       "version_required": "2.3",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "CDRom Cue File",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "cue"
+        ]
+       },
+       {
+        "name": "PCE Boot Rom",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "bios_3_0_usa.pce",
+        "extensions": [
+         "pce"
+        ]
+       },
+       {
+        "name": "MPU Bios",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "pce_mpu_bios.bin",
+        "extensions": [
+         "bin"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/Mazamars312/openfpga-pcengine-cd/releases/download/Mazamars312.PCECD.0.1.6-07/02/2023/Mazamars312.PCECD.0.1.6-07-02-2023.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "pcecd"
+       ],
+       "version": "0.1.6",
+       "date_release": "2023-02-07"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "CD Rom ISO",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "CDROM II Bios",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "[BIOS] TurboGrafx CD Super System Card (USA) (v3.0).pce",
+        "extensions": [
+         "pce"
+        ]
+       },
+       {
+        "name": "MPU Bios",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "mpu.bin",
+        "extensions": [
+         "bin"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://github.com/Mazamars312/openfpga-pcengine-cd/releases/download/Mazamars312.PCECD.0.1.4-07/02/2023/Mazamars312.PCECD.0.1.5-07-02-2023.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "pcecd"
+       ],
+       "version": "0.1.5",
+       "date_release": "2023-02-07"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "CD Rom ISO",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "CDROM II Bios",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "[BIOS] TurboGrafx CD Super System Card (USA) (v3.0).pce",
+        "extensions": [
+         "pce"
+        ]
+       },
+       {
+        "name": "MPU Bios",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "filename": "mpu.bin",
+        "extensions": [
+         "bin"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "coc.bublbobl",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/c7cb7bead0624dbc012862e5e28bf4ba2485a99f/Releases/coc.bublbobl.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "bublbobl",
+        "coinopkey"
+       ],
+       "version": "1.0.0",
+       "date_release": "2026-09-26"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "coc.darkmist",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/b1e934a0ce959f7cb33ad8a56ddce4969f8d4f8f/Releases/coc.lkage.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "darkmist",
+        "coinopkey"
+       ],
+       "version": "1.0.0",
+       "date_release": "2026-10-06"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/b89de856f13f6e0b8f253f84504a6d79d0329fc1/Releases/coc.darkmist.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "darkmist",
+        "coinopkey"
+       ],
+       "version": "1.0.0",
+       "date_release": "2026-10-06"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "jotego.jt88game",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jt88game.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jt88game",
+        "jtpatreon"
+       ],
+       "version": "c68f02e",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtcal50",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jtcal50.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtcal50",
+        "jtpatreon"
+       ],
+       "version": "c68f02e",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/c6deab30cb5928ff5d48d2a4d9fece38e061045a/pocket/zips/jotego.jtcal50.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtcal50",
+        "jtpatreon"
+       ],
+       "version": "b672aca",
+       "date_release": "2026-10-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/9c90b2ec74f6f8acf2ff5abe0fc923fd977f445d/pocket/zips/jotego.jtcal50.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtcal50",
+        "jtpatreon"
+       ],
+       "version": "753eda9",
+       "date_release": "2026-09-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f81d5d9408d89256571376e096c9475de4afde87/pocket/zips/jotego.jtcal50.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtcal50",
+        "jtpatreon"
+       ],
+       "version": "4972fce",
+       "date_release": "2026-09-20"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtgals",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jtgals.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtgals",
+        "jtpatreon"
+       ],
+       "version": "c68f02e",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/c6deab30cb5928ff5d48d2a4d9fece38e061045a/pocket/zips/jotego.jtgals.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtgals",
+        "jtpatreon"
+       ],
+       "version": "b672aca",
+       "date_release": "2026-10-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/9c90b2ec74f6f8acf2ff5abe0fc923fd977f445d/pocket/zips/jotego.jtgals.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtgals",
+        "jtpatreon"
+       ],
+       "version": "753eda9",
+       "date_release": "2026-09-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f81d5d9408d89256571376e096c9475de4afde87/pocket/zips/jotego.jtgals.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtgals",
+        "jtpatreon"
+       ],
+       "version": "4972fce",
+       "date_release": "2026-09-20"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtgrad3",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jtgrad3.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtgrad3",
+        "jtpatreon"
+       ],
+       "version": "6547d6a",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/c6deab30cb5928ff5d48d2a4d9fece38e061045a/pocket/zips/jotego.jtgrad3.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtgrad3",
+        "jtpatreon"
+       ],
+       "version": "b672aca",
+       "date_release": "2026-10-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/9c90b2ec74f6f8acf2ff5abe0fc923fd977f445d/pocket/zips/jotego.jtgrad3.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtgrad3",
+        "jtpatreon"
+       ],
+       "version": "753eda9",
+       "date_release": "2026-09-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f81d5d9408d89256571376e096c9475de4afde87/pocket/zips/jotego.jtgrad3.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtgrad3",
+        "jtpatreon"
+       ],
+       "version": "4972fce",
+       "date_release": "2026-09-20"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtharier",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jtharier.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtharier",
+        "jtpatreon"
+       ],
+       "version": "6547d6a",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/c6deab30cb5928ff5d48d2a4d9fece38e061045a/pocket/zips/jotego.jtharier.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtharier",
+        "jtpatreon"
+       ],
+       "version": "b672aca",
+       "date_release": "2026-10-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/9c90b2ec74f6f8acf2ff5abe0fc923fd977f445d/pocket/zips/jotego.jtharier.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtharier",
+        "jtpatreon"
+       ],
+       "version": "753eda9",
+       "date_release": "2026-09-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f81d5d9408d89256571376e096c9475de4afde87/pocket/zips/jotego.jtharier.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtharier",
+        "jtpatreon"
+       ],
+       "version": "4972fce",
+       "date_release": "2026-09-20"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtktiger",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jtktiger.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtktiger",
+        "jtpatreon"
+       ],
+       "version": "c68f02e",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtroller",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jtroller.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtroller",
+        "jtpatreon"
+       ],
+       "version": "c68f02e",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtsimson",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jtsimson.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtsimson",
+        "jtpatreon"
+       ],
+       "version": "6547d6a",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/c6deab30cb5928ff5d48d2a4d9fece38e061045a/pocket/zips/jotego.jtsimson.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtsimson",
+        "jtpatreon"
+       ],
+       "version": "b672aca",
+       "date_release": "2026-10-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/9c90b2ec74f6f8acf2ff5abe0fc923fd977f445d/pocket/zips/jotego.jtsimson.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtsimson",
+        "jtpatreon"
+       ],
+       "version": "753eda9",
+       "date_release": "2026-09-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f81d5d9408d89256571376e096c9475de4afde87/pocket/zips/jotego.jtsimson.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtsimson",
+        "jtpatreon"
+       ],
+       "version": "4972fce",
+       "date_release": "2026-09-20"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtsuratk",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/3cb09a55e9490510763bf70b2a0728e9107ce5ed/pocket/zips/jotego.jtsuratk.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtsuratk",
+        "jtpatreon"
+       ],
+       "version": "e00420d",
+       "date_release": "2025-10-31"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/e25199a5fff6dda8525992745fa9f11146e24a69/pocket/zips/jotego.jtsuratk.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtsuratk",
+        "jtpatreon"
+       ],
+       "version": "87c63b9",
+       "date_release": "2025-10-24"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/8872d5d3a690fb58370393d1d9f014bfc50289a9/pocket/zips/jotego.jtsuratk.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtsuratk",
+        "jtpatreon"
+       ],
+       "version": "701515f",
+       "date_release": "2025-10-10"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/e24b13961c414c136a93afc075e7224f9daa4992/pocket/zips/jotego.jtsuratk.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtsuratk",
+        "jtpatreon"
+       ],
+       "version": "529cc57",
+       "date_release": "2025-09-26"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jttaitox",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jttaitox.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jttaitox",
+        "jtpatreon"
+       ],
+       "version": "6547d6a",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/c6deab30cb5928ff5d48d2a4d9fece38e061045a/pocket/zips/jotego.jttaitox.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jttaitox",
+        "jtpatreon"
+       ],
+       "version": "b672aca",
+       "date_release": "2026-10-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/9c90b2ec74f6f8acf2ff5abe0fc923fd977f445d/pocket/zips/jotego.jttaitox.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jttaitox",
+        "jtpatreon"
+       ],
+       "version": "753eda9",
+       "date_release": "2026-09-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f81d5d9408d89256571376e096c9475de4afde87/pocket/zips/jotego.jttaitox.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jttaitox",
+        "jtpatreon"
+       ],
+       "version": "4972fce",
+       "date_release": "2026-09-20"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "jotego.jtwardnr",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/jotego"
+     ],
+     "patreon": "https://www.patreon.com/jotego",
+     "custom": [
+      "https://www.paypal.me/topapate"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/f7ebfa3e703b895de089246a4d7aeb4daec8bba3/pocket/zips/jotego.jtwardnr.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtwardnr",
+        "jtpatreon"
+       ],
+       "version": "6547d6a",
+       "date_release": "2026-10-11"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": [],
+      "declare_ai": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/c6deab30cb5928ff5d48d2a4d9fece38e061045a/pocket/zips/jotego.jtwardnr.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtwardnr",
+        "jtpatreon"
+       ],
+       "version": "b672aca",
+       "date_release": "2026-10-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/jotego/jtbin/9c90b2ec74f6f8acf2ff5abe0fc923fd977f445d/pocket/zips/jotego.jtwardnr.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "jtwardnr",
+        "jtpatreon"
+       ],
+       "version": "753eda9",
+       "date_release": "2026-09-27"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Arcade Game",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "beta.bin"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.hiimpact",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/4ffe049ed5fff218254febe3d3feba0a2dcd3b37/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "hiimpact",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-11-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "hiimpact",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-11-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/33e0dc5f8d70b4f75b3fcdf62c5131f4b71d66e0/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "hiimpact",
+        "coinopkey"
+       ],
+       "version": "1.0.5",
+       "date_release": "2024-11-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/2a3f9987c2ba10cbfed77774b10955f2e9d38f5d/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "hiimpact",
+        "coinopkey"
+       ],
+       "version": "1.0.5",
+       "date_release": "2024-11-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.mortalkombat",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/4ffe049ed5fff218254febe3d3feba0a2dcd3b37/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mortalkombat",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-10-08"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mortalkombat",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-10-08"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/33e0dc5f8d70b4f75b3fcdf62c5131f4b71d66e0/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mortalkombat",
+        "coinopkey"
+       ],
+       "version": "1.0.5",
+       "date_release": "2024-10-08"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/2a3f9987c2ba10cbfed77774b10955f2e9d38f5d/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "mortalkombat",
+        "coinopkey"
+       ],
+       "version": "1.0.4",
+       "date_release": "2024-10-08"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.narc",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/33e0dc5f8d70b4f75b3fcdf62c5131f4b71d66e0/Releases/pram0d.zunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "narc",
+        "coinopkey"
+       ],
+       "version": "1.0.1",
+       "date_release": "2024-09-07"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "narc",
+        "coinopkey"
+       ],
+       "version": "1.0.1",
+       "date_release": "2024-09-07"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/49b4091fb8d71116eb5920a88aae72b910322fa4/Releases/pram0d.zunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "narc",
+        "coinopkey"
+       ],
+       "version": "1.0.1",
+       "date_release": "2024-09-07"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.smashtv",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/4ffe049ed5fff218254febe3d3feba0a2dcd3b37/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "smashtv",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-09-22"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "smashtv",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-09-22"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/33e0dc5f8d70b4f75b3fcdf62c5131f4b71d66e0/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "smashtv",
+        "coinopkey"
+       ],
+       "version": "1.0.5",
+       "date_release": "2024-09-22"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/2a3f9987c2ba10cbfed77774b10955f2e9d38f5d/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "smashtv",
+        "coinopkey"
+       ],
+       "version": "1.0.4",
+       "date_release": "2024-09-22"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.strikeforce",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/4ffe049ed5fff218254febe3d3feba0a2dcd3b37/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "strikeforce",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-12-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "strikeforce",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-12-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.superhiimpact",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/4ffe049ed5fff218254febe3d3feba0a2dcd3b37/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "superhiimpact",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-11-28"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "superhiimpact",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-11-28"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/33e0dc5f8d70b4f75b3fcdf62c5131f4b71d66e0/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "superhiimpact",
+        "coinopkey"
+       ],
+       "version": "1.0.5",
+       "date_release": "2024-11-28"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.terminator2",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/4ffe049ed5fff218254febe3d3feba0a2dcd3b37/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "terminator2",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-12-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "terminator2",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-12-25"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.totalcarnage",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/4ffe049ed5fff218254febe3d3feba0a2dcd3b37/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "totalcarnage",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-11-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "totalcarnage",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-11-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/33e0dc5f8d70b4f75b3fcdf62c5131f4b71d66e0/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "totalcarnage",
+        "coinopkey"
+       ],
+       "version": "1.0.5",
+       "date_release": "2024-11-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/2a3f9987c2ba10cbfed77774b10955f2e9d38f5d/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "totalcarnage",
+        "coinopkey"
+       ],
+       "version": "1.0.4",
+       "date_release": "2024-11-02"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "pram0d.trog",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA",
+    "funding": null
+   },
+   "releases": [
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/4ffe049ed5fff218254febe3d3feba0a2dcd3b37/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "trog",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-11-16"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/0c5d82a2b6ddb2da9327218fcc51542d3680fe32/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "trog",
+        "coinopkey"
+       ],
+       "version": "1.0.6",
+       "date_release": "2024-11-16"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/33e0dc5f8d70b4f75b3fcdf62c5131f4b71d66e0/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "trog",
+        "coinopkey"
+       ],
+       "version": "1.0.5",
+       "date_release": "2024-11-16"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    },
+    {
+     "download_url": "https://raw.githubusercontent.com/Coin-OpCollection/Distribution-OpenFPGA/2a3f9987c2ba10cbfed77774b10955f2e9d38f5d/Releases/pram0d.yunit.zip",
+     "requires_license": true,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "trog",
+        "coinopkey"
+       ],
+       "version": "1.0.5",
+       "date_release": "2024-11-16"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "Game JSON Setup",
+        "parameters": {
+         "core_specific_file": true,
+         "instance_json": true,
+         "platform_index": 0
+        },
+        "extensions": [
+         "json"
+        ]
+       },
+       {
+        "name": "ROM",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "rom"
+        ]
+       },
+       {
+        "name": "COINOPKEY",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 1
+        },
+        "filename": "coinop.key",
+        "extensions": [
+         "key"
+        ]
+       }
+      ]
+     },
+     "updaters": {
+      "license": {
+       "filename": "coinop.key"
+      },
+      "previous": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "agg23.Arduboy",
+   "repository": {
+    "platform": "github",
+    "owner": "agg23",
+    "name": "openfpga-arduboy",
+    "funding": {
+     "github": [
+      "https://github.com/sponsors/agg23"
+     ]
+    }
+   },
+   "releases": [
+    {
+     "download_url": "https://github.com/agg23/openfpga-arduboy/releases/download/0.9.0/agg23.Arduboy.0.9.0.zip",
+     "requires_license": false,
+     "core": {
+      "metadata": {
+       "platform_ids": [
+        "arduboy"
+       ],
+       "version": "0.9.0",
+       "date_release": "2022-09-03"
+      },
+      "framework": {
+       "version_required": "1.1",
+       "sleep_supported": false,
+       "dock": {
+        "supported": true,
+        "analog_output": false
+       },
+       "hardware": {
+        "link_port": false
+       }
+      }
+     },
+     "data": {
+      "data_slots": [
+       {
+        "name": "HEX",
+        "parameters": {
+         "core_specific_file": false,
+         "instance_json": false,
+         "platform_index": 0
+        },
+        "extensions": [
+         "hex"
+        ]
+       }
+      ]
+     },
+     "updaters": null
+    }
+   ]
+  },
+  {
+   "id": "Obsidian.PocketTyrian",
+   "repository": {
+    "platform": "github",
+    "owner": "obsidian-dot-dev",
+    "name": "PocketTyrian",
+    "funding": null
+   },
+   "releases": []
+  }
+ ]
+}

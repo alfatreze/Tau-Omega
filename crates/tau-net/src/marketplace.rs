@@ -16,16 +16,21 @@ use std::{
 };
 use tau_core::{
     ErrorCode, TauError,
-    catalog::{self, CATALOG_URL, Catalog, CatalogCore},
+    catalog::{self, CATALOG_URL, Catalog, CatalogCore, PLATFORMS_URL},
     catalog_release::{self, CoreRelease},
 };
 
-const CATALOG_LIMIT: u64 = 4 * 1024 * 1024;
-const RELEASE_LIMIT: u64 = 2 * 1024 * 1024;
+/// The v3 core list is about 4.5 MB (all releases of 333 cores); the platform list is small.
+const CATALOG_LIMIT: u64 = 16 * 1024 * 1024;
+const PLATFORMS_LIMIT: u64 = 1024 * 1024;
+const DIGEST_LIMIT: u64 = 2 * 1024 * 1024;
+const ART_LIMIT: u64 = 200 * 1024;
 /// The catalog changes a few times a day; do not ask more often than this unless the user presses Refresh.
 pub const CATALOG_TTL: u64 = 6 * 3600;
-/// A release is looked up at most once an hour per core (GitHub allows 60 unauthenticated requests an hour).
+/// A checksum lookup is repeated at most once an hour per release (GitHub allows 60 unauthenticated requests an hour).
 pub const RELEASE_TTL: u64 = 3600;
+/// Art on the library site is static: ask again after a week (with the ETag, so an unchanged picture costs no download).
+pub const ART_TTL: u64 = 7 * 24 * 3600;
 
 fn err(code: ErrorCode, message: impl Into<String>) -> TauError {
     TauError {
@@ -61,6 +66,7 @@ fn host_allowed(url: &str) -> bool {
     url.starts_with("https://openfpga-library.github.io/analogue-pocket/")
         || url.starts_with("https://api.github.com/repos/")
         || url.starts_with("https://github.com/")
+        || url.starts_with("https://raw.githubusercontent.com/")
 }
 
 fn explain(error: &ureq::Error) -> String {
@@ -212,107 +218,10 @@ pub enum Source {
     Offline(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CatalogResult {
-    pub catalog: Catalog,
-    pub source: Source,
-    /// Unix seconds of the last successful fetch.
-    pub fetched: u64,
-}
-
-/// The catalog: cached for [`CATALOG_TTL`], revalidated with its ETag, and the cached copy when offline.
-pub fn fetch_catalog(
-    t: &dyn Transport,
-    cache: &Path,
-    now: u64,
-    force: bool,
-) -> Result<CatalogResult, TauError> {
-    let file = root(cache).join("cores.json");
-    let cached = read_cached(&file).and_then(|(b, m)| catalog::parse(&b).ok().map(|c| (c, m)));
-    if let Some((c, m)) = &cached
-        && !force
-        && now.saturating_sub(m.fetched) < CATALOG_TTL
-    {
-        return Ok(CatalogResult {
-            catalog: c.clone(),
-            source: Source::Cache,
-            fetched: m.fetched,
-        });
-    }
-    let etag = cached.as_ref().and_then(|(_, m)| m.etag.clone());
-    let fall_back = |why: String, cached: Option<(Catalog, Meta)>| match cached {
-        Some((c, m)) => Ok(CatalogResult {
-            catalog: c,
-            source: Source::Offline(why),
-            fetched: m.fetched,
-        }),
-        None => Err(err(ErrorCode::Io, why)),
-    };
-    let r = match t.get(CATALOG_URL, etag.as_deref(), CATALOG_LIMIT) {
-        Ok(r) => r,
-        Err(e) => return fall_back(e.message, cached),
-    };
-    match r.status {
-        304 => match cached {
-            Some((c, m)) => {
-                let meta = Meta {
-                    etag: m.etag,
-                    fetched: now,
-                };
-                let _ = write_cached(&file, &fs::read(&file).unwrap_or_default(), &meta);
-                Ok(CatalogResult {
-                    catalog: c,
-                    source: Source::NotModified,
-                    fetched: now,
-                })
-            }
-            None => Err(err(
-                ErrorCode::Io,
-                "The server said the catalog is unchanged, but there is no saved copy.",
-            )),
-        },
-        200 => match catalog::parse(&r.body) {
-            // Only a list that parses replaces the saved one.
-            Ok(c) => {
-                write_cached(
-                    &file,
-                    &r.body,
-                    &Meta {
-                        etag: r.etag,
-                        fetched: now,
-                    },
-                )?;
-                Ok(CatalogResult {
-                    catalog: c,
-                    source: Source::Network,
-                    fetched: now,
-                })
-            }
-            Err(e) => fall_back(
-                format!("The catalog could not be read: {}", e.message),
-                cached,
-            ),
-        },
-        other => fall_back(
-            format!("The catalog server answered with an error ({other})."),
-            cached,
-        ),
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReleaseResult {
-    pub release: CoreRelease,
-    pub source: Source,
-    pub fetched: u64,
-}
-
-fn core_file(cache: &Path, core: &CatalogCore) -> PathBuf {
-    // The id was validated by the catalog parser (no separators); the lowercase name keeps case-folding file systems consistent.
-    root(cache).join("releases").join(format!(
-        "{}.json",
-        core.id.to_ascii_lowercase().replace(' ', "_")
-    ))
+struct Fetched {
+    body: Vec<u8>,
+    source: Source,
+    fetched: u64,
 }
 
 /// Plain words for GitHub's limit, with the reset time as minutes from `now`.
@@ -326,103 +235,212 @@ fn limit_message(reset: Option<u64>, now: u64) -> String {
     }
 }
 
-/// The newest release of `core`'s repository, cached for [`RELEASE_TTL`]; a stale copy is returned (labelled) when
-/// the lookup fails or the limit is hit.
-pub fn fetch_release(
+/// One cached GET: served from the saved copy inside `ttl`, revalidated with its ETag after, the saved copy (labelled)
+/// when the request fails, and only a body that `valid` accepts ever replaces the saved one. A 404 is `NotFound` and is
+/// never hidden behind an old copy; any other failure falls back to the saved copy when there is one.
+#[allow(clippy::too_many_arguments)]
+fn fetch_cached(
     t: &dyn Transport,
-    cache: &Path,
-    core: &CatalogCore,
+    file: &Path,
+    url: &str,
+    limit: u64,
+    ttl: u64,
     now: u64,
     force: bool,
-) -> Result<ReleaseResult, TauError> {
-    let file = core_file(cache, core);
-    let cached = read_cached(&file).and_then(|(b, m)| {
-        catalog_release::parse_release(&b, core)
-            .ok()
-            .map(|r| (r, m))
-    });
-    if let Some((r, m)) = &cached
+    valid: &dyn Fn(&[u8]) -> Result<(), String>,
+) -> Result<Fetched, TauError> {
+    let cached = read_cached(file).filter(|(b, _)| valid(b).is_ok());
+    if let Some((body, m)) = &cached
         && !force
-        && now.saturating_sub(m.fetched) < RELEASE_TTL
+        && now.saturating_sub(m.fetched) < ttl
     {
-        return Ok(ReleaseResult {
-            release: r.clone(),
+        return Ok(Fetched {
+            body: body.clone(),
             source: Source::Cache,
             fetched: m.fetched,
         });
     }
     let etag = cached.as_ref().and_then(|(_, m)| m.etag.clone());
-    let fall_back = |why: String, cached: Option<(CoreRelease, Meta)>| match cached {
-        Some((r, m)) => Ok(ReleaseResult {
-            release: r,
+    let fall_back = |why: String, cached: Option<(Vec<u8>, Meta)>| match cached {
+        Some((body, m)) => Ok(Fetched {
+            body,
             source: Source::Offline(why),
             fetched: m.fetched,
         }),
         None => Err(err(ErrorCode::Io, why)),
     };
-    let r = match t.get(
-        &catalog_release::latest_release_url(core),
-        etag.as_deref(),
-        RELEASE_LIMIT,
-    ) {
+    let r = match t.get(url, etag.as_deref(), limit) {
         Ok(r) => r,
         Err(e) => return fall_back(e.message, cached),
     };
     match r.status {
         304 => match cached {
-            Some((rel, m)) => {
+            Some((body, m)) => {
                 let _ = write_cached(
-                    &file,
-                    &fs::read(&file).unwrap_or_default(),
+                    file,
+                    &body,
                     &Meta {
                         etag: m.etag,
                         fetched: now,
                     },
                 );
-                Ok(ReleaseResult {
-                    release: rel,
+                Ok(Fetched {
+                    body,
                     source: Source::NotModified,
                     fetched: now,
                 })
             }
             None => Err(err(
                 ErrorCode::Io,
-                "The server said the release is unchanged, but there is no saved copy.",
+                "The server said the file is unchanged, but there is no saved copy.",
             )),
         },
-        200 => match catalog_release::parse_release(&r.body, core) {
-            Ok(rel) => {
+        200 => match valid(&r.body) {
+            Ok(()) => {
                 write_cached(
-                    &file,
+                    file,
                     &r.body,
                     &Meta {
                         etag: r.etag,
                         fetched: now,
                     },
                 )?;
-                Ok(ReleaseResult {
-                    release: rel,
+                Ok(Fetched {
+                    body: r.body,
                     source: Source::Network,
                     fetched: now,
                 })
             }
-            // A release that cannot be used (no zip, foreign URLs) is the answer, not an outage: do not hide it behind an old copy.
-            Err(e) => Err(e),
+            Err(why) => fall_back(format!("The file could not be read: {why}"), cached),
         },
-        404 => Err(err(
-            ErrorCode::NotFound,
-            "The author has not published a download yet.",
-        )),
+        404 => Err(err(ErrorCode::NotFound, "That file is not on the server.")),
         403 | 429 => fall_back(limit_message(r.rate_reset, now), cached),
-        other => fall_back(format!("GitHub answered with an error ({other})."), cached),
+        other => fall_back(
+            format!("The server answered with an error ({other})."),
+            cached,
+        ),
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogResult {
+    pub catalog: Catalog,
+    pub source: Source,
+    /// Unix seconds of the last successful fetch of the core list.
+    pub fetched: u64,
+}
+
+/// The catalog (v3 core list plus platform list): cached for [`CATALOG_TTL`], revalidated with ETags, and the saved
+/// copies when offline.
+pub fn fetch_catalog(
+    t: &dyn Transport,
+    cache: &Path,
+    now: u64,
+    force: bool,
+) -> Result<CatalogResult, TauError> {
+    let dir = root(cache);
+    let platforms = fetch_cached(
+        t,
+        &dir.join("platforms.json"),
+        PLATFORMS_URL,
+        PLATFORMS_LIMIT,
+        CATALOG_TTL,
+        now,
+        force,
+        &|b| {
+            serde_json::from_slice::<serde_json::Value>(b)
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        },
+    )?;
+    let cores = fetch_cached(
+        t,
+        &dir.join("cores.json"),
+        CATALOG_URL,
+        CATALOG_LIMIT,
+        CATALOG_TTL,
+        now,
+        force,
+        &|b| {
+            catalog::parse(b, &platforms.body)
+                .map(|_| ())
+                .map_err(|e| e.message)
+        },
+    )?;
+    let catalog = catalog::parse(&cores.body, &platforms.body)?;
+    // Either file being a saved copy makes the list a saved copy.
+    let source = match (&cores.source, &platforms.source) {
+        (Source::Offline(w), _) | (_, Source::Offline(w)) => Source::Offline(w.clone()),
+        (s, _) => s.clone(),
+    };
+    Ok(CatalogResult {
+        catalog,
+        source,
+        fetched: cores.fetched,
+    })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReleaseResult {
+    pub release: CoreRelease,
+    pub source: Source,
+    pub fetched: u64,
+}
+
+/// The release to install (newest unless `version` is given), straight from the catalog; when `lookup_digest` is true and
+/// the address is a GitHub release asset, one best-effort API request adds the size and SHA-256 GitHub publishes for it
+/// (cached for [`RELEASE_TTL`]). The lookup failing for any reason (offline, rate limit, no digest) is not an error: the
+/// release simply has no checksum and the plan shows the notice.
+pub fn resolve_release(
+    t: &dyn Transport,
+    cache: &Path,
+    core: &CatalogCore,
+    version: Option<&str>,
+    now: u64,
+    lookup_digest: bool,
+) -> Result<ReleaseResult, TauError> {
+    let mut release = catalog_release::release_from_catalog(core, version)?;
+    let mut source = Source::Cache;
+    let mut fetched = now;
+    if lookup_digest && let Some(api) = catalog_release::digest_lookup_url(&release.download.url) {
+        let key = format!("{:x}", Sha256::digest(api.as_bytes()));
+        let file = root(cache)
+            .join("digests")
+            .join(format!("{}.json", &key[..24]));
+        let name = release.download.name.clone();
+        if let Ok(got) = fetch_cached(
+            t,
+            &file,
+            &api,
+            DIGEST_LIMIT,
+            RELEASE_TTL,
+            now,
+            false,
+            &|b| {
+                catalog_release::asset_digest(b, &name)
+                    .map(|_| ())
+                    .ok_or_else(|| "the release does not list this file".to_string())
+            },
+        ) && let Some((size, sha)) = catalog_release::asset_digest(&got.body, &name)
+        {
+            release.download.size = size;
+            release.download.sha256 = sha;
+            source = got.source;
+            fetched = got.fetched;
+        }
+    }
+    Ok(ReleaseResult {
+        release,
+        source,
+        fetched,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Checksum {
     /// GitHub's published SHA-256 matched the bytes.
     Verified,
-    /// The release publishes no checksum: the bytes are what GitHub served, nothing more is known.
+    /// No checksum is published for this file: the bytes are what GitHub served, nothing more is known.
     NotPublished,
 }
 
@@ -434,8 +452,8 @@ pub struct CoreDownloaded {
     pub checksum: Checksum,
 }
 
-/// Downloads the release zip into `dest_dir` (`<id>.<tag>.zip`, written as `.part` first). The URL must belong to the
-/// core's own repository; the size must match what GitHub lists; a published digest must match the bytes.
+/// Downloads the release zip into `dest_dir` (`<id>.<tag>.zip`, written as `.part` first). The address must be one of the
+/// two shapes the library uses; when GitHub's size is known it must match; a published digest must match the bytes.
 pub fn download_core(
     t: &dyn Transport,
     core: &CatalogCore,
@@ -444,10 +462,10 @@ pub fn download_core(
     max_bytes: u64,
 ) -> Result<CoreDownloaded, TauError> {
     let d = &release.download;
-    if !catalog_release::url_allowed(core, &d.url) {
+    if catalog_release::parse_download_url(&d.url).is_none() {
         return Err(err(
             ErrorCode::InvalidPathReference,
-            "That download is not from this core's own repository.",
+            "That download address is not one Omega accepts.",
         ));
     }
     if d.size > max_bytes {
@@ -472,7 +490,11 @@ pub fn download_core(
             }
         })
         .collect();
-    let path = dest_dir.join(format!("{}.{safe_tag}.zip", core.id.replace(' ', "_")));
+    let path = dest_dir.join(format!(
+        "{}.{}.zip",
+        core.id.replace(' ', "_"),
+        &safe_tag[..safe_tag.len().min(40)]
+    ));
     let part = path.with_extension("zip.part");
     let (status, bytes, sha) = t.download(&d.url, max_bytes, &part)?;
     let fail = |msg: String| {
@@ -510,12 +532,84 @@ pub fn download_core(
     })
 }
 
+// ---- art -------------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ArtKind {
+    /// The 36x36 core icon.
+    Icon,
+    /// The 521x165 platform banner.
+    Banner,
+}
+
+/// A PNG of the expected shape and size, else a reason. The library's art is plain grayscale; anything else is refused
+/// rather than handed to the UI.
+fn check_png(b: &[u8], kind: ArtKind) -> Result<(), String> {
+    if b.len() < 33 || &b[..8] != b"\x89PNG\r\n\x1a\n" || &b[12..16] != b"IHDR" {
+        return Err("not a PNG".into());
+    }
+    let (w, h) = (
+        u32::from_be_bytes([b[16], b[17], b[18], b[19]]),
+        u32::from_be_bytes([b[20], b[21], b[22], b[23]]),
+    );
+    let ok = match kind {
+        ArtKind::Icon => (w, h) == (36, 36),
+        ArtKind::Banner => w <= 640 && h <= 240 && w >= 100,
+    };
+    ok.then_some(())
+        .ok_or_else(|| format!("unexpected picture size {w}x{h}"))
+}
+
+/// The core's icon or its platform's banner (PNG bytes), cached for a week and revalidated with the ETag. `Ok(None)` when
+/// the library has no picture for it (a 404 is remembered for the same week so it is not asked again).
+pub fn fetch_art(
+    t: &dyn Transport,
+    cache: &Path,
+    core: &CatalogCore,
+    kind: ArtKind,
+    now: u64,
+    force: bool,
+) -> Result<Option<Vec<u8>>, TauError> {
+    let (url, name) = match kind {
+        ArtKind::Icon => (
+            core.icon_url(),
+            format!("icon-{}", core.id.to_ascii_lowercase()),
+        ),
+        ArtKind::Banner => (core.banner_url(), format!("banner-{}", core.platform_id)),
+    };
+    let Some(url) = url else { return Ok(None) };
+    let dir = root(cache).join("art");
+    let file = dir.join(format!("{name}.png"));
+    let missing = dir.join(format!("{name}.none"));
+    if !force
+        && let Ok(m) = fs::metadata(&missing)
+        && m.modified()
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age.as_secs() < ART_TTL)
+    {
+        return Ok(None);
+    }
+    match fetch_cached(t, &file, &url, ART_LIMIT, ART_TTL, now, force, &|b| {
+        check_png(b, kind)
+    }) {
+        Ok(f) => Ok(Some(f.body)),
+        Err(e) if e.code == ErrorCode::NotFound => {
+            fs::create_dir_all(&dir)?;
+            fs::write(&missing, b"")?;
+            Ok(None)
+        }
+        Err(e) => Err(e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::RefCell;
 
-    const CORES: &[u8] = include_bytes!("../../../testdata/openfpga/cores.json");
+    const CORES: &[u8] = include_bytes!("../../../testdata/openfpga/cores_v3.json");
+    const PLATFORMS: &[u8] = include_bytes!("../../../testdata/openfpga/platforms_v3.json");
     const RELEASE: &[u8] = include_bytes!("../../../testdata/openfpga/arduboy_release.json");
 
     /// Scripted answers, in order; records what was asked.
@@ -567,20 +661,17 @@ mod tests {
     }
 
     fn scratch() -> PathBuf {
+        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
         let d = std::env::temp_dir().join(format!(
             "tau-mkt-{}-{}",
             std::process::id(),
-            tau_core_uniq()
+            N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         ));
         fs::create_dir_all(&d).unwrap();
         d
     }
-    fn tau_core_uniq() -> u128 {
-        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-        u128::from(N.fetch_add(1, std::sync::atomic::Ordering::SeqCst))
-    }
     fn arduboy() -> CatalogCore {
-        catalog::parse(CORES)
+        catalog::parse(CORES, PLATFORMS)
             .unwrap()
             .find("agg23.Arduboy")
             .unwrap()
@@ -592,27 +683,37 @@ mod tests {
             "Could not reach the server. Are you offline?",
         ))
     }
+    /// A tiny valid PNG header of the given size (the checks read only the signature and IHDR).
+    fn png(w: u32, h: u32) -> Vec<u8> {
+        let mut v = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        v.extend(w.to_be_bytes());
+        v.extend(h.to_be_bytes());
+        v.extend([8, 0, 0, 0, 0, 0, 0, 0, 0]);
+        v
+    }
 
     #[test]
     fn catalog_is_cached_revalidated_and_survives_offline() {
         let (dir, f) = (scratch(), Fake::default());
-        f.push(ok(200, CORES, Some("\"v1\"")));
+        f.push(ok(200, PLATFORMS, Some("\"p1\"")))
+            .push(ok(200, CORES, Some("\"v1\"")));
         let r = fetch_catalog(&f, &dir, 1000, false).unwrap();
         assert_eq!(
             (r.source.clone(), r.catalog.cores.len()),
-            (Source::Network, 43)
+            (Source::Network, 44)
         );
         // inside the TTL: no request at all
         assert_eq!(
             fetch_catalog(&f, &dir, 1000 + 60, false).unwrap().source,
             Source::Cache
         );
-        assert_eq!(f.asked.borrow().len(), 1);
-        // after the TTL: conditional request with the saved ETag; 304 keeps the copy and renews the age
-        f.push(ok(304, b"", None));
+        assert_eq!(f.asked.borrow().len(), 2);
+        // after the TTL: conditional requests with the saved ETags; 304 keeps the copy and renews the age
+        f.push(ok(304, b"", None)).push(ok(304, b"", None));
         let r = fetch_catalog(&f, &dir, 1000 + CATALOG_TTL + 1, false).unwrap();
         assert_eq!(r.source, Source::NotModified);
-        assert_eq!(f.asked.borrow()[1].1.as_deref(), Some("\"v1\""));
+        assert_eq!(f.asked.borrow()[2].1.as_deref(), Some("\"p1\""));
+        assert_eq!(f.asked.borrow()[3].1.as_deref(), Some("\"v1\""));
         assert_eq!(
             fetch_catalog(&f, &dir, 1000 + CATALOG_TTL + 100, false)
                 .unwrap()
@@ -620,10 +721,10 @@ mod tests {
             Source::Cache
         );
         // forced refresh while offline: the saved copy, labelled with the reason
-        f.push(offline());
+        f.push(offline()).push(offline());
         let r = fetch_catalog(&f, &dir, 1000 + CATALOG_TTL + 200, true).unwrap();
         assert!(matches!(&r.source, Source::Offline(why) if why.contains("offline")));
-        assert_eq!(r.catalog.cores.len(), 43);
+        assert_eq!(r.catalog.cores.len(), 44);
         fs::remove_dir_all(dir).ok();
     }
 
@@ -632,13 +733,14 @@ mod tests {
         let (dir, f) = (scratch(), Fake::default());
         f.push(offline());
         assert!(fetch_catalog(&f, &dir, 1, false).is_err());
-        f.push(ok(200, CORES, None));
+        f.push(ok(200, PLATFORMS, None)).push(ok(200, CORES, None));
         fetch_catalog(&f, &dir, 10, false).unwrap();
-        f.push(ok(200, b"<html>captive portal</html>", Some("x")));
+        f.push(ok(200, PLATFORMS, None))
+            .push(ok(200, b"<html>captive portal</html>", Some("x")));
         let r = fetch_catalog(&f, &dir, 10 + CATALOG_TTL + 1, false).unwrap();
         assert!(matches!(r.source, Source::Offline(_)));
-        assert_eq!(r.catalog.cores.len(), 43);
-        f.push(ok(500, b"", None));
+        assert_eq!(r.catalog.cores.len(), 44);
+        f.push(ok(200, PLATFORMS, None)).push(ok(500, b"", None));
         assert!(matches!(
             fetch_catalog(&f, &dir, 10 + CATALOG_TTL + 2, true)
                 .unwrap()
@@ -649,61 +751,73 @@ mod tests {
     }
 
     #[test]
-    fn release_lookup_is_cached_and_rate_limits_are_explained() {
+    fn the_release_needs_no_request_and_the_checksum_lookup_is_best_effort() {
         let (dir, f, core) = (scratch(), Fake::default(), arduboy());
-        f.push(ok(200, RELEASE, Some("\"r1\"")));
-        let r = fetch_release(&f, &dir, &core, 5000, false).unwrap();
+        // no lookup asked for: nothing is requested
+        let r = resolve_release(&f, &dir, &core, None, 5000, false).unwrap();
         assert_eq!(
-            (r.source.clone(), r.release.tag.as_str()),
-            (Source::Network, "0.9.0")
+            (r.release.tag.as_str(), r.release.download.sha256.clone()),
+            ("0.9.0", None)
+        );
+        assert!(f.asked.borrow().is_empty());
+        // lookup: the size and (absent) digest of the real release
+        f.push(ok(200, RELEASE, Some("\"r1\"")));
+        let r = resolve_release(&f, &dir, &core, None, 5000, true).unwrap();
+        assert_eq!(
+            (
+                r.release.download.size,
+                r.release.download.sha256.clone(),
+                r.source.clone()
+            ),
+            (257_119, None, Source::Network)
         );
         assert_eq!(
-            fetch_release(&f, &dir, &core, 5100, false).unwrap().source,
+            f.asked.borrow()[0].0,
+            "https://api.github.com/repos/agg23/openfpga-arduboy/releases/tags/0.9.0"
+        );
+        // cached for the hour
+        assert_eq!(
+            resolve_release(&f, &dir, &core, None, 5100, true)
+                .unwrap()
+                .source,
             Source::Cache
         );
         assert_eq!(f.asked.borrow().len(), 1);
-        // limit hit with a copy saved: the copy, with the minutes to wait
-        f.push(Ok(Response {
-            status: 403,
-            rate_remaining: Some(0),
-            rate_reset: Some(5000 + RELEASE_TTL + 600),
-            ..Response::default()
-        }));
-        let r = fetch_release(&f, &dir, &core, 5000 + RELEASE_TTL + 1, false).unwrap();
-        assert!(
-            matches!(&r.source, Source::Offline(why) if why.contains("10 minutes") || why.contains("9 minutes"))
-        );
-        // limit hit with no copy: the explanation as the error
-        let (dir2, f2) = (scratch(), Fake::default());
-        f2.push(Ok(Response {
-            status: 429,
-            rate_reset: Some(4200),
-            ..Response::default()
-        }));
-        let e = fetch_release(&f2, &dir2, &core, 1000, false).unwrap_err();
-        assert!(e.message.contains("54 minutes"), "{}", e.message);
-        // no release at all
-        f2.push(ok(404, b"{}", None));
-        assert!(
-            fetch_release(&f2, &dir2, &core, 1000, true)
-                .unwrap_err()
-                .message
-                .contains("not published")
-        );
-        // a release without a usable zip is the answer, not an outage
-        f2.push(ok(200, br#"{"tag_name":"1","assets":[]}"#, None));
-        assert!(
-            fetch_release(&f2, &dir2, &core, 1000, true)
-                .unwrap_err()
-                .message
-                .contains("no downloadable zip")
-        );
+        // limit hit, offline, 404: still a release, with no checksum
+        let dir2 = scratch();
+        for answer in [
+            Ok(Response {
+                status: 403,
+                rate_reset: Some(9999),
+                ..Response::default()
+            }),
+            offline(),
+            ok(404, b"{}", None),
+            ok(200, b"{\"assets\":[]}", None),
+        ] {
+            f.push(answer);
+            let r = resolve_release(&f, &dir2, &core, None, 5000, true).unwrap();
+            assert_eq!(
+                (r.release.download.size, r.release.download.sha256),
+                (0, None)
+            );
+        }
         fs::remove_dir_all(dir).ok();
         fs::remove_dir_all(dir2).ok();
     }
 
+    #[test]
+    fn a_commit_pinned_download_never_asks_github_for_a_checksum() {
+        let (dir, f) = (scratch(), Fake::default());
+        let mut core = arduboy();
+        core.history[0].download_url = "https://raw.githubusercontent.com/o/r/49b4091fb8d71116eb5920a88aae72b910322fa4/Releases/a.zip".into();
+        let r = resolve_release(&f, &dir, &core, None, 1, true).unwrap();
+        assert!(!r.release.is_release && f.asked.borrow().is_empty());
+        fs::remove_dir_all(dir).ok();
+    }
+
     fn release_for(core: &CatalogCore, body: &[u8], sha: Option<String>) -> CoreRelease {
-        let mut r = catalog_release::parse_release(RELEASE, core).unwrap();
+        let mut r = catalog_release::release_from_catalog(core, None).unwrap();
         r.download.size = body.len() as u64;
         r.download.sha256 = sha;
         r
@@ -720,6 +834,10 @@ mod tests {
         assert_eq!(d.checksum, Checksum::NotPublished);
         assert_eq!(fs::read(&d.path).unwrap(), body);
         assert!(d.path.ends_with("agg23.Arduboy.0.9.0.zip"));
+        // size not known yet (catalog only): accepted
+        let mut unknown = release_for(&core, &body, None);
+        unknown.download.size = 0;
+        assert!(download_core(&f, &core, &unknown, &dir, 1 << 20).is_ok());
         // published and matching
         let d = download_core(
             &f,
@@ -731,7 +849,8 @@ mod tests {
         .unwrap();
         assert_eq!((d.checksum, d.sha256), (Checksum::Verified, good));
         // published and wrong: refused, nothing left behind
-        let _ = fs::remove_file(&d.path);
+        fs::remove_file(&d.path).ok();
+        let _ = fs::remove_file(dir.join("agg23.Arduboy.0.9.0.zip"));
         let e = download_core(
             &f,
             &core,
@@ -754,10 +873,12 @@ mod tests {
                 .message
                 .contains("cut short")
         );
-        // over the limit, and a URL from another repository
-        assert!(download_core(&f, &core, &release_for(&core, &body, None), &dir, 3).is_err());
+        // over the limit, and an address that is not a GitHub zip
+        let mut big = release_for(&core, &body, None);
+        big.download.size = 5 << 20;
+        assert!(download_core(&f, &core, &big, &dir, 3).is_err());
         let mut r = release_for(&core, &body, None);
-        r.download.url = "https://github.com/evil/x/releases/download/1/a.zip".into();
+        r.download.url = "https://evil.example/a.zip".into();
         assert_eq!(
             download_core(&f, &core, &r, &dir, 1 << 20)
                 .unwrap_err()
@@ -768,12 +889,76 @@ mod tests {
     }
 
     #[test]
-    fn only_the_three_hosts_are_ever_contacted() {
+    fn art_is_cached_validated_and_a_missing_picture_is_remembered() {
+        let (dir, f, core) = (scratch(), Fake::default(), arduboy());
+        f.push(ok(200, &png(36, 36), Some("\"a\"")));
+        assert_eq!(
+            fetch_art(&f, &dir, &core, ArtKind::Icon, 100, false)
+                .unwrap()
+                .unwrap()
+                .len(),
+            png(36, 36).len()
+        );
+        assert_eq!(
+            f.asked.borrow()[0].0,
+            "https://openfpga-library.github.io/analogue-pocket/assets/images/authors/agg23.Arduboy.png"
+        );
+        // inside the week: no request
+        assert!(
+            fetch_art(&f, &dir, &core, ArtKind::Icon, 200, false)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(f.asked.borrow().len(), 1);
+        // after the week: conditional, 304 keeps it
+        f.push(ok(304, b"", None));
+        assert!(
+            fetch_art(&f, &dir, &core, ArtKind::Icon, 100 + ART_TTL + 1, false)
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(f.asked.borrow()[1].1.as_deref(), Some("\"a\""));
+        // a banner of the wrong shape, or something that is not a PNG, is refused and nothing is saved
+        let (dir2, g) = (scratch(), Fake::default());
+        g.push(ok(200, &png(36, 36), None));
+        assert!(fetch_art(&g, &dir2, &core, ArtKind::Banner, 1, false).is_err());
+        g.push(ok(200, b"<html>", None));
+        assert!(fetch_art(&g, &dir2, &core, ArtKind::Icon, 1, false).is_err());
+        // a 404 means "no picture", and is not asked again inside the week
+        g.push(ok(404, b"", None));
+        assert!(
+            fetch_art(&g, &dir2, &core, ArtKind::Banner, 1, false)
+                .unwrap()
+                .is_none()
+        );
+        let asked = g.asked.borrow().len();
+        assert!(
+            fetch_art(&g, &dir2, &core, ArtKind::Banner, 2, false)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(g.asked.borrow().len(), asked);
+        // a name that is not a plain file name never reaches the network
+        let mut odd = core.clone();
+        odd.id = "a.B C".into();
+        assert!(
+            fetch_art(&g, &dir2, &odd, ArtKind::Icon, 1, false)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(g.asked.borrow().len(), asked);
+        fs::remove_dir_all(dir).ok();
+        fs::remove_dir_all(dir2).ok();
+    }
+
+    #[test]
+    fn only_the_known_hosts_are_ever_contacted() {
         for url in [
             "https://example.com/a",
             "http://api.github.com/repos/x/y/releases/latest",
             "file:///etc/passwd",
             "https://api.github.com/user",
+            "https://raw.githubusercontent.evil.com/x",
         ] {
             assert_eq!(
                 Http.get(url, None, 10).unwrap_err().code,
