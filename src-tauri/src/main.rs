@@ -1,6 +1,5 @@
 mod cacheflush;
 mod device;
-mod ledger_host;
 mod updates;
 mod asset_cmds;
 mod convert_cmds;
@@ -875,7 +874,7 @@ fn main() {
         .setup(|app| {
             // What the app remembers about each card lives in its own cache folder, never on the card.
             if let Ok(dir) = app.path().app_cache_dir() {
-                ledger_host::init(dir);
+                tau_core::ledger_host::init(dir);
             }
             Ok(())
         })

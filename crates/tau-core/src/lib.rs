@@ -33,6 +33,7 @@ pub mod install_exec;
 pub mod install_plan;
 pub mod journal;
 pub mod ledger;
+pub mod ledger_host;
 pub mod marker;
 pub mod package;
 pub mod playlist;
