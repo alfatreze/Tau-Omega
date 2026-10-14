@@ -277,3 +277,33 @@ mod live {
         let _ = std::fs::remove_dir_all(dir);
     }
 }
+
+/// Downloads a pinned `lame` build (Windows). Only the exact URL the engine names is fetched, nothing about
+/// the user or the machine is sent, and the caller checks the SHA-256 before using the bytes.
+pub fn download_lame(source: &tau_core::convert::LameSource) -> Result<Vec<u8>, TauError> {
+    if !source
+        .url
+        .starts_with("https://www.rarewares.org/files/mp3/")
+    {
+        return Err(err(
+            ErrorCode::InvalidPathReference,
+            "Omega only downloads LAME from its pinned source.",
+        ));
+    }
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(8)))
+        .timeout_global(Some(Duration::from_secs(120)))
+        .user_agent(concat!("Tau-Omega/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .into();
+    let mut response = agent
+        .get(source.url)
+        .call()
+        .map_err(|e| err(ErrorCode::Io, format!("Could not download LAME: {e}")))?;
+    response
+        .body_mut()
+        .with_config()
+        .limit(8 * 1024 * 1024)
+        .read_to_vec()
+        .map_err(|e| err(ErrorCode::Io, format!("Could not download LAME: {e}")))
+}

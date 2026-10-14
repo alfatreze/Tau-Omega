@@ -45,10 +45,18 @@ fn install_options() -> Vec<LameInstallOption> {
             runnable: false,
         });
     } else if cfg!(windows) {
+        if let Some(source) = tau_core::convert::lame_source() {
+            out.push(LameInstallOption {
+                method: "download".into(),
+                label: format!("Download {} (about {} KB, checked against a pinned checksum)", source.label, source.bytes_about / 1000),
+                command: source.url.into(),
+                runnable: true,
+            });
+        }
         out.push(LameInstallOption {
             method: "manual".into(),
-            label: "Install LAME with your package manager (for example Chocolatey or Scoop), or download lame.exe and choose it".into(),
-            command: "choco install lame   |   scoop install lame".into(),
+            label: "Or use a package manager".into(),
+            command: "winget install LAME.LAME   |   scoop install lame".into(),
             runnable: false,
         });
     } else {
@@ -93,6 +101,13 @@ pub fn check_lame(path: String) -> Result<String, TauError> {
 /// window); every other method is shown as instructions.
 #[tauri::command(async)]
 pub fn install_lame(app: tauri::AppHandle, method: String) -> Result<LameStatus, TauError> {
+    if method == "download" {
+        let source = tau_core::convert::lame_source().ok_or_else(|| TauError { code: ErrorCode::UnsupportedTags, message: "there is no download for this system".into() })?;
+        let bytes = tau_net::download_lame(&source)?;
+        let exe = tau_core::convert::install_lame_zip(&bytes, source.sha256, &lame_dir(&app)?)?;
+        tau_core::convert::lame_version(&exe)?;
+        return status_for(&app);
+    }
     if method != "brew" {
         return Err(TauError { code: ErrorCode::UnsupportedTags, message: "this method is done by hand".into() });
     }
