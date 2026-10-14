@@ -45,9 +45,9 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('button', { name: 'Clear filters' }).click(); await p.waitForTimeout(200);
   assert.ok(await rows().count() >= 10); ok('Clear filters brings the list back');
 
-  await p.getByRole('button', { name: 'Needs a licence file' }).click(); await p.waitForTimeout(200);
-  assert.equal(await rows().count(), 2); assert.equal(await p.getByRole('button', { name: 'Needs a licence file' }).getAttribute('aria-pressed'), 'true'); ok('the licence toggle filters to cores that need one and reports its state');
-  await p.getByRole('button', { name: 'Needs a licence file' }).click(); await p.waitForTimeout(200);
+  await p.getByRole('button', { name: 'Needs a key file' }).click(); await p.waitForTimeout(200);
+  assert.equal(await rows().count(), 2); assert.equal(await p.getByRole('button', { name: 'Needs a key file' }).getAttribute('aria-pressed'), 'true'); ok('the key-file toggle filters to cores that need one and reports its state');
+  await p.getByRole('button', { name: 'Needs a key file' }).click(); await p.waitForTimeout(200);
 
   await search('arduboy'); await p.waitForTimeout(200);
   assert.match(await p.locator('.mk-card').first().innerText(), /Installed/); ok('a core on the card is marked Installed');
@@ -63,7 +63,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   await search('capcom'); await p.waitForTimeout(200);
   await rows().first().click(); await p.waitForTimeout(600);
-  assert.match(await sheet().innerText(), /You will need a licence file[\s\S]*beta\.bin[\s\S]*Cores\/jotego\.jtcps1\//); ok('a core that needs a licence file says which file and where it goes');
+  assert.match(await sheet().innerText(), /You will need a key file[\s\S]*from the author[\s\S]*beta\.bin[\s\S]*Cores\/jotego\.jtcps1\//); ok('a core that needs a key file says which file and where it goes');
   await p.keyboard.press('Escape'); await p.waitForTimeout(150);
 
   await search('snes'); await p.waitForTimeout(200);
