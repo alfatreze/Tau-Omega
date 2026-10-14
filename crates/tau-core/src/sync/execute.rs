@@ -110,7 +110,12 @@ pub(super) fn execute_with_mirror_inner(
     }
     let mut art_sidecars_written = 0;
     for item in &plan.art_sidecars {
-        if sha256_file(&item.cover_source).ok().as_deref() != Some(item.cover_sha256.as_str()) {
+        let source_bytes = if item.from_embedded {
+            cover::extract_embedded_cover(&item.cover_source)
+        } else {
+            fs::read(&item.cover_source).ok()
+        };
+        if source_bytes.as_deref().map(sha256_bytes).as_deref() != Some(item.cover_sha256.as_str()) {
             return Err(TauError::e(
                 ErrorCode::SourceChangedSincePlan,
                 format!(
@@ -119,7 +124,7 @@ pub(super) fn execute_with_mirror_inner(
                 ),
             ));
         }
-        let packed = image::encode_pal256_bytes(&fs::read(&item.cover_source)?, 128)?;
+        let packed = image::encode_pal256_bytes(&source_bytes.unwrap_or_default(), 128)?;
         if let Some(parent) = item.destination.parent() {
             fs::create_dir_all(parent)?;
         }
