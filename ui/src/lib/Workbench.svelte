@@ -111,6 +111,7 @@
   onMount(async () => {
     unlisten = await onProgress((event) => {
       if (event.job_id === runId && run && !run.finished) handleRunProgress(event.stage, event.done, event.total, event.path ?? '');
+      else if (event.job_id === planJob) planPhase = event.stage === 'analysing' ? `Measuring loudness · ${event.done} of ${event.total || '…'}` : event.stage === 'hashing' ? `Checking files · ${event.done} of ${event.total || '…'}` : '';
       else if (event.job_id === cardJob) cardProgress = `${event.done} / ${event.total || '…'}`;
       else if (event.job_id === sourceJob) sourceProgress = `${event.done} / ${event.total || '…'}`;
     });
@@ -454,13 +455,14 @@
     const editRequests: EditRequest[] = edits.map((p) => ({ album_id: p.id, track: p.track, fields: p.fields, cover: p.cover }));
     return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR } };
   }
-  let preparing = false;
+  let preparing = false; let planJob = ''; let planPhase = '';
   async function start() {
     if (!canStart) return;
     reviewError = ''; review = null;
     // Show something the instant the button is pressed: planning reads the card and can take a moment.
     preparing = true;
-    try { review = await planChanges(buildRequest(), mediaRoot); }
+    planJob = newJobId(); planPhase = '';
+    try { review = await planChanges(buildRequest(), mediaRoot, planJob); }
     catch (error) { preparing = false; reviewError = explainError(error); dialog = 'review'; return; }
     slowDontAsk = false;
     // Nothing to decide (no removals, no slow direct-USB warning to acknowledge): just do it. The staged
@@ -559,7 +561,7 @@
   }
   function dismissFailure() { lastFailed = false; save('lastfail', false); }
   $: syncView = preparing && !run ? {
-    title: `Preparing sync to ${cardLabel}`, phase: 'Checking what needs to be copied…', done: 0, total: 0, line: '', note: '', slow: '', preparing: true,
+    title: `Preparing sync to ${cardLabel}`, phase: planPhase || 'Checking what needs to be copied…', done: 0, total: 0, line: '', note: '', slow: '', preparing: true,
   } : run && !run.finished ? {
     title: `Syncing to ${cardLabel}`, phase: run.phase, done: run.done, total: run.phase === 'Starting' ? 0 : run.total,
     line: [run.total ? `${size(run.done)} of ${size(run.total)}` : '', run.speed > 0 ? `${(run.speed / MB).toFixed(1)} MB/s · ${eta(run.total - run.done, run.speed) === 'under a minute' ? 'under a minute' : `about ${eta(run.total - run.done, run.speed)}`} left` : ''].filter(Boolean).join(' · '),
