@@ -23,6 +23,7 @@
   import { tick } from 'svelte';
   import PackageView from './lib/PackageView.svelte';
   import MarketplaceView from './lib/MarketplaceView.svelte';
+  import { coreUpdateCount } from './lib/marketStore';
   import UpdateBanner from './lib/UpdateBanner.svelte';
   import OmegaUpdate from './lib/OmegaUpdate.svelte';
   import CardMarkerPrompt from './lib/CardMarkerPrompt.svelte';
@@ -327,7 +328,7 @@
     <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
     <button class:active={page === 'appearance'} on:click={() => page = 'appearance'}>Appearance</button>
     <button class:active={page === 'halcyon'} on:click={() => page = 'halcyon'}>Halcyon EQ</button>
-    <button class:active={page === 'marketplace'} on:click={() => page = 'marketplace'}>Marketplace</button>
+    <button class:active={page === 'marketplace'} on:click={() => page = 'marketplace'}>Marketplace{#if $coreUpdateCount > 0}<span class="nav-count" aria-label={`${$coreUpdateCount} core updates`}>{$coreUpdateCount}</span>{/if}</button>
     <button class="nav-group" class:has-active={moreItems.includes(page)} aria-expanded={moreOpen} aria-controls="more-tools" on:click={toggleMore}><span>Tools &amp; settings</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={moreOpen}><path d="m6 9 6 6 6-6"/></svg></button>
     {#if moreOpen || moreItems.includes(page)}
       <div class="nav-sub" id="more-tools">
