@@ -110,46 +110,7 @@ pub(super) fn execute_with_mirror_inner(
     }
     let mut art_sidecars_written = 0;
     for item in &plan.art_sidecars {
-        let source_bytes = if item.from_embedded {
-            cover::extract_embedded_cover(&item.cover_source)
-        } else {
-            fs::read(&item.cover_source).ok()
-        };
-        if source_bytes.as_deref().map(sha256_bytes).as_deref() != Some(item.cover_sha256.as_str())
-        {
-            return Err(TauError::e(
-                ErrorCode::SourceChangedSincePlan,
-                format!(
-                    "cover changed since the plan was reviewed: {}",
-                    item.cover_source.display()
-                ),
-            ));
-        }
-        let packed = image::encode_pal256_bytes(&source_bytes.unwrap_or_default(), 128)?;
-        if let Some(parent) = item.destination.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        // Temp file, verify, then rename: a card pulled mid-write must not leave a
-        // truncated sidecar in place of a previous good one.
-        let temp = item
-            .destination
-            .with_extension(format!("tau-omega-{}.tmp", std::process::id()));
-        write_durable(&temp, &packed)?;
-        // Read the just-written file back and require it to be exactly what was
-        // meant (and a valid TIM1), the same write-then-verify discipline as
-        // every other write path here.
-        let read_back = read_back_bytes(&temp)?;
-        if read_back != packed || image::decode_tim1(&read_back).is_err() {
-            let _ = fs::remove_file(&temp);
-            return Err(TauError::e(
-                ErrorCode::VerificationFailed,
-                format!(
-                    "cover file verification failed: {}",
-                    item.destination.display()
-                ),
-            ));
-        }
-        fs::rename(&temp, &item.destination)?;
+        write_art_sidecar(item)?;
         art_sidecars_written += 1;
     }
     let mut deleted = 0;
@@ -353,4 +314,49 @@ pub(super) fn execute_core_move_inner(
     )?;
     report.deleted = deleted;
     Ok(report)
+}
+
+/// Writes one cover file (`tau-art/cover_128.pal256.timg`): re-reads the picture and refuses if it
+/// changed since the plan, then temp file, read back, verify, rename.
+pub(crate) fn write_art_sidecar(item: &ArtSidecarItem) -> Result<(), TauError> {
+    let source_bytes = if item.from_embedded {
+        cover::extract_embedded_cover(&item.cover_source)
+    } else {
+        fs::read(&item.cover_source).ok()
+    };
+    if source_bytes.as_deref().map(sha256_bytes).as_deref() != Some(item.cover_sha256.as_str()) {
+        return Err(TauError::e(
+            ErrorCode::SourceChangedSincePlan,
+            format!(
+                "cover changed since the plan was reviewed: {}",
+                item.cover_source.display()
+            ),
+        ));
+    }
+    let packed = image::encode_pal256_bytes(&source_bytes.unwrap_or_default(), 128)?;
+    if let Some(parent) = item.destination.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    // Temp file, verify, then rename: a card pulled mid-write must not leave a
+    // truncated sidecar in place of a previous good one.
+    let temp = item
+        .destination
+        .with_extension(format!("tau-omega-{}.tmp", std::process::id()));
+    write_durable(&temp, &packed)?;
+    // Read the just-written file back and require it to be exactly what was
+    // meant (and a valid TIM1), the same write-then-verify discipline as
+    // every other write path here.
+    let read_back = read_back_bytes(&temp)?;
+    if read_back != packed || image::decode_tim1(&read_back).is_err() {
+        let _ = fs::remove_file(&temp);
+        return Err(TauError::e(
+            ErrorCode::VerificationFailed,
+            format!(
+                "cover file verification failed: {}",
+                item.destination.display()
+            ),
+        ));
+    }
+    fs::rename(&temp, &item.destination)?;
+    Ok(())
 }

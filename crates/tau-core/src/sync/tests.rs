@@ -890,3 +890,45 @@ fn a_sidecar_is_made_from_embedded_art_when_there_is_no_folder_image() {
         image::encode_pal256_bytes(&fs::read(&jpg).unwrap(), 128).unwrap()
     );
 }
+
+/// Albums already on a card without a cover file get one from a reviewed plan, and then need no more.
+#[test]
+fn cover_files_are_added_to_existing_albums_and_then_none_are_missing() {
+    let jpg = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata/images/cover455.jpg");
+    let common = root("cover-refresh").join("Assets/tau/common");
+    fs::create_dir_all(common.join("With Art")).unwrap();
+    fs::create_dir_all(common.join("Folder Image")).unwrap();
+    fs::create_dir_all(common.join("Nothing")).unwrap();
+    let bare = common.join("bare.tmp");
+    fs::write(
+        &bare,
+        [b"ID3\x03\x00\x00\x00\x00\x00\x00".as_slice(), &[0u8; 64]].concat(),
+    )
+    .unwrap();
+    fs::write(
+        common.join("With Art/01.mp3"),
+        cover::embed_mp3_bytes(&bare, &jpg).unwrap(),
+    )
+    .unwrap();
+    fs::copy(&bare, common.join("Folder Image/01.mp3")).unwrap();
+    fs::copy(&jpg, common.join("Folder Image/cover.jpg")).unwrap();
+    fs::copy(&bare, common.join("Nothing/01.mp3")).unwrap();
+    fs::remove_file(&bare).unwrap();
+    assert_eq!(count_missing_cover_files(&common), 3);
+    let plan = plan_cover_files(&common).unwrap();
+    assert_eq!(plan.items.len(), 2);
+    assert_eq!(plan.no_picture, vec!["Nothing".to_string()]);
+    assert!(execute_cover_files(&common, &plan, "wrong").is_err());
+    assert_eq!(execute_cover_files(&common, &plan, &plan.id).unwrap(), 2);
+    assert_eq!(count_missing_cover_files(&common), 1);
+    let again = plan_cover_files(&common).unwrap();
+    assert!(again.items.is_empty());
+    assert_eq!(again.have_cover_file, 2);
+    let want = image::encode_pal256_bytes(&fs::read(&jpg).unwrap(), 128).unwrap();
+    for folder in ["With Art", "Folder Image"] {
+        assert_eq!(
+            fs::read(common.join(folder).join(image::pal256_sidecar_name(128))).unwrap(),
+            want
+        );
+    }
+}

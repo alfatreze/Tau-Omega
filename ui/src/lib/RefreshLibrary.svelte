@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { modal } from './a11y';
-  import { libraryHealth, planLibraryRefresh, executeLibraryRefresh, rollbackLibraryRefresh } from './tau-api';
+  import { libraryHealth, planCoverFiles, executeCoverFiles, planLibraryRefresh, executeLibraryRefresh, rollbackLibraryRefresh } from './tau-api';
   import { errorMessage } from './backend';
-  import type { IndexState, RefreshPlan, RefreshReport } from './types';
+  import type { CoverFilePlan, IndexState, RefreshPlan, RefreshReport } from './types';
   /** The core's media folder on the card: `<card>/Assets/<platform>/common`. */
   export let mediaRoot: string;
   export let coreName = '';
@@ -14,6 +14,19 @@
   let open = false; let busy = false; let notice = '';
   let plan: RefreshPlan | null = null; let report: RefreshReport | null = null; let undone = false; let confirmUndo = false;
 
+  let coverPlan: CoverFilePlan | null = null; let coverNotice = ''; let coverBusy = false;
+  async function planCovers() {
+    coverBusy = true; coverNotice = '';
+    try { coverPlan = await planCoverFiles(mediaRoot); } catch (error) { coverNotice = `Could not check the albums: ${errorMessage(error)}`; }
+    finally { coverBusy = false; }
+  }
+  async function makeCovers() {
+    if (!coverPlan) return;
+    coverBusy = true;
+    try { const n = await executeCoverFiles(mediaRoot, coverPlan.id); coverNotice = `Added ${n} cover file${n === 1 ? '' : 's'}.`; coverPlan = null; await loadHealth(); onChanged(); }
+    catch (error) { coverNotice = `Nothing was changed. ${errorMessage(error)}`; }
+    finally { coverBusy = false; }
+  }
   onMount(loadHealth);
   async function loadHealth() { try { health = await libraryHealth(mediaRoot); } catch { health = null; } }
   $: badge = !health ? '' : !health.present ? 'No library yet' : !health.valid ? 'Library damaged' : !health.root_matches ? 'Library is for another core' : health.missing_files > 0 ? `${health.missing_files} listed track${health.missing_files === 1 ? '' : 's'} missing` : `${health.tracks} tracks`;
@@ -47,6 +60,18 @@
   <div><span>Library health</span><strong class:bad>{badge || '—'}</strong></div>
   <button class="quiet" on:click={start}>Refresh library…</button>
 </div>
+{#if health && health.albums_without_cover_file > 0}
+  <div class="rl-row">
+    <div><span>Cover files</span><strong class="bad">{health.albums_without_cover_file} album{health.albums_without_cover_file === 1 ? '' : 's'} without one</strong></div>
+    {#if !coverPlan}<button class="quiet" disabled={coverBusy} on:click={planCovers}>Add cover files…</button>{/if}
+  </div>
+  {#if coverPlan}
+    <p class="rl-lede" role="status">{coverPlan.items.length} album{coverPlan.items.length === 1 ? '' : 's'} get a cover file made from their folder image or the art inside their tracks{coverPlan.no_picture.length ? `; ${coverPlan.no_picture.length} have no picture to use` : ''}. Your music is not changed.
+      <button class="primary" disabled={coverBusy || !coverPlan.items.length} on:click={makeCovers}>Add {coverPlan.items.length}</button>
+      <button class="quiet" disabled={coverBusy} on:click={() => (coverPlan = null)}>Cancel</button></p>
+  {/if}
+{/if}
+{#if coverNotice}<p class="rl-lede" role="status">{coverNotice}</p>{/if}
 
 {#if open}
   <div class="rl-backdrop" role="presentation" on:click={close}></div>

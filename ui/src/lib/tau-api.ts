@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate } from './types';
+import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -62,6 +62,8 @@ export const planCoreUpdate = (zip: string, card: string, allowDowngrade: boolea
 export const executeCoreUpdate = (zip: string, card: string, allowDowngrade: boolean, confirmation: string) => invoke<InstallReport>('execute_core_update', { zip, card, allowDowngrade, confirmation });
 export const rollbackCoreUpdate = (card: string, backupDir: string) => invoke<RollbackReport>('rollback_core_update', { card, backupDir });
 export const libraryHealth = (mediaRoot: string) => invoke<IndexState>('library_health', { mediaRoot });
+export const planCoverFiles = (mediaRoot: string) => invoke<CoverFilePlan>('plan_cover_files', { mediaRoot });
+export const executeCoverFiles = (mediaRoot: string, confirmation: string) => invoke<number>('execute_cover_files', { mediaRoot, confirmation });
 export const planLibraryRefresh = (mediaRoot: string) => invoke<RefreshPlan>('plan_library_refresh', { mediaRoot });
 export const executeLibraryRefresh = (mediaRoot: string, confirmation: string) => invoke<RefreshReport>('execute_library_refresh', { mediaRoot, confirmation });
 export const rollbackLibraryRefresh = (mediaRoot: string, backupDir: string) => invoke<void>('rollback_library_refresh', { mediaRoot, backupDir });

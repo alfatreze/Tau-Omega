@@ -41,6 +41,46 @@ pub fn find_cover(folder: &Path) -> Option<PathBuf> {
     candidates.into_iter().next()
 }
 
+/// Last resort for a cover file: the largest image (jpg, jpeg, png) in the folder, else in a folder
+/// one level below (`Artwork/`, `Scans/`). Same idea as tau-alpha's `sync_media.py`.
+pub fn find_any_image(folder: &Path) -> Option<PathBuf> {
+    fn images(dir: &Path) -> Vec<(u64, PathBuf)> {
+        fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| {
+                p.is_file()
+                    && !p
+                        .file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with("._"))
+                    && p.extension().is_some_and(|x| {
+                        ["jpg", "jpeg", "png"]
+                            .iter()
+                            .any(|k| x.eq_ignore_ascii_case(k))
+                    })
+            })
+            .filter_map(|p| Some((fs::metadata(&p).ok()?.len(), p)))
+            .collect()
+    }
+    let mut found = images(folder);
+    if found.is_empty() {
+        for child in fs::read_dir(folder)
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+        {
+            let path = child.path();
+            if path.is_dir() && !path.ends_with("tau-art") {
+                found.extend(images(&path));
+            }
+        }
+    }
+    found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    found.into_iter().next().map(|(_, p)| p)
+}
+
 /// Checks whether a discovered cover is safe for Tau's current JPEG decoder.
 pub fn validate_jpeg_cover(cover: &Path) -> Result<(), TauError> {
     validate_jpeg(&fs::read(cover)?)

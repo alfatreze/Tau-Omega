@@ -124,6 +124,20 @@ pub fn library_health(a: &[String], j: bool) -> Result<(), CliError> {
     emit(j, &s, || format!("{s:?}"))
 }
 
+/// `tau covers-plan <media-root>`: which albums have no cover file and what each would be made from. Writes nothing.
+pub fn covers_plan(a: &[String], j: bool) -> Result<(), CliError> {
+    let p = tau_core::sync::plan_cover_files(Path::new(arg(a, "a media root")?))?;
+    emit(j, &p, || {
+        format!(
+            "plan {}: {} of {} albums need a cover file ({} have no picture to use)",
+            p.id,
+            p.items.len(),
+            p.albums,
+            p.no_picture.len()
+        )
+    })
+}
+
 /// `tau library-refresh-plan <media-root>`: what a refresh would fix and rebuild. Reads tags; writes nothing.
 pub fn library_refresh_plan(a: &[String], j: bool) -> Result<(), CliError> {
     let p = tau_core::refresh::plan_refresh(Path::new(arg(a, "a media root")?))?;
