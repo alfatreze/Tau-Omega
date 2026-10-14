@@ -50,3 +50,30 @@ fn the_index_with_details_is_byte_identical_to_the_reference() {
         .unwrap();
     assert_eq!(got, fs::read(root.join("index.tdb")).unwrap());
 }
+
+#[test]
+fn files_the_pocket_refuses_and_half_tagged_replaygain_are_reported() {
+    use tau_core::problems::{ProblemKind, find_problems};
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/details/common");
+    let scan = tau_core::scan_dir(&root, false).unwrap();
+    let problems = find_problems(&root, &scan.entries).unwrap();
+    let wont: Vec<_> = problems
+        .iter()
+        .filter(|p| p.kind == ProblemKind::WillNotPlay)
+        .flat_map(|p| p.files.clone())
+        .collect();
+    assert!(
+        wont.iter().any(|f| f.ends_with("flac_96k_24.flac")),
+        "{wont:?}"
+    );
+    assert!(
+        wont.iter().any(|f| f.ends_with("flac_6ch.flac")),
+        "{wont:?}"
+    );
+    assert_eq!(wont.len(), 2, "{wont:?}");
+    let half = problems
+        .iter()
+        .filter(|p| p.kind == ProblemKind::ReplayGain)
+        .count();
+    assert_eq!(half, 1);
+}
