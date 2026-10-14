@@ -208,10 +208,15 @@ pub fn post_install_check_with(
         .iter()
         .map(|p| card_root.join("Assets").join(p).join("common"))
         .collect();
-    let slot_report = data_slot_problems(&core_dir, &commons, &core_assets);
+    let slot_report = data_slot_problems(
+        &core_dir,
+        &commons,
+        &core_assets,
+        super::is_generic_core(&identity),
+    );
     match slot_report {
         Err(detail) => push("data slots", CheckStatus::Fail, detail),
-        Ok(report) if report.problems.is_empty() => push(
+        Ok(report) if report.problems.is_empty() && report.warnings.is_empty() => push(
             "data slots",
             CheckStatus::Pass,
             format!(
@@ -219,6 +224,9 @@ pub fn post_install_check_with(
                 report.slots
             ),
         ),
+        Ok(report) if report.problems.is_empty() => {
+            push("data slots", CheckStatus::Warn, report.warnings.join(" "))
+        }
         Ok(report) => push("data slots", CheckStatus::Fail, report.problems.join(" ")),
     }
 
@@ -411,6 +419,8 @@ pub(super) fn core_json_problems(core_id: &str, json: &Value) -> Vec<String> {
 pub(super) struct SlotReport {
     pub(super) slots: usize,
     pub(super) problems: Vec<String>,
+    /// Things worth saying that do not make the install unusable (a slot without an id, a BIOS the user must supply).
+    pub(super) warnings: Vec<String>,
 }
 
 use crate::cardlayout::{SLOT_CORE_SPECIFIC, slot_parameters};
@@ -419,6 +429,7 @@ pub(super) fn data_slot_problems(
     core_dir: &Path,
     commons: &[PathBuf],
     core_assets: &Path,
+    generic: bool,
 ) -> Result<SlotReport, String> {
     let bytes =
         fs::read(core_dir.join("data.json")).map_err(|_| "data.json is missing.".to_string())?;
@@ -429,6 +440,7 @@ pub(super) fn data_slot_problems(
         .and_then(Value::as_array)
         .ok_or_else(|| "data.json has no data.data_slots list.".to_string())?;
     let mut problems = Vec::new();
+    let mut warnings = Vec::new();
     if slots.len() > MAX_DATA_SLOTS {
         problems.push(format!(
             "{} slots declared; the Pocket allows {MAX_DATA_SLOTS}.",
@@ -445,7 +457,12 @@ pub(super) fn data_slot_problems(
             }
             seen.push(id);
         } else {
-            problems.push(format!("slot \"{name}\" has no id."));
+            if generic {
+                // Analogue's reference lists `id` but widely used community cores (Arduboy) omit it and run on a Pocket.
+                warnings.push(format!("slot \"{name}\" declares no id."));
+            } else {
+                problems.push(format!("slot \"{name}\" has no id."));
+            }
         }
         let filename = slot.get("filename").and_then(Value::as_str);
         if let Some(filename) = filename {
@@ -468,13 +485,19 @@ pub(super) fn data_slot_problems(
                     .map_or(core_assets, PathBuf::as_path)
             };
             if required && !folder.join(filename).is_file() && !core_dir.join(filename).is_file() {
-                problems.push(format!("required file {filename} is not on the card."));
+                if generic {
+                    // A BIOS or system file of a community core is the user's to supply; the core is installed correctly without it.
+                    warnings.push(format!("the core asks for {filename}, which you supply yourself; it is not on the card yet."));
+                } else {
+                    problems.push(format!("required file {filename} is not on the card."));
+                }
             }
         }
     }
     Ok(SlotReport {
         slots: slots.len(),
         problems,
+        warnings,
     })
 }
 

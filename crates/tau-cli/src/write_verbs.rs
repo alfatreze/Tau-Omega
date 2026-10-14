@@ -133,6 +133,16 @@ pub fn update_core(a: &[String], j: bool) -> Result<(), CliError> {
     emit(j, &r, || format!("updated: {r:?}"))
 }
 
+/// `tau update-undo <card-root> --backup <backup-dir> --yes`: puts the card back as it was before an `update` (or a Marketplace
+/// install), from that run's backup folder alone (the folder `update` reported as `backup_dir`).
+pub fn update_undo(a: &[String], j: bool) -> Result<(), CliError> {
+    yes(a)?;
+    let card = Path::new(first(a, "a card root")?);
+    let backup = Path::new(need(a, "--backup", "update-undo")?);
+    let r = install_exec::rollback(card, backup)?;
+    emit(j, &r, || format!("undone: {r:?}"))
+}
+
 // ---- library refresh ----
 
 /// `tau library-refresh <media-root> --confirm <plan-id> --backup-dir <outside> --yes`: runs a reviewed refresh (see `library-refresh-plan`).
