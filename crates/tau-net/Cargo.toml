@@ -1,0 +1,14 @@
+[package]
+name = "tau-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The only network code in Tau Omega: the GitHub release check and verified download, shared by the app and the tau CLI"
+
+[dependencies]
+tau-core = { path = "../tau-core", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+ureq = "3"
+
+[lints]
+workspace = true
