@@ -105,7 +105,7 @@
     <label><span class="sr">Sort</span>
       <select bind:value={filters.sort}><option value="newest">Newest release</option><option value="name">Name</option></select>
     </label>
-    <button class="chip toggle" aria-pressed={filters.licence} on:click={() => (filters.licence = !filters.licence)}>Needs a licence file</button>
+    <button class="chip toggle" aria-pressed={filters.licence} title="Cores that will not run until you add a key file from the author (about 20 cores)" on:click={() => (filters.licence = !filters.licence)}>Needs a key file</button>
     <button class="chip toggle" aria-pressed={filters.installedOnly} disabled={!card} title={card ? '' : 'Open a card to filter by what it has'} on:click={() => (filters.installedOnly = !filters.installedOnly)}>On this card</button>
   </div>
   <div class="mk-tags" role="group" aria-label="Category">
@@ -117,7 +117,7 @@
   {#if error && !result}
     <div class="empty"><h2>The list could not be loaded</h2><p>{error}</p><button class="primary" on:click={() => load(true)}>Try again</button></div>
   {:else if result && !shown.length}
-    <div class="empty"><h2>No cores match</h2><p>{filters.query ? `Nothing matches “${filters.query}”` : 'Nothing matches these filters'}{filters.category ? ` in ${filters.category}` : ''}{filters.licence ? ' that need a licence file' : ''}{filters.installedOnly ? ' on this card' : ''}.</p>
+    <div class="empty"><h2>No cores match</h2><p>{filters.query ? `Nothing matches “${filters.query}”` : 'Nothing matches these filters'}{filters.category ? ` in ${filters.category}` : ''}{filters.licence ? ' that need a key file' : ''}{filters.installedOnly ? ' on this card' : ''}.</p>
       <button class="quiet" on:click={() => (filters = { ...filters, query: '', category: '', licence: false, installedOnly: false })}>Clear filters</button></div>
   {:else if result}
     <ul class="mk-grid" aria-busy={loading} aria-label="Cores">
@@ -138,7 +138,7 @@
           </button>
           <div class="mk-foot">
             {#if item.category}<button class="chip toggle mk-tag" aria-pressed={filters.category === item.category} aria-label={`Show only ${item.category}`} on:click={() => toggleCategory(item.category)}>{item.category}</button>{/if}
-            {#if item.requires_license}<span class="chip">Needs a licence file</span>{/if}
+            {#if item.requires_license}<span class="chip" title="This core will not run until you add a key file from the author">Needs a key file</span>{/if}
             {#if chip(item)}<span class="chip" class:capable={statusOf(item)?.status === 'UpdateAvailable'}>{chip(item)}</span>{/if}
             <span class="mk-ver">{item.version || '—'}<small>{item.release_date}</small></span>
           </div>
@@ -164,7 +164,7 @@
     </dl>
 
     {#if selected.requires_license}
-      <p class="mk-callout" role="note"><strong>You will need a licence file.</strong> This core does not include it. After installing, put <code>{selected.license_filename || 'the licence file the author names'}</code> in <code>Cores/{selected.id}/</code> on the card.</p>
+      <p class="mk-callout" role="note"><strong>You will need a key file.</strong> This core does not run without one, and it is not in the download: you get it from the author (see Source above). After installing, put <code>{selected.license_filename || 'the file the author names'}</code> in <code>Cores/{selected.id}/</code> on the card.</p>
     {/if}
     {#if selected.assets.length}
       <p class="mk-small">Put your own files in {#each selected.assets as a, i}<code>Assets/{a.platform}/{a.core_specific ? selected.id : 'common'}</code>{#if a.extensions.length} ({a.extensions.map((x) => '.' + x).join(' ')}){/if}{i < selected.assets.length - 1 ? ', ' : ''}{/each}.</p>
