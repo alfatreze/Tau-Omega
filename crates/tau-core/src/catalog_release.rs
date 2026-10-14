@@ -15,6 +15,11 @@ pub fn latest_release_url(core: &CatalogCore) -> String {
     )
 }
 
+/// Whether `url` is a download of this core's own repository (the only place its package may come from).
+pub fn url_allowed(core: &CatalogCore, url: &str) -> bool {
+    url.starts_with(&download_prefix(core)) && !url[download_prefix(core).len()..].contains("..")
+}
+
 fn download_prefix(core: &CatalogCore) -> String {
     format!(
         "https://github.com/{}/{}/releases/download/",
