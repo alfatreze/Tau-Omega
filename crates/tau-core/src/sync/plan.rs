@@ -102,6 +102,17 @@ pub(crate) fn plan_candidates(
         .unwrap_or_else(|_| common.to_path_buf());
     candidates.sort_by(|a, b| a.1.cmp(&b.1));
     let mut seen = std::collections::BTreeSet::new();
+    let mut folder_tracks: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
+    for (source, _) in &candidates {
+        if audio_file(source)
+            && let Some(folder) = source.parent()
+        {
+            folder_tracks
+                .entry(folder.to_path_buf())
+                .or_default()
+                .push(source.clone());
+        }
+    }
     let mut seen_art_folders = std::collections::BTreeSet::new();
     let mut warned_covers = std::collections::BTreeSet::new();
     let mut ledger = ledger::Session::open(&destination);
@@ -192,8 +203,10 @@ pub(crate) fn plan_candidates(
             && audio_file(&source)
             && let Some(source_folder) = source.parent()
             && seen_art_folders.insert(source_folder.to_path_buf())
-            && let Some((cover_source, cover_sha256, from_embedded)) =
-                art_source(source_folder, &source)?
+            && let Some((cover_source, cover_sha256, from_embedded)) = art_source(
+                source_folder,
+                folder_tracks.get(source_folder).map_or(&[], Vec::as_slice),
+            )?
         {
             let destination_folder = target.parent().ok_or_else(|| {
                 TauError::e(
@@ -331,17 +344,22 @@ pub(crate) fn plan_candidates(
 /// Where a folder's cover sidecar comes from: a folder image first (`cover.jpg`, ...), else the picture
 /// embedded in the first track of the folder that has one (MP3 APIC, FLAC PICTURE). Returns the source
 /// path, its hash and whether it is embedded art.
-fn art_source(
+pub(crate) fn art_source(
     folder: &Path,
-    first_track: &Path,
+    tracks: &[PathBuf],
 ) -> Result<Option<(PathBuf, String, bool)>, TauError> {
     if let Some(file) = cover::find_cover(folder) {
         let hash = sha256_file(&file)?;
         return Ok(Some((file, hash, false)));
     }
-    if let Some(bytes) = cover::extract_embedded_cover(first_track) {
-        let hash = sha256_bytes(&bytes);
-        return Ok(Some((first_track.to_path_buf(), hash, true)));
+    for track in tracks {
+        if let Some(bytes) = cover::extract_embedded_cover(track) {
+            return Ok(Some((track.clone(), sha256_bytes(&bytes), true)));
+        }
+    }
+    if let Some(file) = cover::find_any_image(folder) {
+        let hash = sha256_file(&file)?;
+        return Ok(Some((file, hash, false)));
     }
     Ok(None)
 }

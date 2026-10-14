@@ -113,6 +113,8 @@ pub struct PlanOptions {
 
 mod plan;
 pub use plan::*;
+mod covers;
+pub use covers::*;
 mod execute;
 pub use execute::*;
 mod sources;

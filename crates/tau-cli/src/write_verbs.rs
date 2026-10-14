@@ -150,6 +150,15 @@ pub fn library_refresh(a: &[String], j: bool) -> Result<(), CliError> {
     emit(j, &r, || format!("refreshed: {r:?}"))
 }
 
+/// `tau covers <media-root> --confirm <plan-id> --yes`: writes the cover files `covers-plan` listed and rebuilds the index.
+pub fn covers(a: &[String], j: bool) -> Result<(), CliError> {
+    yes(a)?;
+    let root = first(a, "a media root")?;
+    let plan = tau_core::sync::plan_cover_files(root)?;
+    let n = tau_core::sync::execute_cover_files(root, &plan, need(a, "--confirm", "covers")?)?;
+    emit(j, &n, || format!("added {n} cover file(s)"))
+}
+
 // ---- workbench: add / remove / edit albums ----
 
 fn request(a: &[String]) -> Result<changes::ChangeRequest, CliError> {

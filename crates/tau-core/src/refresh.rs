@@ -97,6 +97,9 @@ pub struct IndexState {
     pub root_matches: bool,
     /// Listed tracks whose file is not on the card.
     pub missing_files: usize,
+    /// Albums in the folder that have no cover file (`tau-art/cover_128.pal256.timg`).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub albums_without_cover_file: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +144,12 @@ fn refuse(message: impl Into<String>) -> TauError {
 /// The library's health as a cheap read (no tag scan): is there an index, is it valid, is it rooted at this core, are
 /// all its files there. Used for the badge; [`plan_refresh`] does the full comparison.
 pub fn index_state(media_root: &Path) -> IndexState {
+    let mut state = index_state_of_index(media_root);
+    state.albums_without_cover_file = crate::sync::count_missing_cover_files(media_root);
+    state
+}
+
+fn index_state_of_index(media_root: &Path) -> IndexState {
     let prefix = root_prefix(media_root).unwrap_or_default();
     let Ok(bytes) = fs::read(media_root.join(INDEX)) else {
         return IndexState::default();

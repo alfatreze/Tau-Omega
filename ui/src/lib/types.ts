@@ -201,7 +201,8 @@ export type RollbackReport = { restored: number; created_removed: number };
 /** Mirrors `tau_core::refresh`. */
 export type RefreshReason = 'unsupported_format' | 'non_ascii_name' | 'name_collision' | 'path_too_long' | 'tags_unreadable' | 'old_tag_version' | 'over_capacity';
 export type RefreshFinding = { rel: string; reason: RefreshReason; message: string; fix: string | null; skipped: boolean };
-export type IndexState = { present: boolean; valid: boolean; tracks: number | null; root: string | null; root_matches: boolean; missing_files: number };
+export type IndexState = { present: boolean; valid: boolean; tracks: number | null; root: string | null; root_matches: boolean; missing_files: number; albums_without_cover_file: number };
+export type CoverFilePlan = { id: string; albums: number; have_cover_file: number; items: { source_folder: string; destination: string; cover_source: string; from_embedded: boolean }[]; no_picture: string[] };
 export type RefreshPlan = { id: string; media_root: string; root_prefix: string; before: IndexState; media_files: number; would_index: number; findings: RefreshFinding[]; renames: { from: string; to: string }[]; playlist_fixes: { file: string; lines: number }[]; stubs_to_remove: number; refused: string | null; nothing_to_do: boolean };
 export type RefreshReport = { backup_dir: string; renamed: number; playlists_rewritten: number; stubs_removed: number; before: IndexState; after: IndexState; index_path: string; nothing_to_do: boolean };
 
