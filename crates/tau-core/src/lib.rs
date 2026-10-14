@@ -17,10 +17,12 @@ pub(crate) fn test_uniq() -> u128 {
 
 pub mod breakdown;
 pub mod cardlayout;
+pub mod catalog;
 pub mod changes;
 pub mod compare;
 pub mod compat;
 pub mod convert;
+pub mod core_version;
 pub mod cover;
 pub mod details;
 pub mod diag;

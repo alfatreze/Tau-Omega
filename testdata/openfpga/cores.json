@@ -1,0 +1,1987 @@
+{
+ "data": [
+  {
+   "identifier": "Alius.ChisKit",
+   "platform": "ChisKit",
+   "repository": {
+    "platform": "github",
+    "owner": "gpzi994",
+    "name": "ChisKit"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "0.01b",
+    "platform": {
+     "category": "Utility",
+     "name": "ChisKit",
+     "manufacturer": "Alius",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "chiskit",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "August.Macross",
+   "platform": "Macross Ver.26",
+   "repository": {
+    "platform": "github",
+    "owner": "augustinwinter",
+    "name": "openfpga-nmk16"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2026-10-03",
+    "version": "0.26.0",
+    "platform": {
+     "category": "Arcade",
+     "name": "Macross Ver.26",
+     "manufacturer": "Banpresto / NMK",
+     "year": 1992
+    },
+    "assets": [
+     {
+      "platform": "nmk16",
+      "filename": "macross.rom",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "AwesomeDolphin.SpaceInvaders",
+   "platform": "Space Invaders",
+   "repository": {
+    "platform": "github",
+    "owner": "AwesomeDolphin",
+    "name": "openFPGA-SpaceInvaders"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2023-12-25",
+    "version": "1.0.0",
+    "platform": {
+     "category": "Arcade",
+     "name": "Space Invaders",
+     "manufacturer": "Taito",
+     "year": 1978
+    },
+    "assets": [
+     {
+      "platform": "spaceinvaders",
+      "filename": "invaders.rom"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "0.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "1.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "2.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "3.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "4.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "5.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "6.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "7.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "8.raw"
+     },
+     {
+      "platform": "spaceinvaders",
+      "filename": "9.raw"
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "BananaWiFi.GBPrinter",
+   "platform": "Game Boy Printer",
+   "repository": {
+    "platform": "github",
+    "owner": "BananaWiFi",
+    "name": "openFPGA-Game-Boy-Printer"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2026-09-10",
+    "version": "1.0.2",
+    "platform": {
+     "category": "Others",
+     "name": "Game Boy Printer",
+     "manufacturer": "Nintendo",
+     "year": 1998
+    },
+    "assets": []
+   }
+  },
+  {
+   "identifier": "HarpMudd.Berzerk",
+   "platform": "Berzerk",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.berzerk"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "custom": [
+     "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-09-14",
+    "version": "1.1.1",
+    "platform": {
+     "category": "Arcade",
+     "name": "Berzerk",
+     "manufacturer": "Stern",
+     "year": 1980
+    },
+    "assets": [
+     {
+      "platform": "berzerk",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "berzerk",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "HarpMudd.Mp3Player",
+   "platform": "MP3 Player",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.mp3player"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "custom": [
+     "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-10-12",
+    "version": "1.7.0",
+    "platform": {
+     "category": "Others",
+     "name": "MP3 Player",
+     "manufacturer": "HarpMudd",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "mp3player",
+      "filename": "mp3player.rom"
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "HarpMudd.Mpatrol",
+   "platform": "Moon Patrol",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.mpatrol"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "custom": [
+     "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-06-10",
+    "version": "1.0.0",
+    "platform": {
+     "category": "Arcade",
+     "name": "Moon Patrol",
+     "manufacturer": "Irem",
+     "year": 1982
+    },
+    "assets": [
+     {
+      "platform": "mpatrol",
+      "filename": "mpatrol.rom"
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "HarpMudd.Popeye",
+   "platform": "Popeye",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.popeye"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "custom": [
+     "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-07-10",
+    "version": "1.1.1",
+    "platform": {
+     "category": "Arcade",
+     "name": "Popeye",
+     "manufacturer": "Nintendo",
+     "year": 1982
+    },
+    "assets": [
+     {
+      "platform": "popeye",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "popeye",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "HarpMudd.Ringking",
+   "platform": "Ring King",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.ringking"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "custom": [
+     "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-07-19",
+    "version": "2.0.0",
+    "platform": {
+     "category": "Arcade",
+     "name": "Ring King",
+     "manufacturer": "Woodplace / Data East",
+     "year": 1985
+    },
+    "assets": [
+     {
+      "platform": "ringking",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "ringking",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "HarpMudd.Shollow",
+   "platform": "Satan's Hollow",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.shollow"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "custom": [
+     "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-07-11",
+    "version": "1.1.0",
+    "platform": {
+     "category": "Arcade",
+     "name": "Satan's Hollow",
+     "manufacturer": "Bally Midway",
+     "year": 1982
+    },
+    "assets": [
+     {
+      "platform": "shollow",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "shollow",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "HarpMudd.Tapper",
+   "platform": "Tapper",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.tapper"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "custom": [
+     "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-06-25",
+    "version": "1.4.0",
+    "platform": {
+     "category": "Arcade",
+     "name": "Tapper",
+     "manufacturer": "Bally Midway",
+     "year": 1983
+    },
+    "assets": [
+     {
+      "platform": "tapper",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "tapper",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "HarpMudd.Zaxxon",
+   "platform": "Zaxxon",
+   "repository": {
+    "platform": "github",
+    "owner": "harpmudd",
+    "name": "HarpMudd.zaxxon"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "custom": [
+     "https://www.paypal.com/donate/?hosted_button_id=S22WV924XU2ME"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-06-27",
+    "version": "1.3.1",
+    "platform": {
+     "category": "Arcade",
+     "name": "Zaxxon",
+     "manufacturer": "Sega",
+     "year": 1982
+    },
+    "assets": [
+     {
+      "platform": "zaxxon",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "zaxxon",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "HtheB.Dstroy",
+   "platform": "Dstroy",
+   "repository": {
+    "platform": "github",
+    "owner": "HtheB",
+    "name": "Dstroy-AnaloguePocket"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2026-10-13",
+    "version": "1.0.0",
+    "platform": {
+     "category": "Others",
+     "name": "Dstroy",
+     "manufacturer": "Fully Bugged Software",
+     "year": 1995
+    },
+    "assets": [
+     {
+      "platform": "dstroy",
+      "extensions": [
+       "data"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "K3V.GBA",
+   "platform": "Game Boy Advance",
+   "repository": {
+    "platform": "github",
+    "owner": "K3v-68",
+    "name": "k3v-gba"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2026-08-14",
+    "version": "0.1.5",
+    "platform": {
+     "category": "Handheld",
+     "name": "Game Boy Advance",
+     "manufacturer": "Nintendo",
+     "year": 2001
+    },
+    "assets": [
+     {
+      "platform": "gba",
+      "extensions": [
+       "gba"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "Koala_Koa.Paprium",
+   "platform": "Paprium",
+   "repository": {
+    "platform": "github",
+    "owner": "thekoalakoa",
+    "name": "paprium-pocket"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/thekoalakoa"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2026-10-12",
+    "version": "0.2.6",
+    "platform": {
+     "category": "Others",
+     "name": "Paprium",
+     "manufacturer": "WaterMelon",
+     "year": 2020
+    },
+    "assets": [
+     {
+      "platform": "paprium",
+      "filename": "Paprium.md",
+      "extensions": [
+       "md",
+       "bin"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "Mazamars312.Amiga",
+   "platform": "Amiga",
+   "repository": {
+    "platform": "github",
+    "owner": "Mazamars312",
+    "name": "Analogue-Amiga"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2024-01-18",
+    "version": "0.2.3",
+    "platform": {
+     "category": "Computer",
+     "name": "Amiga",
+     "manufacturer": "Commodore International",
+     "year": 1985
+    },
+    "assets": [
+     {
+      "platform": "amiga",
+      "filename": "amiga_mpu_bios.bin",
+      "extensions": [
+       "bin"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "amiga",
+      "filename": "AmigaVision.rom",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "Mazamars312.Amiga_Analogizer",
+   "platform": "Amiga",
+   "repository": {
+    "platform": "github",
+    "owner": "RndMnkIII",
+    "name": "Analogizer-Amiga"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2025-02-01",
+    "version": "0.3.2",
+    "platform": {
+     "category": "Computer",
+     "name": "Amiga",
+     "manufacturer": "Commodore International",
+     "year": 1985
+    },
+    "assets": [
+     {
+      "platform": "amiga",
+      "filename": "amiga_mpu_bios.bin",
+      "extensions": [
+       "bin"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "amiga",
+      "filename": "MegaAGS-Kickstart.rom",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "Mazamars312.NeoGeo",
+   "platform": "Neo Geo",
+   "repository": {
+    "platform": "github",
+    "owner": "Mazamars312",
+    "name": "Analogue_Pocket_Neogeo"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2023-01-17",
+    "version": "0.8.1",
+    "platform": {
+     "category": "Console",
+     "name": "Neo Geo",
+     "manufacturer": "SNK",
+     "year": 1990
+    },
+    "assets": [
+     {
+      "platform": "ng",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "ng",
+      "filename": "uni-bios_4_0.rom",
+      "extensions": [
+       "rom",
+       "sp1",
+       "bin"
+      ]
+     },
+     {
+      "platform": "ng",
+      "filename": "000-lo.lo",
+      "extensions": [
+       "lo"
+      ]
+     },
+     {
+      "platform": "ng",
+      "filename": "sfix.sfix",
+      "extensions": [
+       "sfix"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "srom"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "bin",
+       "pbin",
+       "prom"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "cbin",
+       "crom0"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "mbin",
+       "m1rom"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "vbin",
+       "vroma0"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "Mazamars312.NeoGeo_Analogizer",
+   "platform": "Neo Geo",
+   "repository": {
+    "platform": "github",
+    "owner": "RndMnkIII",
+    "name": "Analogizer_Mazamars312_Neogeo_0.8.1"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2025-02-04",
+    "version": "1.1.3",
+    "platform": {
+     "category": "Console",
+     "name": "Neo Geo",
+     "manufacturer": "SNK",
+     "year": 1990
+    },
+    "assets": [
+     {
+      "platform": "ng",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "ng",
+      "filename": "uni-bios_4_0.rom",
+      "extensions": [
+       "rom",
+       "sp1",
+       "bin"
+      ]
+     },
+     {
+      "platform": "ng",
+      "filename": "000-lo.lo",
+      "extensions": [
+       "lo"
+      ]
+     },
+     {
+      "platform": "ng",
+      "filename": "sfix.sfix",
+      "extensions": [
+       "sfix"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "srom"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "bin",
+       "pbin",
+       "prom"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "cbin",
+       "crom0"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "mbin",
+       "m1rom"
+      ]
+     },
+     {
+      "platform": "ng",
+      "extensions": [
+       "vbin",
+       "vroma0"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "Mazamars312.PC Engine CD",
+   "platform": "PC Engine CD",
+   "repository": {
+    "platform": "github",
+    "owner": "Mazamars312",
+    "name": "openfpga-pcengine-cd"
+   },
+   "requires_license": false,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2024-11-12",
+    "version": "0.2.3",
+    "platform": {
+     "category": "Console",
+     "name": "PC Engine CD",
+     "manufacturer": "NEC Home Electronics",
+     "year": 1988
+    },
+    "assets": [
+     {
+      "platform": "pcecd",
+      "extensions": [
+       "cue"
+      ]
+     },
+     {
+      "platform": "pcecd",
+      "filename": "bios_3_0_usa.pce",
+      "extensions": [
+       "pce"
+      ]
+     },
+     {
+      "platform": "pcecd",
+      "filename": "pce_mpu_bios.bin",
+      "extensions": [
+       "bin"
+      ],
+      "core_specific": true
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "coc.bublbobl",
+   "platform": "Bubble Bobble",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2026-09-26",
+    "version": "1.0.0",
+    "platform": {
+     "category": "Arcade",
+     "name": "Bubble Bobble",
+     "manufacturer": "Coin-Op Collection",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "bublbobl",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "bublbobl",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "coc.darkmist",
+   "platform": "The Lost Castle In Darkmist",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": null,
+   "release": {
+    "release_date": "2026-10-06",
+    "version": "1.0.0",
+    "platform": {
+     "category": "Arcade",
+     "name": "The Lost Castle In Darkmist",
+     "manufacturer": "Coin-Op Collection",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "darkmist",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "darkmist",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jt88game",
+   "platform": "jt88game",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "c68f02e",
+    "platform": {
+     "category": "Arcade",
+     "name": "jt88game",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jt88game",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jt88game",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtcal50",
+   "platform": "jtcal50",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "c68f02e",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtcal50",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jtcal50",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtcal50",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtgals",
+   "platform": "jtgals",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "c68f02e",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtgals",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jtgals",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtgals",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtgrad3",
+   "platform": "jtgrad3",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "6547d6a",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtgrad3",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jtgrad3",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtgrad3",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtharier",
+   "platform": "jtharier",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "6547d6a",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtharier",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jtharier",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtharier",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtktiger",
+   "platform": "jtktiger",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "c68f02e",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtktiger",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jtktiger",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtktiger",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtroller",
+   "platform": "jtroller",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "c68f02e",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtroller",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jtroller",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtroller",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtsimson",
+   "platform": "jtsimson",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "6547d6a",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtsimson",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jtsimson",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtsimson",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtsuratk",
+   "platform": "jtsuratk",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2025-10-31",
+    "version": "e00420d",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtsuratk",
+     "manufacturer": "JT FPGA",
+     "year": 2025
+    },
+    "assets": [
+     {
+      "platform": "jtsuratk",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtsuratk",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jttaitox",
+   "platform": "jttaitox",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "6547d6a",
+    "platform": {
+     "category": "Arcade",
+     "name": "jttaitox",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jttaitox",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jttaitox",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "jotego.jtwardnr",
+   "platform": "jtwardnr",
+   "repository": {
+    "platform": "github",
+    "owner": "jotego",
+    "name": "jtbin"
+   },
+   "requires_license": true,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/jotego"
+    ],
+    "patreon": "https://www.patreon.com/jotego",
+    "custom": [
+     "https://www.paypal.me/topapate"
+    ]
+   },
+   "updaters": {
+    "license": {
+     "filename": "beta.bin"
+    },
+    "previous": [],
+    "declare_ai": []
+   },
+   "release": {
+    "release_date": "2026-10-11",
+    "version": "6547d6a",
+    "platform": {
+     "category": "Arcade",
+     "name": "jtwardnr",
+     "manufacturer": "JT FPGA",
+     "year": 2026
+    },
+    "assets": [
+     {
+      "platform": "jtwardnr",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "jtwardnr",
+      "extensions": [
+       "rom"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.hiimpact",
+   "platform": "High Impact Football",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-11-25",
+    "version": "1.0.6",
+    "platform": {
+     "category": "Arcade",
+     "name": "High Impact Football",
+     "manufacturer": "pram0d",
+     "year": 2024
+    },
+    "assets": [
+     {
+      "platform": "hiimpact",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "hiimpact",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.mortalkombat",
+   "platform": "Mortal Kombat",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-10-08",
+    "version": "1.0.6",
+    "platform": {
+     "category": "Arcade",
+     "name": "Mortal Kombat",
+     "manufacturer": "pram0d",
+     "year": 2024
+    },
+    "assets": [
+     {
+      "platform": "mortalkombat",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "mortalkombat",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.narc",
+   "platform": "NARC",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-09-07",
+    "version": "1.0.1",
+    "platform": {
+     "category": "Arcade",
+     "name": "NARC",
+     "manufacturer": "pram0d",
+     "year": 2024
+    },
+    "assets": [
+     {
+      "platform": "narc",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "narc",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.smashtv",
+   "platform": "Smash T.V.",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-09-22",
+    "version": "1.0.6",
+    "platform": {
+     "category": "Arcade",
+     "name": "Smash T.V.",
+     "manufacturer": "Williams",
+     "year": 1990
+    },
+    "assets": [
+     {
+      "platform": "smashtv",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "smashtv",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.strikeforce",
+   "platform": "Strike Force",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-12-25",
+    "version": "1.0.6",
+    "platform": {
+     "category": "Arcade",
+     "name": "Strike Force",
+     "manufacturer": "pram0d",
+     "year": 2024
+    },
+    "assets": [
+     {
+      "platform": "strikeforce",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "strikeforce",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.superhiimpact",
+   "platform": "Super High Impact",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-11-28",
+    "version": "1.0.6",
+    "platform": {
+     "category": "Arcade",
+     "name": "Super High Impact",
+     "manufacturer": "pram0d",
+     "year": 2024
+    },
+    "assets": [
+     {
+      "platform": "superhiimpact",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "superhiimpact",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.terminator2",
+   "platform": "Terminator 2",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-12-25",
+    "version": "1.0.6",
+    "platform": {
+     "category": "Arcade",
+     "name": "Terminator 2",
+     "manufacturer": "pram0d",
+     "year": 2024
+    },
+    "assets": [
+     {
+      "platform": "terminator2",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "terminator2",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.totalcarnage",
+   "platform": "Total Carnage",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-11-02",
+    "version": "1.0.6",
+    "platform": {
+     "category": "Arcade",
+     "name": "Total Carnage",
+     "manufacturer": "pram0d",
+     "year": 2024
+    },
+    "assets": [
+     {
+      "platform": "totalcarnage",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "totalcarnage",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "pram0d.trog",
+   "platform": "Trog",
+   "repository": {
+    "platform": "github",
+    "owner": "Coin-OpCollection",
+    "name": "Distribution-OpenFPGA"
+   },
+   "requires_license": true,
+   "sponsor": null,
+   "updaters": {
+    "license": {
+     "filename": "coinop.key"
+    },
+    "previous": []
+   },
+   "release": {
+    "release_date": "2024-11-16",
+    "version": "1.0.6",
+    "platform": {
+     "category": "Arcade",
+     "name": "Trog",
+     "manufacturer": "pram0d",
+     "year": 2024
+    },
+    "assets": [
+     {
+      "platform": "trog",
+      "extensions": [
+       "json"
+      ],
+      "core_specific": true
+     },
+     {
+      "platform": "trog",
+      "extensions": [
+       "rom"
+      ]
+     },
+     {
+      "platform": "coinopkey",
+      "filename": "coinop.key",
+      "extensions": [
+       "key"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "identifier": "agg23.Arduboy",
+   "platform": "Arduboy",
+   "repository": {
+    "platform": "github",
+    "owner": "agg23",
+    "name": "openfpga-arduboy"
+   },
+   "requires_license": false,
+   "sponsor": {
+    "github": [
+     "https://github.com/sponsors/agg23"
+    ]
+   },
+   "updaters": null,
+   "release": {
+    "release_date": "2022-09-03",
+    "version": "0.9.0",
+    "platform": {
+     "category": "Handheld",
+     "name": "Arduboy",
+     "manufacturer": "Arduboy",
+     "year": 2016
+    },
+    "assets": [
+     {
+      "platform": "arduboy",
+      "extensions": [
+       "hex"
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
