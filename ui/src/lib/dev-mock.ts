@@ -288,7 +288,7 @@ const handlers: Record<string, (args: any) => unknown> = {
     { id: 'me.Homebrew', installed_version: '0.1', latest_version: '', release_date: '', status: 'NotInCatalog' },
     { id: 'alfatreze.TAU', installed_version: '0.6.0', latest_version: '', release_date: '', status: 'Excluded' },
   ], source: 'Cache', fetched: Math.floor(Date.now() / 1000) - 3600 }),
-  marketplace_download: (a) => ({ download: { path: `/cache/${a.coreId}.zip`, bytes: 3.2 * MB, sha256: 'b'.repeat(64), checksum: a.coreId === 'agg23.Arduboy' ? 'NotPublished' : 'Verified' }, vetted: { core_id: a.coreId as string, version: '1.4.0', date_release: '2026-09-02', platform_ids: ['snes'], firmware_required: '2.0', dock_supported: true, files: 14, uncompressed_bytes: 6 * MB, asset_files: 2 } }),
+  marketplace_download: (a) => ({ download: { path: `/cache/${a.coreId}.zip`, bytes: 3.2 * MB, sha256: 'b'.repeat(64), checksum: a.coreId === 'agg23.Arduboy' ? 'NotPublished' : 'Verified' }, vetted: { core_id: a.coreId as string, version: (a.version as string | null) ?? '1.4.0', date_release: '2026-09-02', platform_ids: ['snes'], firmware_required: '2.0', dock_supported: true, files: 14, uncompressed_bytes: 6 * MB, asset_files: 2 } }),
   update_check: () => null,
   update_download: () => [],
   persist_names: () => ({ 16: 'Halcyon EQ preset' }),
