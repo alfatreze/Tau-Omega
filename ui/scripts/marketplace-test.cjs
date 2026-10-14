@@ -45,15 +45,11 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('button', { name: 'Clear filters' }).click(); await p.waitForTimeout(200);
   assert.ok(await rows().count() >= 10); ok('Clear filters brings the list back');
 
-  await p.getByRole('button', { name: 'Needs a key file' }).click(); await p.waitForTimeout(200);
-  assert.equal(await rows().count(), 2); assert.equal(await p.getByRole('button', { name: 'Needs a key file' }).getAttribute('aria-pressed'), 'true'); ok('the key-file toggle filters to cores that need one and reports its state');
-  await p.getByRole('button', { name: 'Needs a key file' }).click(); await p.waitForTimeout(200);
-
   await search('arduboy'); await p.waitForTimeout(200);
   assert.match(await p.locator('.mk-card').first().innerText(), /Installed/); ok('a core on the card is marked Installed');
   await rows().first().click(); await p.waitForTimeout(600);
   assert.equal(await sheet().count(), 1);
-  assert.match(await sheet().innerText(), /Needs Pocket firmware 1\.1 or newer[\s\S]*Dock: yes[\s\S]*Link port: no/); ok('compatibility is shown from the catalog before anything is downloaded');
+  assert.match(await sheet().innerText(), /Requirements[\s\S]*Pocket firmware\s*1\.1 or newer[\s\S]*Dock\s*yes[\s\S]*Link port\s*no/); ok('requirements are shown from the catalog before anything is downloaded');
   assert.equal(await sheet().locator('img.mk-banner').count(), 1); ok('the platform banner is shown in the details');
   await sheet().getByRole('button', { name: 'Download and review' }).click(); await p.waitForTimeout(600);
   assert.match(await sheet().innerText(), /no checksum was published for this release/); ok('a release without a checksum says so once it is downloaded');
@@ -63,7 +59,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   await search('capcom'); await p.waitForTimeout(200);
   await rows().first().click(); await p.waitForTimeout(600);
-  assert.match(await sheet().innerText(), /You will need a key file[\s\S]*from the author[\s\S]*beta\.bin[\s\S]*Cores\/jotego\.jtcps1\//); ok('a core that needs a key file says which file and where it goes');
+  assert.match(await sheet().innerText(), /Requirements[\s\S]*Key file[\s\S]*beta\.bin[\s\S]*not in the download[\s\S]*get it from the author[\s\S]*Cores\/jotego\.jtcps1\//); ok('a core that needs a key file lists it under Requirements with where to get it and where it goes');
   await p.keyboard.press('Escape'); await p.waitForTimeout(150);
 
   await search('snes'); await p.waitForTimeout(200);
@@ -90,7 +86,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.keyboard.press('Escape'); await p.waitForTimeout(150);
   await search('snes'); await p.waitForTimeout(200);
   await rows().first().click(); await p.waitForTimeout(500);
-  assert.match(await sheet().innerText(), /Needs Pocket firmware 2\.0/); assert.match(await sheet().innerText(), /Earlier versions \(1\)/); ok('the firmware requirement and the version history come from the catalog');
+  assert.match(await sheet().innerText(), /Pocket firmware\s*2\.0 or newer/); assert.match(await sheet().innerText(), /Earlier versions \(1\)/); ok('the firmware requirement and the version history come from the catalog');
   await sheet().locator('summary').click();
   await sheet().getByRole('button', { name: 'Choose this version' }).click(); await p.waitForTimeout(200);
   assert.ok(await sheet().getByRole('button', { name: 'Download version 0.9.0 and review' }).count() === 1); ok('an earlier version can be chosen and the install button names it');

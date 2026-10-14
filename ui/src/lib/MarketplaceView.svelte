@@ -11,7 +11,7 @@
   export let card = '';
 
   let result: CatalogResult | null = null; let loading = false; let error = '';
-  let filters: Filters = { query: '', category: '', licence: false, installedOnly: false, sort: 'newest' };
+  let filters: Filters = { query: '', category: '', installedOnly: false, sort: 'newest' };
   let statuses = new Map<string, CoreStatus>();
   let searchEl: HTMLInputElement;
   let selected: CatalogCore | null = null;
@@ -105,7 +105,6 @@
     <label><span class="sr">Sort</span>
       <select bind:value={filters.sort}><option value="newest">Newest release</option><option value="name">Name</option></select>
     </label>
-    <button class="chip toggle" aria-pressed={filters.licence} title="Cores that will not run until you add a key file from the author (about 20 cores)" on:click={() => (filters.licence = !filters.licence)}>Needs a key file</button>
     <button class="chip toggle" aria-pressed={filters.installedOnly} disabled={!card} title={card ? '' : 'Open a card to filter by what it has'} on:click={() => (filters.installedOnly = !filters.installedOnly)}>On this card</button>
   </div>
   <div class="mk-tags" role="group" aria-label="Category">
@@ -117,8 +116,8 @@
   {#if error && !result}
     <div class="empty"><h2>The list could not be loaded</h2><p>{error}</p><button class="primary" on:click={() => load(true)}>Try again</button></div>
   {:else if result && !shown.length}
-    <div class="empty"><h2>No cores match</h2><p>{filters.query ? `Nothing matches “${filters.query}”` : 'Nothing matches these filters'}{filters.category ? ` in ${filters.category}` : ''}{filters.licence ? ' that need a key file' : ''}{filters.installedOnly ? ' on this card' : ''}.</p>
-      <button class="quiet" on:click={() => (filters = { ...filters, query: '', category: '', licence: false, installedOnly: false })}>Clear filters</button></div>
+    <div class="empty"><h2>No cores match</h2><p>{filters.query ? `Nothing matches “${filters.query}”` : 'Nothing matches these filters'}{filters.category ? ` in ${filters.category}` : ''}{filters.installedOnly ? ' on this card' : ''}.</p>
+      <button class="quiet" on:click={() => (filters = { ...filters, query: '', category: '', installedOnly: false })}>Clear filters</button></div>
   {:else if result}
     <ul class="mk-grid" aria-busy={loading} aria-label="Cores">
       {#each shown as item (item.id)}
@@ -138,7 +137,6 @@
           </button>
           <div class="mk-foot">
             {#if item.category}<button class="chip toggle mk-tag" aria-pressed={filters.category === item.category} aria-label={`Show only ${item.category}`} on:click={() => toggleCategory(item.category)}>{item.category}</button>{/if}
-            {#if item.requires_license}<span class="chip" title="This core will not run until you add a key file from the author">Needs a key file</span>{/if}
             {#if chip(item)}<span class="chip" class:capable={statusOf(item)?.status === 'UpdateAvailable'}>{chip(item)}</span>{/if}
             <span class="mk-ver">{item.version || '—'}<small>{item.release_date}</small></span>
           </div>
@@ -163,18 +161,23 @@
       {#if statusOf(selected) && chip(selected)}<div><dt>On your card</dt><dd>{statusOf(selected)?.installed_version} · {chip(selected)}</dd></div>{/if}
     </dl>
 
-    {#if selected.requires_license}
-      <p class="mk-callout" role="note"><strong>You will need a key file.</strong> This core does not run without one, and it is not in the download: you get it from the author (see Source above). After installing, put <code>{selected.license_filename || 'the file the author names'}</code> in <code>Cores/{selected.id}/</code> on the card.</p>
-    {/if}
-    {#if selected.assets.length}
-      <p class="mk-small">Put your own files in {#each selected.assets as a, i}<code>Assets/{a.platform}/{a.core_specific ? selected.id : 'common'}</code>{#if a.extensions.length} ({a.extensions.map((x) => '.' + x).join(' ')}){/if}{i < selected.assets.length - 1 ? ', ' : ''}{/each}.</p>
-    {/if}
     {#if selected.sponsor.links.length}
       <p class="mk-small">Support the author: {#each selected.sponsor.links as l, i}<code>{l.replace('https://', '')}</code>{i < selected.sponsor.links.length - 1 ? ', ' : ''}{/each}</p>
     {/if}
 
-    <h3>Compatibility</h3>
-    <p class="mk-small">Needs Pocket firmware {selected.firmware_required || 'not stated'} or newer · Dock: {yesNo(selected.dock_supported)} · Link port: {yesNo(selected.link_port)} · Sleep: {yesNo(selected.sleep_supported)}</p>
+    <h3>Requirements</h3>
+    <dl class="mk-reqs">
+      <div><dt>Pocket firmware</dt><dd>{selected.firmware_required ? `${selected.firmware_required} or newer` : 'not stated'}</dd></div>
+      <div><dt>Dock</dt><dd>{yesNo(selected.dock_supported)}</dd></div>
+      <div><dt>Link port</dt><dd>{yesNo(selected.link_port)}</dd></div>
+      <div><dt>Sleep</dt><dd>{yesNo(selected.sleep_supported)}</dd></div>
+      {#if selected.requires_license}
+        <div class="mk-req-key"><dt>Key file</dt><dd><code>{selected.license_filename || 'a file the author names'}</code> is not in the download: get it from the author (see Source above) and put it in <code>Cores/{selected.id}/</code> on the card. The core will not run without it.</dd></div>
+      {/if}
+      {#if selected.assets.length}
+        <div><dt>Your own files</dt><dd>{#each selected.assets as a, i}<code>Assets/{a.platform}/{a.core_specific ? selected.id : 'common'}</code>{#if a.extensions.length} ({a.extensions.map((x) => '.' + x).join(' ')}){/if}{i < selected.assets.length - 1 ? ', ' : ''}{/each}</dd></div>
+      {/if}
+    </dl>
     {#if selected.declares_ai.length}<p class="mk-callout soft" role="note">The author says they used AI tools to build this core: {selected.declares_ai.join(', ')}.</p>{/if}
     {#if selected.history.length > 1}
       <details class="mk-history"><summary>Earlier versions ({selected.history.length - 1})</summary>
@@ -224,6 +227,8 @@
   .mk-ver{margin-left:auto;font-size:12px;color:#c7d1d0;display:flex;flex-direction:column;align-items:flex-end;line-height:1.3}.mk-ver small{font-size:11px;color:#95a5a4}
   .mk-icon{display:block;width:28px;height:28px;border-radius:7px;image-rendering:pixelated}
   .mk-banner{display:block;width:100%;height:auto;border-radius:10px;margin:0 0 16px;background:#000}
+  .mk-reqs{display:grid;gap:8px;margin:6px 0 4px}.mk-reqs>div{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:baseline}.mk-reqs dt{font-size:12px;color:#95a5a4}.mk-reqs dd{margin:0;font-size:12.5px;color:#dce6e4;overflow-wrap:anywhere;line-height:1.5}
+  .mk-req-key{border:1px solid #5c5030;background:#241f12;border-radius:9px;padding:9px 11px}.mk-req-key dt{color:#e5d9a8;font-weight:700}
   .mk-history{margin:10px 0;font-size:12px;color:#a6b3b2}.mk-history summary{cursor:pointer}.mk-history ul{margin:8px 0;padding:0;list-style:none}.mk-history li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}
   .mk-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100}
   .mk-sheet{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);overflow:auto;z-index:101;background:#1a2325;border-left:1px solid #2c393a;padding:26px 28px 40px;box-sizing:border-box}
@@ -233,5 +238,5 @@
   .mk-small{font-size:12px;color:#a6b3b2;line-height:1.55;margin:6px 0}
   .mk-callout{border:1px solid #3b5a58;background:#16292a;border-radius:9px;padding:10px 12px;font-size:12px;line-height:1.5;color:#dce6e4;margin:10px 0}.mk-callout.soft{border-color:#5c5030;background:#241f12;color:#e5d9a8}
   code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px}
-  @media(max-width:720px){.mk-grid{grid-template-columns:1fr}.mk-sheet{padding:20px 16px 32px}}
+  @media(max-width:720px){.mk-reqs>div{grid-template-columns:1fr;gap:2px}.mk-grid{grid-template-columns:1fr}.mk-sheet{padding:20px 16px 32px}}
 </style>
