@@ -64,14 +64,15 @@ Existing language: dark surface `#161f20`/`#1a2325`, border `#2c393a`, accent mi
 - **M1** `catalog_release` + trust checks on a zip + `core_update` matching, tests on the real Arduboy zip (committed small fixture) and synthetic hostile zips (traversal, symlink, wrong id, oversize).
 - **M2** host commands + CLI (`tau catalog`, `core-updates`), network layer with cache/ETag/rate-limit handling.
 - **M3** Marketplace page + detail + filters (dev-mock first, browser-checked, svelte-check).
+- **M3b** artwork: remote-zip reader (range requests), `icon.bin`/platform image decode, cache by release tag, "Download all artwork".
 - **M4** install flow through the existing plan/executor, licence note; one real install of a small core onto `CARDWRITE` with approval.
 - **M5** Core updates section, `Update all` as sequential plans, count badge, migration note; one real update on `CARDWRITE`.
 - **M6** polish: offline states, keyboard pass, a11y pass, docs, roadmap entry, release notes.
 
-## 6. Decisions for the owner
+## 6. Decisions (owner, 2026-10-14)
 
-1. **Scope of "all cores":** show everything in the library (my default) or only cores marked compatible with your cards?
-2. **Unverified downloads:** allow releases that publish no checksum (my default: allow, labelled) or refuse?
-3. **GitHub token:** v1 unauthenticated (60/h, lazy lookups); add an optional token setting later?
-4. **Tau's own cores** appear in the Marketplace? (My default: yes, as a pinned first entry linking to the existing Tau update path, no second install route.)
-5. Core icons/screenshots from the repositories: not in v1 (privacy and weight); revisit after M5.
+1. **Scope:** show every catalog core. The catalog carries no compatibility data; compatibility (`core.json` `version_required`, Dock support) is only known from the zip, so it appears as a line in the install plan, not as a filter.
+2. **No checksum:** allowed, with a small notice ("No checksum published for this release") in the plan and on the detail panel.
+3. **GitHub token:** not in v1 (lookups are lazy and cached; 60/hour is enough). Revisit only if rate limits bite.
+4. **Tau's own cores:** skipped for now; a shared approach with the existing Tau update path is a later item.
+5. **Icons and shots:** bring them, and download again only when a core's release changes. Sources: the catalog has no images and no screenshots anywhere; the only art is inside each release zip (`Cores/<id>/icon.bin`, `Platforms/_images/<platform>.bin`). Plan (M3b): read just those entries from the remote zip with HTTP range requests (central directory at the end, then the two entries), decode the Pocket image format, cache by `(core id, release tag)` in the app cache, fetch lazily for visible rows and on an explicit "Download all artwork" action, never block the list on it. If a host does not support range requests, fall back to the whole zip only when the user opens that core. No third-party screenshot scraping (READMEs are untrusted, vary, and would add a second network scope).
