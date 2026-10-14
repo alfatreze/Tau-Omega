@@ -271,7 +271,11 @@ const handlers: Record<string, (args: any) => unknown> = {
   },
   marketplace_core_updates: () => ({ rows: [
     { id: 'agg23.SNES', installed_version: '1.2.0', latest_version: '1.4.0', release_date: '2026-09-02', status: 'UpdateAvailable' },
+    { id: 'spiritualized.GB', installed_version: '1.0.0', latest_version: '1.2.1', release_date: '2026-08-14', status: 'UpdateAvailable' },
+    { id: 'Mazamars312.PCE', installed_version: '1.9.0', latest_version: '2.0.3', release_date: '2025-12-01', status: 'UpdateAvailable' },
     { id: 'agg23.Arduboy', installed_version: '0.9.0', latest_version: '0.9.0', release_date: '2022-09-03', status: 'UpToDate' },
+    { id: 'old.NES', installed_version: '0.3', latest_version: '1.1.0', release_date: '2025-04-01', status: { ReplacedBy: 'pack.NES' } },
+    { id: 'me.Homebrew', installed_version: '0.1', latest_version: '', release_date: '', status: 'NotInCatalog' },
     { id: 'alfatreze.TAU', installed_version: '0.6.0', latest_version: '', release_date: '', status: 'Excluded' },
   ], source: 'Cache', fetched: Math.floor(Date.now() / 1000) - 3600 }),
   marketplace_download: (a) => ({ download: { path: `/cache/${a.coreId}.zip`, bytes: 3.2 * MB, sha256: 'b'.repeat(64), checksum: a.coreId === 'agg23.Arduboy' ? 'NotPublished' : 'Verified' }, vetted: { core_id: a.coreId as string, version: '1.4.0', date_release: '2026-09-02', platform_ids: ['snes'], firmware_required: '2.0', dock_supported: true, files: 14, uncompressed_bytes: 6 * MB, asset_files: 2 } }),

@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import VirtualList from './VirtualList.svelte';
-  import UpdatePlanView from './UpdatePlanView.svelte';
+  import CoreInstall from './CoreInstall.svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
-  import { marketplaceCatalog, marketplaceCoreUpdates, marketplaceDownload, marketplaceRelease } from './tau-api';
+  import { marketplaceCatalog, marketplaceCoreUpdates, marketplaceRelease } from './tau-api';
   import { categories, filterCores, size, sourceNote, statusLabel, statusMap, type Filters } from './marketplace';
-  import type { CatalogCore, CatalogResult, CoreStatus, MarketplaceDownload, ReleaseResult } from './types';
+  import { coreUpdateCount } from './marketStore';
+  import type { CatalogCore, CatalogResult, CoreStatus, ReleaseResult } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
   export let card = '';
 
@@ -16,7 +17,6 @@
   let searchEl: HTMLInputElement;
   let selected: CatalogCore | null = null;
   let release: ReleaseResult | null = null; let releaseBusy = false; let releaseError = '';
-  let download: MarketplaceDownload | null = null; let downloadBusy = false; let downloadError = '';
   let announce = '';
 
   $: cores = result?.catalog.cores ?? [];
@@ -36,25 +36,18 @@
   }
   async function loadStatuses(path: string) {
     if (!path) { statuses = new Map(); return; }
-    try { statuses = statusMap((await marketplaceCoreUpdates(path, false)).rows); } catch { statuses = new Map(); }
+    try { const rows = (await marketplaceCoreUpdates(path, false)).rows; statuses = statusMap(rows); coreUpdateCount.set(rows.filter((r) => r.status === 'UpdateAvailable').length); } catch { statuses = new Map(); }
   }
   onMount(() => { void load(false); });
 
   async function open(core: CatalogCore) {
-    selected = core; release = null; releaseError = ''; download = null; downloadError = '';
+    selected = core; release = null; releaseError = '';
     releaseBusy = true;
     try { release = await marketplaceRelease(core.id, false); }
     catch (e) { releaseError = errorMessage(e); }
     finally { releaseBusy = false; }
   }
   function close() { selected = null; }
-  async function fetchZip() {
-    if (!selected) return;
-    downloadBusy = true; downloadError = ''; download = null;
-    try { download = await marketplaceDownload(selected.id); }
-    catch (e) { downloadError = errorMessage(e); }
-    finally { downloadBusy = false; }
-  }
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
   let copied = false;
   async function copyRepo() { if (!selected) return; try { await navigator.clipboard.writeText(repoUrl(selected)); copied = true; setTimeout(() => (copied = false), 1500); } catch { /* the address stays visible to select */ } }
@@ -152,15 +145,8 @@
       <p class="mk-small">Open a card first (Cards page) to install this core.</p>
     {:else if !release}
       <p class="mk-small">Waiting for the release.</p>
-    {:else if !download}
-      <p class="mk-small">Omega downloads the zip, checks it, and shows exactly what would change on <strong>{card.split('/').pop()}</strong>. Nothing is written yet.</p>
-      <button class="primary" disabled={downloadBusy} on:click={fetchZip}>{downloadBusy ? 'Downloading and checking…' : 'Download and review'}</button>
-      {#if downloadError}<p class="err" role="alert">{downloadError}</p>{/if}
     {:else}
-      <p class="mk-small" role="status">Downloaded {size(download.download.bytes)} · {download.download.checksum === 'Verified' ? 'checksum verified against GitHub’s' : 'no checksum was published'} · {download.vetted.files} files{download.vetted.asset_files ? ` (${download.vetted.asset_files} in Assets)` : ''}.
-        {download.vetted.firmware_required ? `Needs Pocket firmware ${download.vetted.firmware_required} or newer.` : 'The core does not state a minimum Pocket firmware.'}
-        {download.vetted.dock_supported === false ? ' Not supported with the Dock.' : ''}</p>
-      <UpdatePlanView zipPath={download.download.path} cardPath={card} />
+      <CoreInstall coreId={selected.id} {card} on:installed={() => loadStatuses(card)} />
     {/if}
   </div>
 {/if}

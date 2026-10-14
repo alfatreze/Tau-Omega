@@ -1,5 +1,6 @@
 <script lang="ts">
   // The Cards page (known cards, player cores, other cores). Moved out of App.svelte unchanged; state and handlers stay there.
+  import CoreUpdates from './CoreUpdates.svelte';
   import type { Core } from './types';
   export let cardMounted: boolean | null = null; export let ejectedSafely = ''; export let path = '';
   export let knownCards: string[] = []; export let notice = '';
@@ -15,6 +16,7 @@
     {#if cardMounted === false}<div class="ejected-banner" role="status"><span>{ejectedSafely && ejectedSafely === path ? 'Safely ejected. You can unplug it now.' : 'This card is no longer connected.'}</span><button class="quiet" on:click={() => openKnownCard(path)}>Reconnect</button></div>{/if}
     {#if knownCards.length}<section class="known-cards" aria-labelledby="known-cards-title"><p class="eyebrow">QUICK OPEN</p><h2 id="known-cards-title">Known cards</h2><div class="known-card-list">{#each knownCards as card}<button class="known-card" class:active={path === card} on:click={() => openKnownCard(card)}><span class="known-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="5" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="16.5" r="1.1" fill="currentColor"/><circle cx="15" cy="16.5" r="1.1" fill="currentColor"/><circle cx="12" cy="19.2" r="1.1" fill="currentColor"/></svg></span><span class="known-card-body"><strong class="known-card-name">{cardName(card)}</strong><span class="known-card-badge" class:mounted={mountedCards.includes(card)}>{mountedCards.includes(card) ? 'Available now' : 'Recently used'}</span><span class="known-card-path">{card}</span></span></button>{/each}</div></section>{/if}
     <p class="notice" role="status">{notice}</p>
+    {#if path}<CoreUpdates card={path} />{/if}
     {#if cores.length}
       <section aria-labelledby="player-title">
         <div class="section-title"><div><p class="eyebrow">MEDIA PLAYERS</p><h2 id="player-title">Player cores on this card</h2></div><button class="quiet refresh-btn" aria-label="Refresh this card" title="Refresh" on:click={openFolder}><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
