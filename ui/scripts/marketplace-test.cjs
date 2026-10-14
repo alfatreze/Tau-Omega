@@ -1,0 +1,90 @@
+// Behaviour checks for the core Marketplace and Core updates against the dev mock.
+// Usage: (npm run dev &) && NODE_PATH=$(npm root -g) node scripts/marketplace-test.cjs   (URL=... to point elsewhere)
+// Exits non-zero on the first failed expectation.
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const url = process.env.URL || 'http://localhost:5173';
+let passed = 0;
+const ok = (name) => { passed++; console.log(`ok - ${name}`); };
+(async () => {
+  const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+  const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors = [];
+  p.on('pageerror', (e) => errors.push(e.message));
+  p.on('console', (m) => m.text().startsWith('[dev-mock] unmocked') && errors.push(m.text()));
+  const fresh = async () => { await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.goto(url); await p.waitForTimeout(900); };
+  const nav = (name) => p.locator('nav button', { hasText: name }).first();
+  const openMarket = async () => { await nav('Marketplace').click(); await p.waitForTimeout(700); };
+  const search = (text) => p.getByRole('searchbox', { name: 'Search cores' }).fill(text);
+  const rows = () => p.locator('.mk-open');
+  const sheet = () => p.getByRole('dialog');
+
+  await fresh();
+  assert.match(await nav('Marketplace').innerText(), /3/); ok('the nav badge counts the cores with an update on the open card');
+  await openMarket();
+  assert.ok(await rows().count() >= 10); ok('the catalog list shows cores');
+  assert.match(await p.locator('.mk-note').innerText(), /of 20 cores/); ok('the list says how many cores it shows and how fresh it is');
+
+  await search('snes'); await p.waitForTimeout(200);
+  assert.equal(await rows().count(), 1); assert.match(await rows().first().getAttribute('aria-label'), /^SNES, Console/); ok('search narrows the list by name');
+  await search('zzzz'); await p.waitForTimeout(200);
+  assert.match(await p.locator('.empty').innerText(), /No cores match[\s\S]*zzzz/); ok('an empty result names what was searched');
+  await p.getByRole('button', { name: 'Clear filters' }).click(); await p.waitForTimeout(200);
+  assert.ok(await rows().count() >= 10); ok('Clear filters brings the list back');
+
+  await p.getByRole('button', { name: 'Needs a licence file' }).click(); await p.waitForTimeout(200);
+  assert.equal(await rows().count(), 2); assert.equal(await p.getByRole('button', { name: 'Needs a licence file' }).getAttribute('aria-pressed'), 'true'); ok('the licence toggle filters to cores that need one and reports its state');
+  await p.getByRole('button', { name: 'Needs a licence file' }).click(); await p.waitForTimeout(200);
+
+  await search('arduboy'); await p.waitForTimeout(200);
+  assert.match(await p.locator('.mk-row').first().innerText(), /Installed/); ok('a core on the card is marked Installed');
+  await rows().first().click(); await p.waitForTimeout(600);
+  assert.equal(await sheet().count(), 1); assert.match(await sheet().innerText(), /No checksum published for this release/); ok('a release without a checksum shows the notice');
+  assert.match(await sheet().innerText(), /github\.com\/agg23\/openfpga-arduboy/); ok('the detail shows where the core comes from');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  assert.equal(await sheet().count(), 0); assert.match(await p.evaluate(() => document.activeElement?.className || ''), /mk-open/); ok('Escape closes the details and focus returns to the row');
+
+  await search('capcom'); await p.waitForTimeout(200);
+  await rows().first().click(); await p.waitForTimeout(600);
+  assert.match(await sheet().innerText(), /You will need a licence file[\s\S]*beta\.bin[\s\S]*Cores\/jotego\.jtcps1\//); ok('a core that needs a licence file says which file and where it goes');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+
+  await search('snes'); await p.waitForTimeout(200);
+  await rows().first().click(); await p.waitForTimeout(600);
+  await sheet().getByRole('button', { name: 'Download and review' }).click(); await p.waitForTimeout(600);
+  assert.match(await sheet().innerText(), /Downloaded[\s\S]*checksum verified[\s\S]*Needs Pocket firmware 2\.0/); ok('download and review shows the checks before any plan');
+  assert.equal(await sheet().getByRole('button', { name: 'Review update' }).count(), 1); ok('the reviewed install plan is offered, nothing is written yet');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+
+  await search(''); await p.waitForTimeout(200);
+  await rows().first().focus(); await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowDown'); await p.keyboard.press('ArrowUp');
+  assert.equal(await p.evaluate(() => [...document.querySelectorAll('.mk-open')].indexOf(document.activeElement)), 1); ok('Up and Down move between rows');
+  await p.keyboard.press('Escape');
+
+  // error and offline states (the mock switches modes through window.__mkt)
+  await p.evaluate(() => { globalThis.__mkt = 'offline'; });
+  await p.getByRole('button', { name: 'Refresh' }).click(); await p.waitForTimeout(500);
+  assert.match(await p.locator('.mk-note').innerText(), /Showing the saved list from 3 days ago\. Could not reach the server/); ok('offline: the saved list is shown with its age and the reason');
+  await p.evaluate(() => { globalThis.__mkt = 'limit'; });
+  await rows().first().click(); await p.waitForTimeout(500);
+  assert.match(await sheet().innerText(), /GitHub allows 60 lookups an hour[\s\S]*23 minutes/); ok('the GitHub limit is explained with the time to wait');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+  await p.evaluate(() => { globalThis.__mkt = 'fail'; });
+  await nav('Cards').click(); await p.waitForTimeout(300); await openMarket();
+  assert.match(await p.locator('.empty').innerText(), /The list could not be loaded[\s\S]*Try again/); ok('a list that cannot be loaded offers Try again');
+  await p.evaluate(() => { globalThis.__mkt = undefined; });
+
+  // Core updates on the Cards page
+  await nav('Cards').click(); await p.waitForTimeout(700);
+  const cu = p.getByRole('region', { name: 'Core updates' });
+  assert.match(await cu.innerText(), /3 updates available/); assert.match(await cu.innerText(), /Tau cores update through the Tau update bar/); ok('Core updates lists the updates and defers Tau cores to the Tau bar');
+  assert.match(await cu.innerText(), /Replaced by pack\.NES/); assert.match(await cu.innerText(), /Not in the library/); ok('a renamed core and an unknown core get plain statuses');
+  await cu.getByRole('button', { name: /Review all 3 updates/ }).click(); await p.waitForTimeout(300);
+  assert.match(await cu.innerText(), /Update 1 of 3/); ok('Review all starts a one-at-a-time queue');
+  await cu.getByRole('button', { name: 'Skip this one' }).click(); await p.waitForTimeout(250);
+  assert.match(await cu.innerText(), /Update 2 of 3/); ok('Skip moves to the next update without installing');
+
+  assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
+  await b.close();
+  console.log(`\n${passed} checks passed`);
+})().catch((e) => { console.error('\nFAILED:', e.message); process.exit(1); });
