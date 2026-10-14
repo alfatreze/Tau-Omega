@@ -68,5 +68,7 @@ All of section 3 is built and committed except the optional parts noted below. S
 - **Playability**: Problems lists files the Pocket will not play and incomplete ReplayGain tags; the sync plan warns.
 - **Conversion**: new `tau-audio` crate (symphonia, rubato, flacenc, ebur128) and `tau-core::convert`; settings in Settings > Syncing music; lame found or installed (Homebrew run by the app, other systems shown as instructions); source libraries list convertible files; review shows converted / ReplayGain / left-out counts; progress stages Analysing and Converting.
 - **ReplayGain**: keep + add missing (default), rebuild, off; copies only; measured values cached on the host.
-- Not done: Opus/WMA reading; a managed lame download for Windows (needs a trusted source to pin); embedding covers into converted FLAC/MP3 above LAME's size limit.
+- Not done: Opus/WMA reading; embedding covers into converted FLAC/MP3 above LAME's size limit.
 - **Found in tau-alpha (read only, reported to the owner)**: `tools/tau_details.py` `pack()` raises (`struct.error`) for a ReplayGain peak at or above 2.0 (a `u16` Q15 field), which would stop `tau_library.py` from building an index for such a library. Omega clamps to 65535.
+
+- **Windows LAME (decided 2026-10-14):** LAME publishes source only; binaries come from third parties. The winget package `LAME.LAME` 4.0 and Scoop both use Rarewares' portable zip, whose SHA-256 (`722f4311...0808` for x64) I confirmed by downloading it. The app downloads exactly that zip after the user clicks, verifies the checksum, and unpacks `lame.exe` and the DLLs into its tools folder; nothing runs as administrator. Linux stays a shown command. Not run on Windows yet (no Windows machine here); the unpack is tested on the real zip.

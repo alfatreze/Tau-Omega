@@ -117,6 +117,84 @@ pub fn lame_version(path: &Path) -> Result<String, crate::TauError> {
         .map_err(|e| crate::TauError::e(crate::ErrorCode::UnsupportedTags, e.to_string()))
 }
 
+/// A pinned place to get `lame` for Windows: the build Rarewares publishes (the same file and hash the winget
+/// `LAME.LAME` 4.0 package and Scoop use; the hash was also checked by downloading it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LameSource {
+    pub label: &'static str,
+    pub url: &'static str,
+    pub sha256: &'static str,
+    pub bytes_about: u64,
+}
+
+/// The `lame` download for this system, or `None` where the app does not download it (macOS and Linux use
+/// the package manager).
+pub fn lame_source() -> Option<LameSource> {
+    if !cfg!(windows) {
+        return None;
+    }
+    Some(if cfg!(target_arch = "x86") {
+        LameSource {
+            label: "LAME 4.0 (32-bit) from rarewares.org",
+            url: "https://www.rarewares.org/files/mp3/lame-4.0-x86.zip",
+            sha256: "74e27352e2aca6c19fdcdcc32aa6b4ae2729bb2202b28b08dad561086fe0c670",
+            bytes_about: 800_000,
+        }
+    } else {
+        LameSource {
+            label: "LAME 4.0 from rarewares.org",
+            url: "https://www.rarewares.org/files/mp3/lame-4.0-x64.zip",
+            sha256: "722f4311e2795d5c852076a579b3183beeb76e9010d9cab1e7f9d2e86d9d0808",
+            bytes_about: 823_296,
+        }
+    })
+}
+
+/// Unpacks a downloaded `lame` zip into `dest_dir` after checking its SHA-256: only `lame.exe` and the DLLs
+/// next to it are written, flat, never a path from inside the archive. Returns the path of `lame.exe`.
+pub fn install_lame_zip(
+    zip_bytes: &[u8],
+    expected_sha256: &str,
+    dest_dir: &Path,
+) -> Result<PathBuf, crate::TauError> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let bad = |m: &str| crate::TauError::e(crate::ErrorCode::VerificationFailed, m.to_string());
+    let actual = format!("{:x}", Sha256::digest(zip_bytes));
+    if !actual.eq_ignore_ascii_case(expected_sha256) {
+        return Err(bad(
+            "the downloaded file is not the one expected (checksum mismatch), so it was not used",
+        ));
+    }
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes))
+        .map_err(|e| bad(&format!("not a zip file ({e})")))?;
+    std::fs::create_dir_all(dest_dir)?;
+    let mut exe = None;
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| bad(&format!("unreadable zip ({e})")))?;
+        let name = file
+            .name()
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or("")
+            .to_string();
+        let lower = name.to_ascii_lowercase();
+        if !(lower == "lame.exe" || lower.ends_with(".dll")) || file.size() > 8 * 1024 * 1024 {
+            continue;
+        }
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
+        let target = dest_dir.join(&name);
+        std::fs::write(&target, data)?;
+        if lower == "lame.exe" {
+            exe = Some(target);
+        }
+    }
+    exe.ok_or_else(|| bad("the archive has no lame.exe"))
+}
+
 /// How a converted file is made.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -418,6 +496,40 @@ pub fn has_full_replaygain(d: &details::Details) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_lame_zip_is_checked_then_unpacked_flat_with_only_the_program_and_its_dlls() {
+        use sha2::{Digest, Sha256};
+        use std::io::Write;
+        let mut bytes = Vec::new();
+        {
+            let mut w = zip::ZipWriter::new(std::io::Cursor::new(&mut bytes));
+            let opts = zip::write::SimpleFileOptions::default();
+            for (name, body) in [
+                ("lame.exe", &b"exe"[..]),
+                ("sub/libmpg123-0.dll", b"dll"),
+                ("../evil.txt", b"x"),
+                ("readme.txt", b"r"),
+            ] {
+                w.start_file(name, opts).unwrap();
+                w.write_all(body).unwrap();
+            }
+            w.finish().unwrap();
+        }
+        let dir = std::env::temp_dir().join(format!("tau-lame-zip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let good = format!("{:x}", Sha256::digest(&bytes));
+        assert!(
+            super::install_lame_zip(&bytes, "00", &dir).is_err(),
+            "a wrong checksum writes nothing"
+        );
+        assert!(!dir.exists());
+        let exe = super::install_lame_zip(&bytes, &good, &dir).unwrap();
+        assert_eq!(exe, dir.join("lame.exe"));
+        assert!(dir.join("libmpg123-0.dll").is_file());
+        assert!(!dir.join("evil.txt").exists() && !dir.join("readme.txt").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     use super::*;
 
     fn info(
