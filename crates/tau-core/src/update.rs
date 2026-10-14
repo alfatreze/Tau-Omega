@@ -104,6 +104,8 @@ pub struct BuildIdentity {
 pub enum PairStatus {
     /// The bitstream is in [`KNOWN_BITSTREAMS`] and the ROM accepts its version.
     Verified { core_version: String },
+    /// A community core with no Tau-style firmware (no `bitstream.rbf_r` and no `tau.rom`): there is no pair to check.
+    NotApplicable,
     /// The ROM has no `TAUFWPAIR` marker: an old or non-Tau ROM cannot be vouched for.
     NoMarker,
     /// The bitstream is not in the table (or there is no ROM or bitstream to compare).
@@ -179,7 +181,17 @@ pub fn pair_status_with(identity: &BuildIdentity, docs: &[CompatDoc]) -> PairSta
     status
 }
 
+/// A core that is not Tau's and carries none of Tau's firmware files (a community core from the marketplace).
+pub fn is_generic_core(identity: &BuildIdentity) -> bool {
+    identity.rom_sha256.is_none()
+        && identity.bitstream_sha256.is_none()
+        && !crate::core_update::is_tau_core(&identity.core_id)
+}
+
 fn pair_version_status(identity: &BuildIdentity, docs: &[CompatDoc]) -> PairStatus {
+    if is_generic_core(identity) {
+        return PairStatus::NotApplicable;
+    }
     let (Some(_), Some(bitstream)) = (&identity.rom_sha256, &identity.bitstream_sha256) else {
         return PairStatus::CannotVerify;
     };
