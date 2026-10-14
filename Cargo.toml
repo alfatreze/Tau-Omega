@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/tau-core", "crates/tau-cli", "crates/testkit"]
+members = ["crates/tau-core", "crates/tau-cli", "crates/tau-net", "crates/testkit"]
 resolver = "2"
 
 [workspace.package]

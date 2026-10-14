@@ -113,3 +113,28 @@ fn errors_are_json_on_stderr_with_json() {
         "{e}"
     );
 }
+
+#[test]
+fn the_network_verbs_refuse_bad_arguments_before_any_request() {
+    let (ok, _, e) = run(&["update-download", "--json"]);
+    assert!(!ok && e.contains("release tag"), "{e}");
+    let (ok, _, e) = run(&[
+        "update-download",
+        "v0.6.0-preview.1",
+        "--out",
+        "/tmp/x",
+        "--json",
+    ]);
+    assert!(!ok && e.contains("zip name"), "{e}");
+    let (ok, _, e) = run(&["update-download", "v0.6.0-preview.1", "tau.rom", "--json"]);
+    assert!(!ok && e.contains("--out"), "{e}");
+}
+
+/// Talks to GitHub (the same single GET the app makes): `cargo test -p tau-cli -- --ignored live_update_check`.
+#[test]
+#[ignore]
+fn live_update_check_reads_the_public_release_list() {
+    let (ok, v, e) = run(&["update-check", "--json"]);
+    assert!(ok, "{e}");
+    assert!(v.is_object() && v["latest"]["tag"].is_string(), "{v}");
+}

@@ -3508,6 +3508,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tau-net"
+version = "0.4.1"
+dependencies = [
+ "serde",
+ "tau-core",
+ "ureq",
+]
+
+[[package]]
 name = "tau-omega"
 version = "0.4.1"
 dependencies = [
@@ -3516,11 +3525,11 @@ dependencies = [
  "serde",
  "serde_json",
  "tau-core",
+ "tau-net",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-updater",
- "ureq",
 ]
 
 [[package]]
