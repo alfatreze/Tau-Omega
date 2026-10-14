@@ -319,7 +319,10 @@ pub(crate) fn plan_candidates(
 /// Where a folder's cover sidecar comes from: a folder image first (`cover.jpg`, ...), else the picture
 /// embedded in the first track of the folder that has one (MP3 APIC, FLAC PICTURE). Returns the source
 /// path, its hash and whether it is embedded art.
-fn art_source(folder: &Path, first_track: &Path) -> Result<Option<(PathBuf, String, bool)>, TauError> {
+fn art_source(
+    folder: &Path,
+    first_track: &Path,
+) -> Result<Option<(PathBuf, String, bool)>, TauError> {
     if let Some(file) = cover::find_cover(folder) {
         let hash = sha256_file(&file)?;
         return Ok(Some((file, hash, false)));

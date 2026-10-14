@@ -1,6 +1,7 @@
 //! Split out of the parent module unchanged (see the parent's docs).
 
 use super::*;
+use crate::details;
 
 pub(super) fn num(value: Option<&String>, hi: u16) -> u16 {
     value
@@ -218,6 +219,7 @@ pub fn build_index(
     let root = pool.add(root_prefix);
     let (mut tracks, mut albums_b, mut first_album, mut track_new) =
         (Vec::new(), Vec::new(), BTreeMap::new(), BTreeMap::new());
+    let mut details_b: Vec<u8> = Vec::new();
     let mut album_titles = Vec::new();
     let mut track_titles = Vec::new();
     for (ai, a) in albums.iter().enumerate() {
@@ -245,6 +247,19 @@ pub fn build_index(
             push_u16(&mut tracks, ai as u16);
             tracks.push(e.fmt);
             tracks.push(0);
+            if let Some(det) = e.tags.get("_det").and_then(|hex| {
+                details::Details::from_hex(
+                    hex,
+                    &ascii_text(e.tags.get("_denc").map(String::as_str).unwrap_or(""), 40),
+                )
+            }) {
+                let offset = if det.encoder.is_empty() {
+                    0
+                } else {
+                    pool.add(&det.encoder)
+                };
+                details_b.extend(det.pack(offset));
+            }
         }
     }
     let mut artists_b = Vec::new();
@@ -321,6 +336,13 @@ pub fn build_index(
         out.extend(body);
     }
     align(&mut out);
+    // The optional track details section (header bytes 112..119): only when every track has a record.
+    let mut details_entry = (0usize, 0usize);
+    if !entries.is_empty() && details_b.len() == entries.len() * details::RECORD {
+        details_entry = (out.len(), 16 + details_b.len());
+        out.extend(details::section(&details_b));
+        align(&mut out);
+    }
     if out.len() > MAX_FILE || pool.buffer.len() > MAX_STRINGS {
         return Err(TauError::e(
             ErrorCode::IndexCapExceeded,
@@ -348,6 +370,8 @@ pub fn build_index(
         put_u32(&mut out, 48 + i * 8, *off as u32);
         put_u32(&mut out, 52 + i * 8, *len as u32);
     }
+    put_u32(&mut out, 112, details_entry.0 as u32);
+    put_u32(&mut out, 116, details_entry.1 as u32);
     let header_crc = crc32(&out[..124]);
     put_u32(&mut out, 124, header_crc);
     Ok(out)

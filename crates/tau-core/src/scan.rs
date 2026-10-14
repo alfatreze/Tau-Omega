@@ -231,16 +231,26 @@ pub fn scan_dir_with_progress(
                 path: Some(rel.clone()),
             },
         )?;
+        // A cached record from before details existed has no `_det` tag: read the file again.
         let cached = match (cache.as_mut(), print.as_ref()) {
             (Some(session), Some(print)) => session.tags(&rel, print),
             _ => None,
-        };
+        }
+        .filter(|hit| hit.tags.contains_key("_det"));
         let (tags, secs, fmt) = if let Some(hit) = cached {
             output.reused += 1;
             (hit.tags, hit.secs, hit.fmt)
         } else {
             output.read += 1;
-            match read_tags(&path) {
+            match read_tags(&path).map(|mut result| {
+                // The track's technical details travel in the tag map (hex, plus the encoder text) so the
+                // ledger cache keeps them with the rest.
+                if let Ok(det) = crate::details::extract(&path) {
+                    result.0.insert("_det".into(), det.to_hex());
+                    result.0.insert("_denc".into(), det.encoder);
+                }
+                result
+            }) {
                 Ok(result) => {
                     if let (Some(session), Some(print)) = (cache.as_mut(), print) {
                         session.put_tags(
@@ -264,6 +274,19 @@ pub fn scan_dir_with_progress(
                 }
             }
         };
+        let mut tags = tags;
+        // The cover-file flag describes the folder as it is now, not as it was when the tags were cached.
+        if let Some(mut det) = tags
+            .get("_det")
+            .and_then(|hex| crate::details::Details::from_hex(hex, ""))
+        {
+            let has = path
+                .parent()
+                .is_some_and(|p| p.join(crate::details::SIDECAR).is_file());
+            det.flags = (det.flags & !crate::details::F_SIDECAR)
+                | if has { crate::details::F_SIDECAR } else { 0 };
+            tags.insert("_det".into(), det.to_hex());
+        }
         let (dir, file) = rel
             .rsplit_once('/')
             .map(|(a, b)| (a.to_string(), b.to_string()))

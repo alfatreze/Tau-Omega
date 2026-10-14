@@ -857,7 +857,11 @@ fn a_sidecar_is_made_from_embedded_art_when_there_is_no_folder_image() {
     fs::create_dir_all(source.join("Album")).unwrap();
     fs::create_dir_all(&common).unwrap();
     let bare = source.join("bare.mp3");
-    fs::write(&bare, [b"ID3\x03\x00\x00\x00\x00\x00\x00".as_slice(), &[0u8; 64]].concat()).unwrap();
+    fs::write(
+        &bare,
+        [b"ID3\x03\x00\x00\x00\x00\x00\x00".as_slice(), &[0u8; 64]].concat(),
+    )
+    .unwrap();
     fs::write(
         source.join("Album/01 Track.mp3"),
         cover::embed_mp3_bytes(&bare, &jpg).unwrap(),
@@ -869,10 +873,20 @@ fn a_sidecar_is_made_from_embedded_art_when_there_is_no_folder_image() {
         embed_covers: false,
         art_sidecar_pal256: true,
     };
-    let sync_plan = plan(&[source], &common, "/Assets/tau/common/", options, &mut None).unwrap();
+    let sync_plan = plan(
+        &[source],
+        &common,
+        "/Assets/tau/common/",
+        options,
+        &mut None,
+    )
+    .unwrap();
     assert_eq!(sync_plan.art_sidecars.len(), 1);
     assert!(sync_plan.art_sidecars[0].from_embedded);
     execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
     let written = fs::read(sync_plan.art_sidecars[0].destination.clone()).unwrap();
-    assert_eq!(written, image::encode_pal256_bytes(&fs::read(&jpg).unwrap(), 128).unwrap());
+    assert_eq!(
+        written,
+        image::encode_pal256_bytes(&fs::read(&jpg).unwrap(), 128).unwrap()
+    );
 }

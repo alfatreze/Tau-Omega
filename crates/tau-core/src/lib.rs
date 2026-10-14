@@ -21,6 +21,7 @@ pub mod changes;
 pub mod compare;
 pub mod compat;
 pub mod cover;
+pub mod details;
 pub mod diag;
 pub mod diagnostics;
 pub mod duplicates;
