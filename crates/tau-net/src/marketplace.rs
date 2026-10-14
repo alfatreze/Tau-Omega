@@ -968,3 +968,47 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod live {
+    use super::*;
+
+    /// Talks to the real library site and GitHub (read-only, one small download): `cargo test -p tau-net -- --ignored live_marketplace --nocapture`.
+    #[test]
+    #[ignore]
+    fn live_marketplace_catalog_art_and_a_verified_download() {
+        let dir = std::env::temp_dir().join("tau-marketplace-live");
+        let _ = fs::remove_dir_all(&dir);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let cat = fetch_catalog(&Http, &dir, now, true).unwrap();
+        assert!(cat.catalog.cores.len() > 300, "{}", cat.catalog.cores.len());
+        let core = cat.catalog.find("HarpMudd.Berzerk").unwrap();
+        for kind in [ArtKind::Icon, ArtKind::Banner] {
+            let png = fetch_art(&Http, &dir, core, kind, now, true)
+                .unwrap()
+                .expect("the library has art for this core");
+            println!("{kind:?}: {} bytes", png.len());
+        }
+        let rel = resolve_release(&Http, &dir, core, Some("1.1.0"), now, true).unwrap();
+        assert!(
+            rel.release.download.sha256.is_some(),
+            "GitHub publishes a digest for this asset"
+        );
+        let got = download_core(&Http, core, &rel.release, &dir.join("dl"), 8 << 20).unwrap();
+        assert_eq!(got.checksum, Checksum::Verified);
+        let vetted = tau_core::core_package::vet_zip(
+            Path::new(&got.path),
+            &core.id,
+            tau_core::core_package::Limits::default(),
+        )
+        .unwrap();
+        println!(
+            "{} {} vetted, {} files, firmware {}",
+            vetted.core_id, vetted.version, vetted.files, vetted.firmware_required
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+}
