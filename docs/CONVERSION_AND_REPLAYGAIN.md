@@ -44,4 +44,5 @@ The cover file the Pocket reads (`tau-art/cover_128.pal256.timg`) is always made
 ## Not done yet
 - A converted file's cover is carried over only when it is under about 120 KB (LAME's limit for MP3; FLAC always keeps it).
 - Opus and WMA cannot be read.
-- The CLI has no ledger, so conversions and tag changes are re-planned as updates on every run (the app remembers what it wrote).
+
+The command line shares the app's card ledger (the app's cache folder, or `TAU_OMEGA_CACHE_DIR`), so a repeat `tau plan` recognises converted files and tag changes as already done.

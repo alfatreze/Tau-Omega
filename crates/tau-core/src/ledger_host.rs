@@ -1,4 +1,4 @@
-//! The host half of the verification ledger (`tau_core::ledger`, design in `docs/PERFORMANCE_AUDIT.md`):
+//! The host half of the verification ledger (`crate::ledger`, design in `docs/PERFORMANCE_AUDIT.md`):
 //! *which card is this* and *where does its ledger live*.
 //!
 //! The ledger is a cache in the app's own cache folder, never on the card. It is keyed by the volume's UUID
@@ -18,10 +18,45 @@ static CACHE_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// id changes when a card is unmounted and mounted again, so a swapped card never reuses an old answer.
 static VOLUMES: Mutex<Option<HashMap<(PathBuf, u64), Option<String>>>> = Mutex::new(None);
 
+/// The block device holding `path`, from `/proc/mounts` text (Linux).
+#[allow(dead_code)] // only called on Linux; unit-tested everywhere
+fn linux_device_for(mounts: &str, path: &Path) -> Option<String> {
+    mounts
+        .lines()
+        .filter_map(|l| {
+            let mut parts = l.split_whitespace();
+            Some((
+                parts.next()?.to_string(),
+                parts.next()?.replace("\\040", " "),
+            ))
+        })
+        .filter(|(dev, mount)| dev.starts_with("/dev/") && path.starts_with(mount))
+        .max_by_key(|(_, mount)| mount.len())
+        .map(|(dev, _)| dev)
+}
+
+/// The cache folder the desktop app uses (`dev.tau.omega`), so the command line and the app share what they
+/// remember about a card (`TAU_OMEGA_CACHE_DIR` overrides it). `None` when the system gives no cache location.
+pub fn default_cache_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("TAU_OMEGA_CACHE_DIR") {
+        return Some(PathBuf::from(dir));
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    #[cfg(target_os = "macos")]
+    let base = home.map(|h| h.join("Library/Caches"));
+    #[cfg(target_os = "windows")]
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| home.map(|h| h.join(".cache")));
+    base.map(|b| b.join("dev.tau.omega"))
+}
+
 /// Registers the ledger with the engine; `cache_dir` is the app's cache folder.
 pub fn init(cache_dir: PathBuf) {
     let _ = CACHE_DIR.set(cache_dir.join("ledger"));
-    tau_core::ledger::register_locator(locate);
+    crate::ledger::register_locator(locate);
 }
 
 /// `Assets/tau/common` -> `tau_common`: the part of a media root that names it, or `None` when the folder is
@@ -78,7 +113,7 @@ fn volume_uuid(root: &Path) -> Option<String> {
 #[cfg(target_os = "linux")]
 fn volume_uuid(root: &Path) -> Option<String> {
     let mounts = std::fs::read_to_string("/proc/mounts").ok()?;
-    let device = crate::device::linux_device_for(&mounts, root)?;
+    let device = linux_device_for(&mounts, root)?;
     let device = std::fs::canonicalize(&device).ok()?;
     std::fs::read_dir("/dev/disk/by-uuid")
         .ok()?
@@ -139,7 +174,7 @@ fn volume_key(root: &Path) -> Option<String> {
             found
         }
     }?;
-    let total = tau_core::storage::volume_space(root).ok()?.total_bytes;
+    let total = crate::storage::volume_space(root).ok()?.total_bytes;
     Some(format!("{}-{total}", sanitize(&uuid)))
 }
 
@@ -287,10 +322,10 @@ mod real_pocket_check {
             }
             let path = locate(&root).expect("the Pocket's volume gets a ledger");
             let t = Instant::now();
-            let cold = tau_core::scan_dir(&root, false).unwrap();
+            let cold = crate::scan_dir(&root, false).unwrap();
             let cold_time = t.elapsed();
             let t = Instant::now();
-            let warm = tau_core::scan_dir(&root, false).unwrap();
+            let warm = crate::scan_dir(&root, false).unwrap();
             let warm_time = t.elapsed();
             eprintln!(
                 "{:<18} {:>4} tracks   cold: read {:>4} in {:>8.1?}   warm: read {:>3}, reused {:>4} in {:>8.1?}   ledger {} bytes",

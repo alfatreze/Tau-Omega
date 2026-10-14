@@ -56,6 +56,10 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     let command = args.remove(0);
+    // The same card ledger the app keeps, so repeat runs recognise what was already written.
+    if let Some(dir) = tau_core::ledger_host::default_cache_dir() {
+        tau_core::ledger_host::init(dir);
+    }
     let json = flag(&mut args, "--json");
     let result = match command.as_str() {
         "cards" => cards(&args, json),

@@ -68,5 +68,5 @@ All of section 3 is built and committed except the optional parts noted below. S
 - **Playability**: Problems lists files the Pocket will not play and incomplete ReplayGain tags; the sync plan warns.
 - **Conversion**: new `tau-audio` crate (symphonia, rubato, flacenc, ebur128) and `tau-core::convert`; settings in Settings > Syncing music; lame found or installed (Homebrew run by the app, other systems shown as instructions); source libraries list convertible files; review shows converted / ReplayGain / left-out counts; progress stages Analysing and Converting.
 - **ReplayGain**: keep + add missing (default), rebuild, off; copies only; measured values cached on the host.
-- Not done: Opus/WMA reading; a managed lame download for Windows (needs a trusted source to pin); the CLI ledger; embedding covers into converted FLAC/MP3 above LAME's size limit.
+- Not done: Opus/WMA reading; a managed lame download for Windows (needs a trusted source to pin); embedding covers into converted FLAC/MP3 above LAME's size limit.
 - **Found in tau-alpha (read only, reported to the owner)**: `tools/tau_details.py` `pack()` raises (`struct.error`) for a ReplayGain peak at or above 2.0 (a `u16` Q15 field), which would stop `tau_library.py` from building an index for such a library. Omega clamps to 65535.
