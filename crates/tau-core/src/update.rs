@@ -181,11 +181,10 @@ pub fn pair_status_with(identity: &BuildIdentity, docs: &[CompatDoc]) -> PairSta
     status
 }
 
-/// A core that is not Tau's and carries none of Tau's firmware files (a community core from the marketplace).
+/// A core that is not Tau's: it carries no `tau.rom` (the firmware Tau's pairing check is about). Many community cores do
+/// ship a `bitstream.rbf_r` (Analogue's standard name); that alone does not make them Tau cores.
 pub fn is_generic_core(identity: &BuildIdentity) -> bool {
-    identity.rom_sha256.is_none()
-        && identity.bitstream_sha256.is_none()
-        && !crate::core_update::is_tau_core(&identity.core_id)
+    identity.rom_sha256.is_none() && !crate::core_update::is_tau_core(&identity.core_id)
 }
 
 fn pair_version_status(identity: &BuildIdentity, docs: &[CompatDoc]) -> PairStatus {

@@ -33,12 +33,17 @@ fn core_json(version: &str, date: &str) -> String {
 }
 
 fn zip(dir: &Path, version: &str, date: &str, rev: u8) -> PathBuf {
-    let path = dir.join(format!("agg23.Arduboy.{version}.zip"));
+    zip_with(dir, version, date, rev, "arduboy.rev")
+}
+
+/// `bitstream` is the core's bitstream file name: `arduboy.rev` or Analogue's standard `bitstream.rbf_r`.
+fn zip_with(dir: &Path, version: &str, date: &str, rev: u8, bitstream: &str) -> PathBuf {
+    let path = dir.join(format!("agg23.Arduboy.{version}.{bitstream}.zip"));
     let mut w = ZipWriter::new(fs::File::create(&path).unwrap());
     let o = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     for (name, data) in [
         ("Cores/agg23.Arduboy/core.json", core_json(version, date).into_bytes()),
-        ("Cores/agg23.Arduboy/arduboy.rev", vec![rev; 4096]),
+        (&format!("Cores/agg23.Arduboy/{bitstream}"), vec![rev; 4096]),
         ("Cores/agg23.Arduboy/data.json", br#"{"data":{"magic":"APF_VER_1","data_slots":[{"name":"ROM","id":1,"required":false,"parameters":"0x1","extensions":["hex"]}]}}"#.to_vec()),
         ("Assets/ardu/common/.gitkeep", vec![]),
         ("Platforms/ardu.json", br#"{"platform":{"category":"Handheld","name":"Arduboy","manufacturer":"Arduboy","year":2016}}"#.to_vec()),
@@ -213,5 +218,45 @@ fn a_real_world_data_json_without_slot_ids_is_a_warning_not_a_failure() {
         slots.detail.contains("declares no id") && slots.detail.contains("bios.bin"),
         "{}",
         slots.detail
+    );
+}
+
+/// A community core that ships `bitstream.rbf_r` (HarpMudd.Berzerk and most others) is still not a Tau core: no firmware
+/// pairing is claimed, and versions order it. (Found on the real card: the first version of this rule keyed on the
+/// bitstream's absence and so mistook such a core for a Tau build.)
+#[test]
+fn a_community_core_with_a_standard_bitstream_name_is_still_judged_by_version() {
+    let (d, card, bk) = (scratch("rbf"), scratch("card"), scratch("bk"));
+    let old = zip_with(&d, "1.1.0", "2026-09-14", 1, "bitstream.rbf_r");
+    let plan = install_plan::plan(&old, &card, &[], false).unwrap();
+    assert_eq!(plan.update.cores[0].pair, PairStatus::NotApplicable);
+    assert!(
+        !plan.cautions.iter().any(|c| c.contains("firmware")),
+        "{:?}",
+        plan.cautions
+    );
+    install_exec::execute(&old, &card, &plan, &plan.id, &bk, &[]).unwrap();
+    let newer = zip_with(&d, "1.1.1", "2026-09-14", 2, "bitstream.rbf_r");
+    let plan = install_plan::plan(&newer, &card, &[], false).unwrap();
+    assert_eq!(
+        plan.update.cores[0].verdict,
+        UpdateVerdict::Update,
+        "{:?}",
+        plan.update.cores[0].reasons
+    );
+    let report = install_exec::execute(&newer, &card, &plan, &plan.id, &bk, &[]).unwrap();
+    assert!(report.ok());
+    let slots = report.checks[0]
+        .items
+        .iter()
+        .find(|i| i.name == "firmware pairing")
+        .unwrap();
+    assert_eq!(format!("{:?}", slots.status), "Pass");
+    // and going back is a downgrade that needs the user's choice
+    assert!(
+        install_plan::plan(&old, &card, &[], false)
+            .unwrap()
+            .refused
+            .is_some()
     );
 }
