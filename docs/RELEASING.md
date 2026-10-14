@@ -20,5 +20,5 @@ Built 2026-10-10 with `tauri-plugin-updater` (+29 crates in `src-tauri/Cargo.loc
 
 ## Release history
 - **v0.4.1** (2026-10-10): first published version with installers and the updater. v0.4.0 was tagged and built but never published (it predated the unified page layout), so its draft and tag were deleted and the same work was released as 0.4.1. Nothing earlier than 0.4.1 can update itself.
-- **v0.4.2**: conversion of files the Pocket cannot play (FLAC/MP3 via symphonia, rubato, flacenc, lame), ReplayGain tags, cover files, library track details, CLI ledger, Windows LAME download. First release that tests the in-app updater (0.4.1 must offer it).
+- **v0.4.2**: conversion of files the Pocket cannot play (FLAC/MP3 via symphonia, rubato, flacenc, lame), ReplayGain tags, cover files, library track details, CLI ledger, Windows LAME download. First release that tests the in-app updater (0.4.1 must offer it). Published 2026-10-14; the in-app update from 0.4.1 to 0.4.2 worked (owner-tested on macOS, quick, no issues).
 - To exercise the updater end to end: publish a later version (0.4.2) and check that a running 0.4.1 offers and installs it.
