@@ -15,7 +15,13 @@ fn a_core_specific_required_slot_is_looked_for_in_the_core_folder() {
     }
     fs::write(core_dir.join("data.json"), br#"{"data":{"data_slots":[{"name":"Firmware","id":1,"required":true,"parameters":"0x10A","filename":"tau.rom"}]}}"#).unwrap();
     fs::write(common.join("tau.rom"), b"old place").unwrap();
-    let r = data_slot_problems(&core_dir, std::slice::from_ref(&common), &core_assets).unwrap();
+    let r = data_slot_problems(
+        &core_dir,
+        std::slice::from_ref(&common),
+        &core_assets,
+        false,
+    )
+    .unwrap();
     assert!(
         r.problems.iter().any(|p| p.contains("tau.rom")),
         "a core-specific slot is not satisfied by common/: {:?}",
@@ -23,10 +29,15 @@ fn a_core_specific_required_slot_is_looked_for_in_the_core_folder() {
     );
     fs::write(core_assets.join("tau.rom"), b"rom").unwrap();
     assert!(
-        data_slot_problems(&core_dir, std::slice::from_ref(&common), &core_assets)
-            .unwrap()
-            .problems
-            .is_empty()
+        data_slot_problems(
+            &core_dir,
+            std::slice::from_ref(&common),
+            &core_assets,
+            false
+        )
+        .unwrap()
+        .problems
+        .is_empty()
     );
     let _ = fs::remove_dir_all(root);
 }

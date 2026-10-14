@@ -182,3 +182,36 @@ fn versions_that_cannot_be_ordered_are_not_guessed() {
     assert!(plan.refused.is_none());
     assert!(!plan.cautions.is_empty());
 }
+
+/// The real Arduboy `data.json`: a slot with no `id` and a required file the user supplies. A genuine community core
+/// like this must install with warnings, never be called "do not rely on this install".
+#[test]
+fn a_real_world_data_json_without_slot_ids_is_a_warning_not_a_failure() {
+    let (d, card, bk) = (scratch("noid"), scratch("card"), scratch("bk"));
+    let path = d.join("agg23.Arduboy.0.9.0.zip");
+    let mut w = ZipWriter::new(fs::File::create(&path).unwrap());
+    let o = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    for (name, data) in [
+        ("Cores/agg23.Arduboy/core.json", core_json("0.9.0", "2022-09-03").into_bytes()),
+        ("Cores/agg23.Arduboy/arduboy.rev", vec![1u8; 64]),
+        ("Cores/agg23.Arduboy/data.json", br#"{"data":{"magic":"APF_VER_1","data_slots":[{"name":"HEX","required":true,"parameters":257,"extensions":["hex"],"address":"0x00000000"},{"name":"BIOS","id":2,"required":true,"filename":"bios.bin"}]}}"#.to_vec()),
+    ] {
+        w.start_file(name, o).unwrap();
+        w.write_all(&data).unwrap();
+    }
+    w.finish().unwrap();
+    let plan = install_plan::plan(&path, &card, &[], false).unwrap();
+    let report = install_exec::execute(&path, &card, &plan, &plan.id, &bk, &[]).unwrap();
+    assert!(report.ok(), "{:#?}", report.checks);
+    let slots = report.checks[0]
+        .items
+        .iter()
+        .find(|i| i.name == "data slots")
+        .unwrap();
+    assert_eq!(format!("{:?}", slots.status), "Warn");
+    assert!(
+        slots.detail.contains("declares no id") && slots.detail.contains("bios.bin"),
+        "{}",
+        slots.detail
+    );
+}
