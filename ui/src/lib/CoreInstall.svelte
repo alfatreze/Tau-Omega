@@ -8,13 +8,15 @@
   import { size } from './marketplace';
   import type { MarketplaceDownload } from './types';
   export let coreId: string; export let card: string;
+  /** A specific version from the catalog's history; empty means the newest. */
+  export let version = '';
   /** The button label before anything is downloaded. */
   export let label = 'Download and review';
   const dispatch = createEventDispatcher<{ installed: void }>();
   let download: MarketplaceDownload | null = null; let busy = false; let error = '';
   async function fetchZip() {
     busy = true; error = ''; download = null;
-    try { download = await marketplaceDownload(coreId); }
+    try { download = await marketplaceDownload(coreId, version || null); }
     catch (e) { error = errorMessage(e); }
     finally { busy = false; }
   }

@@ -58,14 +58,14 @@ pub struct MarketplaceDownload {
     pub vetted: Vetted,
 }
 
-/// Downloads the core's newest release zip into the app cache (size and published checksum checked), then vets it. A zip
+/// Downloads the core's newest release zip (or the `version` asked for, from the catalog's history) into the app cache (size and published checksum checked), then vets it. A zip
 /// that fails vetting is deleted and reported. Pass `path` to `plan_package_install` to review the install.
 #[tauri::command(async)]
-pub fn marketplace_download(app: tauri::AppHandle, core_id: String) -> Result<MarketplaceDownload, TauError> {
+pub fn marketplace_download(app: tauri::AppHandle, core_id: String, version: Option<String>) -> Result<MarketplaceDownload, TauError> {
     let dir = cache(&app)?;
     let catalog = marketplace::fetch_catalog(&Http, &dir, now(), false)?.catalog;
     let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
-    let release = marketplace::resolve_release(&Http, &dir, core, None, now(), true)?.release;
+    let release = marketplace::resolve_release(&Http, &dir, core, version.as_deref(), now(), true)?.release;
     let limits = Limits::default();
     let download = marketplace::download_core(&Http, core, &release, &dir.join("marketplace").join("downloads"), limits.max_zip_bytes)?;
     match core_package::vet_zip(Path::new(&download.path), &core.id, limits) {

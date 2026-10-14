@@ -16,6 +16,8 @@
   let statuses = new Map<string, CoreStatus>();
   let searchEl: HTMLInputElement;
   let selected: CatalogCore | null = null;
+  /** The version chosen in the history ('' = the newest). */
+  let chosen = '';
   /** Pictures by `kind:id`: undefined = not asked yet, null = the library has none. Fetched only for rows that are shown. */
   let art: Record<string, string | null | undefined> = {}; const asking = new Set<string>(); let queue: string[] = [];
   let announce = '';
@@ -58,7 +60,7 @@
   /** The list tells us which rows are showing; only those icons are fetched. */
   function onRange(e: CustomEvent<{ start: number; end: number }>) { for (const c of shown.slice(e.detail.start, e.detail.end)) wantArt('Icon', c.id); }
 
-  function open(core: CatalogCore) { selected = core; wantArt('Banner', core.id); wantArt('Icon', core.id); }
+  function open(core: CatalogCore) { selected = core; chosen = ''; wantArt('Banner', core.id); wantArt('Icon', core.id); }
   function close() { selected = null; }
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
   let copied = false;
@@ -157,8 +159,8 @@
     {#if selected.declares_ai.length}<p class="mk-callout soft" role="note">The author says they used AI tools to build this core: {selected.declares_ai.join(', ')}.</p>{/if}
     {#if selected.history.length > 1}
       <details class="mk-history"><summary>Earlier versions ({selected.history.length - 1})</summary>
-        <ul>{#each selected.history.slice(1) as h}<li>{h.version} · {h.release_date}</li>{/each}</ul>
-        <p class="mk-small">Omega installs the newest version. To use an older one, ask for it by name on the command line (<code>tau core-download {selected.id} --version …</code>).</p>
+        <ul>{#each selected.history.slice(1) as h}<li><span>{h.version} · {h.release_date}</span>{#if card && selected.download_url}<button class="quiet" aria-pressed={chosen === h.version} on:click={() => (chosen = chosen === h.version ? '' : h.version)}>{chosen === h.version ? 'Use the newest instead' : 'Choose this version'}</button>{/if}</li>{/each}</ul>
+        <p class="mk-small">An older version replaces a newer one on the card only if you confirm the downgrade in the plan. Your files are kept, as with any update.</p>
       </details>
     {/if}
 
@@ -168,7 +170,7 @@
     {:else if !selected.download_url}
       <p class="mk-small">The author has not published a download yet.</p>
     {:else}
-      <CoreInstall coreId={selected.id} {card} on:installed={() => loadStatuses(card)} />
+      {#key chosen}<CoreInstall coreId={selected.id} {card} version={chosen} label={chosen ? `Download version ${chosen} and review` : 'Download and review'} on:installed={() => loadStatuses(card)} />{/key}
     {/if}
   </div>
 {/if}
@@ -191,7 +193,7 @@
   .mk-ver{display:grid;gap:3px;text-align:right;font-size:13px;color:#c7d1d0;max-width:130px}
   .mk-icon{display:block;width:36px;height:36px;border-radius:7px;image-rendering:pixelated}
   .mk-banner{display:block;width:100%;height:auto;border-radius:10px;margin:0 0 16px;background:#000}
-  .mk-history{margin:10px 0;font-size:12px;color:#a6b3b2}.mk-history summary{cursor:pointer}.mk-history ul{margin:8px 0;padding-left:18px}
+  .mk-history{margin:10px 0;font-size:12px;color:#a6b3b2}.mk-history summary{cursor:pointer}.mk-history ul{margin:8px 0;padding:0;list-style:none}.mk-history li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}
   .mk-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100}
   .mk-sheet{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);overflow:auto;z-index:101;background:#1a2325;border-left:1px solid #2c393a;padding:26px 28px 40px;box-sizing:border-box}
   .mk-sheet h3{font-size:14px;margin:22px 0 8px}

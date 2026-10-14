@@ -101,4 +101,4 @@ export const installLame = (method: string) => invoke<LameStatus>('install_lame'
 export const marketplaceCatalog = (force = false) => invoke<CatalogResult>('marketplace_catalog', { force });
 export const marketplaceArt = (coreId: string, kind: ArtKind) => invoke<string | null>('marketplace_art', { coreId, kind });
 export const marketplaceCoreUpdates = (card: string, force = false) => invoke<CoreUpdates>('marketplace_core_updates', { card, force });
-export const marketplaceDownload = (coreId: string) => invoke<MarketplaceDownload>('marketplace_download', { coreId });
+export const marketplaceDownload = (coreId: string, version: string | null = null) => invoke<MarketplaceDownload>('marketplace_download', { coreId, version });
