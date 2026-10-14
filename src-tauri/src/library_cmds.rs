@@ -64,9 +64,13 @@ pub fn change_plan_view(plan: &tau_core::changes::ChangePlan) -> ChangePlanView 
 }
 
 #[tauri::command(async)]
-pub fn plan_changes(app: tauri::AppHandle, mut request: tau_core::changes::ChangeRequest, destination: String) -> Result<ChangePlanView, TauError> {
+pub fn plan_changes(app: tauri::AppHandle, mut request: tau_core::changes::ChangeRequest, destination: String, job_id: Option<String>, window: Window, jobs: State<JobRegistry>) -> Result<ChangePlanView, TauError> {
     request.options.convert = runtime_convert(&app)?;
-    let plan = tau_core::changes::plan_changes(Path::new(&destination), &request, &mut None)?;
+    // Measuring loudness for a big library takes a while, so a planning run reports progress like any other job.
+    let plan = match job_id {
+        Some(id) => with_job(&window, &jobs, id, |progress| tau_core::changes::plan_changes(Path::new(&destination), &request, progress))?,
+        None => tau_core::changes::plan_changes(Path::new(&destination), &request, &mut None)?,
+    };
     Ok(change_plan_view(&plan))
 }
 
