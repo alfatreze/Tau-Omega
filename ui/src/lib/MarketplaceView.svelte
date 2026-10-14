@@ -51,6 +51,14 @@
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
   let copied = false;
   async function copyRepo() { if (!selected) return; try { await navigator.clipboard.writeText(repoUrl(selected)); copied = true; setTimeout(() => (copied = false), 1500); } catch { /* the address stays visible to select */ } }
+  /** Up/Down move between rows (the list is windowed, so the neighbour is looked up in the page each time). */
+  function rowKey(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const rows = [...document.querySelectorAll<HTMLElement>('.mk-open')];
+    const at = rows.indexOf(e.currentTarget as HTMLElement);
+    const next = rows[at + (e.key === 'ArrowDown' ? 1 : -1)];
+    if (next) { e.preventDefault(); next.focus(); next.scrollIntoView({ block: 'nearest' }); }
+  }
   function onKey(e: KeyboardEvent) {
     if (e.key === '/' && !selected && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'SELECT') { e.preventDefault(); searchEl?.focus(); }
     if (e.key === 'Escape' && selected) { e.stopPropagation(); close(); }
@@ -82,7 +90,7 @@
     <button class="chip toggle" aria-pressed={filters.licence} on:click={() => (filters.licence = !filters.licence)}>Needs a licence file</button>
     <button class="chip toggle" aria-pressed={filters.installedOnly} disabled={!card} title={card ? '' : 'Open a card to filter by what it has'} on:click={() => (filters.installedOnly = !filters.installedOnly)}>On this card</button>
   </div>
-  <p class="mk-note" role="status" aria-live="polite">{#if error}<span class="err">{error}</span>{:else if loading && !result}Loading the list…{:else}{announce}{#if note} · {note}{/if}{/if}</p>
+  <p class="mk-note" role="status" aria-live="polite">{#if error && result}<span class="err">{error}</span>{:else if error}{:else if loading && !result}Loading the list…{:else}{announce}{#if note}{' · '}{note}{/if}{/if}</p>
 
   {#if error && !result}
     <div class="empty"><h2>The list could not be loaded</h2><p>{error}</p><button class="primary" on:click={() => load(true)}>Try again</button></div>
@@ -90,10 +98,10 @@
     <div class="empty"><h2>No cores match</h2><p>{filters.query ? `Nothing matches “${filters.query}”` : 'Nothing matches these filters'}{filters.category ? ` in ${filters.category}` : ''}{filters.licence ? ' that need a licence file' : ''}{filters.installedOnly ? ' on this card' : ''}.</p>
       <button class="quiet" on:click={() => (filters = { ...filters, query: '', category: '', licence: false, installedOnly: false })}>Clear filters</button></div>
   {:else if result}
-    <div class="mk-list">
+    <div class="mk-list" aria-busy={loading}>
       <VirtualList items={shown} rowHeight={68} key={(c) => c.id} label="Cores" {resetKey} let:item>
         <div class="mk-row" role="listitem">
-          <button class="mk-open" aria-label={`${item.name}, ${item.category}, version ${item.version || 'unknown'}. Show details`} on:click={() => open(item)}>
+          <button class="mk-open" on:keydown={rowKey} aria-label={`${item.name}, ${item.category}, version ${item.version || 'unknown'}. Show details`} on:click={() => open(item)}>
             <span class="core-icon" aria-hidden="true">{item.name.slice(0, 2).toUpperCase()}</span>
             <span class="mk-main"><strong>{item.name}</strong><small>{item.author} · {item.manufacturer || item.category}{item.year ? ` · ${item.year}` : ''}</small></span>
             <span class="mk-ver"><span>{item.version || '—'}</span><small>{item.release_date}</small></span>

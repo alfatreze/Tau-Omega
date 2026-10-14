@@ -262,9 +262,15 @@ const handlers: Record<string, (args: any) => unknown> = {
   card_marker_status: () => ({ setting: prefs.card_marker, is_card: true, present: prefs.card_marker === 'on' }),
   set_card_marker: (a) => { prefs.card_marker = a.setting; return { setting: a.setting, is_card: true, present: a.setting === 'on' }; },
   remove_card_marker: () => ({ setting: prefs.card_marker, is_card: true, present: false }),
-  marketplace_catalog: () => ({ catalog: { cores: marketCores }, source: 'Network', fetched: Math.floor(Date.now() / 1000) - 120 }),
+  marketplace_catalog: () => {
+    // Failure modes for checking the error states by hand: set window.__mkt = 'fail' | 'offline' | 'limit' in the console.
+    const mode = (globalThis as { __mkt?: string }).__mkt;
+    if (mode === 'fail') throw { code: 'E_IO', message: 'Could not reach the server. Are you offline?' };
+    return { catalog: { cores: marketCores }, source: mode === 'offline' ? { Offline: 'Could not reach the server. Are you offline?' } : 'Network', fetched: Math.floor(Date.now() / 1000) - (mode === 'offline' ? 3 * 86400 : 120) };
+  },
   marketplace_release: (a) => {
     const id = a.coreId as string;
+    if ((globalThis as { __mkt?: string }).__mkt === 'limit') throw { code: 'E_IO', message: 'GitHub allows 60 lookups an hour and that limit was reached. Try again in 23 minutes.' };
     if (id === 'zz.NoRelease') throw { code: 'E_NOT_FOUND', message: 'The author has not published a download yet.' };
     const c = marketCores.find((x) => x.id === id)!;
     return { release: { tag: c.version, title: `${c.name} ${c.version}`, prerelease: false, published: c.release_date, notes: 'Fixes audio pops after a long session.\nAdds a save-state menu.', download: { name: `${c.id}.${c.version}.zip`, url: `https://github.com/${c.repository.owner}/${c.repository.name}/releases/download/${c.version}/${c.id}.zip`, size: 3.2 * MB, sha256: id === 'agg23.Arduboy' ? null : 'a'.repeat(64) } }, source: 'Network', fetched: Math.floor(Date.now() / 1000) };

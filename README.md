@@ -38,4 +38,5 @@ Point it at a music folder (or several) and at a Pocket SD card. It scans, reads
 and optimises cover art in the copies, copies the music into a chosen Tau core's `Assets/<platform>/common/` folder, imports
 your playlists, builds and verifies `tau-library.tdb`, and reports exactly what it changed. It also lists every core on the card,
 shows which ones understand the library, and moves or copies media between them, rebuilding each destination's index because the
-index stores absolute card paths.
+index stores absolute card paths. It can also browse the openFPGA Library (the community's Analogue Pocket cores), install one through
+the same reviewed plan, and tell you which installed cores have updates (`docs/MARKETPLACE_SPEC.md`).
