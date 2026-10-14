@@ -1,0 +1,15 @@
+[package]
+name = "tau-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Audio decoding, resampling, FLAC encoding, MP3 encoding through an external lame, and loudness analysis for Tau Omega's conversion and ReplayGain features"
+
+[lints]
+workspace = true
+
+[dependencies]
+symphonia = { version = "0.6", default-features = false, features = ["flac", "mp3", "wav", "aiff", "alac", "aac", "isomp4", "ogg", "vorbis", "pcm", "adpcm", "id3v2", "id3v1", "ape"] }
+rubato = "5"
+flacenc = { version = "0.5", default-features = false }
+ebur128 = "0.1"
