@@ -142,7 +142,7 @@ pub fn plan_changes(
             &request.add_albums,
             common,
             &prefix,
-            request.options,
+            request.options.clone(),
             progress,
         )?)
     };
@@ -606,6 +606,7 @@ mod tests {
             mirror: false,
             embed_covers: true,
             art_sidecar_pal256: true,
+            ..sync::PlanOptions::default()
         };
         let add = plan_changes(
             &media,
@@ -614,7 +615,7 @@ mod tests {
                 add_albums: vec!["Omega Sweep Test".into()],
                 remove_albums: vec![],
                 edits: vec![],
-                options: opts,
+                options: opts.clone(),
             },
             &mut None,
         )

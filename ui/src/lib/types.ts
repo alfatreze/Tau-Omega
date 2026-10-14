@@ -26,7 +26,7 @@ export type LibraryScan = { tracks: TrackRow[]; playlists: Playlist[]; warnings:
 /** The engine's own `tau_core::sync::SyncReport`, returned directly from
  * execute_sync/execute_core_copy/execute_core_move now that it implements
  * `Serialize` (P1-1) -- no hand-written result DTO duplicates it. */
-export type SyncReport = { plan_id: string; copied: number; unchanged: number; bytes_written: number; deleted: number; art_sidecars_written: number; index_path: string; index_sha256: string; warnings: Warning[] };
+export type SyncReport = { plan_id: string; copied: number; unchanged: number; bytes_written: number; deleted: number; art_sidecars_written: number; converted: number; replaygain_tagged: number; index_path: string; index_sha256: string; warnings: Warning[] };
 /** What a rejected `invoke()` resolves to now that the engine's errors carry
  * a stable numeric `code` (see `tau_core::ErrorCode`) across the boundary
  * instead of a flattened English string. */
@@ -101,7 +101,7 @@ export type LibraryListing = { limits: IndexLimits; albums: AlbumInfo[]; tracks:
 export type FieldEdits = { title: string | null; artist: string | null; album: string | null; album_artist: string | null; year: string | null };
 export type EditRequest = { album_id: string; track: string | null; fields: FieldEdits; cover: string | null };
 export type ChangeRequest = { library_root: string | null; add_albums: string[]; remove_albums: string[]; edits: EditRequest[]; options: { mirror: boolean; embed_covers: boolean; art_sidecar_pal256: boolean } };
-export type ChangePlanView = { id: string; new_files: number; updated_files: number; unchanged_files: number; bytes_to_write: number; removed_files: number; bytes_to_remove: number; edited_files: number; playlists_updated: number; warnings: Warning[] };
+export type ChangePlanView = { id: string; new_files: number; updated_files: number; unchanged_files: number; bytes_to_write: number; removed_files: number; bytes_to_remove: number; edited_files: number; playlists_updated: number; warnings: Warning[]; converted_files: number; replaygain_files: number; skipped: { file: string; reason: string }[] };
 export type ChangeReport = { phase: string; plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string };
 export type ConnectionKind = 'direct_usb' | 'card_reader' | 'unknown';
 export type ConnectionInfo = { kind: ConnectionKind; detail: string };
@@ -115,7 +115,11 @@ export type CardBreakdown = { total_bytes: number; available_bytes: number; unit
 export type EjectResult = { ok: boolean; message: string };
 /** Whether read-backs after a write are checked against the card itself, not memory. */
 export type ReadbackStatus = { checks_the_device: boolean; failed_evictions: number };
-export type Prefs = { history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; speeds: Record<string, number>; connections: Record<string, string> };
+export type Mp3Quality = { vbr: number } | { cbr: number };
+export type ConvertSettings = { enabled: boolean; mode: 'auto' | 'manual'; max_rate: number; flac_bits: number; reduce_playable: boolean; mp3: Mp3Quality; lame_path: string | null; lame_dir: string | null; analysis_cache: string | null; replaygain: 'off' | 'add_missing' | 'rebuild' };
+export type LameInstallOption = { method: string; label: string; command: string; runnable: boolean };
+export type LameStatus = { path: string | null; version: string | null; options: LameInstallOption[] };
+export type Prefs = { convert: ConvertSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */

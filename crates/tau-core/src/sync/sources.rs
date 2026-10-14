@@ -145,6 +145,7 @@ pub(crate) fn backup_then_delete(
         sha256: item.sha256.clone(),
         cover: None,
         state: CopyState::New,
+        transform: None,
     };
     copy_verified(&copy)?;
     if sha256_file(&backup)? != item.sha256 {
@@ -208,6 +209,7 @@ pub(super) fn collect_source(
     root: &Path,
     at: &Path,
     include_root: bool,
+    convertible: bool,
     out: &mut Vec<(PathBuf, PathBuf)>,
 ) -> Result<(), TauError> {
     let mut children: Vec<_> = fs::read_dir(at)?.filter_map(Result::ok).collect();
@@ -219,8 +221,10 @@ pub(super) fn collect_source(
             continue;
         }
         if path.is_dir() {
-            collect_source(root, &path, false, out)?;
-        } else if path.is_file() && supported(&path) {
+            collect_source(root, &path, false, convertible, out)?;
+        } else if path.is_file()
+            && (supported(&path) || (convertible && crate::convert::convertible_extension(&path)))
+        {
             let rel = path.strip_prefix(root).unwrap();
             let mut converted = PathBuf::new();
             if include_root {

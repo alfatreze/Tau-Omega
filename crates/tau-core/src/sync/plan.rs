@@ -1,6 +1,7 @@
 //! Split out of the parent module unchanged (see the parent's docs).
 
 use super::*;
+use crate::convert::Action;
 
 /// Produces a read-only sync plan. Sources are copied below `common` using
 /// ASCII-safe names and never modified. `common` must be a Tau media root.
@@ -64,7 +65,13 @@ pub(super) fn plan_with_layout(
             ));
         }
         if source.is_dir() {
-            collect_source(source, source, include_source_root, &mut candidates)?;
+            collect_source(
+                source,
+                source,
+                include_source_root,
+                options.convert.enabled,
+                &mut candidates,
+            )?;
         } else {
             candidates.push((
                 source.clone(),
@@ -89,6 +96,7 @@ pub(crate) fn plan_candidates(
         mirror,
         embed_covers,
         art_sidecar_pal256,
+        convert: settings,
     } = options;
     validate_media_root(common)?;
     if candidates.is_empty() {
@@ -120,9 +128,14 @@ pub(crate) fn plan_candidates(
     let mut items = Vec::new();
     let mut art_sidecars = Vec::new();
     let mut warnings = Vec::new();
+    let mut skipped: Vec<SkippedItem> = Vec::new();
+    // Conversion and ReplayGain decisions for every file (a no-op while both are off).
+    let prepared = prepare(&candidates, &settings, &mut warnings, progress)?;
+    let lame = settings.enabled.then(|| settings.find_lame()).flatten();
     let mut bytes_to_write = 0;
     let total = candidates.len() as u64;
     for (done, (source, relative)) in candidates.into_iter().enumerate() {
+        let decision = &prepared[done];
         tick(
             progress,
             Progress {
@@ -132,9 +145,29 @@ pub(crate) fn plan_candidates(
                 path: Some(relative.to_string_lossy().into_owned()),
             },
         )?;
+        if let Action::Skip(reason) = &decision.action {
+            skipped.push(SkippedItem {
+                source: source.clone(),
+                reason: reason.clone(),
+            });
+            continue;
+        }
+        let converted = matches!(decision.action, Action::Convert(_));
+        let relative = match &decision.action {
+            Action::Convert(kind) => convert::converted_name(&relative, kind),
+            _ => relative,
+        };
         // FAT/exFAT ignore case, so `Song.mp3` and `song.mp3` are the same file on
         // the card: the second copy would silently replace the first.
         if !seen.insert(relative.to_string_lossy().to_lowercase()) {
+            if converted {
+                skipped.push(SkippedItem {
+                    source: source.clone(),
+                    reason: "a file with the same name (after conversion) is already in this copy"
+                        .into(),
+                });
+                continue;
+            }
             return Err(TauError::e(
                 ErrorCode::NameCollision,
                 format!(
@@ -153,8 +186,9 @@ pub(crate) fn plan_candidates(
                 ),
             ));
         }
-        let bytes = fs::metadata(&source)?.len();
+        let source_bytes = fs::metadata(&source)?.len();
         if audio_file(&source)
+            && matches!(decision.action, Action::Copy)
             && let Ok(details) = crate::details::extract(&source)
             && let Some(reason) = crate::details::unplayable_reason(&details)
         {
@@ -166,8 +200,44 @@ pub(crate) fn plan_candidates(
                 ),
             ));
         }
-        let sha256 = sha256_file(&source)?;
-        let cover = if embed_covers && audio_file(&source) {
+        let sha256 = match &decision.sha256 {
+            Some(sha) => sha.clone(),
+            None => sha256_file(&source)?,
+        };
+        let transform = match (&decision.action, decision.replaygain.is_empty()) {
+            (Action::Convert(kind), _) => {
+                let info = decision.info.as_ref();
+                Some(Transform {
+                    kind: Some(kind.clone()),
+                    reason: decision.reason.clone(),
+                    replaygain: decision.replaygain.clone(),
+                    frames: info.and_then(|i| {
+                        i.frames
+                            .map(|f| (f * kind.rate() as u64).div_ceil(i.rate.max(1) as u64))
+                    }),
+                    source_rate: info.map_or(0, |i| i.rate),
+                })
+            }
+            (_, false) => Some(Transform {
+                kind: None,
+                reason: "ReplayGain tags added".into(),
+                replaygain: decision.replaygain.clone(),
+                frames: None,
+                source_rate: 0,
+            }),
+            _ => None,
+        };
+        let bytes = match (&transform, &decision.info) {
+            (
+                Some(Transform {
+                    kind: Some(kind), ..
+                }),
+                Some(info),
+            ) => convert::estimate_bytes(info, source_bytes, kind),
+            (Some(_), _) => source_bytes + 4096,
+            _ => source_bytes,
+        };
+        let cover = if embed_covers && audio_file(&source) && !converted {
             match source.parent().and_then(cover::find_cover) {
                 Some(path) => match cover::validate_jpeg_cover(&path) {
                     Ok(()) => Some(CoverItem {
@@ -200,7 +270,7 @@ pub(crate) fn plan_candidates(
             None
         };
         if art_sidecar_pal256
-            && audio_file(&source)
+            && (audio_file(&source) || converted)
             && let Some(source_folder) = source.parent()
             && seen_art_folders.insert(source_folder.to_path_buf())
             && let Some((cover_source, cover_sha256, from_embedded)) = art_source(
@@ -228,7 +298,7 @@ pub(crate) fn plan_candidates(
         // cover-embedded copies, which can never equal their source and so used to be rewritten on every
         // re-sync. A small canary below re-hashes a few of these to catch anything that drifted.
         let rel_key = relative.to_string_lossy().replace('\\', "/");
-        let cover_sha = cover.as_ref().map(|c| c.sha256.clone()).unwrap_or_default();
+        let cover_sha = variant_key(cover.as_ref(), transform.as_ref());
         let remembered = match (
             ledger.as_ref(),
             fs::metadata(&target)
@@ -242,7 +312,8 @@ pub(crate) fn plan_candidates(
         };
         // Same when the ledger remembers this very copy, else when the file on the card hashes equal.
         let same = remembered.is_some()
-            || (target.is_file()
+            || (transform.is_none()
+                && target.is_file()
                 && fs::metadata(&target)?.len() == bytes
                 && sha256_file(&target).ok().as_deref() == Some(&sha256));
         let mut state = if same {
@@ -276,6 +347,7 @@ pub(crate) fn plan_candidates(
             sha256,
             cover,
             state,
+            transform,
         });
     }
     run_canary(
@@ -308,6 +380,12 @@ pub(crate) fn plan_candidates(
             hasher.update(cover.source.to_string_lossy().as_bytes());
             hasher.update(cover.sha256.as_bytes());
         }
+        if let Some(transform) = &item.transform {
+            hasher.update(transform.spec().as_bytes());
+        }
+    }
+    for item in &skipped {
+        hasher.update(item.source.to_string_lossy().as_bytes());
     }
     for item in &art_sidecars {
         hasher.update(item.destination.to_string_lossy().as_bytes());
@@ -338,7 +416,19 @@ pub(crate) fn plan_candidates(
         art_sidecars,
         warnings,
         bytes_to_write,
+        skipped,
+        lame,
     })
+}
+
+/// What the ledger compares to know a card file was made from these exact inputs: the embedded cover and
+/// the conversion or tags applied.
+pub(super) fn variant_key(cover: Option<&CoverItem>, transform: Option<&Transform>) -> String {
+    let cover = cover.map(|c| c.sha256.clone()).unwrap_or_default();
+    match transform {
+        Some(t) => format!("{cover}|{}", t.spec()),
+        None => cover,
+    }
 }
 
 /// Where a folder's cover sidecar comes from: a folder image first (`cover.jpg`, ...), else the picture

@@ -7,6 +7,7 @@ pub mod decode;
 pub mod flac_out;
 pub mod lame;
 pub mod loudness;
+pub mod meta;
 pub mod mixdown;
 pub mod pipeline;
 pub mod resample;
@@ -39,6 +40,14 @@ impl From<std::io::Error> for AudioError {
     fn from(error: std::io::Error) -> Self {
         Self::Io(error.to_string())
     }
+}
+
+/// What an encode produced.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Encoded {
+    pub frames: u64,
+    /// Highest sample magnitude written (linear, 1.0 = full scale, before rounding).
+    pub peak: f64,
 }
 
 /// What the Pocket can play, and so what a conversion aims at.

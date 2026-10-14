@@ -3,6 +3,7 @@ mod device;
 mod ledger_host;
 mod updates;
 mod asset_cmds;
+mod convert_cmds;
 mod omega_update;
 
 use serde::{Deserialize, Serialize};
@@ -225,6 +226,8 @@ impl ProgressObserver for JobObserver<'_> {
                     tau_core::Stage::Verifying => "verifying",
                     tau_core::Stage::Deleting => "deleting",
                     tau_core::Stage::Editing => "editing",
+                    tau_core::Stage::Analysing => "analysing",
+                    tau_core::Stage::Converting => "converting",
                 },
                 done: progress.done,
                 total: progress.total,
@@ -449,6 +452,8 @@ struct Prefs {
     /// Keep macOS Spotlight from scanning Pocket cards: `"ask"` (not decided yet), `"on"` (add the marker file when
     /// writing to a card) or `"off"`.
     card_marker: String,
+    /// Conversion of files the Pocket cannot play, and ReplayGain, for every sync.
+    convert: tau_core::convert::ConvertSettings,
 }
 impl Default for Prefs {
     fn default() -> Self {
@@ -464,6 +469,7 @@ impl Default for Prefs {
             check_updates: true,
             update_notice_shown: false,
             card_marker: "ask".into(),
+            convert: tau_core::convert::ConvertSettings::product(),
         }
     }
 }
@@ -752,7 +758,17 @@ fn compare_media(left: String, right: String) -> Result<ComparisonView, TauError
     Ok(ComparisonView { comparison, only_left, only_right, different, identical })
 }
 
-fn make_plan(sources: Vec<String>, destination: String, embed_covers: bool, art_sidecar_pal256: bool) -> Result<tau_core::sync::SyncPlan, TauError> {
+/// The conversion settings a sync runs with: the user's preferences plus where this app keeps its own
+/// tools and its loudness memory.
+fn runtime_convert(app: &tauri::AppHandle) -> Result<tau_core::convert::ConvertSettings, TauError> {
+    let mut settings = read_prefs(app)?.convert;
+    let data = data_dir(app)?;
+    settings.lame_dir = Some(data.join("tools"));
+    settings.analysis_cache = Some(data.join("analysis-cache.json"));
+    Ok(settings)
+}
+
+fn make_plan(app: &tauri::AppHandle, sources: Vec<String>, destination: String, embed_covers: bool, art_sidecar_pal256: bool) -> Result<tau_core::sync::SyncPlan, TauError> {
     let destination = PathBuf::from(destination);
     let source_paths = sources.into_iter().filter(|source| !source.trim().is_empty()).map(PathBuf::from).collect::<Vec<_>>();
     let root_prefix = tau_core::root_prefix(&destination)?;
@@ -760,7 +776,7 @@ fn make_plan(sources: Vec<String>, destination: String, embed_covers: bool, art_
         &source_paths,
         &destination,
         &root_prefix,
-        tau_core::sync::PlanOptions { mirror: false, embed_covers, art_sidecar_pal256 },
+        tau_core::sync::PlanOptions { mirror: false, embed_covers, art_sidecar_pal256, convert: runtime_convert(app)? },
         &mut None,
     )
 }
@@ -771,8 +787,8 @@ fn make_core_copy_plan(source: String, destination: String) -> Result<tau_core::
 }
 
 #[tauri::command(async)]
-fn plan_sync(sources: Vec<String>, destination: String, embed_covers: bool, art_sidecar_pal256: bool) -> Result<SyncPlanView, TauError> {
-    let plan = make_plan(sources, destination, embed_covers, art_sidecar_pal256)?;
+fn plan_sync(app: tauri::AppHandle, sources: Vec<String>, destination: String, embed_covers: bool, art_sidecar_pal256: bool) -> Result<SyncPlanView, TauError> {
+    let plan = make_plan(&app, sources, destination, embed_covers, art_sidecar_pal256)?;
     Ok(sync_plan_view(plan))
 }
 
@@ -820,7 +836,7 @@ mod package_cmds;
 #[tauri::command(async)]
 fn execute_sync(app: tauri::AppHandle, sources: Vec<String>, destination: String, confirmation: String, manifest_path: String, embed_covers: bool, art_sidecar_pal256: bool, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::sync::SyncReport, TauError> {
     let _write = begin_card_write(&app, &destination)?;
-    let plan = make_plan(sources, destination, embed_covers, art_sidecar_pal256)?;
+    let plan = make_plan(&app, sources, destination, embed_covers, art_sidecar_pal256)?;
     let manifest = PathBuf::from(manifest_path);
     with_job(&window, &jobs, job_id, |progress| {
         tau_core::journal::execute_to_journal(&plan, &confirmation, "sync", &manifest, progress)
@@ -863,7 +879,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, playlist_cmds::export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, diag_cmds::read_persisted_settings, diag_cmds::read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, playlist_cmds::plan_playlist_write, playlist_cmds::execute_playlist_write, playlist_cmds::plan_playlist_rename, playlist_cmds::execute_playlist_rename, playlist_cmds::plan_playlist_import, playlist_cmds::execute_playlist_import, check_storage_capacity, plan_backup, package_cmds::inspect_package, package_cmds::plan_package_install, package_cmds::execute_package_install, package_cmds::plan_remove_core, package_cmds::execute_remove_core, diag_cmds::read_qr_report, diag_cmds::list_screenshots, diag_cmds::read_image_data_url, diag_cmds::read_core_icon, diag_cmds::read_platform_image, diag_cmds::preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, asset_cmds::appearance_check, asset_cmds::appearance_open, asset_cmds::appearance_export, asset_cmds::appearance_plan_install, asset_cmds::appearance_install, asset_cmds::halcyon_open, asset_cmds::halcyon_import_apo, asset_cmds::halcyon_curve, asset_cmds::halcyon_validate, asset_cmds::halcyon_export, asset_cmds::halcyon_plan_install, asset_cmds::halcyon_install, omega_update::omega_update_check, omega_update::omega_update_install, diag_cmds::diag_read, diag_cmds::diag_zip, get_prefs, set_prefs, persist_names, plan_settings_migration, execute_settings_migration, rollback_settings_migration, update_check, update_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, library_health, plan_cover_files, execute_cover_files, plan_library_refresh, execute_library_refresh, rollback_library_refresh, library_cmds::list_library, library_cmds::plan_changes, library_cmds::execute_changes, library_cmds::list_history, library_cmds::prune_history, library_cmds::clear_history, library_cmds::album_thumbnails, library_cmds::image_thumbnail])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, playlist_cmds::export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, diag_cmds::read_persisted_settings, diag_cmds::read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, playlist_cmds::plan_playlist_write, playlist_cmds::execute_playlist_write, playlist_cmds::plan_playlist_rename, playlist_cmds::execute_playlist_rename, playlist_cmds::plan_playlist_import, playlist_cmds::execute_playlist_import, check_storage_capacity, plan_backup, package_cmds::inspect_package, package_cmds::plan_package_install, package_cmds::execute_package_install, package_cmds::plan_remove_core, package_cmds::execute_remove_core, diag_cmds::read_qr_report, diag_cmds::list_screenshots, diag_cmds::read_image_data_url, diag_cmds::read_core_icon, diag_cmds::read_platform_image, diag_cmds::preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, asset_cmds::appearance_check, asset_cmds::appearance_open, asset_cmds::appearance_export, asset_cmds::appearance_plan_install, asset_cmds::appearance_install, asset_cmds::halcyon_open, asset_cmds::halcyon_import_apo, asset_cmds::halcyon_curve, asset_cmds::halcyon_validate, asset_cmds::halcyon_export, asset_cmds::halcyon_plan_install, asset_cmds::halcyon_install, omega_update::omega_update_check, omega_update::omega_update_install, diag_cmds::diag_read, diag_cmds::diag_zip, get_prefs, set_prefs, persist_names, plan_settings_migration, execute_settings_migration, rollback_settings_migration, update_check, update_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, convert_cmds::lame_status, convert_cmds::check_lame, convert_cmds::install_lame, library_health, plan_cover_files, execute_cover_files, plan_library_refresh, execute_library_refresh, rollback_library_refresh, library_cmds::list_library, library_cmds::plan_changes, library_cmds::execute_changes, library_cmds::list_history, library_cmds::prune_history, library_cmds::clear_history, library_cmds::album_thumbnails, library_cmds::image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

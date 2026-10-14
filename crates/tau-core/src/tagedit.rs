@@ -122,7 +122,7 @@ pub fn plan_edit(common: &Path, requests: &[EditRequest]) -> Result<EditPlan, Ta
             return Err(TauError::e(ErrorCode::NoSources, "an edit changes nothing"));
         }
         let dir = workbench::checked_dir(&destination, &request.album_id)?;
-        let mut files: Vec<PathBuf> = workbench::direct_files(&dir)?
+        let mut files: Vec<PathBuf> = workbench::direct_files(&dir, false)?
             .into_iter()
             .filter(|f| sync::audio_file(f))
             .collect();
@@ -375,9 +375,9 @@ fn apply_to_file(path: &Path, fields: &FieldEdits, cover: Option<&Path>) -> Resu
     let rewritten = if fields.is_empty() {
         original.clone()
     } else if is_flac {
-        flac_rewrite(&original, fields)?
+        flac_rewrite(&original, fields, &[])?
     } else {
-        id3_rewrite(&original, fields)?
+        id3_rewrite(&original, fields, &[])?
     };
     let temp = temp_path(path, "edit");
     sync::write_durable(&temp, &rewritten)?;
@@ -438,6 +438,22 @@ fn verify_written(path: &Path, fields: &FieldEdits, expect_cover: bool) -> Resul
     Ok(())
 }
 
+/// Returns a copy of a whole MP3 or FLAC file with user tags set: `TXXX` frames in an MP3, Vorbis comments in a
+/// FLAC, replacing any existing ones of the same name. Everything else in the file is kept verbatim. Used for
+/// ReplayGain.
+pub(crate) fn set_custom_tags(
+    data: &[u8],
+    is_flac: bool,
+    custom: &[(String, String)],
+) -> Result<Vec<u8>, TauError> {
+    let none = FieldEdits::default();
+    if is_flac {
+        flac_rewrite(data, &none, custom)
+    } else {
+        id3_rewrite(data, &none, custom)
+    }
+}
+
 // ---- ID3v2 -------------------------------------------------------------
 
 fn syncsafe(b: &[u8]) -> usize {
@@ -477,11 +493,92 @@ fn text_frame(major: u8, id: &str, value: &str) -> Vec<u8> {
     frame
 }
 
+/// A user text frame (`TXXX`): `description` and `value`, ISO-8859-1 or (v2.3 non-Latin) UTF-16.
+fn txxx_frame(major: u8, description: &str, value: &str) -> Vec<u8> {
+    let mut data = Vec::new();
+    let latin = description
+        .chars()
+        .chain(value.chars())
+        .all(|c| (c as u32) < 256);
+    if major == 4 {
+        data.push(3);
+        data.extend_from_slice(description.as_bytes());
+        data.push(0);
+        data.extend_from_slice(value.as_bytes());
+    } else if latin {
+        data.push(0);
+        data.extend(description.chars().map(|c| c as u8));
+        data.push(0);
+        data.extend(value.chars().map(|c| c as u8));
+    } else {
+        data.extend_from_slice(&[1, 0xff, 0xfe]);
+        for unit in description.encode_utf16() {
+            data.extend_from_slice(&unit.to_le_bytes());
+        }
+        data.extend_from_slice(&[0, 0, 0xff, 0xfe]);
+        for unit in value.encode_utf16() {
+            data.extend_from_slice(&unit.to_le_bytes());
+        }
+    }
+    let mut frame = b"TXXX".to_vec();
+    if major == 4 {
+        frame.extend_from_slice(&to_syncsafe(data.len()));
+    } else {
+        frame.extend_from_slice(&(data.len() as u32).to_be_bytes());
+    }
+    frame.extend_from_slice(&[0, 0]);
+    frame.extend_from_slice(&data);
+    frame
+}
+
+/// The description of a `TXXX` frame body (Latin-1, UTF-8 or UTF-16), or `None` when it cannot be read.
+fn txxx_description(body: &[u8]) -> Option<String> {
+    let (&encoding, rest) = body.split_first()?;
+    match encoding {
+        0 => rest
+            .iter()
+            .position(|&b| b == 0)
+            .map(|n| rest[..n].iter().map(|&b| b as char).collect()),
+        3 => rest
+            .iter()
+            .position(|&b| b == 0)
+            .map(|n| String::from_utf8_lossy(&rest[..n]).into_owned()),
+        1 | 2 => {
+            let (big, rest) = match rest {
+                [0xFE, 0xFF, r @ ..] => (true, r),
+                [0xFF, 0xFE, r @ ..] => (false, r),
+                _ => (encoding == 2, rest),
+            };
+            let mut units = Vec::new();
+            for pair in rest.chunks(2) {
+                if pair.len() < 2 {
+                    break;
+                }
+                let u = if big {
+                    u16::from_be_bytes([pair[0], pair[1]])
+                } else {
+                    u16::from_le_bytes([pair[0], pair[1]])
+                };
+                if u == 0 {
+                    return Some(String::from_utf16_lossy(&units));
+                }
+                units.push(u);
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 /// Returns `data` with the text frames for `fields` replaced. Every other
 /// frame and the audio bytes are kept verbatim. A v2.3 tag is upgraded to
 /// v2.4 (UTF-8 text) only when a new value needs characters ISO-8859-1 cannot
 /// hold, and only if no frame carries flags that differ between versions.
-fn id3_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
+fn id3_rewrite(
+    data: &[u8],
+    fields: &FieldEdits,
+    custom: &[(String, String)],
+) -> Result<Vec<u8>, TauError> {
     let unsupported = |why: &str| TauError::e(ErrorCode::UnsupportedTags, why.to_string());
     type Frame = ([u8; 4], [u8; 2], Vec<u8>);
     let (mut major, kept, audio_start): (u8, Vec<Frame>, usize) = if data.starts_with(b"ID3") {
@@ -525,7 +622,11 @@ fn id3_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
                 return Err(unsupported("malformed ID3 frame"));
             }
             let id: [u8; 4] = header[..4].try_into().unwrap();
-            if !replaced.contains(&String::from_utf8_lossy(&id).as_ref()) {
+            let body = &data[position + 10..position + 10 + length];
+            let custom_replaced = &id == b"TXXX"
+                && txxx_description(body)
+                    .is_some_and(|d| custom.iter().any(|(k, _)| k.eq_ignore_ascii_case(&d)));
+            if !custom_replaced && !replaced.contains(&String::from_utf8_lossy(&id).as_ref()) {
                 kept.push((
                     id,
                     [header[8], header[9]],
@@ -561,6 +662,9 @@ fn id3_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
         frames.extend_from_slice(flags);
         frames.extend_from_slice(body);
     }
+    for (description, value) in custom {
+        frames.extend_from_slice(&txxx_frame(major, description, value));
+    }
     for (frame, _, value) in fields.pairs() {
         let value = value.trim();
         if value.is_empty() {
@@ -591,7 +695,11 @@ fn id3_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
 
 /// Returns `data` with the Vorbis comments for `fields` replaced. Other
 /// metadata blocks (except padding) and the audio frames are kept verbatim.
-fn flac_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
+fn flac_rewrite(
+    data: &[u8],
+    fields: &FieldEdits,
+    custom: &[(String, String)],
+) -> Result<Vec<u8>, TauError> {
     let bad = || TauError::e(ErrorCode::UnsupportedTags, "malformed FLAC metadata");
     if !data.starts_with(b"fLaC") {
         return Err(TauError::e(ErrorCode::UnsupportedTags, "not a FLAC file"));
@@ -611,7 +719,12 @@ fn flac_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
             break;
         }
     }
-    let replaced: Vec<&str> = fields.pairs().iter().map(|(_, key, _)| *key).collect();
+    let mut replaced: Vec<String> = fields
+        .pairs()
+        .iter()
+        .map(|(_, key, _)| key.to_string())
+        .collect();
+    replaced.extend(custom.iter().map(|(k, _)| k.to_ascii_uppercase()));
     let mut vendor = b"tau-omega".to_vec();
     let mut comments: Vec<Vec<u8>> = Vec::new();
     if let Some((_, body)) = blocks.iter().find(|(kind, _)| *kind == 4) {
@@ -630,10 +743,13 @@ fn flac_rewrite(data: &[u8], fields: &FieldEdits) -> Result<Vec<u8>, TauError> {
                 .split_once('=')
                 .map(|(k, _)| k.to_ascii_uppercase())
                 .unwrap_or_default();
-            if !replaced.contains(&key.as_str()) {
+            if !replaced.contains(&key) {
                 comments.push(comment.to_vec());
             }
         }
+    }
+    for (key, value) in custom {
+        comments.push(format!("{key}={value}").into_bytes());
     }
     for (_, key, value) in fields.pairs() {
         let value = value.trim();

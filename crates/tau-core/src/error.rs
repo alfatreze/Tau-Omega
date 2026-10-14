@@ -232,6 +232,10 @@ pub enum Stage {
     Verifying,
     Deleting,
     Editing,
+    /// Measuring loudness for ReplayGain.
+    Analysing,
+    /// Converting a file the Pocket cannot play.
+    Converting,
 }
 
 /// One progress report from a long-running scan/plan/execute call. `done` and

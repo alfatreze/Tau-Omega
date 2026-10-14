@@ -81,6 +81,7 @@ fn real_card_halcyon_sync() {
         mirror: false,
         embed_covers: false,
         art_sidecar_pal256: false,
+        ..tau_core::sync::PlanOptions::default()
     };
     let plan = tau_core::sync::plan(
         &[Path::new(&src).to_path_buf()],

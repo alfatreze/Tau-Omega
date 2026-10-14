@@ -5,8 +5,10 @@ use super::*;
 /// The workbench's album/track/playlist listing of a media root (a local
 /// library folder or a card's media root).
 #[tauri::command(async)]
-pub fn list_library(path: String, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::workbench::LibraryListing, TauError> {
-    with_job(&window, &jobs, job_id, |progress| tau_core::workbench::list_library(Path::new(&path), progress))
+pub fn list_library(app: tauri::AppHandle, path: String, include_convertible: Option<bool>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::workbench::LibraryListing, TauError> {
+    // A source library also lists the files that can be converted for the Pocket (if conversion is on).
+    let convertible = include_convertible.unwrap_or(false) && runtime_convert(&app)?.enabled;
+    with_job(&window, &jobs, job_id, |progress| tau_core::workbench::list_library_with(Path::new(&path), convertible, progress))
 }
 
 /// What a reviewed change set will do, in counts (the full per-file plan
@@ -23,6 +25,18 @@ pub(super) struct ChangePlanView {
     edited_files: usize,
     playlists_updated: usize,
     warnings: Vec<tau_core::Warning>,
+    /// Files converted into something the Pocket plays (FLAC or MP3).
+    converted_files: usize,
+    /// Files that get ReplayGain tags added to their copy.
+    replaygain_files: usize,
+    /// Files left out, with the reason.
+    skipped: Vec<SkippedView>,
+}
+
+#[derive(Serialize)]
+pub(super) struct SkippedView {
+    file: String,
+    reason: String,
 }
 
 pub fn change_plan_view(plan: &tau_core::changes::ChangePlan) -> ChangePlanView {
@@ -39,11 +53,19 @@ pub fn change_plan_view(plan: &tau_core::changes::ChangePlan) -> ChangePlanView 
         edited_files: plan.edit.as_ref().map_or(0, |e| e.items.len()),
         playlists_updated: plan.removal.as_ref().map_or(0, |r| r.playlist_updates.len()),
         warnings: plan.sync.as_ref().map(|s| s.warnings.clone()).unwrap_or_default(),
+        converted_files: plan.sync.as_ref().map_or(0, |s| s.items.iter().filter(|i| i.transform.as_ref().is_some_and(|t| t.kind.is_some())).count()),
+        replaygain_files: plan.sync.as_ref().map_or(0, |s| s.items.iter().filter(|i| i.transform.as_ref().is_some_and(|t| t.kind.is_none())).count()),
+        skipped: plan
+            .sync
+            .as_ref()
+            .map(|s| s.skipped.iter().map(|k| SkippedView { file: k.source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), reason: k.reason.clone() }).collect())
+            .unwrap_or_default(),
     }
 }
 
 #[tauri::command(async)]
-pub fn plan_changes(request: tau_core::changes::ChangeRequest, destination: String) -> Result<ChangePlanView, TauError> {
+pub fn plan_changes(app: tauri::AppHandle, mut request: tau_core::changes::ChangeRequest, destination: String) -> Result<ChangePlanView, TauError> {
+    request.options.convert = runtime_convert(&app)?;
     let plan = tau_core::changes::plan_changes(Path::new(&destination), &request, &mut None)?;
     Ok(change_plan_view(&plan))
 }
@@ -90,8 +112,9 @@ pub fn prune_history_best_effort(app: &tauri::AppHandle) {
 /// journal so the sync history can describe the run in words. The journal is
 /// written to the reports directory before anything changes.
 #[tauri::command(async)]
-pub fn execute_changes(app: tauri::AppHandle, request: tau_core::changes::ChangeRequest, destination: String, confirmation: String, backup: Option<String>, context: Option<Value>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<ChangeResult, TauError> {
+pub fn execute_changes(app: tauri::AppHandle, mut request: tau_core::changes::ChangeRequest, destination: String, confirmation: String, backup: Option<String>, context: Option<Value>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<ChangeResult, TauError> {
     let _write = begin_card_write(&app, &destination)?;
+    request.options.convert = runtime_convert(&app)?;
     let dest = PathBuf::from(&destination);
     let plan = tau_core::changes::plan_changes(&dest, &request, &mut None)?;
     let reports = resolved_reports_dir(&app)?;

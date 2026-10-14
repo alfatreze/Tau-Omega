@@ -24,7 +24,7 @@ pub fn plan_selection(
     for id in album_ids {
         let dir = checked_dir(library_root, id)?;
         let dest = dest_dir(id);
-        for file in direct_files(&dir)? {
+        for file in direct_files(&dir, options.convert.enabled)? {
             let name = sync::ascii_file_name(&file.file_name().unwrap().to_string_lossy());
             let relative = if dest.is_empty() {
                 PathBuf::from(name)

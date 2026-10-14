@@ -20,6 +20,7 @@ pub mod cardlayout;
 pub mod changes;
 pub mod compare;
 pub mod compat;
+pub mod convert;
 pub mod cover;
 pub mod details;
 pub mod diag;

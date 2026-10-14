@@ -410,7 +410,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await stage('Mingus Ah Um');
   await p.getByRole('button', { name: 'Start sync' }).click(); await p.waitForTimeout(400);
   assert.equal(await p.getByRole('dialog', { name: /Ready to sync/ }).count() + await p.getByRole('alertdialog').count(), 0); ok('adds on a card reader start straight away: no "Ready to sync" dialog');
-  assert.deepEqual(await p.evaluate(() => window.__tauMock.lastOptions()), { mirror: false, embed_covers: true, art_sidecar_pal256: true }); ok('covers are always put inside the songs and the fast cover file is always written');
+  assert.deepEqual(await p.evaluate(() => window.__tauMock.lastOptions()), { mirror: false, embed_covers: false, art_sidecar_pal256: true }); ok('the songs are left alone and the cover file the Pocket reads is always written');
   await p.waitForSelector('text=Sync complete', { timeout: 20000 });
   assert.match(await text(p.getByRole('status', { name: 'Sync complete' })), /./); assert.match(await text(p.getByRole('status', { name: 'Sync complete' })), /the cover was not put inside the songs/); ok('a cover that could not be embedded is reported when the sync finishes, not asked about first');
   await done();
