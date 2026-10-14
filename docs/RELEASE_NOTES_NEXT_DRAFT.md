@@ -6,6 +6,7 @@
 - **Core updates** on the Cards page: which community cores on the card have a newer release, with "Review all updates, one at a time". A count on the Marketplace item shows when updates exist. Checking follows the existing update setting; installing is never automatic.
 - Your ROMs, saves, settings and licence files are never touched by an update.
 - A release with no published checksum is allowed and says so.
+- Install an **earlier version** of a core from its details ("Choose this version"); going back is a downgrade you confirm in the plan. Files that exist only in the newer version stay on the card.
 
 ## Command line
 `tau catalog`, `tau catalog-core <id>`, `tau core-updates <card>`, `tau core-download <id> --out <folder>` (download, check, no card write) and `tau update-undo <card> --backup <folder>` (put a card back after an install).
@@ -15,4 +16,4 @@
 - The post-install check treats a slot without an id and a file you must supply (a BIOS) as warnings for community cores.
 
 ## Not in this release
-Installing an older version from the app (the command line can: `--version`), Tau's own cores in the Marketplace.
+Tau's own cores in the Marketplace.
