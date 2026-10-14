@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate } from './types';
+import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate, CatalogResult, ReleaseResult, CoreUpdates, MarketplaceDownload } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -97,3 +97,8 @@ export const omegaUpdateInstall = () => invoke<void>('omega_update_install');
 export const lameStatus = () => invoke<LameStatus>('lame_status');
 export const checkLame = (path: string) => invoke<string>('check_lame', { path });
 export const installLame = (method: string) => invoke<LameStatus>('install_lame', { method });
+
+export const marketplaceCatalog = (force = false) => invoke<CatalogResult>('marketplace_catalog', { force });
+export const marketplaceRelease = (coreId: string, force = false) => invoke<ReleaseResult>('marketplace_release', { coreId, force });
+export const marketplaceCoreUpdates = (card: string, force = false) => invoke<CoreUpdates>('marketplace_core_updates', { card, force });
+export const marketplaceDownload = (coreId: string) => invoke<MarketplaceDownload>('marketplace_download', { coreId });

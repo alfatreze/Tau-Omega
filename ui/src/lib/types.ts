@@ -225,3 +225,19 @@ export type ApoImport = { preset: HalcyonPreset; preamp_db: number; peak_gain_db
 
 /** Mirrors `omega_update::OmegaUpdate` (Tau Omega's own updater, not the Tau core update check). */
 export type OmegaUpdate = { current: string; version: string; notes: string | null; date: string | null };
+
+/** Mirrors `tau_core::catalog` / `catalog_release` / `core_update` / `core_package` and `tau_net::marketplace` (serde output). */
+export type CatalogAsset = { platform: string; filename: string; extensions: string[]; core_specific: boolean };
+export type CatalogCore = {
+  id: string; author: string; name: string; repository: { owner: string; name: string }; requires_license: boolean; license_filename: string;
+  sponsor: { links: string[] }; replaces: string[]; version: string; release_date: string; category: string; manufacturer: string; year: number; assets: CatalogAsset[];
+};
+export type MarketSource = 'Network' | 'NotModified' | 'Cache' | { Offline: string };
+export type CatalogResult = { catalog: { cores: CatalogCore[] }; source: MarketSource; fetched: number };
+export type CoreRelease = { tag: string; title: string; prerelease: boolean; published: string; notes: string; download: { name: string; url: string; size: number; sha256: string | null } };
+export type ReleaseResult = { release: CoreRelease; source: MarketSource; fetched: number };
+export type CoreStatusKind = 'UpToDate' | 'UpdateAvailable' | 'NewerThanCatalog' | 'Unknown' | 'NotInCatalog' | 'Excluded' | { ReplacedBy: string };
+export type CoreStatus = { id: string; installed_version: string; latest_version: string; release_date: string; status: CoreStatusKind };
+export type CoreUpdates = { rows: CoreStatus[]; source: MarketSource; fetched: number };
+export type Vetted = { core_id: string; version: string; date_release: string; platform_ids: string[]; firmware_required: string; dock_supported: boolean | null; files: number; uncompressed_bytes: number; asset_files: number };
+export type MarketplaceDownload = { download: { path: string; bytes: number; sha256: string; checksum: 'Verified' | 'NotPublished' }; vetted: Vetted };

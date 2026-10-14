@@ -14,6 +14,23 @@ const LIBRARY = '/Users/me/Music';
 const MB = 1e6;
 const GB = 1e9;
 
+const mc = (id: string, name: string, owner: string, repo: string, category: string, manufacturer: string, year: number, version: string, date: string, license = false) => ({
+  id, author: id.split('.')[0], name, repository: { owner, name: repo }, requires_license: license, license_filename: license ? 'beta.bin' : '', sponsor: { links: license ? [] : [`https://github.com/sponsors/${owner}`] },
+  replaces: [] as string[], version, release_date: date, category, manufacturer, year, assets: [{ platform: name.toLowerCase().replace(/\W/g, ''), filename: '', extensions: ['sfc', 'smc'], core_specific: false }],
+});
+const marketCores = [
+  mc('agg23.SNES', 'SNES', 'agg23', 'openfpga-SNES', 'Console', 'Nintendo', 1990, '1.4.0', '2026-09-02'),
+  mc('agg23.Arduboy', 'Arduboy', 'agg23', 'openfpga-arduboy', 'Handheld', 'Arduboy', 2016, '0.9.0', '2022-09-03'),
+  mc('Alius.ChisKit', 'ChisKit', 'gpzi994', 'ChisKit', 'Utility', 'Alius', 2026, '0.01b', '2026-10-11'),
+  mc('jotego.jtcps1', 'Capcom CPS1', 'jotego', 'jtcores', 'Arcade', 'Capcom', 1988, 'c68f02e', '2026-10-11', true),
+  mc('coc.bublbobl', 'Bubble Bobble', 'coc', 'bublbobl', 'Arcade', 'Taito', 1986, '1.0.0', '2026-09-26', true),
+  mc('spiritualized.GB', 'Game Boy', 'spiritualized', 'gb', 'Handheld', 'Nintendo', 1989, '1.2.1', '2026-08-14'),
+  mc('Mazamars312.PCE', 'PC Engine', 'Mazamars312', 'pce', 'Console', 'NEC', 1987, '2.0.3', '2025-12-01'),
+  mc('zz.NoRelease', 'Unreleased', 'zz', 'none', 'Computer', 'Nobody', 2026, '', ''),
+  ...['Amiga', 'C64', 'ZX Spectrum', 'NES', 'Genesis', 'Neo Geo', 'Atari 2600', 'Intellivision', 'Vectrex', 'MSX', 'CPC', 'Apple II'].map((n, i) =>
+    mc(`pack.${n.replace(/\W/g, '')}`, n, 'pack', n.toLowerCase().replace(/\W/g, ''), i % 3 ? 'Computer' : 'Console', 'Various', 1977 + i * 2, `1.${i}.0`, `2025-0${1 + (i % 9)}-1${i % 9}`)),
+];
+
 const cores = [
   { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platforms: ['tau'], media_platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'ok', tracks: 7180 },
   { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platforms: ['tau2'], media_platform: 'tau2', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
@@ -245,6 +262,19 @@ const handlers: Record<string, (args: any) => unknown> = {
   card_marker_status: () => ({ setting: prefs.card_marker, is_card: true, present: prefs.card_marker === 'on' }),
   set_card_marker: (a) => { prefs.card_marker = a.setting; return { setting: a.setting, is_card: true, present: a.setting === 'on' }; },
   remove_card_marker: () => ({ setting: prefs.card_marker, is_card: true, present: false }),
+  marketplace_catalog: () => ({ catalog: { cores: marketCores }, source: 'Network', fetched: Math.floor(Date.now() / 1000) - 120 }),
+  marketplace_release: (a) => {
+    const id = a.coreId as string;
+    if (id === 'zz.NoRelease') throw { code: 'E_NOT_FOUND', message: 'The author has not published a download yet.' };
+    const c = marketCores.find((x) => x.id === id)!;
+    return { release: { tag: c.version, title: `${c.name} ${c.version}`, prerelease: false, published: c.release_date, notes: 'Fixes audio pops after a long session.\nAdds a save-state menu.', download: { name: `${c.id}.${c.version}.zip`, url: `https://github.com/${c.repository.owner}/${c.repository.name}/releases/download/${c.version}/${c.id}.zip`, size: 3.2 * MB, sha256: id === 'agg23.Arduboy' ? null : 'a'.repeat(64) } }, source: 'Network', fetched: Math.floor(Date.now() / 1000) };
+  },
+  marketplace_core_updates: () => ({ rows: [
+    { id: 'agg23.SNES', installed_version: '1.2.0', latest_version: '1.4.0', release_date: '2026-09-02', status: 'UpdateAvailable' },
+    { id: 'agg23.Arduboy', installed_version: '0.9.0', latest_version: '0.9.0', release_date: '2022-09-03', status: 'UpToDate' },
+    { id: 'alfatreze.TAU', installed_version: '0.6.0', latest_version: '', release_date: '', status: 'Excluded' },
+  ], source: 'Cache', fetched: Math.floor(Date.now() / 1000) - 3600 }),
+  marketplace_download: (a) => ({ download: { path: `/cache/${a.coreId}.zip`, bytes: 3.2 * MB, sha256: 'b'.repeat(64), checksum: a.coreId === 'agg23.Arduboy' ? 'NotPublished' : 'Verified' }, vetted: { core_id: a.coreId as string, version: '1.4.0', date_release: '2026-09-02', platform_ids: ['snes'], firmware_required: '2.0', dock_supported: true, files: 14, uncompressed_bytes: 6 * MB, asset_files: 2 } }),
   update_check: () => null,
   update_download: () => [],
   persist_names: () => ({ 16: 'Halcyon EQ preset' }),

@@ -60,6 +60,8 @@ Existing language: dark surface `#161f20`/`#1a2325`, border `#2c393a`, accent mi
 
 ## 5. Build order (each step host-tested, plan-first, no card write without approval)
 
+**Status 2026-10-14:** M0, M1, M2 and M3 built (M3: `MarketplaceView.svelte`, `marketplace.ts`, mock backend; browser-checked at desktop and 375 px; nothing downloaded or installed against a real card yet).
+
 - **M0** engine `catalog` + fixture + `core_version`, tests (this commit series).
 - **M1** `catalog_release` + trust checks on a zip + `core_update` matching, tests on the real Arduboy zip (committed small fixture) and synthetic hostile zips (traversal, symlink, wrong id, oversize).
 - **M2** host commands + CLI (`tau catalog`, `core-updates`), network layer with cache/ETag/rate-limit handling.
