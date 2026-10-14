@@ -1,11 +1,11 @@
 Tau Omega test build 0.5.0-alpha.2   (NOT a release)
 Release goal : 0.5.0
-Built        : 2026-10-15 00:51 WEST
+Built        : 2026-10-15 00:52 WEST
 Branch       : marketplace
-Commit       : 6b15612   Marketplace: card gallery (platform banner as the main image, author icon and name, category tag on each card) and quick category tag filter with counts; grid keyboard navigation; checks updated (35)
-Working tree : clean
+Commit       : 50fcc46   Marketplace: 'Needs a key file' wording (filter, card chip, details) with an explanation that the file comes from the author
+Working tree : UNCOMMITTED CHANGES in the working tree
 Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
 App          : Tau Omega.app   (unsigned: right-click > Open the first time)
-SHA-256      : 5abf2dbdbcfaecc5b61f34be636a319c49aeb62ee2f0bd5e4a384ae0c2481bc8  (of Contents/MacOS/tau-omega)
+SHA-256      : 8af0330968d9212b0043ea0d5acd85b7f3b82cffc332e9b4acd5bb27869985e2  (of Contents/MacOS/tau-omega)
 
 What is in it: (fill in a line or two when sharing this build)

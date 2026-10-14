@@ -2,14 +2,13 @@
 import type { CatalogCore, CoreStatus, CoreStatusKind, MarketSource } from './types';
 
 export type Sort = 'newest' | 'name';
-export type Filters = { query: string; category: string; licence: boolean; installedOnly: boolean; sort: Sort };
+export type Filters = { query: string; category: string; installedOnly: boolean; sort: Sort };
 
 /** Every word of the query must appear in the id, name, author, manufacturer or category (same rule as the engine's `Catalog::search`). */
 export function matches(core: CatalogCore, f: Filters): boolean {
   const hay = `${core.id} ${core.name} ${core.author} ${core.manufacturer} ${core.category}`.toLowerCase();
   return f.query.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w))
-    && (!f.category || core.category.toLowerCase() === f.category.toLowerCase())
-    && (!f.licence || core.requires_license);
+    && (!f.category || core.category.toLowerCase() === f.category.toLowerCase());
 }
 
 export function filterCores(cores: CatalogCore[], f: Filters, installed: Set<string>): CatalogCore[] {

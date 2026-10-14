@@ -1,1 +1,1 @@
-5abf2dbdbcfaecc5b61f34be636a319c49aeb62ee2f0bd5e4a384ae0c2481bc8  Tau Omega.app/Contents/MacOS/tau-omega
+8af0330968d9212b0043ea0d5acd85b7f3b82cffc332e9b4acd5bb27869985e2  Tau Omega.app/Contents/MacOS/tau-omega
