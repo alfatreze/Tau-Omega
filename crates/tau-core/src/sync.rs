@@ -3,7 +3,7 @@
 
 use crate::{
     ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, WarningCode, ascii_name,
-    build_index, cover, image, ledger, parse, scan_dir_with_progress, tick, verify,
+    build_index, convert, cover, image, ledger, parse, scan_dir_with_progress, tick, verify,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -21,6 +21,44 @@ pub struct CopyItem {
     pub sha256: String,
     pub cover: Option<CoverItem>,
     pub state: CopyState,
+    /// Set when the copy is not byte for byte: a conversion, or ReplayGain tags added to the copy.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub transform: Option<Transform>,
+}
+/// What is done to a file on its way to the card besides copying it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Transform {
+    /// `Some` for a conversion; `None` when only ReplayGain tags are added to the copy.
+    pub kind: Option<convert::Kind>,
+    /// Why (shown in the review).
+    pub reason: String,
+    /// ReplayGain tags written into the copy (name, value).
+    pub replaygain: Vec<(String, String)>,
+    /// Frames the converted file will have, when the source says.
+    pub frames: Option<u64>,
+    /// The source's rate, for the progress display and the output check.
+    pub source_rate: u32,
+}
+impl Transform {
+    /// A stable text identifying exactly what will be made, for the plan token and the ledger.
+    pub fn spec(&self) -> String {
+        let mut text = self
+            .kind
+            .as_ref()
+            .map_or_else(|| "tags".to_string(), convert::Kind::spec);
+        for (k, v) in &self.replaygain {
+            text.push_str(&format!("|{k}={v}"));
+        }
+        text
+    }
+}
+/// A source file left out of the plan, with the reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SkippedItem {
+    pub source: PathBuf,
+    pub reason: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -71,6 +109,12 @@ pub struct SyncPlan {
     pub art_sidecars: Vec<ArtSidecarItem>,
     pub warnings: Vec<Warning>,
     pub bytes_to_write: u64,
+    /// Files left out (formats the Pocket cannot play that were not converted).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub skipped: Vec<SkippedItem>,
+    /// The `lame` found when planning (used to make MP3s).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub lame: Option<PathBuf>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -81,6 +125,11 @@ pub struct SyncReport {
     pub bytes_written: u64,
     pub deleted: usize,
     pub art_sidecars_written: usize,
+    /// Files written as conversions, and files that got ReplayGain tags in their copy.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub converted: usize,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub replaygain_tagged: usize,
     pub index_path: PathBuf,
     pub index_sha256: String,
     pub warnings: Vec<Warning>,
@@ -93,8 +142,9 @@ pub struct SyncReport {
 /// -> `plan_with_layout` telescoping-constructor chain (P1-3): one public
 /// entry point, one options struct, so a new capability adds a field here
 /// instead of another wrapper function.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 pub struct PlanOptions {
     /// Delete destination files that no longer correspond to a source.
     pub mirror: bool,
@@ -109,6 +159,8 @@ pub struct PlanOptions {
     /// (`docs/FIRMWARE_SYNC.md`'s "Watched interfaces"); it does feed this
     /// app's own decode-and-preview path.
     pub art_sidecar_pal256: bool,
+    /// Conversion of files the Pocket cannot play, and ReplayGain. The default is everything off.
+    pub convert: convert::ConvertSettings,
 }
 
 mod plan;
@@ -121,6 +173,8 @@ mod sources;
 pub use sources::*;
 mod recovery;
 pub use recovery::*;
+mod transform;
+use transform::*;
 mod verified_copy;
 pub(crate) use verified_copy::*;
 

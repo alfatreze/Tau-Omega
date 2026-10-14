@@ -18,6 +18,7 @@
   import HalcyonView from './lib/HalcyonView.svelte';
   import DiagnosticsView from './lib/DiagnosticsView.svelte';
   import LibrarySettings from './lib/LibrarySettings.svelte';
+  import SyncSettings from './lib/SyncSettings.svelte';
   import { modal, trap } from './lib/a11y';
   import { tick } from 'svelte';
   import PackageView from './lib/PackageView.svelte';
@@ -371,7 +372,7 @@
   {:else if page === 'appearance'}
     <AppearanceView {mediaRoot} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'settings'}
-    <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings card={path} openHistory={() => openHistory()} /></SettingsView>
+    <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings card={path} openHistory={() => openHistory()} /><SyncSettings /></SettingsView>
   {/if}
   </div>
 </main>

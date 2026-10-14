@@ -1,8 +1,8 @@
 //! MP3 encoding through the user's own `lame` program, run as a separate process (never linked: LAME is
 //! LGPL software and this keeps it out of Tau Omega's own licence). Raw 16-bit PCM goes in over a pipe.
 
-use crate::AudioError;
 use crate::pipeline::{Pipeline, Quantizer};
+use crate::{AudioError, Encoded};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -95,7 +95,7 @@ pub fn encode(
     cover: Option<&[u8]>,
     out: &Path,
     progress: &mut dyn FnMut(u64) -> bool,
-) -> Result<u64, AudioError> {
+) -> Result<Encoded, AudioError> {
     let rate = pipeline.target.rate;
     let channels = pipeline.target.channels;
     let mut cmd = Command::new(lame);
@@ -142,6 +142,7 @@ pub fn encode(
     let mut buf = Vec::new();
     let mut bytes = Vec::new();
     let mut frames = 0u64;
+    let mut peak = 0.0f64;
     let mut failure: Option<AudioError> = None;
     loop {
         buf.clear();
@@ -162,6 +163,7 @@ pub fn encode(
         }
         bytes.clear();
         for s in &buf {
+            peak = peak.max(s.abs());
             bytes.extend((quant.to_i32(*s) as i16).to_le_bytes());
         }
         if stdin.write_all(&bytes).is_err() {
@@ -187,5 +189,5 @@ pub fn encode(
             text.lines().last().unwrap_or("no message")
         )));
     }
-    Ok(frames)
+    Ok(Encoded { frames, peak })
 }

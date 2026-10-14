@@ -72,7 +72,7 @@ Since 2026-10-06 the firmware shows reports as a pixel grid first and a QR secon
 Verify against real captures first (the owner's card should hold grid screenshots from 2026-10-06 on: check, then copy a few with their provenance, per the rule that fixtures come from real artefacts), then plug it into the QR viewer and Send diagnostics so one "read this screenshot" works for either view.
 Then decode the tags `main` now emits that Omega skips (23 heap, 24 load, 25 load2, 26 infotext, 27 nowplaying; 15, 17, 18 stay undecoded until a capture exists). Also in the Settings viewer: label persist id 16 as the Halcyon EQ preset and unpack the polarity and ReplayGain bits of the theme-mode word.
 
-### 2b. Sync alignment with Tau Alpha main (review 2026-10-14, plan in `docs/SYNC_ALIGNMENT_2026-10-14.md`; owner decisions pending)
+### 2b. Sync alignment with Tau Alpha main (DONE 2026-10-14: `docs/SYNC_ALIGNMENT_2026-10-14.md`, `docs/CONVERSION_AND_REPLAYGAIN.md`)
 Mandatory cover sidecars from any cover source (Omega only reads a folder image today), the index's optional track details section (an Omega sync currently drops it), ReplayGain tags (display, protect, optionally create), sample-rate/depth/channel checks, and the transcoding policy (today: no audio is ever transcoded; proposal: skip unplayable files by default, optional lossless Convert, embed off by default).
 
 ### 3. `tau-assets.bin` completeness (so saving never destroys what the card holds)

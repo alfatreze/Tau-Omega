@@ -72,7 +72,8 @@ fn a_24_bit_wav_becomes_a_bit_exact_flac_at_the_same_rate() {
         &mut |_| true,
     )
     .unwrap();
-    assert_eq!(frames, 20_000);
+    assert_eq!(frames.frames, 20_000);
+    assert!(frames.peak > 0.4 && frames.peak < 1.0);
     let back_info = probe(&out).unwrap();
     assert_eq!(
         (
@@ -182,7 +183,7 @@ fn an_mp3_comes_out_of_lame_when_it_is_installed() {
         &mut |_| true,
     )
     .unwrap();
-    assert_eq!(frames, 44_100);
+    assert_eq!(frames.frames, 44_100);
     let back = probe(&out).unwrap();
     assert_eq!(
         (back.codec.as_str(), back.rate, back.channels),

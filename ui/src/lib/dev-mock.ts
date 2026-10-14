@@ -40,7 +40,7 @@ let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voy
 });
 let mounted = true;
 let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
-let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', speeds: {} as Record<string, number>, connections: {} as Record<string, string> };
+let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', speeds: {} as Record<string, number>, connections: {} as Record<string, string>, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
@@ -98,7 +98,7 @@ const plan = (request: any) => {
     new_files: files(adds), updated_files: 0, unchanged_files: 0,
     bytes_to_write: adds.reduce((n, a) => n + a.bytes, 0),
     removed_files: files(removes), bytes_to_remove: removes.reduce((n, a) => n + a.bytes, 0),
-    edited_files: request.edits.length * 5, playlists_updated: removes.length ? 1 : 0, warnings: planWarnings,
+    edited_files: request.edits.length * 5, playlists_updated: removes.length ? 1 : 0, warnings: planWarnings, converted_files: 0, replaygain_files: 0, skipped: [],
   };
 };
 
@@ -232,6 +232,9 @@ const handlers: Record<string, (args: any) => unknown> = {
   execute_core_update: () => ({ backup_dir: '/backups/mockplan', files_written: 1, bytes_written: 107197, files_backed_up: 2, obsolete_removed: 0, caches_cleared: 1, stubs_swept: 0, nothing_to_do: false, checks: [{ core_id: 'alfatreze.TAU', items: [{ name: 'core.json', status: 'pass', detail: 'valid.' }], verdict: 'pass', summary: 'alfatreze.TAU: all 1 checks passed.' }] }),
   rollback_core_update: () => ({ restored: 2, created_removed: 0 }),
   library_health: () => ({ present: true, valid: true, tracks: 120, root: '/Assets/tau/common/', root_matches: true, missing_files: 0, albums_without_cover_file: 3 }),
+  lame_status: () => ({ path: '/opt/homebrew/bin/lame', version: 'LAME 64bits version 4.0', options: [{ method: 'brew', label: 'Install with Homebrew', command: 'brew install lame', runnable: true }] }),
+  check_lame: () => 'LAME 64bits version 4.0',
+  install_lame: () => ({ path: '/opt/homebrew/bin/lame', version: 'LAME 64bits version 4.0', options: [] }),
   plan_cover_files: () => ({ id: 'cp', albums: 40, have_cover_file: 37, items: [], no_picture: [] }),
   execute_cover_files: () => 3,
   plan_library_refresh: () => ({ id: 'rp', media_root: '/x', root_prefix: '/Assets/tau/common/', before: { present: true, valid: true, tracks: 120, root: '/Assets/tau_dev_42/common/', root_matches: false, missing_files: 120 }, media_files: 124, would_index: 122,

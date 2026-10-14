@@ -47,7 +47,7 @@
    * timed. These are placeholders to be replaced with real figures collected during development; the review sheet
    * always says when an estimate rests on them rather than on a measured transfer. */
   const DEFAULT_SPEED: Record<string, number> = { direct_usb: 1.5 * MB, card_reader: 20 * MB, unknown: 5 * MB };
-  const STAGES: Record<string, string> = { scanning: 'Reading files', hashing: 'Checking files', copying: 'Copying', building_index: 'Updating the library list', verifying: 'Verifying', deleting: 'Removing', editing: 'Updating tags' };
+  const STAGES: Record<string, string> = { scanning: 'Reading files', hashing: 'Checking files', copying: 'Copying', building_index: 'Updating the library list', verifying: 'Verifying', deleting: 'Removing', editing: 'Updating tags', analysing: 'Measuring loudness', converting: 'Converting' };
 
   // ---- persistence (per card + core) ---------------------------------------
   const storeKey = (name: string) => `tau.wb.${name}.${mediaRoot}`;
@@ -161,7 +161,7 @@
   async function scanSource() {
     if (!sourcePath) return;
     sourceBusy = true; sourceError = ''; sourceJob = newJobId(); sourceProgress = '';
-    try { source = await listLibrary(sourcePath, sourceJob); }
+    try { source = await listLibrary(sourcePath, sourceJob, true); }
     catch (error) { source = null; sourceError = explainError(error); }
     finally { sourceBusy = false; }
   }
@@ -781,6 +781,9 @@
       <h2 id="rev-t">Ready to sync to {cardLabel}?</h2>
       <dl class="wb-review">
         {#if adds.length}<div><dt>Add</dt><dd>{plural(review.new_files + review.updated_files, 'track')} · {size(review.bytes_to_write)}{review.unchanged_files ? ` (${review.unchanged_files} already up to date)` : ''}</dd></div>{/if}
+        {#if review.converted_files}<div><dt>Convert</dt><dd>{plural(review.converted_files, 'file')} the Pocket cannot play become FLAC or MP3 copies. Your originals are not changed.</dd></div>{/if}
+        {#if review.replaygain_files}<div><dt>ReplayGain</dt><dd>added to {review.replaygain_files} {review.replaygain_files === 1 ? 'copy' : 'copies'}. Your originals are not changed.</dd></div>{/if}
+        {#if review.skipped.length}<div><dt>Left out</dt><dd>{plural(review.skipped.length, 'file')}: {review.skipped.slice(0, 3).map((k) => `${k.file} (${k.reason})`).join('; ')}{review.skipped.length > 3 ? '…' : ''}</dd></div>{/if}
         {#if review.removed_files}<div><dt>Remove</dt><dd>{plural(review.removed_files, 'track')} · {size(review.bytes_to_remove)}{review.playlists_updated ? ` · ${plural(review.playlists_updated, 'playlist')} updated` : ''}</dd></div>{/if}
         {#if review.edited_files}<div><dt>Edit</dt><dd>{plural(review.edited_files, 'track')} (only the copies on the Pocket)</dd></div>{/if}
         {#if reviewEta}<div><dt>Time</dt><dd>about {reviewEta}{#if estIsDefault} <small class="wb-was">(rough estimate; we haven't timed this card yet)</small>{:else} <small class="wb-was">(from your last transfer)</small>{/if}</dd></div>{/if}

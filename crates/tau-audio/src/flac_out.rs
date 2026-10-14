@@ -1,7 +1,7 @@
 //! FLAC writing (flacenc, pure Rust) from a [`Pipeline`], with Vorbis comments and an optional picture.
 
-use crate::AudioError;
 use crate::pipeline::{Pipeline, Quantizer};
+use crate::{AudioError, Encoded};
 use flacenc::component::{BitRepr, MetadataBlockData};
 use flacenc::error::Verify;
 use flacenc::source::{Fill, Source};
@@ -24,6 +24,7 @@ struct PullSource<'a> {
     ints: Vec<i32>,
     error: Option<AudioError>,
     frames: u64,
+    peak: f64,
     progress: &'a mut dyn FnMut(u64) -> bool,
     cancelled: bool,
 }
@@ -61,6 +62,7 @@ impl Source for PullSource<'_> {
         }
         self.ints.clear();
         for s in &self.scratch {
+            self.peak = self.peak.max(s.abs());
             self.ints.push(self.quant.to_i32(*s));
         }
         dest.fill_interleaved(&self.ints)?;
@@ -104,7 +106,7 @@ pub fn encode(
     picture: Option<Picture<'_>>,
     path: &Path,
     progress: &mut dyn FnMut(u64) -> bool,
-) -> Result<u64, AudioError> {
+) -> Result<Encoded, AudioError> {
     let channels = pipeline.target.channels as usize;
     let rate = pipeline.target.rate as usize;
     let config = flacenc::config::Encoder::default()
@@ -120,6 +122,7 @@ pub fn encode(
         ints: Vec::new(),
         error: None,
         frames: 0,
+        peak: 0.0,
         progress,
         cancelled: false,
     };
@@ -132,6 +135,7 @@ pub fn encode(
         return Err(AudioError::Process("cancelled".into()));
     }
     let frames = source.frames;
+    let peak = source.peak;
     // flacenc counts the short last frame in the minimum block size; the format (and strict readers) mean
     // the minimum excluding the last block, which is the configured size unless there is only one block.
     let block = config.block_size.min(frames.max(1) as usize);
@@ -157,5 +161,5 @@ pub fn encode(
     let mut file = std::fs::File::create(path)?;
     file.write_all(sink.as_slice())?;
     file.sync_all()?;
-    Ok(frames)
+    Ok(Encoded { frames, peak })
 }

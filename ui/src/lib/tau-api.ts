@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate } from './types';
+import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -43,7 +43,7 @@ export const readImageDataUrl = (path: string) => invoke<string>('read_image_dat
 export const readCoreIcon = (card: string, coreId: string) => invoke<string | null>('read_core_icon', { card, coreId });
 export const readPlatformImage = (card: string, platform: string) => invoke<string | null>('read_platform_image', { card, platform });
 export { cancelJob, newJobId, onProgress, errorMessage, explainError } from './backend';
-export const listLibrary = (path: string, jobId: string) => invoke<LibraryListing>('list_library', { path, jobId });
+export const listLibrary = (path: string, jobId: string, includeConvertible = false) => invoke<LibraryListing>('list_library', { path, jobId, includeConvertible });
 export const planChanges = (request: ChangeRequest, destination: string) => invoke<ChangePlanView>('plan_changes', { request, destination });
 export const executeChanges = (request: ChangeRequest, destination: string, confirmation: string, backup: string | null, context: HistoryContext | null, jobId: string) => invoke<ChangeResult>('execute_changes', { request, destination, confirmation, backup, context, jobId });
 export const listHistory = () => invoke<HistoryEntry[]>('list_history');
@@ -93,3 +93,7 @@ export const halcyonPlanInstall = (presets: HalcyonPreset[], mediaRoot: string) 
 export const halcyonInstall = (presets: HalcyonPreset[], mediaRoot: string, confirmation: string, backup: string | null) => invoke<AssetsInstallReport>('halcyon_install', { presets, mediaRoot, confirmation, backup });
 export const omegaUpdateCheck = () => invoke<OmegaUpdate | null>('omega_update_check');
 export const omegaUpdateInstall = () => invoke<void>('omega_update_install');
+
+export const lameStatus = () => invoke<LameStatus>('lame_status');
+export const checkLame = (path: string) => invoke<string>('check_lame', { path });
+export const installLame = (method: string) => invoke<LameStatus>('install_lame', { method });

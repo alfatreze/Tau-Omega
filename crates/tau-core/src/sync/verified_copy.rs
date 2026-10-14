@@ -175,6 +175,16 @@ pub(super) fn run_canary(
 }
 
 pub(super) fn copy_verified(item: &CopyItem) -> Result<String, TauError> {
+    copy_verified_with(item, None, &mut |_| true)
+}
+
+/// Writes one planned file: a plain or cover-embedded copy, a copy with ReplayGain tags added, or a
+/// conversion, always to a temporary name that is verified before it is renamed into place.
+pub(super) fn copy_verified_with(
+    item: &CopyItem,
+    lame: Option<&Path>,
+    frames_done: &mut dyn FnMut(u64) -> bool,
+) -> Result<String, TauError> {
     if let Some(parent) = item.destination.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -191,7 +201,26 @@ pub(super) fn copy_verified(item: &CopyItem) -> Result<String, TauError> {
         ));
     }
     let output_sha;
-    if let Some(cover) = &item.cover {
+    if let Some(transform) = &item.transform {
+        if let Some(kind) = &transform.kind {
+            transform::convert_to(item, transform, kind, lame, &temp, frames_done).inspect_err(
+                |_| {
+                    let _ = fs::remove_file(&temp);
+                },
+            )?;
+            evict_cache(&temp);
+            output_sha = sha256_file(&temp)?;
+        } else {
+            let bytes = transform::tagged_bytes(item, transform)?;
+            let expected = sha256_bytes(&bytes);
+            write_durable(&temp, &bytes).inspect_err(|_| {
+                let _ = fs::remove_file(&temp);
+            })?;
+            drop(bytes);
+            verify_written(&temp, &expected, &item.source)?;
+            output_sha = expected;
+        }
+    } else if let Some(cover) = &item.cover {
         if sha256_file(&cover.source)? != cover.sha256 {
             return Err(TauError::e(
                 ErrorCode::SourceChangedSincePlan,

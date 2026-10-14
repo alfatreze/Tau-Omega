@@ -46,7 +46,7 @@ impl fmt::Display for CliError {
 
 fn usage() {
     eprintln!(
-        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare, diag\nApp parity (all take --json; errors then print an error object (code, message) as JSON on stderr): report-code <png> | screenshots <card> | settings <interact_persist.json> | package-inspect <zip> | package-plan <zip> --card <root> | package-install <zip> --card <root> --confirm <plan-id> --yes | library-health <media-root> | library-refresh-plan <media-root> | covers-plan <media-root> | halcyon-import <apo.txt> --name N | halcyon-show <tau-assets.bin>\nNetwork (one GET of the public release list; nothing is installed): update-check [--card <root>] | update-download <tag> <zip-name>... --out <folder> (verified against the release's checksums)\nChanging things (plan first, then the same command with --confirm <plan-id> --yes; replacing files needs --backup-dir <folder outside the card>): remove-plan|remove <card> --core <id> [--delete-media] | update-plan|update <zip> --card <root> [--allow-downgrade] | library-refresh <media-root> | covers <media-root> | changes-plan|changes <media-root> [--request r.json] [--library <dir>] [--add <album>] [--remove <album>] (changes also needs --manifest <journal.json>) | theme-check <theme.json> | theme-show <tau-assets.bin> | assets-plan|assets-install <media-root> [--themes t.json] [--presets p.json]\nDiagnostics: tau diag <card-root> [--limit N] [--zip <host-folder>]   (reads Check results, QR/pixel-grid screenshots and core checksums; --zip writes the diagnostics zip to a folder OUTSIDE the card, nothing is uploaded)\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--no-art-sidecar]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [--embed-cover] [--no-art-sidecar]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. Cover files (tau-art/cover_128.pal256.timg, from a folder image or the art embedded in the tracks) are always written per album; --no-art-sidecar turns that off."
+        "Tau Omega CLI\n\nRead-only: cards, scan, verify, report, compare, diag\nApp parity (all take --json; errors then print an error object (code, message) as JSON on stderr): report-code <png> | screenshots <card> | settings <interact_persist.json> | package-inspect <zip> | package-plan <zip> --card <root> | package-install <zip> --card <root> --confirm <plan-id> --yes | library-health <media-root> | library-refresh-plan <media-root> | covers-plan <media-root> | halcyon-import <apo.txt> --name N | halcyon-show <tau-assets.bin>\nNetwork (one GET of the public release list; nothing is installed): update-check [--card <root>] | update-download <tag> <zip-name>... --out <folder> (verified against the release's checksums)\nChanging things (plan first, then the same command with --confirm <plan-id> --yes; replacing files needs --backup-dir <folder outside the card>): remove-plan|remove <card> --core <id> [--delete-media] | update-plan|update <zip> --card <root> [--allow-downgrade] | library-refresh <media-root> | covers <media-root> | changes-plan|changes <media-root> [--request r.json] [--library <dir>] [--add <album>] [--remove <album>] (changes also needs --manifest <journal.json>) | theme-check <theme.json> | theme-show <tau-assets.bin> | assets-plan|assets-install <media-root> [--themes t.json] [--presets p.json]\nDiagnostics: tau diag <card-root> [--limit N] [--zip <host-folder>]   (reads Check results, QR/pixel-grid screenshots and core checksums; --zip writes the diagnostics zip to a folder OUTSIDE the card, nothing is uploaded)\nCompare: tau compare <Assets/platform/common> --with <Assets/platform/common>\nCore copy: tau core-copy-plan <source-common> --dest <destination-common>\n           tau core-copy <source-common> --dest <destination-common> --confirm <plan-id> --yes --manifest report.json\nCore move: tau core-move <source-common> --dest <destination-common> --confirm <plan-id> --confirm-delete <plan-id> --backup-dir <host-folder> --yes --manifest report.json\nIndex: tau index <common> --out <file> --yes\nSync: tau plan <sources...> --dest <Assets/platform/common> [--mirror] [--embed-cover] [--no-art-sidecar] [--no-convert] [--replaygain off|add|rebuild] [--convert-mode auto|manual --max-rate 44100|48000 --flac-bits 16|24 --mp3-quality v0..v9|b128..b320 --reduce-playable] [--lame <path>]\n      tau sync <sources...> --dest <Assets/platform/common> --confirm <plan-id> --yes --manifest report.json [same options as plan]\n      mirror additionally needs --confirm-delete <plan-id> --backup-dir <host-folder>.\n\nSync never changes a source. --embed-cover adds a reviewed baseline JPEG to MP3/FLAC destination copies only. Cover files (tau-art/cover_128.pal256.timg, from a folder image or the art embedded in the tracks) are always written per album; --no-art-sidecar turns that off. Files the Pocket cannot play are converted by default (FLAC for lossless, MP3 through your own lame for lossy; --no-convert leaves them out) and missing ReplayGain tags are added to the copies (--replaygain)."
     );
 }
 fn main() -> ExitCode {
@@ -479,9 +479,61 @@ fn make_plan(a: &[String]) -> Result<SyncPlan, CliError> {
             mirror: a.iter().any(|arg| arg == "--mirror"),
             embed_covers: a.iter().any(|arg| arg == "--embed-cover"),
             art_sidecar_pal256: !a.iter().any(|arg| arg == "--no-art-sidecar"),
+            convert: convert_settings(a)?,
         },
         &mut None,
     )?)
+}
+
+/// Conversion and ReplayGain settings from the command line. The defaults are the app's: files the Pocket
+/// cannot play are converted (Auto), ReplayGain is added where missing.
+fn convert_settings(a: &[String]) -> Result<tau_core::convert::ConvertSettings, CliError> {
+    use tau_core::convert::{ConvertSettings, Mode, Mp3Quality, ReplayGainMode};
+    let mut s = ConvertSettings::product();
+    if a.iter().any(|x| x == "--no-convert") {
+        s.enabled = false;
+    }
+    if let Some(mode) = value(a, "--replaygain") {
+        s.replaygain = match mode {
+            "off" => ReplayGainMode::Off,
+            "add" => ReplayGainMode::AddMissing,
+            "rebuild" => ReplayGainMode::Rebuild,
+            _ => return Err("--replaygain takes off, add or rebuild".into()),
+        };
+    }
+    if let Some(mode) = value(a, "--convert-mode") {
+        s.mode = match mode {
+            "auto" => Mode::Auto,
+            "manual" => Mode::Manual,
+            _ => return Err("--convert-mode takes auto or manual".into()),
+        };
+    }
+    if let Some(rate) = value(a, "--max-rate") {
+        s.max_rate = rate
+            .parse()
+            .map_err(|_| "--max-rate takes 44100 or 48000")?;
+    }
+    if let Some(bits) = value(a, "--flac-bits") {
+        s.flac_bits = bits.parse().map_err(|_| "--flac-bits takes 16 or 24")?;
+    }
+    s.reduce_playable = a.iter().any(|x| x == "--reduce-playable");
+    if let Some(q) = value(a, "--mp3-quality") {
+        s.mp3 = match q.split_at(1) {
+            ("v", n) => Mp3Quality::Vbr(
+                n.parse()
+                    .map_err(|_| "--mp3-quality takes v0..v9 or b128..b320")?,
+            ),
+            ("b", n) => Mp3Quality::Cbr(
+                n.parse()
+                    .map_err(|_| "--mp3-quality takes v0..v9 or b128..b320")?,
+            ),
+            _ => return Err("--mp3-quality takes v0..v9 or b128..b320".into()),
+        };
+    }
+    if let Some(p) = value(a, "--lame") {
+        s.lame_path = Some(PathBuf::from(p));
+    }
+    Ok(s)
 }
 fn make_core_copy_plan(a: &[String]) -> Result<SyncPlan, CliError> {
     let source = PathBuf::from(a.first().ok_or("core-copy needs a source media root")?);
@@ -496,21 +548,45 @@ fn make_core_copy_plan(a: &[String]) -> Result<SyncPlan, CliError> {
 }
 fn show_plan(p: &SyncPlan, j: bool) {
     let count = |state| p.items.iter().filter(|item| item.state == state).count();
+    let converted = p
+        .items
+        .iter()
+        .filter(|i| i.transform.as_ref().is_some_and(|t| t.kind.is_some()))
+        .count();
+    let tagged = p
+        .items
+        .iter()
+        .filter(|i| i.transform.as_ref().is_some_and(|t| t.kind.is_none()))
+        .count();
     if j {
+        let skipped: Vec<String> = p
+            .skipped
+            .iter()
+            .map(|s| {
+                format!(
+                    r#"{{"file":{},"reason":{}}}"#,
+                    q(&s.source.to_string_lossy()),
+                    q(&s.reason)
+                )
+            })
+            .collect();
         println!(
-            r#"{{"plan_id":{},"destination":{},"new":{},"update":{},"same":{},"delete":{},"bytes_to_write":{},"warnings":{}}}"#,
+            r#"{{"plan_id":{},"destination":{},"new":{},"update":{},"same":{},"delete":{},"converted":{},"replaygain_added":{},"skipped":[{}],"bytes_to_write":{},"warnings":{}}}"#,
             q(&p.id),
             q(&p.destination.to_string_lossy()),
             count(CopyState::New),
             count(CopyState::Update),
             count(CopyState::Same),
             p.deletions.len(),
+            converted,
+            tagged,
+            skipped.join(","),
             p.bytes_to_write,
             warnings_array(&p.warnings)
         );
     } else {
         println!(
-            "Plan {}\nDestination: {}\n{} new · {} update · {} unchanged · {} delete · {} bytes to write\nTo execute: tau sync ... --confirm {} --yes",
+            "Plan {}\nDestination: {}\n{} new · {} update · {} unchanged · {} delete · {} bytes to write\n{} converted for the Pocket · ReplayGain added to {} · {} left out",
             p.id,
             p.destination.display(),
             count(CopyState::New),
@@ -518,8 +594,14 @@ fn show_plan(p: &SyncPlan, j: bool) {
             count(CopyState::Same),
             p.deletions.len(),
             p.bytes_to_write,
-            p.id
+            converted,
+            tagged,
+            p.skipped.len()
         );
+        for s in &p.skipped {
+            println!("  left out: {} ({})", s.source.display(), s.reason);
+        }
+        println!("To execute: tau sync ... --confirm {} --yes", p.id);
     }
 }
 pub(crate) fn value<'a>(a: &'a [String], key: &str) -> Option<&'a str> {
@@ -538,7 +620,17 @@ fn sources(a: &[String]) -> Vec<PathBuf> {
         }
         if matches!(
             arg.as_str(),
-            "--dest" | "--confirm" | "--confirm-delete" | "--manifest" | "--backup-dir"
+            "--dest"
+                | "--confirm"
+                | "--confirm-delete"
+                | "--manifest"
+                | "--backup-dir"
+                | "--replaygain"
+                | "--convert-mode"
+                | "--max-rate"
+                | "--flac-bits"
+                | "--mp3-quality"
+                | "--lame"
         ) {
             skip = true;
             continue;
@@ -548,6 +640,8 @@ fn sources(a: &[String]) -> Vec<PathBuf> {
             && arg != "--embed-cover"
             && arg != "--art-sidecar"
             && arg != "--no-art-sidecar"
+            && arg != "--no-convert"
+            && arg != "--reduce-playable"
         {
             out.push(PathBuf::from(arg));
         }

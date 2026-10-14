@@ -58,6 +58,8 @@ pub(super) fn execute_with_mirror_inner(
         plan.items.iter().map(|i| i.destination.as_path()),
     );
     let mut copied = 0;
+    let mut converted_written = 0;
+    let mut tagged_written = 0;
     let mut unchanged = 0;
     let mut bytes_written = 0;
     let mut remembered = ledger::Session::open(&plan.destination);
@@ -76,7 +78,29 @@ pub(super) fn execute_with_mirror_inner(
                         path: Some(item.destination.to_string_lossy().into_owned()),
                     },
                 )?;
-                let output_sha = copy_verified(item)?;
+                let name = item.destination.to_string_lossy().into_owned();
+                let expected_frames = item.transform.as_ref().and_then(|t| t.frames).unwrap_or(0);
+                let mut cancelled: Option<TauError> = None;
+                let output_sha =
+                    copy_verified_with(item, plan.lame.as_deref(), &mut |frames| match tick(
+                        progress,
+                        Progress {
+                            stage: Stage::Converting,
+                            done: frames,
+                            total: expected_frames,
+                            path: Some(name.clone()),
+                        },
+                    ) {
+                        Ok(()) => true,
+                        Err(e) => {
+                            cancelled = Some(e);
+                            false
+                        }
+                    });
+                if let Some(e) = cancelled {
+                    return Err(e);
+                }
+                let output_sha = output_sha?;
                 // Remember what was just written and verified (the read-back bypassed the cache), keyed by the
                 // file as it stands after the final rename.
                 if let Some(session) = remembered.as_mut()
@@ -89,17 +113,18 @@ pub(super) fn execute_with_mirror_inner(
                         print,
                         ledger::Provenance {
                             source_sha: item.sha256.clone(),
-                            cover_sha: item
-                                .cover
-                                .as_ref()
-                                .map(|c| c.sha256.clone())
-                                .unwrap_or_default(),
+                            cover_sha: variant_key(item.cover.as_ref(), item.transform.as_ref()),
                             embed_version: ledger::EMBED_VERSION,
                             output_sha,
                         },
                     );
                 }
                 copied += 1;
+                match item.transform.as_ref().map(|t| t.kind.is_some()) {
+                    Some(true) => converted_written += 1,
+                    Some(false) => tagged_written += 1,
+                    None => {}
+                }
                 bytes_written += item.bytes;
                 copy_done += item.bytes;
             }
@@ -159,6 +184,8 @@ pub(super) fn execute_with_mirror_inner(
                 bytes_written,
                 deleted,
                 art_sidecars_written,
+                converted: converted_written,
+                replaygain_tagged: tagged_written,
                 index_path,
                 index_sha256: sha256_bytes(&current),
                 warnings: plan.warnings.clone(),
@@ -195,6 +222,8 @@ pub(super) fn execute_with_mirror_inner(
         bytes_written,
         deleted,
         art_sidecars_written,
+        converted: converted_written,
+        replaygain_tagged: tagged_written,
         index_path,
         index_sha256: sha256_bytes(&index),
         warnings,
@@ -300,6 +329,7 @@ pub(super) fn execute_core_move_inner(
             sha256: item.sha256.clone(),
             cover: None,
             state: CopyState::New,
+            transform: None,
         };
         copy_verified(&backup_item)?;
         fs::remove_file(&item.source)?;

@@ -106,6 +106,10 @@ impl Decoder {
         })
     }
 
+    pub(crate) fn format_metadata(&mut self) -> symphonia::core::meta::Metadata<'_> {
+        self.format.metadata()
+    }
+
     /// Appends the next packet's frames (interleaved, the file's channel order) to `out`. `Ok(false)` at the
     /// end of the stream. Undecodable packets are skipped, as a player does.
     pub fn next(&mut self, out: &mut Vec<f32>) -> Result<bool, AudioError> {

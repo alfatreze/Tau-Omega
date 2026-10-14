@@ -1,4 +1,5 @@
 use super::*;
+use crate::details;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
@@ -20,6 +21,7 @@ fn space_is_counted_in_whole_clusters_and_checked_before_writing() {
                 sha256: String::new(),
                 cover: None,
                 state: CopyState::New,
+                transform: None,
             })
             .collect(),
         deletions: Vec::new(),
@@ -27,6 +29,8 @@ fn space_is_counted_in_whole_clusters_and_checked_before_writing() {
         art_sidecars: Vec::new(),
         warnings: Vec::new(),
         bytes_to_write: 1000,
+        skipped: Vec::new(),
+        lame: None,
     };
     let needed = bytes_on_disk(&plan, 131_072);
     assert!(needed >= 1000 * 131_072, "exFAT-sized clusters: {needed}");
@@ -71,6 +75,7 @@ fn synced_card(name: &str) -> PathBuf {
             mirror: false,
             embed_covers: false,
             art_sidecar_pal256: false,
+            ..PlanOptions::default()
         },
         &mut None,
     )
@@ -161,6 +166,7 @@ fn opts(embed: bool) -> PlanOptions {
         mirror: false,
         embed_covers: embed,
         art_sidecar_pal256: false,
+        ..PlanOptions::default()
     }
 }
 
@@ -312,6 +318,7 @@ fn an_unusable_cover_warns_instead_of_failing_the_sync() {
             mirror: false,
             embed_covers: true,
             art_sidecar_pal256: false,
+            ..PlanOptions::default()
         },
         &mut None,
     )
@@ -361,6 +368,7 @@ fn names_that_differ_only_by_case_collide() {
             mirror: false,
             embed_covers: false,
             art_sidecar_pal256: false,
+            ..PlanOptions::default()
         },
         &mut None,
     )
@@ -565,6 +573,7 @@ fn mirror_requires_second_confirmation_and_verified_backup() {
             mirror: true,
             embed_covers: false,
             art_sidecar_pal256: false,
+            ..PlanOptions::default()
         },
         &mut None,
     )
@@ -603,6 +612,7 @@ fn reviewed_cover_is_embedded_only_in_the_destination_copy() {
             mirror: false,
             embed_covers: true,
             art_sidecar_pal256: false,
+            ..PlanOptions::default()
         },
         &mut None,
     )
@@ -642,6 +652,7 @@ fn art_sidecar_is_planned_once_per_album_and_written_verifiably() {
             mirror: false,
             embed_covers: false,
             art_sidecar_pal256: true,
+            ..PlanOptions::default()
         },
         &mut None,
     )
@@ -667,6 +678,7 @@ fn art_sidecar_is_planned_once_per_album_and_written_verifiably() {
             mirror: false,
             embed_covers: false,
             art_sidecar_pal256: true,
+            ..PlanOptions::default()
         },
         &mut None,
     )
@@ -829,6 +841,7 @@ fn a_confirmed_sync_leaves_no_appledouble_stubs_and_a_refused_one_touches_nothin
             mirror: false,
             embed_covers: false,
             art_sidecar_pal256: false,
+            ..PlanOptions::default()
         },
         &mut None,
     )
@@ -872,6 +885,7 @@ fn a_sidecar_is_made_from_embedded_art_when_there_is_no_folder_image() {
         mirror: false,
         embed_covers: false,
         art_sidecar_pal256: true,
+        ..PlanOptions::default()
     };
     let sync_plan = plan(
         &[source],
@@ -931,4 +945,178 @@ fn cover_files_are_added_to_existing_albums_and_then_none_are_missing() {
             want
         );
     }
+}
+
+// ---- conversion and ReplayGain ----
+
+fn write_wav(path: &Path, rate: u32, channels: u16, bits: u16, frames: usize, amplitude: f64) {
+    let bytes = (bits / 8) as usize;
+    let scale = (1i64 << (bits - 1)) as f64 - 1.0;
+    let mut data = Vec::new();
+    for i in 0..frames {
+        let v = ((2.0 * std::f64::consts::PI * 440.0 * i as f64 / rate as f64).sin()
+            * amplitude
+            * scale) as i32;
+        for _ in 0..channels {
+            data.extend_from_slice(&v.to_le_bytes()[..bytes]);
+        }
+    }
+    let mut out = Vec::new();
+    out.extend(b"RIFF");
+    out.extend((36 + data.len() as u32).to_le_bytes());
+    out.extend(b"WAVEfmt ");
+    out.extend(16u32.to_le_bytes());
+    out.extend(1u16.to_le_bytes());
+    out.extend(channels.to_le_bytes());
+    out.extend(rate.to_le_bytes());
+    out.extend((rate * channels as u32 * bytes as u32).to_le_bytes());
+    out.extend((channels * bytes as u16).to_le_bytes());
+    out.extend(bits.to_le_bytes());
+    out.extend(b"data");
+    out.extend((data.len() as u32).to_le_bytes());
+    out.extend(data);
+    fs::write(path, out).unwrap();
+}
+
+fn product_options(rg: convert::ReplayGainMode) -> PlanOptions {
+    PlanOptions {
+        convert: convert::ConvertSettings {
+            replaygain: rg,
+            ..convert::ConvertSettings::product()
+        },
+        ..PlanOptions::default()
+    }
+}
+
+#[test]
+fn a_hi_res_wav_is_converted_to_flac_and_a_second_sync_changes_nothing() {
+    crate::ledger::register_test_locator();
+    let base = std::env::temp_dir().join(format!(
+        "tau-ledger-it-convert-{}",
+        std::process::id() as u128 + crate::test_uniq()
+    ));
+    let (source, common) = (base.join("lib"), base.join("card/Assets/tau/common"));
+    fs::create_dir_all(source.join("Album")).unwrap();
+    fs::create_dir_all(&common).unwrap();
+    write_wav(
+        &source.join("Album/01 Track.wav"),
+        96_000,
+        2,
+        24,
+        96_000,
+        0.5,
+    );
+    fs::write(source.join("Album/notes.txt"), b"ignored").unwrap();
+    let options = product_options(convert::ReplayGainMode::Off);
+    let first = plan(
+        std::slice::from_ref(&source),
+        &common,
+        "/Assets/tau/common/",
+        options.clone(),
+        &mut None,
+    )
+    .unwrap();
+    assert_eq!(first.items.len(), 1);
+    let item = &first.items[0];
+    assert!(
+        item.destination.ends_with("Album/01 Track.flac"),
+        "{:?}",
+        item.destination
+    );
+    let t = item.transform.as_ref().unwrap();
+    assert_eq!(t.kind.as_ref().unwrap().spec(), "flac:48000:24:2:0");
+    assert_eq!(item.state, CopyState::New);
+    let report = execute(&first, &first.id, &mut None).unwrap();
+    assert_eq!(report.copied, 1);
+    let made = tau_audio::decode::probe(&item.destination).unwrap();
+    assert_eq!(
+        (made.codec.as_str(), made.rate, made.channels, made.bits),
+        ("flac", 48_000, 2, Some(24))
+    );
+    assert_eq!(made.frames, Some(48_000));
+    // the source was not touched and the index lists the track
+    assert!(source.join("Album/01 Track.wav").is_file());
+    let scan = scan_dir_with_progress(&common, false, &mut None).unwrap();
+    assert_eq!(scan.entries.len(), 1);
+    // planning again proves the converted file is already there
+    let again = plan(
+        &[source],
+        &common,
+        "/Assets/tau/common/",
+        options,
+        &mut None,
+    )
+    .unwrap();
+    assert_eq!(again.items[0].state, CopyState::Same);
+}
+
+#[test]
+fn replaygain_is_added_to_copies_and_kept_when_already_there() {
+    let source = root("rg-source");
+    let card = root("rg-card");
+    let common = card.join("Assets/tau/common");
+    fs::create_dir_all(source.join("Album")).unwrap();
+    fs::create_dir_all(&common).unwrap();
+    // two playable FLAC files made from tones of different loudness
+    for (name, amp) in [("01 Quiet", 0.1), ("02 Loud", 0.5)] {
+        let wav = source.join("Album").join(format!("{name}.wav"));
+        write_wav(&wav, 44_100, 2, 16, 44_100 * 3, amp);
+        let info = tau_audio::decode::probe(&wav).unwrap();
+        let mut pipeline =
+            tau_audio::pipeline::Pipeline::open(&wav, tau_audio::pipeline::Target::native(&info))
+                .unwrap();
+        tau_audio::flac_out::encode(
+            &mut pipeline,
+            16,
+            false,
+            &[],
+            None,
+            &source.join("Album").join(format!("{name}.flac")),
+            &mut |_| true,
+        )
+        .unwrap();
+        fs::remove_file(wav).unwrap();
+    }
+    let options = product_options(convert::ReplayGainMode::AddMissing);
+    let p = plan(
+        std::slice::from_ref(&source),
+        &common,
+        "/Assets/tau/common/",
+        options,
+        &mut None,
+    )
+    .unwrap();
+    assert_eq!(p.items.len(), 2);
+    for item in &p.items {
+        let t = item.transform.as_ref().expect("tags planned");
+        assert!(t.kind.is_none());
+        assert_eq!(t.replaygain.len(), 4, "{:?}", t.replaygain);
+    }
+    execute(&p, &p.id, &mut None).unwrap();
+    let quiet = details::extract(&common.join("Album/01 Quiet.flac")).unwrap();
+    let loud = details::extract(&common.join("Album/02 Loud.flac")).unwrap();
+    for d in [&quiet, &loud] {
+        assert_eq!(d.flags & 0xF0, 0xF0, "all four ReplayGain tags present");
+    }
+    // the quieter track gets the larger gain; an album gain is shared
+    assert!(
+        quiet.gain_track > loud.gain_track,
+        "{} {}",
+        quiet.gain_track,
+        loud.gain_track
+    );
+    assert_eq!(quiet.gain_album, loud.gain_album);
+    // the audio itself is unchanged: the copy decodes to the same samples as the source
+    let a = fs::read(source.join("Album/02 Loud.flac")).unwrap();
+    let b = fs::read(common.join("Album/02 Loud.flac")).unwrap();
+    assert_ne!(a, b);
+    assert_eq!(&a[a.len() - 2000..], &b[b.len() - 2000..]);
+    // the sources were not touched
+    assert_eq!(
+        details::extract(&source.join("Album/02 Loud.flac"))
+            .unwrap()
+            .flags
+            & 0xF0,
+        0
+    );
 }
