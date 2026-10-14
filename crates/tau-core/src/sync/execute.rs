@@ -115,7 +115,8 @@ pub(super) fn execute_with_mirror_inner(
         } else {
             fs::read(&item.cover_source).ok()
         };
-        if source_bytes.as_deref().map(sha256_bytes).as_deref() != Some(item.cover_sha256.as_str()) {
+        if source_bytes.as_deref().map(sha256_bytes).as_deref() != Some(item.cover_sha256.as_str())
+        {
             return Err(TauError::e(
                 ErrorCode::SourceChangedSincePlan,
                 format!(

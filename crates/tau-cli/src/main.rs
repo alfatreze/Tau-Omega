@@ -541,7 +541,12 @@ fn sources(a: &[String]) -> Vec<PathBuf> {
             skip = true;
             continue;
         }
-        if arg != "--yes" && arg != "--mirror" && arg != "--embed-cover" && arg != "--art-sidecar" && arg != "--no-art-sidecar" {
+        if arg != "--yes"
+            && arg != "--mirror"
+            && arg != "--embed-cover"
+            && arg != "--art-sidecar"
+            && arg != "--no-art-sidecar"
+        {
             out.push(PathBuf::from(arg));
         }
     }

@@ -16,7 +16,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-REFERENCE = ROOT.parent / "tau-alpha"
+import os
+REFERENCE = Path(os.environ.get("TAU_REFERENCE") or ROOT.parent / "tau-alpha")  # a tau-alpha checkout at main
 sys.path.insert(0, str(REFERENCE / "tools"))
 import tau_library as library  # noqa: E402
 
