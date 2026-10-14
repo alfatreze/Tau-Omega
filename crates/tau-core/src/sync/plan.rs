@@ -143,6 +143,18 @@ pub(crate) fn plan_candidates(
             ));
         }
         let bytes = fs::metadata(&source)?.len();
+        if audio_file(&source)
+            && let Ok(details) = crate::details::extract(&source)
+            && let Some(reason) = crate::details::unplayable_reason(&details)
+        {
+            warnings.push(Warning::new(
+                WarningCode::WillNotPlay,
+                format!(
+                    "{}: copied, but the Pocket will not play it ({reason})",
+                    relative.display()
+                ),
+            ));
+        }
         let sha256 = sha256_file(&source)?;
         let cover = if embed_covers && audio_file(&source) {
             match source.parent().and_then(cover::find_cover) {

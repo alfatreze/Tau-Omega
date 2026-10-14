@@ -9,13 +9,15 @@
     unsupported_format: 'Unsupported tag format',
     path_issue: 'Path issues',
     missing_cover: 'Missing cover art',
+    will_not_play: 'The Pocket will not play these',
+    replay_gain: 'Incomplete ReplayGain tags',
   };
-  const ORDER: ProblemKind[] = ['duplicate', 'missing_tag', 'unsupported_format', 'path_issue', 'missing_cover'];
+  const ORDER: ProblemKind[] = ['duplicate', 'missing_tag', 'unsupported_format', 'path_issue', 'missing_cover', 'will_not_play', 'replay_gain'];
 
   $: byKind = ORDER.map((kind) => ({ kind, items: (problems ?? []).filter((p) => p.kind === kind) })).filter((g) => g.items.length);
 </script>
 <section class="page" aria-labelledby="problems-title">
-  <header><div><p class="eyebrow">LIBRARY HEALTH</p><h1 id="problems-title">Problems</h1><p class="lede">Duplicate content, missing tags, path issues a card sync would rewrite or collide on, and folders with no cover art. Nothing is changed or deleted.</p></div></header>
+  <header><div><p class="eyebrow">LIBRARY HEALTH</p><h1 id="problems-title">Problems</h1><p class="lede">Duplicate content, missing tags, path issues a card sync would rewrite or collide on, folders with no cover art, files the Pocket cannot play and incomplete ReplayGain tags. Nothing is changed or deleted.</p></div></header>
   <section class="settings-card"><div class="picker-row"><input bind:value={path} placeholder="/Users/me/Music"/><button class="picker" on:click={choose}>Choose</button><button class="primary" disabled={loading} on:click={scan}>{loading ? 'Scanning…' : 'Find problems'}</button></div><p class="notice" role="status">{notice}</p></section>
   {#if problems?.length}
     <section class="comparison-counts problems-counts"><span><b>{problems.length}</b> problems</span><span><b>{byKind.length}</b> categories</span></section>

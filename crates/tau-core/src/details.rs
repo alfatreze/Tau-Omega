@@ -537,6 +537,33 @@ fn flac(f: &mut fs::File, size: u64) -> Result<Details, TauError> {
     Ok(d)
 }
 
+/// Why the Pocket will not play this file, if it will not (the player refuses FLAC above 48 kHz, more
+/// than two channels, or a bit depth the decoder lacks; MP3 plays at every rate it can carry).
+pub fn unplayable_reason(d: &Details) -> Option<String> {
+    if d.codec != 2 {
+        return None;
+    }
+    if d.rate > 48_000 {
+        return Some(format!(
+            "{} kHz FLAC: the Pocket plays FLAC up to 48 kHz",
+            d.rate as f64 / 1000.0
+        ));
+    }
+    if d.channels > 2 {
+        return Some(format!(
+            "{} channels: the Pocket plays mono and stereo",
+            d.channels
+        ));
+    }
+    if !matches!(d.bits, 8 | 16 | 20 | 24) {
+        return Some(format!(
+            "{}-bit FLAC: the Pocket plays 8, 16, 20 and 24 bit",
+            d.bits
+        ));
+    }
+    None
+}
+
 /// Reads one track's details. Never decodes audio; reads the tag region and the first 16 KiB of audio.
 pub fn extract(path: &Path) -> Result<Details, TauError> {
     let size = fs::metadata(path)?.len();

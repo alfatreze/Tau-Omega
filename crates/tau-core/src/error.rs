@@ -176,6 +176,8 @@ pub enum WarningCode {
     /// A file on the card is not what this tool wrote there, so it (and the files from earlier syncs that
     /// could not be re-checked) will be copied again.
     CardFileChanged,
+    /// A source file the Pocket's player refuses (for example FLAC above 48 kHz); it is copied as it is.
+    WillNotPlay,
 }
 
 impl WarningCode {
@@ -191,6 +193,7 @@ impl WarningCode {
             Self::NoMediaFound => "no_media_found",
             Self::CoverNotEmbedded => "cover_not_embedded",
             Self::CardFileChanged => "card_file_changed",
+            Self::WillNotPlay => "will_not_play",
         }
     }
 }

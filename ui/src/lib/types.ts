@@ -19,7 +19,7 @@ export type MediaScan = { playlists: PlaylistDetail[]; warnings: Warning[] };
  * playlist change, following the same plan -> confirm -> execute shape as
  * `Plan`/`SyncReport`. */
 export type PlaylistPlan = { id: string; file: string; previous_file: string | null; tracks: string[]; dropped: string[]; overwrites_existing: boolean };
-export type ProblemKind = 'duplicate' | 'missing_tag' | 'unsupported_format' | 'path_issue' | 'missing_cover';
+export type ProblemKind = 'duplicate' | 'missing_tag' | 'unsupported_format' | 'path_issue' | 'missing_cover' | 'will_not_play' | 'replay_gain';
 export type Problem = { kind: ProblemKind; files: string[]; message: string };
 export type TrackRow = { rel: string; title: string; artist: string; album: string; secs: number; format: string };
 export type LibraryScan = { tracks: TrackRow[]; playlists: Playlist[]; warnings: Warning[] };

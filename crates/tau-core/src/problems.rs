@@ -15,6 +15,10 @@ pub enum ProblemKind {
     UnsupportedFormat,
     PathIssue,
     MissingCover,
+    /// A file the Pocket's player refuses (hi-res FLAC, more than two channels).
+    WillNotPlay,
+    /// ReplayGain tags that are incomplete: gain without a peak (no boost), or track without album gain.
+    ReplayGain,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +36,7 @@ pub fn find_problems(root: impl AsRef<Path>, entries: &[Entry]) -> Result<Vec<Pr
     problems.extend(tag_problems(entries));
     problems.extend(path_problems(entries));
     problems.extend(format_and_cover_problems(root, entries));
+    problems.extend(playback_problems(entries));
     Ok(problems)
 }
 
@@ -105,6 +110,60 @@ fn path_problems(entries: &[Entry]) -> Vec<Problem> {
                 files,
             });
         }
+    }
+    problems
+}
+
+/// What the Pocket will not play, and ReplayGain tags that would not take effect, from the details the
+/// scan read from each file.
+fn playback_problems(entries: &[Entry]) -> Vec<Problem> {
+    use crate::details::{
+        Details, F_RG_ALBUM_GAIN, F_RG_ALBUM_PEAK, F_RG_TRACK_GAIN, F_RG_TRACK_PEAK,
+        unplayable_reason,
+    };
+    let mut problems = Vec::new();
+    let mut partial: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for entry in entries {
+        let Some(d) = entry
+            .tags
+            .get("_det")
+            .and_then(|h| Details::from_hex(h, ""))
+        else {
+            continue;
+        };
+        if let Some(reason) = unplayable_reason(&d) {
+            problems.push(Problem {
+                kind: ProblemKind::WillNotPlay,
+                message: reason,
+                files: vec![entry.rel.clone()],
+            });
+        }
+        let has = |f: u8| d.flags & f != 0;
+        // A positive gain only plays louder with a peak tag; any gain tag without its peak is half a pair.
+        let tags_any = has(F_RG_TRACK_GAIN) || has(F_RG_ALBUM_GAIN);
+        let peak_missing = (has(F_RG_TRACK_GAIN) && !has(F_RG_TRACK_PEAK))
+            || (has(F_RG_ALBUM_GAIN) && !has(F_RG_ALBUM_PEAK));
+        if tags_any && (peak_missing || !has(F_RG_ALBUM_GAIN)) {
+            partial
+                .entry(entry.dir.clone())
+                .or_default()
+                .push(entry.rel.clone());
+        }
+    }
+    for (dir, files) in partial {
+        let label = if dir.is_empty() {
+            "the root folder".to_string()
+        } else {
+            dir
+        };
+        problems.push(Problem {
+            kind: ProblemKind::ReplayGain,
+            message: format!(
+                "{label}: ReplayGain is incomplete on {} track(s) (album gain or a peak value missing, so album mode or a boost will not apply)",
+                files.len()
+            ),
+            files,
+        });
     }
     problems
 }
