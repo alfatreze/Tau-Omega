@@ -42,6 +42,7 @@ pub fn default_cache_dir() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("TAU_OMEGA_CACHE_DIR") {
         return Some(PathBuf::from(dir));
     }
+    #[cfg(not(target_os = "windows"))]
     let home = std::env::var_os("HOME").map(PathBuf::from);
     #[cfg(target_os = "macos")]
     let base = home.map(|h| h.join("Library/Caches"));
