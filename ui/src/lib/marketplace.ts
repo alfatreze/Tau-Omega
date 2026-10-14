@@ -19,6 +19,14 @@ export function filterCores(cores: CatalogCore[], f: Filters, installed: Set<str
     : out.sort((a, b) => b.release_date.localeCompare(a.release_date) || a.name.localeCompare(b.name));
 }
 
+/** Cards per category among the other filters (the category itself is ignored so every chip shows what choosing it would give). */
+export function categoryCounts(cores: CatalogCore[], f: Filters, installed: Set<string>): { all: number; byCategory: [string, number][] } {
+  const rest = filterCores(cores, { ...f, category: '' }, installed);
+  const map = new Map<string, number>();
+  for (const c of rest) if (c.category) map.set(c.category, (map.get(c.category) ?? 0) + 1);
+  return { all: rest.length, byCategory: [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])) };
+}
+
 export const categories = (cores: CatalogCore[]): string[] => [...new Set(cores.map((c) => c.category).filter(Boolean))].sort();
 
 /** The status chip text for an installed core, or null when nothing is worth saying. Colour is never the only signal. */

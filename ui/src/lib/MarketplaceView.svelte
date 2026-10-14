@@ -1,11 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import VirtualList from './VirtualList.svelte';
   import CoreInstall from './CoreInstall.svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
   import { marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates } from './tau-api';
-  import { categories, filterCores, size, sourceNote, statusLabel, statusMap, type Filters } from './marketplace';
+  import { categoryCounts, filterCores, size, sourceNote, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
   import type { CatalogCore, CatalogResult, CoreStatus } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
@@ -25,9 +24,8 @@
   $: cores = result?.catalog.cores ?? [];
   $: installed = new Set([...statuses.keys()]);
   $: shown = filterCores(cores, filters, installed);
-  $: cats = categories(cores);
+  $: counts = categoryCounts(cores, filters, installed);
   $: note = result ? sourceNote(result.source, result.fetched) : null;
-  $: resetKey = `${filters.query}|${filters.category}|${filters.licence}|${filters.installedOnly}|${filters.sort}`;
   $: if (result) announce = `${shown.length} of ${cores.length} cores`;
   $: void loadStatuses(card);
 
@@ -57,20 +55,28 @@
         .finally(() => { running--; asking.delete(key); pump(); });
     }
   }
-  /** The list tells us which rows are showing; only those icons are fetched. */
-  function onRange(e: CustomEvent<{ start: number; end: number }>) { for (const c of shown.slice(e.detail.start, e.detail.end)) wantArt('Icon', c.id); }
+  /** A card asks for its pictures only when it scrolls near the screen (the catalog has hundreds of cores). */
+  function visible(node: HTMLElement, id: string) {
+    if (typeof IntersectionObserver === 'undefined') { wantArt('Icon', id); wantArt('Banner', id); return {}; }
+    const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) { wantArt('Banner', id); wantArt('Icon', id); io.disconnect(); } }, { rootMargin: '300px' });
+    io.observe(node);
+    return { destroy: () => io.disconnect() };
+  }
+  const toggleCategory = (c: string) => (filters.category = filters.category === c ? '' : c);
 
   function open(core: CatalogCore) { selected = core; chosen = ''; wantArt('Banner', core.id); wantArt('Icon', core.id); }
   function close() { selected = null; }
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
   let copied = false;
   async function copyRepo() { if (!selected) return; try { await navigator.clipboard.writeText(repoUrl(selected)); copied = true; setTimeout(() => (copied = false), 1500); } catch { /* the address stays visible to select */ } }
-  /** Up/Down move between rows (the list is windowed, so the neighbour is looked up in the page each time). */
-  function rowKey(e: KeyboardEvent) {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    const rows = [...document.querySelectorAll<HTMLElement>('.mk-open')];
-    const at = rows.indexOf(e.currentTarget as HTMLElement);
-    const next = rows[at + (e.key === 'ArrowDown' ? 1 : -1)];
+  /** Arrow keys move between cards: Left/Right by one, Up/Down by a row (the number of cards that share the first card's top edge). */
+  function cardKey(e: KeyboardEvent) {
+    if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    const cards = [...document.querySelectorAll<HTMLElement>('.mk-open')];
+    const at = cards.indexOf(e.currentTarget as HTMLElement);
+    const columns = Math.max(1, cards.filter((c) => c.offsetTop === cards[0].offsetTop).length);
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' ? columns : -columns;
+    const next = cards[at + step];
     if (next) { e.preventDefault(); next.focus(); next.scrollIntoView({ block: 'nearest' }); }
   }
   function onKey(e: KeyboardEvent) {
@@ -96,14 +102,15 @@
     <label class="mk-search"><span class="sr">Search cores</span>
       <input bind:this={searchEl} type="search" placeholder="Search by name, author or system   ( / )" bind:value={filters.query} />
     </label>
-    <label><span class="sr">Category</span>
-      <select bind:value={filters.category}><option value="">All categories</option>{#each cats as c}<option value={c}>{c}</option>{/each}</select>
-    </label>
     <label><span class="sr">Sort</span>
       <select bind:value={filters.sort}><option value="newest">Newest release</option><option value="name">Name</option></select>
     </label>
     <button class="chip toggle" aria-pressed={filters.licence} on:click={() => (filters.licence = !filters.licence)}>Needs a licence file</button>
     <button class="chip toggle" aria-pressed={filters.installedOnly} disabled={!card} title={card ? '' : 'Open a card to filter by what it has'} on:click={() => (filters.installedOnly = !filters.installedOnly)}>On this card</button>
+  </div>
+  <div class="mk-tags" role="group" aria-label="Category">
+    <button class="chip toggle" aria-pressed={!filters.category} on:click={() => (filters.category = '')}>All <span class="mk-count">{counts.all}</span></button>
+    {#each counts.byCategory as [name, n]}<button class="chip toggle" aria-pressed={filters.category === name} on:click={() => toggleCategory(name)}>{name} <span class="mk-count">{n}</span></button>{/each}
   </div>
   <p class="mk-note" role="status" aria-live="polite">{#if error && result}<span class="err">{error}</span>{:else if error}{:else if loading && !result}Loading the list…{:else}{announce}{#if note}{' · '}{note}{/if}{/if}</p>
 
@@ -113,19 +120,31 @@
     <div class="empty"><h2>No cores match</h2><p>{filters.query ? `Nothing matches “${filters.query}”` : 'Nothing matches these filters'}{filters.category ? ` in ${filters.category}` : ''}{filters.licence ? ' that need a licence file' : ''}{filters.installedOnly ? ' on this card' : ''}.</p>
       <button class="quiet" on:click={() => (filters = { ...filters, query: '', category: '', licence: false, installedOnly: false })}>Clear filters</button></div>
   {:else if result}
-    <div class="mk-list" aria-busy={loading}>
-      <VirtualList items={shown} rowHeight={68} key={(c) => c.id} label="Cores" {resetKey} on:range={onRange} let:item>
-        <div class="mk-row" role="listitem">
-          <button class="mk-open" on:keydown={rowKey} aria-label={`${item.name}, ${item.category}, version ${item.version || 'unknown'}. Show details`} on:click={() => open(item)}>
-            <span class="core-icon" aria-hidden="true">{#if art[`Icon:${item.id}`]}<img class="mk-icon" src={art[`Icon:${item.id}`]} alt="" width="36" height="36" />{:else}{item.name.slice(0, 2).toUpperCase()}{/if}</span>
-            <span class="mk-main"><strong>{item.name}</strong><small>{item.author} · {item.manufacturer || item.category}{item.year ? ` · ${item.year}` : ''}</small></span>
-            <span class="mk-ver"><span>{item.version || '—'}</span><small>{item.release_date}</small></span>
+    <ul class="mk-grid" aria-busy={loading} aria-label="Cores">
+      {#each shown as item (item.id)}
+        <li class="mk-card" use:visible={item.id}>
+          <button class="mk-open" on:keydown={cardKey} aria-label={`${item.name}, ${item.category}, version ${item.version || 'unknown'}. Show details`} on:click={() => open(item)}>
+            <span class="mk-art" aria-hidden="true">
+              {#if art[`Banner:${item.id}`]}<img src={art[`Banner:${item.id}`]} alt="" />{:else}<span class="mk-art-fallback">{item.name.slice(0, 2).toUpperCase()}</span>{/if}
+            </span>
+            <span class="mk-body">
+              <strong class="mk-title">{item.name}</strong>
+              <small class="mk-sub">{item.manufacturer || item.category}{item.year ? ` · ${item.year}` : ''}</small>
+              <span class="mk-author">
+                <span class="mk-avatar" aria-hidden="true">{#if art[`Icon:${item.id}`]}<img class="mk-icon" src={art[`Icon:${item.id}`]} alt="" width="28" height="28" />{:else}{item.author.slice(0, 1).toUpperCase()}{/if}</span>
+                <span class="mk-author-name">{item.author}</span>
+              </span>
+            </span>
           </button>
-          {#if item.requires_license}<span class="chip">Needs a licence file</span>{/if}
-          {#if chip(item)}<span class="chip" class:capable={statusOf(item)?.status === 'UpdateAvailable'}>{chip(item)}</span>{/if}
-        </div>
-      </VirtualList>
-    </div>
+          <div class="mk-foot">
+            {#if item.category}<button class="chip toggle mk-tag" aria-pressed={filters.category === item.category} aria-label={`Show only ${item.category}`} on:click={() => toggleCategory(item.category)}>{item.category}</button>{/if}
+            {#if item.requires_license}<span class="chip">Needs a licence file</span>{/if}
+            {#if chip(item)}<span class="chip" class:capable={statusOf(item)?.status === 'UpdateAvailable'}>{chip(item)}</span>{/if}
+            <span class="mk-ver">{item.version || '—'}<small>{item.release_date}</small></span>
+          </div>
+        </li>
+      {/each}
+    </ul>
   {/if}
 </section>
 
@@ -184,14 +203,26 @@
   .chip.toggle:disabled{opacity:.45;cursor:not-allowed}
   .mk-note{font-size:12px;color:#95a5a4;min-height:18px;margin:0 0 10px}
   .err{color:#ff9b9b}
-  .mk-list{display:flex;flex-direction:column;height:min(62vh,640px);border:1px solid #2c393a;border-radius:12px;overflow:hidden;background:#161f20}
-  .mk-row{height:68px;display:flex;align-items:center;gap:10px;padding:0 12px 0 0;border-bottom:1px solid #2c393a;box-sizing:border-box}
-  .mk-open{flex:1;min-width:0;height:100%;display:flex;align-items:center;gap:13px;padding:0 0 0 16px;background:transparent;color:inherit;text-align:left}
-  .mk-open:hover{background:#1c282a}
+  .mk-tags{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+  .mk-count{opacity:.65;font-weight:500;margin-left:4px}
+  .mk-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px}
+  .mk-card{display:flex;flex-direction:column;background:#161f20;border:1px solid #2c393a;border-radius:12px;overflow:hidden}
+  .mk-card:hover{border-color:#3d5254}
+  .mk-open{display:flex;flex-direction:column;flex:1;background:transparent;color:inherit;text-align:left;padding:0;border-radius:0}
   .mk-open:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
-  .mk-main{flex:1;min-width:0;display:grid;gap:3px}.mk-main strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mk-main small,.mk-ver small{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .mk-ver{display:grid;gap:3px;text-align:right;font-size:13px;color:#c7d1d0;max-width:130px}
-  .mk-icon{display:block;width:36px;height:36px;border-radius:7px;image-rendering:pixelated}
+  .mk-art{display:block;width:100%;aspect-ratio:521/165;background:#000;overflow:hidden}
+  .mk-art img{display:block;width:100%;height:100%;object-fit:cover}
+  .mk-art-fallback{display:grid;place-items:center;height:100%;color:#c1f0ad;font-weight:700;font-size:22px;letter-spacing:.06em}
+  .mk-body{display:flex;flex-direction:column;gap:4px;padding:12px 14px 10px}
+  .mk-title{font-size:15px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mk-sub{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mk-author{display:flex;align-items:center;gap:8px;margin-top:6px;min-width:0}
+  .mk-avatar{flex:none;width:28px;height:28px;display:grid;place-items:center;border-radius:7px;background:#273638;color:#c1f0ad;font-weight:700;font-size:12px;overflow:hidden}
+  .mk-author-name{font-size:12.5px;color:#c7d1d0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mk-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:9px 14px 12px;border-top:1px solid #2c393a;background:#141c1d}
+  .mk-tag{padding:4px 10px;font-size:11px}
+  .mk-ver{margin-left:auto;font-size:12px;color:#c7d1d0;display:flex;flex-direction:column;align-items:flex-end;line-height:1.3}.mk-ver small{font-size:11px;color:#95a5a4}
+  .mk-icon{display:block;width:28px;height:28px;border-radius:7px;image-rendering:pixelated}
   .mk-banner{display:block;width:100%;height:auto;border-radius:10px;margin:0 0 16px;background:#000}
   .mk-history{margin:10px 0;font-size:12px;color:#a6b3b2}.mk-history summary{cursor:pointer}.mk-history ul{margin:8px 0;padding:0;list-style:none}.mk-history li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}
   .mk-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100}
@@ -202,5 +233,5 @@
   .mk-small{font-size:12px;color:#a6b3b2;line-height:1.55;margin:6px 0}
   .mk-callout{border:1px solid #3b5a58;background:#16292a;border-radius:9px;padding:10px 12px;font-size:12px;line-height:1.5;color:#dce6e4;margin:10px 0}.mk-callout.soft{border-color:#5c5030;background:#241f12;color:#e5d9a8}
   code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px}
-  @media(max-width:720px){.mk-ver{display:none}.mk-sheet{padding:20px 16px 32px}}
+  @media(max-width:720px){.mk-grid{grid-template-columns:1fr}.mk-sheet{padding:20px 16px 32px}}
 </style>
