@@ -40,6 +40,7 @@
   }
 
   function toggleGroup() { open = !open; save(); if (open) { coresSelection.set({ platform: '', core: '' }); show(); } }
+  function pickGroup(key: string) { coresSelection.set({ platform: '', core: '', group: key }); show(); }
   function toggleClosed(key: string) { closed = { ...closed, [key]: !closed[key] }; save(); }
   function togglePlat(id: string) { expanded = { ...expanded, [id]: !expanded[id] }; save(); }
   function pickPlatform(id: string) { expanded = { ...expanded, [id]: true }; save(); coresSelection.set({ platform: id, core: '' }); show(); }
@@ -86,7 +87,7 @@
           {#each groups as c (c.name)}
             <li role="treeitem" aria-level="1" aria-expanded={catOpen[c.name]} aria-selected="false">
               <div class="nt-row">
-                                <button class="nt-item nt-cat" data-kind="category" data-level="1" data-id={c.name} on:click={() => toggleClosed(`c:${c.name}`)}><Icon name={categoryIcon(c.name)} size={15} /><span class="nt-name">{c.name}</span><span class="nt-count">{c.cores}</span></button><button class="nt-chev" tabindex="-1" aria-label={`${catOpen[c.name] ? 'Collapse' : 'Expand'} ${c.name}`} on:click={() => toggleClosed(`c:${c.name}`)}><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={catOpen[c.name]}><path d="m9 6 6 6-6 6"/></svg></button>
+                                <button class="nt-item nt-cat" class:sel={active && !$coresSelection.core && !$coresSelection.platform && $coresSelection.group === `c:${c.name}`} data-kind="category" data-level="1" data-id={c.name} on:click={() => pickGroup(`c:${c.name}`)}><Icon name={categoryIcon(c.name)} size={15} /><span class="nt-name">{c.name}</span><span class="nt-count">{c.cores}</span></button><button class="nt-chev" tabindex="-1" aria-label={`${catOpen[c.name] ? 'Collapse' : 'Expand'} ${c.name}`} on:click={() => toggleClosed(`c:${c.name}`)}><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={catOpen[c.name]}><path d="m9 6 6 6-6 6"/></svg></button>
               </div>
               {#if catOpen[c.name]}
                 <ul role="group" class="nt-sub">
@@ -95,7 +96,7 @@
                     <li role="treeitem" aria-level="2" aria-expanded={makerOpen[mk]} aria-selected="false">
                       {#if m.name}
                         <div class="nt-row">
-                                                    <button class="nt-item nt-maker" data-kind="maker" data-level="2" data-id={mk} on:click={() => toggleClosed(`m:${mk}`)}><span class="nt-name">{m.name}</span><span class="nt-count">{m.cores}</span></button><button class="nt-chev" tabindex="-1" aria-label={`${makerOpen[mk] ? 'Collapse' : 'Expand'} ${m.name}`} on:click={() => toggleClosed(`m:${mk}`)}><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={makerOpen[mk]}><path d="m9 6 6 6-6 6"/></svg></button>
+                                                    <button class="nt-item nt-maker" class:sel={active && !$coresSelection.core && !$coresSelection.platform && $coresSelection.group === `m:${mk}`} data-kind="maker" data-level="2" data-id={mk} on:click={() => pickGroup(`m:${mk}`)}><span class="nt-name">{m.name}</span><span class="nt-count">{m.cores}</span></button><button class="nt-chev" tabindex="-1" aria-label={`${makerOpen[mk] ? 'Collapse' : 'Expand'} ${m.name}`} on:click={() => toggleClosed(`m:${mk}`)}><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={makerOpen[mk]}><path d="m9 6 6 6-6 6"/></svg></button>
                         </div>
                       {/if}
                       {#if makerOpen[mk] || !m.name}
@@ -142,11 +143,11 @@
   .nt-sub{margin:0 0 2px 10px}
   .nt-row{display:flex;align-items:center;gap:2px}
   .nt-chev{flex:none;width:28px;height:30px;padding:0;display:grid;place-items:center;background:transparent;color:#8f9e9d;border-radius:6px}
-  .nt-chev:hover{background:#202b2d;color:#e8ecec}.nt-chev svg{transition:transform .12s}.nt-chev svg.open{transform:rotate(90deg)}
+  .nt-chev{border:1px solid transparent;border-radius:8px}.nt-chev:hover{background:#2a3b3d;border-color:#4a6264;color:#c1f0ad}.nt-chev:active{background:#34494b}.nt-chev svg{transition:transform .12s}.nt-chev svg.open{transform:rotate(90deg)}
   .nt-item{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;font-size:13px;line-height:1.25;border-radius:7px;color:#b4bfbf;background:transparent;text-align:left}
-  .nt-item:hover{background:#202b2d;color:#eff5f4}
+  .nt-item:hover{background:#1f2e26;color:#e9fbdd;box-shadow:inset 3px 0 0 #6fae58}
   .nt-item:focus-visible,.nt-chev:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
-  .nt-item.sel{background:#202b2d;color:#c1f0ad}
+  .nt-item.sel{background:#243628;color:#c1f0ad;box-shadow:inset 3px 0 0 #c1f0ad}
   .nt-cat{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9fb3aa}
   .nt-maker{font-size:12px;color:#8f9e9d}
   .nt-core{width:100%}
