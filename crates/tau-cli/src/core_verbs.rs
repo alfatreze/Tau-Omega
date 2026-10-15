@@ -7,8 +7,8 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tau_core::{
     core_add::{self, AddState, Destination},
-    core_files, core_lint, core_pack, core_preview, core_remove, core_screens, core_settings,
-    corehub,
+    core_files, core_health, core_lint, core_pack, core_preview, core_remove, core_screens,
+    core_settings, core_state, corehub,
     manual_source::{self, Source},
 };
 
@@ -544,4 +544,87 @@ pub fn core_lint(a: &[String], j: bool) -> Result<(), CliError> {
         return Err(CliError::Usage("one or more cores have errors".into()));
     }
     Ok(())
+}
+
+/// `tau core-health <card-root> [--json]`: which installed cores cannot work (broken files, a required file missing, nothing to load). Read-only.
+pub fn core_health(a: &[String], j: bool) -> Result<(), CliError> {
+    let card = a.first().ok_or("core-health needs a card root")?;
+    let all = core_health::check_card(Path::new(card))?;
+    emit(j, &all, || {
+        let mut s = String::new();
+        for h in &all {
+            s += &format!(
+                "{:<36} {:?}{}\n",
+                h.id,
+                h.verdict,
+                if h.needs_no_files {
+                    "  (needs no files)"
+                } else {
+                    ""
+                }
+            );
+            for r in &h.reasons {
+                s += &format!("    {}  | fix: {}\n", r.message, r.fix);
+            }
+        }
+        s
+    })
+}
+
+fn state_ids(a: &[String]) -> Vec<String> {
+    a.iter()
+        .skip(1)
+        .filter(|x| !x.starts_with("--"))
+        .cloned()
+        .collect()
+}
+
+/// `tau core-disable <card-root> <core-id...> [--confirm <token> --yes]` and `tau core-enable ...`: without `--confirm` it prints the plan (and the
+/// token); with it, moves `Cores/<id>` to `Disabled Cores/<id>` (or back). The Pocket's menu caches are cleared.
+pub fn core_state_verb(a: &[String], j: bool, enable: bool) -> Result<(), CliError> {
+    let card = Path::new(a.first().ok_or("needs a card root")?);
+    let ids = state_ids(a);
+    let p = core_state::plan(card, &ids, enable)?;
+    if let Some(token) = value(a, "--confirm") {
+        yes(a)?;
+        let r = core_state::execute(
+            card,
+            &ids,
+            enable,
+            token,
+            &[],
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs()),
+        )?;
+        return emit(j, &r, || {
+            format!(
+                "{} core(s) {}; {} menu cache file(s) cleared",
+                r.moved,
+                if enable { "enabled" } else { "disabled" },
+                r.caches_cleared
+            )
+        });
+    }
+    emit(j, &p, || {
+        let mut s = format!("plan token {}\n", p.token);
+        for (f, t) in p.from.iter().zip(&p.to) {
+            s += &format!("  move {f} -> {t}\n");
+        }
+        for n in &p.notes {
+            s += &format!("  note: {n}\n");
+        }
+        s
+    })
+}
+
+/// `tau cores-disabled <card-root>`: the cores in the holding folder.
+pub fn cores_disabled(a: &[String], j: bool) -> Result<(), CliError> {
+    let card = Path::new(a.first().ok_or("cores-disabled needs a card root")?);
+    let list = core_state::list_disabled(card);
+    emit(j, &list, || {
+        list.iter()
+            .map(|d| format!("{:<36} {}  {}\n", d.id, d.version, d.reasons.join("; ")))
+            .collect()
+    })
 }
