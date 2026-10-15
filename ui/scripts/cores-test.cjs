@@ -97,8 +97,8 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // ---- Screenshots
   await tab('Screenshots').click(); await p.waitForTimeout(700);
-  assert.match(await panel().innerText(), /does not record which core took a screenshot/); ok('the tab says the Pocket does not record which core took a screenshot');
-  assert.equal(await p.getByRole('button', { name: /Likely this core/ }).getAttribute('aria-pressed'), 'true'); assert.equal(await panel().locator('.ct-shot').count(), 5); ok('it opens on the screenshots that are likely this core');
+  assert.match(await panel().innerText(), /records which core took it \(5 here\)[\s\S]*older screenshots? did not record one/); ok('the tab says each screenshot records its core, and how many older ones do not');
+  assert.equal(await p.getByRole('button', { name: /This core/ }).getAttribute('aria-pressed'), 'true'); assert.equal(await panel().locator('.ct-shot').count(), 7); assert.equal(await panel().locator('.ct-why:not(.soft)').count(), 5); assert.equal(await panel().locator('.ct-why.soft').count(), 2); ok('it opens on this core: 5 exact, 2 marked probably, none from other cores');
   await p.getByRole('button', { name: /All screenshots/ }).click(); await p.waitForTimeout(500);
   assert.equal(await panel().locator('.ct-shot').count(), 24); assert.ok(await panel().locator('.ct-shot img').count() >= 4); ok('all screenshots are one click away, with thumbnails');
   await panel().locator('.ct-shot').first().click(); await p.waitForTimeout(500);

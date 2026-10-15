@@ -62,12 +62,13 @@ fn the_real_card_reads_cleanly_end_to_end() {
                     .find(|l| l.folder.rel_path.starts_with("Memories"))
                     .map_or(0, |l| l.total_files);
                 println!(
-                    "{} {}: {} asset files, {saves} saves, {states} states, {} saved settings, {} presets, {} likely screenshots of {}, missing: {:?}",
+                    "{} {}: {} asset files, {saves} saves, {states} states, {} saved settings, {} presets, {} screenshots name it, {} probably, of {}, missing: {:?}",
                     d.id,
                     d.version,
                     files,
                     s.values.len(),
                     s.presets,
+                    shots.recorded,
                     shots.likely,
                     shots.total,
                     f.missing
