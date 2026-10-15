@@ -25,6 +25,7 @@ pub mod compat;
 pub mod convert;
 pub mod core_add;
 pub mod core_files;
+pub mod core_lint;
 pub mod core_pack;
 pub mod core_package;
 pub mod core_preview;
