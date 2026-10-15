@@ -27,3 +27,6 @@ Numbered in `docs/DECISIONS.md` (portable engine boundary D-001, plan-then-confi
 ## Where things go
 - State and handoffs: `docs/STATUS_HANDOFF.md` (newest block first), order of work: `ROADMAP.md`.
 - This file holds rules only: no execution log, no project history.
+
+## Live dev (2026-10-15)
+Instead of opening a new alpha for every change, run the live app: `cd src-tauri && cargo tauri dev` (starts Vite on :5173 and the Rust shell; UI edits hot-reload, Rust edits rebuild and restart the window). Only cut `tools/dev-build.sh` alphas when a build is meant to be kept or tested elsewhere.
