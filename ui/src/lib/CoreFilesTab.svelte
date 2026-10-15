@@ -83,7 +83,7 @@
         <div class="cf-tools"><label><span class="sr">Search {f.folder.label}</span><input type="search" placeholder="Search these files" bind:value={query[zoneId(f)]} /></label>
           <label><span class="sr">Sort</span><select bind:value={sortBy[zoneId(f)]}><option value="name">Name</option><option value="size">Largest</option><option value="date">Newest</option></select></label></div>
         {#if list.length}
-          <div class="cf-list" style={`height:${Math.min(list.length * 40, 360)}px`}>
+          <div class="cf-list" style={`height:${Math.min(list.length, 800) * 40}px`}>
             <VirtualList items={list} rowHeight={40} key={(e) => e.rel_path} label={f.folder.label} let:item>
               <div class="cf-row" role="listitem">
                 <input type="checkbox" class="cf-pick" aria-label={`Select ${item.rel_path}`} checked={isPicked(zoneId(f), item.rel_path)} on:change={() => toggle(zoneId(f), item.rel_path)} />

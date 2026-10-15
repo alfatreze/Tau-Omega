@@ -229,20 +229,22 @@ pub fn describe(role: FolderRole, name: &str, slots: &[SlotInfo]) -> Purpose {
         };
     }
     // Nothing names it. A file inside the core's own folder that no slot mentions is most likely read by the core directly.
-    if role == FolderRole::AssetsCore && ext != "json" {
+    if role == FolderRole::AssetsCore && ext == "json" {
+        // A json file in the core's own folder that no slot accepts: the core's instance/configuration file. (A core whose slots accept json,
+        // like Neo Geo's per-game setups, never gets here: those are matched by their slot and stay with the games.)
+        return Purpose {
+            group: SETUP.into(),
+            summary: "A configuration file in the core's own folder (an instance file that tells the core which data files to load). Not named in the core's file list.".into(),
+            source: "guess".into(),
+            support: true,
+        };
+    }
+    if role == FolderRole::AssetsCore {
         return Purpose {
             group: OTHER.into(),
             summary: "Not named in the core's file list. It is in the core's own folder, so the core or its helper firmware probably reads it directly.".into(),
             source: "guess".into(),
             support: true,
-        };
-    }
-    if ext == "json" && role == FolderRole::AssetsCore {
-        return Purpose {
-            group: SETUP.into(),
-            summary: "A game setup file: it names the data files that make up one game.".into(),
-            source: "guess".into(),
-            support: false,
         };
     }
     Purpose {
@@ -320,6 +322,16 @@ mod tests {
         );
         assert_eq!((p.source.as_str(), p.support), ("guess", true));
         assert!(p.summary.contains("Not named in the core's file list"));
+        // an unlisted json in the core's own folder is its configuration, not a game
+        let c = describe(
+            FolderRole::AssetsCore,
+            "TAU.json",
+            &[slot("MPU Bios", "amiga_mpu_bios.bin", &["bin"], true)],
+        );
+        assert_eq!(
+            (c.group.as_str(), c.source.as_str(), c.support),
+            (SETUP, "guess", true)
+        );
         // a game in the shared folder with no slot says nothing it cannot know
         let g = describe(FolderRole::AssetsShared, "Some Game.nes", &[]);
         assert_eq!(
