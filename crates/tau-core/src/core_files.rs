@@ -308,7 +308,7 @@ fn modified(meta: &fs::Metadata) -> i64 {
 }
 
 /// Walks `dir` for files (hidden and `._` skipped), at most [`MAX_DEPTH`] levels, returning relative paths sorted by name.
-fn walk(dir: &Path) -> Vec<(String, PathBuf)> {
+pub(crate) fn walk(dir: &Path) -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
     let mut stack = vec![(dir.to_path_buf(), String::new(), 0usize)];
     while let Some((path, rel, depth)) = stack.pop() {
