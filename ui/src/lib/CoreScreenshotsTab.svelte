@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Screenshots. The Pocket keeps every screenshot in one flat folder and does not record which core took it, so this tab says so and
-  // shows two honest views: "Likely this core" (taken within minutes of one of its save states, with the reason) and "All screenshots".
+  // Screenshots. The Pocket keeps every screenshot in one flat folder but writes the core (and the loaded game) inside each file, so the
+  // "This core" view is exact. A file without that block (older firmware) is only shown as "probably" when it was taken near a save state.
   import { onMount } from 'svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
@@ -10,16 +10,16 @@
   export let card: string; export let coreId: string;
 
   let view: ScreenshotView | null = null; let error = ''; let loading = true;
-  let mode: 'likely' | 'all' = 'likely';
+  let mode: 'core' | 'all' = 'core';
   let thumbs: Record<string, string | null | undefined> = {}; const asked = new Set<string>(); let queue: string[] = []; let running = 0;
   let large: Shot | null = null; let largeUrl = '';
 
   onMount(async () => {
-    try { view = await coreScreenshots(card, coreId); if (!view.likely) mode = 'all'; }
+    try { view = await coreScreenshots(card, coreId); if (!view.recorded && !view.likely) mode = 'all'; }
     catch (e) { error = errorMessage(e); }
     finally { loading = false; }
   });
-  $: shown = view ? (mode === 'likely' ? view.shots.filter((s) => s.likely) : view.shots) : [];
+  $: shown = view ? (mode === 'core' ? view.shots.filter((s) => s.recorded || s.likely) : view.shots) : [];
 
   function want(file: string) {
     if (thumbs[file] !== undefined || asked.has(file)) return;
@@ -45,21 +45,21 @@
   {:else if view}
     <div class="ct-bar">
       <div class="ct-modes" role="group" aria-label="Which screenshots">
-        <button class="chip toggle" aria-pressed={mode === 'likely'} on:click={() => (mode = 'likely')}>Likely this core <span class="ct-n">{view.likely}</span></button>
+        <button class="chip toggle" aria-pressed={mode === 'core'} on:click={() => (mode = 'core')}>This core <span class="ct-n">{view.recorded + view.likely}</span></button>
         <button class="chip toggle" aria-pressed={mode === 'all'} on:click={() => (mode = 'all')}>All screenshots <span class="ct-n">{view.total}</span></button>
       </div>
     </div>
-    <p class="ct-note" role="note">The Pocket does not record which core took a screenshot. “Likely this core” are the ones taken within {view.window_secs / 60} minutes of one of this core's {plural(view.states, 'save state')}.</p>
+    <p class="ct-note" role="note">Each screenshot records which core took it{view.recorded ? ` (${view.recorded} here)` : ''}.{#if view.total > view.with_meta} {plural(view.total - view.with_meta, 'older screenshot')} did not record one; “probably” marks those taken within {view.window_secs / 60} minutes of one of this core's {plural(view.states, 'save state')}.{/if}</p>
     {#if !shown.length}
-      <div class="empty"><h2>{mode === 'likely' ? 'No screenshots can be tied to this core' : 'No screenshots on this card'}</h2><p>{mode === 'likely' ? 'Switch to All screenshots to see everything on the card.' : 'Press the screenshot buttons on the Pocket and they appear here.'}</p></div>
+      <div class="empty"><h2>{mode === 'core' ? 'No screenshots from this core' : 'No screenshots on this card'}</h2><p>{mode === 'core' ? 'Switch to All screenshots to see everything on the card.' : 'Press the screenshot buttons on the Pocket and they appear here.'}</p></div>
     {:else}
       <ul class="ct-grid" aria-label="Screenshots">
         {#each shown as s (s.file)}
           <li use:visible={s.file}>
-            <button class="ct-shot" aria-label={`Screenshot taken ${s.taken}${s.likely ? ', likely this core' : ''}. Open`} on:click={() => open(s)}>
+            <button class="ct-shot" aria-label={`Screenshot taken ${s.taken}${s.recorded ? ', this core' : s.likely ? ', probably this core' : s.meta ? `, ${s.meta.core}` : ''}. Open`} on:click={() => open(s)}>
               {#if thumbs[s.file]}<img src={thumbs[s.file]} alt="" />{:else}<span class="ct-ph" aria-hidden="true"></span>{/if}
-              <span class="ct-cap">{s.taken.slice(0, 16)}</span>
-              {#if s.likely}<span class="ct-why" title={s.likely}>likely this core</span>{/if}
+              <span class="ct-cap">{s.taken.slice(0, 16)}{#if s.meta} · {s.recorded ? s.meta.loaded_file : s.meta.core}{/if}</span>
+              {#if s.recorded}<span class="ct-why" title="The screenshot names this core">this core</span>{:else if s.likely}<span class="ct-why soft" title={s.likely}>probably</span>{/if}
             </button>
           </li>
         {/each}
@@ -71,7 +71,7 @@
 {#if large}
   <div class="ct-back" role="presentation" on:click={() => (large = null)}></div>
   <div class="ct-big" role="dialog" tabindex="-1" aria-modal="true" aria-label={`Screenshot taken ${large.taken}`} use:modal on:keydown={(e) => e.key === 'Escape' && (large = null)}>
-    <header><div><strong>{large.taken}</strong>{#if large.likely}<p class="ct-note">{large.likely}</p>{:else}<p class="ct-note">Cannot be tied to a core.</p>{/if}</div><button class="quiet" data-autofocus on:click={() => (large = null)}>Close</button></header>
+    <header><div><strong>{large.taken}</strong>{#if large.meta}<p class="ct-note">{large.meta.core} {large.meta.version} · {large.meta.platform_name}{large.meta.loaded_file ? ` · ${large.meta.loaded_file}` : ''}</p>{:else if large.likely}<p class="ct-note">{large.likely}</p>{:else}<p class="ct-note">Cannot be tied to a core.</p>{/if}</div><button class="quiet" data-autofocus on:click={() => (large = null)}>Close</button></header>
     {#if largeUrl}<img src={largeUrl} alt={`Screenshot taken ${large.taken}`} />{/if}
   </div>
 {/if}
@@ -85,6 +85,7 @@
   .ct-shot img,.ct-ph{display:block;width:100%;aspect-ratio:3/2;object-fit:cover;background:#0c1213}
   .ct-cap{display:block;padding:6px 9px;font-size:11.5px;color:#a6b3b2}
   .ct-why{position:absolute;top:7px;left:7px;font-size:10.5px;font-weight:700;color:#142015;background:#c1f0ad;border-radius:99px;padding:2px 8px}
+  .ct-why.soft{background:#e5d9a8}
   .ct-back{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100}
   .ct-big{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(820px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:#1a2325;border:1px solid #2c393a;border-radius:14px;padding:16px 18px;box-sizing:border-box}
   .ct-big header{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.ct-big img{display:block;width:100%;height:auto;border-radius:8px;image-rendering:auto}

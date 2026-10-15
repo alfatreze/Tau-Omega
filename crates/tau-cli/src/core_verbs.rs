@@ -193,8 +193,9 @@ pub fn core_screens(a: &[String], j: bool) -> Result<(), CliError> {
     let v = core_screens::screenshots(Path::new(card), id)?;
     emit(j, &v, || {
         format!(
-            "{} screenshot(s) on the card, {} taken within {} minutes of one of this core's {} save state(s)\n(the Pocket does not record which core took a screenshot)",
+            "{} screenshot(s) on the card: {} name this core, {} older file(s) without a recorded core are probably this core (taken within {} minutes of one of its {} save state(s))",
             v.total,
+            v.recorded,
             v.likely,
             v.window_secs / 60,
             v.states

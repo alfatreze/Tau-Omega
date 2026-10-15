@@ -13,11 +13,11 @@ Branch `cores-section` (worktree `../tau-omega-cores`, built on `marketplace`). 
 | Files for a core (ROMs, BIOS, tapes, disks) | `Assets/<platform>/common/` (shared by every core of the platform) and `Assets/<platform>/<Author.Core>/` (that core only) | Which one a slot reads is its parameter bits (`core_specific_file`, `platform_index`); `cardlayout` already decodes them. A slot with a fixed `filename` (a BIOS) with `required: true` and no file on the card is a **missing file**. |
 | Saves | `Saves/<platform>/common/<game>.sav` or `Saves/<platform>/<Author.Core>/...` | Same rule as assets, for non-volatile slots. `Saves/pocket-sync-save-backup__*.zip` are Pocket Sync's backups (not a core's; listed separately, never as a save). |
 | Save states | `Memories/Save States/<Author.Core>/<YYYYMMDD_HHMMSS>_USR_<hash>_<game>.sta` | Per core, with the game name in the file name. |
-| Screenshots | `Memories/Screenshots/<YYYYMMDD_HHMMSS>.png` | **Flat, one folder for every core, and the PNG carries no text chunks** (IHDR, IDAT, IEND only): the card does **not** say which core took a screenshot. 489 on the test card. |
+| Screenshots | `Memories/Screenshots/<YYYYMMDD_HHMMSS>.png` | Flat, one folder for every core. **Each file ends with a 600-byte block (after the PNG and two embedded Analogue pictures) that names the core**: magic `01 52 50 41`, author at 0x48, core short name at 0x68 (`Author.Core` is the `Cores/` folder), version 0x88, loaded file 0xA8 (256 B), platform id 0x1A8, platform name 0x1B8. Present in all 489 screenshots of the test card. |
 | Saved settings | `Settings/<Author.Core>/{Interact,Input,Video}/_core/{interact,input,video}_persist.json` | `interact_persist` holds `{id, type, val}` per menu variable; the names come from the core's own `interact.json` (`variables[].name`, `id`, `type`, `graphical.min/max`, list `options`). |
 | Presets (per game) | `Presets/<Author.Core>/{Input,Interact}/<platform>/<Author.Core>/<game>.json` | 1,004 files on the test card (arcade cores ship a preset per game). |
 
-Consequences: Files, Saves, Save states, Settings and Presets are **exact per core**; Screenshots are **not**, so Omega says so and uses a labelled heuristic (section 4.3) instead of pretending.
+Consequences: Files, Saves, Save states, Settings, Presets and Screenshots are all **exact per core**. A screenshot without the block (older firmware, edited file) is the only guess, and is labelled "probably" (taken within 10 minutes of one of the core's save states). Correction 2026-10-15: an earlier draft of this spec said screenshots carry no core; that was wrong, the block sits after IEND.
 
 ## 2. How other tools do it (and what we take)
 
@@ -66,7 +66,7 @@ The Pocket's files are organised by folder and system, but people think by core 
 **Core page.** Header: core icon, name, version, author, platform breadcrumb (`Cores > Game Boy Advance > Spiritualized.GBA`), buttons: Open in Marketplace (when in the catalog), inspector toggle. Tabs (`role="tablist"`, arrows, Home/End):
 - **Files**: two folder sections, *Shared by every GBA core* (`Assets/gba/common`) and *Only this core* (`Assets/gba/Spiritualized.GBA`), each a list (name, kind chip, size, date) with search, sort and a **drop zone** (see below). A "Needs attention" strip lists missing required files (BIOS) with the exact name and folder, and a drop on it fills them in. Entries carry `kind` and `slot` now; a parser column is reserved for later.
 - **Saves**: save files (with the game name, size, date and which folder), save states (with game name and time), and a note when Pocket Sync backup zips are on the card (counted, not listed as saves).
-- **Screenshots**: a thumbnail grid. Default filter **"Likely this core"** with an honest label: the Pocket does not record which core took a screenshot, so Omega lists screenshots taken within 10 minutes of one of this core's save states (shown with the reason on hover/focus), and offers **"All screenshots"** (with counts) for everything on the card. Clicking opens a larger preview.
+- **Screenshots**: a thumbnail grid. Default filter **"This core"**: screenshots whose embedded block names this core (badge "this core", caption shows the game), plus older block-less files taken within 10 minutes of one of its save states (badge "probably"). "All screenshots" shows everything with the owning core in the caption; the large view shows core, version, platform and game.
 - **Settings**: *Needs attention* (missing BIOS and any required file not on the card), *Saved settings* (decoded name = value, e.g. "Rumble Strength 5", with list option labels), *Controls and video* (which saved files exist and when changed), *Presets* (count and folder), *What this core reads* (its data slots: name, accepted extensions, required, file name, shared or core-only).
 
 **Inspector (right, collapsible):** core icon, name, description, version and date, author and URL (text + copy, no external opener yet), Pocket firmware, Dock, link port, sleep, platform(s) with names, folders on the card with sizes, a catalog line when known ("Update available in the Marketplace"), counts (ROMs, saves, states). Collapse button in its header and `I` key; open/closed state saved in the browser storage per user.
@@ -89,10 +89,10 @@ No new colours: surface `#161f20`/`#1a2325`, border `#2c393a`, text `#e8ecec`/`#
 Tree: `role="tree"`/`treeitem`/`group` with `aria-expanded`, `aria-selected`, roving tabindex, the keyboard model above. Tabs: `role="tablist"/"tab"/"tabpanel"` with `aria-controls`. Inspector: `role="complementary"` labelled "Core details", toggle with `aria-expanded`. Drop zones are real buttons too ("Add files…" opens the file picker) so dragging is never the only way. Status chips always carry text. Lists announce counts with `aria-live="polite"`. Focus returns to the invoking control after the review sheet closes. Targets 24 px minimum, 44 px for primary actions.
 
 ### 4.7 Copy rules
-"Core", "platform", "shared by every <platform> core", "only this core"; "BIOS" only when the slot says so, else "required file"; never "asset". Screenshots: "The Pocket does not record which core took a screenshot, so these are the ones taken within 10 minutes of this core's save states."
+"Core", "platform", "shared by every <platform> core", "only this core"; "BIOS" only when the slot says so, else "required file"; never "asset". Screenshots: "Each screenshot records which core took it." "Probably" only for older files without that record.
 
 ### 4.8 Open questions (answered by building the simplest thing and listing it)
-- Screenshots attribution is a heuristic: kept transparent and optional; a better signal (core logs, `System/lastcore.bin` history) is parked.
+- Screenshot attribution is exact from the embedded block; the save-state time heuristic remains only for files without it.
 - No delete/rename/export of saves and screenshots in this pass (read-only plus the add-files flow); Pocket Sync already does bulk save backup.
 - No parser yet: entries expose `kind` and `slot`; a `parsed` field is the extension point.
 
