@@ -58,6 +58,7 @@ pub mod ledger_host;
 pub mod manual_registry;
 pub mod manual_source;
 pub mod marker;
+pub mod menu_symptoms;
 pub mod package;
 pub mod playlist;
 pub mod problems;

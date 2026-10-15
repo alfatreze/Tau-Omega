@@ -331,3 +331,7 @@ export type ResultsView = { since: string | null; shots: ResultShot[]; runs: Res
 /** Run notes (the Results page's second tab). */
 export type RunResult = { profile: string; captured_at: string; verdict: string; failing: string[]; firmware: string; bitstream: string; changes: DiffLine[] };
 export type RunNote = { id: string; card: string; stamp: string; core_id: string; shortname: string; version: string; package: string; package_sha256: string; bitstreams: [string, string][]; backup_dir: string; files_written: number; text: string; lint_overrides: string[]; results: RunResult[]; results_at: string | null };
+
+/** The Check page. */
+export type CheckResult = { title: string; lint: LintReport; symptoms: LintFinding[] };
+export type CardCheckRow = { id: string; shortname: string; errors: number; warnings: number; notes: number };

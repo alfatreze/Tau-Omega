@@ -35,10 +35,11 @@
   import { loadDeveloperTools, developerTools } from './lib/devStore';
   import BuildsView from './lib/BuildsView.svelte';
   import ResultsView from './lib/ResultsView.svelte';
+  import CheckView from './lib/CheckView.svelte';
   import { coresSelection, coresTab, coresTreeStore, findCore } from './lib/coresStore';
   import { autoCheckUpdates } from './lib/updatesStore';
   import { get } from 'svelte/store';
-  let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
+  let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' | 'check' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
   let packageZipPath = ''; let packageCardPath = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
   async function inspectPackageZip() { packageManifest = null; packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packageManifest = await inspectPackage(packageZipPath); packageInspectNotice = `${packageManifest.entries.length} files found. Nothing was changed.`; } catch (error) { packageInspectNotice = `Could not read this package: ${errorMessage(error)}`; } }
@@ -345,7 +346,7 @@
     <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
     <button class:active={page === 'appearance'} on:click={() => page = 'appearance'}>Appearance</button>
     <button class:active={page === 'halcyon'} on:click={() => page = 'halcyon'}>Halcyon EQ</button>
-    {#if $developerTools}<button class:active={page === 'builds'} on:click={() => page = 'builds'}>Builds</button><button class:active={page === 'results'} on:click={() => page = 'results'}>Results</button>{/if}
+    {#if $developerTools}<button class:active={page === 'builds'} on:click={() => page = 'builds'}>Builds</button><button class:active={page === 'results'} on:click={() => page = 'results'}>Results</button><button class:active={page === 'check'} on:click={() => page = 'check'}>Check</button>{/if}
     <button class:active={page === 'marketplace'} on:click={() => page = 'marketplace'}>Marketplace{#if $coreUpdateCount > 0}<span class="nav-count" aria-label={`${$coreUpdateCount} core updates`}>{$coreUpdateCount}</span>{/if}</button>
     <button class="nav-group" class:has-active={moreItems.includes(page)} aria-expanded={moreOpen} aria-controls="more-tools" on:click={toggleMore}><span>Tools &amp; settings</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={moreOpen}><path d="m6 9 6 6 6-6"/></svg></button>
     {#if moreOpen || moreItems.includes(page)}
@@ -384,6 +385,8 @@
     <BackupView bind:sourcePath={backupSourcePath} bind:destinationPath={backupDestPath} chooseSource={() => chooseFolder('backupSource')} chooseDestination={() => chooseFolder('backupDestination')} review={reviewBackup} backupPlan={backupPlanResult} {backupNotice} capacity={backupCapacity} />
   {:else if page === 'package'}
     <PackageView bind:removeKeepMedia bind:zipPath={packageZipPath} bind:cardPath={packageCardPath} chooseZip={() => chooseFolder('packageZip')} chooseCard={() => chooseFolder('packageCard')} inspect={inspectPackageZip} manifest={packageManifest} inspectNotice={packageInspectNotice} review={reviewPackageInstall} plan={packagePlan} planNotice={packagePlanNotice} confirm={confirmPackageInstall} report={packageReport} confirmNotice={packageConfirmNotice} loadCoresToRemove={loadCoresToRemove} removeCores={removeCores} removeCoresNotice={removeCoresNotice} bind:removeCoreId={removeCoreId} reviewRemove={reviewRemoveCore} removePlan={removePlan} removePlanNotice={removePlanNotice} confirmRemove={confirmRemoveCore} removeReport={removeReport} removeConfirmNotice={removeConfirmNotice} />
+  {:else if page === 'check'}
+    <CheckView card={path} />
   {:else if page === 'results'}
     <ResultsView card={path} />
   {:else if page === 'builds'}
