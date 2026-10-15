@@ -3,8 +3,11 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { readCoreIcon, readPlatformImage } from './tau-api';
   import { plural, size } from './coresFormat';
-  import type { CoreDetail, CoreFiles } from './types';
+  import RefreshLibrary from './RefreshLibrary.svelte';
+  import type { Core, CoreDetail, CoreFiles } from './types';
   export let card: string; export let detail: CoreDetail; export let files: CoreFiles | null = null;
+  /** The card-level record of this core (library facts); `null` while the card is still being read. */
+  export let lib: Core | null = null; export let openLibrary: (c: Core) => void = () => {}; export let libraryChanged: () => void = () => {};
   const dispatch = createEventDispatcher<{ close: void }>();
 
   let icon: string | null = null;
@@ -40,6 +43,21 @@
     <div><dt>Platform</dt><dd>{detail.platforms.length ? detail.platforms.map((p) => p.name + (p.year ? ` (${p.manufacturer ? p.manufacturer + ', ' : ''}${p.year})` : '')).join(', ') : 'None declared'}</dd></div>
   </dl>
 
+  {#if lib?.library_capable}
+    <h3>Music library</h3>
+    <dl class="ci-facts">
+      <div><dt>Library</dt><dd>Library ready</dd></div>
+      <div><dt>Index</dt><dd>{lib.index_status}</dd></div>
+      <div><dt>Tracks</dt><dd>{lib.tracks ?? '—'}</dd></div>
+    </dl>
+    <div class="ci-lib"><button class="primary" on:click={() => openLibrary(lib)}>Open library</button></div>
+    {#if lib.media_platform}{#key lib.id}<RefreshLibrary mediaRoot={`${card.replace(/\/$/, '')}/Assets/${lib.media_platform}/common`} coreName={lib.shortname || lib.id} onChanged={libraryChanged} />{/key}{/if}
+  {:else if lib && lib.audio_formats.length}
+    <h3>Music</h3>
+    <dl class="ci-facts"><div><dt>Plays</dt><dd>{lib.audio_formats.join(' + ').toUpperCase()}</dd></div></dl>
+    <div class="ci-lib"><button class="quiet" on:click={() => openLibrary(lib)}>Use as the Library target</button></div>
+  {/if}
+
   <h3>Requirements</h3>
   <dl class="ci-facts">
     <div><dt>Pocket firmware</dt><dd>{detail.firmware_required ? `${detail.firmware_required} or newer` : 'Not stated'}</dd></div>
@@ -72,5 +90,6 @@
   .ci h3{margin:10px 0 0;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}
   .ci-facts{display:grid;gap:7px;margin:0}.ci-facts>div{display:grid;grid-template-columns:104px 1fr;gap:10px;align-items:baseline}.ci-facts dt{font-size:12px;color:#8f9e9d}.ci-facts dd{margin:0;font-size:12.5px;color:#e8ecec;overflow-wrap:anywhere;line-height:1.45}
   .ci-folders{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.ci-folders li{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:#8f9e9d}
+  .ci-lib{display:flex;gap:8px;margin:4px 0 2px}
   .ci-note{font-size:12px;color:#95a5a4}code{font-size:11px;background:#101617;border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
 </style>

@@ -24,3 +24,4 @@
 ## Not in this release
 Tau's own cores in the Marketplace.
 - Cores: remove files from a core's Files tab (reviewed first, every file backed up outside the card and verified before it is deleted).
+- Cores are grouped like the openFPGA Library (Console > Nintendo > SNES > core); all Tau builds sit under one TAU row. The Cards page is now **Card** (Overview and History); the simple core lists are replaced by the Cores section, and the Library page lets you choose the target core (cores that play mp3 and flac are listed first).

@@ -31,7 +31,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await tree.getByRole('button', { name: 'Expand Game Boy Advance' }).click(); await p.waitForTimeout(150);
   assert.deepEqual(await tree.locator('.nt-core .nt-name').allInnerTexts(), ['GBA', 'GBAlt']); ok('expanding a platform lists its cores');
   await tree.getByRole('button', { name: 'Expand TAU' }).click(); await p.waitForTimeout(150);
-  assert.deepEqual(await tree.locator('.nt-core .nt-name').allInnerTexts(), ['GBA', 'GBAlt', 'TAU', 'TAU Preview']); ok('every Tau core is under the one TAU platform');
+  assert.deepEqual(await tree.locator('.nt-core .nt-name').allInnerTexts(), ['GBA', 'GBAlt', 'omega', 'player2']); ok('every Tau core is under the one TAU platform');
   await tree.getByRole('button', { name: 'Collapse TAU' }).click(); await p.waitForTimeout(100);
   await tree.getByRole('button', { name: 'Collapse Handheld' }).click(); await p.waitForTimeout(100);
   assert.equal(await tree.locator('[data-kind="platform"]').count(), 4); ok('a category can be collapsed with everything under it');
@@ -154,6 +154,34 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await platform('No platform').click(); await p.waitForTimeout(300);
   await p.locator('.pv-open').first().click(); await p.waitForTimeout(700);
   assert.match(await panel().innerText(), /No files yet/); ok('a core with no platform opens without errors');
+
+  // ---- Tau's library facts live with the core
+  await tree.getByRole('button', { name: 'Expand TAU' }).click().catch(() => {}); await p.waitForTimeout(150);
+  await core('omega').click(); await p.waitForTimeout(900);
+  const ins = p.getByRole('complementary', { name: 'omega' });
+  assert.match(await ins.innerText(), /music library[\s\S]*Library ready[\s\S]*Tracks\s*7180[\s\S]*requirements/i); assert.equal(await ins.getByRole('button', { name: 'Open library' }).count(), 1); ok('a library core shows its tracks and Open library in the details panel');
+  assert.match(await ins.innerText(), /Refresh|library/i); ok('the library can be refreshed from there too');
+  await core('GBA').click().catch(() => {});
+
+  // ---- the Card page: overview and history, no core lists
+  await p.getByRole('button', { name: 'Card', exact: true }).click(); await p.waitForTimeout(500);
+  assert.deepEqual(await p.getByRole('tab').allInnerTexts(), ['Overview', 'History']); ok('the Card page has Overview and History');
+  const card = await p.locator('#cards').innerText();
+  assert.ok(!/Player cores on this card|Other cores on this card|Set as player/.test(card)); assert.match(card, /8 cores installed[\s\S]*Every core has the files it needs[\s\S]*Music libraries/i); ok('the simple core lists are gone; the overview says what needs attention (nothing, once the BIOS was added) and lists the libraries');
+  await p.getByRole('button', { name: 'Browse cores' }).click(); await p.waitForTimeout(400);
+  assert.match(await p.locator('.cores').innerText(), /grouped like the openFPGA Library/); ok('Browse cores opens the Cores section');
+  await p.getByRole('button', { name: 'Card', exact: true }).click(); await p.waitForTimeout(300);
+  await p.getByRole('tab', { name: 'History' }).click(); await p.waitForTimeout(500);
+  assert.match(await p.locator('main').innerText(), /Sync history/); ok('History is a tab of the Card page');
+  assert.equal(await p.locator('nav button', { hasText: /^Sync history$/ }).count(), 0); ok('and it is no longer a separate menu entry');
+
+  // ---- the Library's target core is chosen from the cores that play mp3 and flac
+  await p.locator('nav button', { hasText: /^Library$/ }).click(); await p.waitForTimeout(700);
+  const target = p.getByRole('combobox', { name: 'Target core' });
+  assert.equal(await target.count(), 1);
+  const groupsText = await target.evaluate((el) => [...el.querySelectorAll('optgroup')].map((g) => g.label + ': ' + [...g.querySelectorAll('option')].map((o) => o.textContent.trim()).join(' | ')));
+  assert.match(groupsText[0], /^Plays mp3 and flac: .*omega.*Mp3Player/); assert.match(groupsText[1], /^Other cores/); ok('the target list offers the cores that play mp3 and flac first, every other core by hand after');
+  await tree.locator('.nt-item[data-kind="platform"]').first().click(); await p.waitForTimeout(300);
 
   // ---- a scripted accessibility pass: every control is named, no duplicate ids, roles line up
   const audit = await p.evaluate(() => {

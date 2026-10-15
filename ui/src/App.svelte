@@ -3,7 +3,7 @@
   import { open, save } from '@tauri-apps/plugin-dialog';
   import type { ConnectionKind, BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport, HistoryEntry } from './lib/types';
   import { invoke } from './lib/backend';
-  import { checkStorageCapacity, persistNames, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getManualPlayers, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanMedia, setManualPlayer, listHistory, pruneHistory } from './lib/tau-api';
+  import { checkStorageCapacity, persistNames, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanMedia, listHistory, pruneHistory } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import HistoryView from './lib/HistoryView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
@@ -29,8 +29,9 @@
   import UpdateBanner from './lib/UpdateBanner.svelte';
   import OmegaUpdate from './lib/OmegaUpdate.svelte';
   import CardMarkerPrompt from './lib/CardMarkerPrompt.svelte';
-  import RefreshLibrary from './lib/RefreshLibrary.svelte';
-  let page: 'cards' | 'workbench' | 'compare' | 'history' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
+  import { coresSelection, coresTreeStore, findCore } from './lib/coresStore';
+  import { get } from 'svelte/store';
+  let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
   let packageZipPath = ''; let packageCardPath = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
   async function inspectPackageZip() { packageManifest = null; packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packageManifest = await inspectPackage(packageZipPath); packageInspectNotice = `${packageManifest.entries.length} files found. Nothing was changed.`; } catch (error) { packageInspectNotice = `Could not read this package: ${errorMessage(error)}`; } }
@@ -68,7 +69,7 @@
   });
   // Rarely-used tools and settings live in a collapsible sidebar section; it
   // stays open while one of its pages is showing and remembers the user's choice.
-  const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'history', 'settings'];
+  const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'settings'];
   let moreOpen = false;
   try { moreOpen = localStorage.getItem('tau.nav.more') === '1'; } catch { /* per-viewer convenience */ }
   function toggleMore() { moreOpen = !moreOpen; try { localStorage.setItem('tau.nav.more', moreOpen ? '1' : '0'); } catch { /* ignore */ } }
@@ -89,7 +90,6 @@
   function onWindowKey(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
     if (showHelp) { showHelp = false; return; }
-    if (detailCore) { closeCoreDetail(); return; }
     if (navOpen) { navOpen = false; navToggleEl?.focus(); }
   }
   let cardRevision = 0;
@@ -133,7 +133,11 @@
     finally { historyLoading = false; }
   }
   /** Opens the sync history, optionally on one entry (a journal path, or 'latest'). */
-  function openHistory(id = '') { historySelect = id; moreOpen = true; page = 'history'; loadHistory(); }
+  function openHistory(id = '') { historySelect = id; cardTab = 'history'; page = 'cards'; }
+  $: if (page === 'cards' && cardTab === 'history') void loadHistory();
+  /** Opens one core in the Cores section. */
+  function openCore(id: string) { const hit = findCore(get(coresTreeStore), id); if (hit) coresSelection.set({ platform: hit.node.platform.id, core: id }); page = 'cores'; }
+  function browseCores() { coresSelection.set({ platform: '', core: '' }); page = 'cores'; }
   const autoJournalPath = (kind: string) => `${reportsDir}/${Date.now()}-${kind}.json`;
   let notice = 'Open a card folder to inspect it. Tau Omega will not write anything at this stage.';
   let leftCore = ''; let rightCore = ''; let comparison: Comparison | null = null; let compareNotice = ''; let copyReportPath = ''; let coreCopyPlan: Plan | null = null; let moveSource = false; let moveBackupPath = ''; let approveDeletion = false;
@@ -209,12 +213,11 @@
     } catch (error) { notice = `Could not inspect this folder: ${errorMessage(error)}`; cores = []; activeCore = null; }
   }
   const cardName = (cardPath: string) => cardPath.split('/').filter(Boolean).pop() ?? cardPath;
-  let mountedCards: string[] = []; let recentCards: string[] = []; let manualPlayers: string[] = [];
+  let mountedCards: string[] = []; let recentCards: string[] = [];
   $: knownCards = [...mountedCards, ...recentCards.filter((card) => !mountedCards.includes(card))];
   async function refreshKnownCards() {
     try { mountedCards = await listMountedCards(); } catch { mountedCards = []; }
     try { recentCards = await getRecentCards(); } catch { recentCards = []; }
-    try { manualPlayers = await getManualPlayers(); } catch { manualPlayers = []; }
   }
   async function openKnownCard(card: string) { path = card; await openFolder(); }
 
@@ -230,15 +233,14 @@
     try { mountedCards = await listMountedCards(); cardMounted = mountedCards.includes(path); } catch { /* a failed check isn't reason to flip to "ejected" */ }
   }
 
-  // Takes `players` explicitly (rather than closing over `manualPlayers`)
-  // so the `$:` statements below, which only track variables they reference
-  // directly, see the real dependency and re-run when the list changes --
-  // a closure over an outer variable is invisible to Svelte's reactivity.
-  const isPlayerCore = (core: Core, players: string[]) => players.includes(core.id) || core.platform_category === 'Media Players' || (core.platform_category == null && (core.id.toLowerCase().includes('tau') || core.platform.toLowerCase().includes('tau')));
-  $: playerCores = cores.filter((core) => isPlayerCore(core, manualPlayers));
-  $: otherCores = cores.filter((core) => !isPlayerCore(core, manualPlayers));
-  let showOtherCores = false;
-  async function toggleManualPlayer(core: Core) { try { await setManualPlayer(core.id, true); manualPlayers = [...manualPlayers, core.id]; } catch (error) { notice = `Could not set ${core.id} as a player: ${errorMessage(error)}`; } }
+  // The target core: whose media folder the Library, Halcyon and Appearance pages work on. The choice is listed from the cores that can
+  // play the library's files (a core whose slots take mp3 and flac first, then mp3 or flac, then one that serves the Tau library); any
+  // other core can be picked by hand ("Other cores"). Nothing is decided by a platform's category any more.
+  const audioRank = (c: Core) => (c.library_capable ? 0 : c.audio_formats.length >= 2 ? 1 : c.audio_formats.length ? 2 : 3);
+  const byTarget = (a: Core, b: Core) => audioRank(a) - audioRank(b) || (a.shortname || a.id).localeCompare(b.shortname || b.id);
+  $: audioCores = cores.filter((c) => audioRank(c) < 3).sort(byTarget);
+  $: otherTargets = cores.filter((c) => audioRank(c) === 3).sort(byTarget);
+  const formatsOf = (c: Core) => (c.library_capable ? 'library' : c.audio_formats.join(' + ').toUpperCase());
 
   // Real per-core artwork (Cores/<id>/icon.bin, decoded server-side). `null`
   // means "asked, no icon" (most cores don't ship one) -- distinct from
@@ -270,14 +272,12 @@
   // known, but never overrides a choice the user or a card-refresh already
   // made (see `openFolder`'s own preserve-by-id logic).
   let activeCore: Core | null = null;
-  $: if (!activeCore && playerCores.length) activeCore = playerCores[0];
-  let showSwitcher = false;
+  $: if (!activeCore && audioCores.length) activeCore = audioCores[0];
+  let cardTab: 'overview' | 'history' = 'overview';
+  let showSwitcher = false; let showAllTargets = false;
   function selectActiveCore(core: Core) { activeCore = core; showSwitcher = false; openCoreLibrary(core); }
   async function switchToKnownCard(card: string) { showSwitcher = false; await openKnownCard(card); }
 
-  let detailCore: Core | null = null;
-  function showCoreDetail(core: Core) { detailCore = core; }
-  function closeCoreDetail() { detailCore = null; }
   function openCoreLibrary(core: Core) {
     activeCore = core;
     if (!core.media_platform) { notice = `${core.id} has no declared platform, so its media root can't be located.`; return; }
@@ -315,16 +315,20 @@
           <p class="switcher-label">Switch card</p>
           {#each knownCards as card}<button class="switcher-row" class:active={path === card} on:click={() => switchToKnownCard(card)}>{cardName(card)}{#if pendingFor(card, pendingTick)}<span class="switcher-pending">{pendingFor(card, pendingTick)} pending</span>{/if}{#if mountedCards.includes(card)}<span class="switcher-dot" aria-hidden="true"></span>{/if}</button>{/each}
         {/if}
-        {#if playerCores.length}
-          <p class="switcher-label">Switch core</p>
-          {#each playerCores as core}<button class="switcher-row" class:active={activeCore?.id === core.id} on:click={() => selectActiveCore(core)}>{core.shortname || core.id}</button>{/each}
+        {#if cores.length}
+          <p class="switcher-label">{audioCores.length ? 'Target core: plays mp3 and flac' : 'Target core: pick one'}</p>
+          {#each audioCores as core}<button class="switcher-row" class:active={activeCore?.id === core.id} on:click={() => selectActiveCore(core)}>{core.shortname || core.id}<small class="switcher-fmt">{formatsOf(core)}</small></button>{/each}
+          {#if otherTargets.length}
+            <button class="switcher-row switcher-more" aria-expanded={showAllTargets || !audioCores.length} on:click={() => (showAllTargets = !showAllTargets)}>Other cores…</button>
+            {#if showAllTargets || !audioCores.length}{#each otherTargets as core}<button class="switcher-row" class:active={activeCore?.id === core.id} on:click={() => selectActiveCore(core)}>{core.shortname || core.id}</button>{/each}{/if}
+          {/if}
         {/if}
-        <button class="switcher-manage" on:click={() => { page = 'cards'; showSwitcher = false; }}>Manage cards &amp; cores →</button>
+        <button class="switcher-manage" on:click={() => { page = 'cards'; showSwitcher = false; }}>Open the card page →</button>
       </div>
     {/if}
   </div>
   <nav aria-label="Main">
-    <button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button>
+    <button class:active={page === 'cards'} on:click={() => page = 'cards'}>Card</button>
     <NavTree card={path} active={page === 'cores'} show={() => (page = 'cores')} />
     <button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Library</button>
     <button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button>
@@ -340,7 +344,6 @@
         <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
         <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
         <button class:active={page === 'diagnostics'} on:click={() => page = 'diagnostics'}>Send diagnostics</button>
-        <button class:active={page === 'history'} on:click={() => openHistory()}>Sync history</button>
         <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
       </div>
     {/if}
@@ -350,13 +353,13 @@
   <UpdateBanner card={path} openPackage={(zip) => { packageZipPath = zip; if (!packageCardPath) packageCardPath = path; page = 'package'; void inspectPackageZip(); }} />
   <OmegaUpdate />
   {#if page === 'cards'}
-    <CardsView {cardMounted} {ejectedSafely} {path} {knownCards} {notice} {cores} {playerCores} {otherCores} {platformImages} {coreIcons} bind:showOtherCores {mountedCards} {cardName} {chooseFolder} {openFolder} {openKnownCard} {openCoreLibrary} {showCoreDetail} {toggleManualPlayer} />
+    <CardsView {cardMounted} {ejectedSafely} {path} {knownCards} {notice} {cores} {mountedCards} {cardName} {chooseFolder} {openFolder} {openKnownCard} {openCoreLibrary} {openCore} {browseCores} bind:tab={cardTab}>
+      <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} refresh={loadHistory} openSettings={() => { moreOpen = true; page = 'settings'; }} startSync={() => page = 'workbench'} />
+    </CardsView>
   {:else if page === 'workbench'}
-    <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, media_platform: c.media_platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} mediaRoot={mediaRoot} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
+    <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, media_platform: c.media_platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} targets={audioCores.map((c) => ({ id: c.id, label: c.shortname || c.id, note: formatsOf(c) }))} otherTargets={otherTargets.map((c) => ({ id: c.id, label: c.shortname || c.id, note: '' }))} targetId={activeCore?.id ?? ''} chooseTarget={(id) => { const c = cores.find((x) => x.id === id); if (c) activeCore = c; }} mediaRoot={mediaRoot} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
   {:else if page === 'compare'}
     <CompareView bind:leftCore bind:rightCore bind:copyReportPath {comparison} {compareNotice} {coreCopyPlan} {coreCopyCapacity} {size} {chooseFolder} {compareCores} {reviewCoreCopy} {runCoreCopy} />
-  {:else if page === 'history'}
-    <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} refresh={loadHistory} openSettings={() => { moreOpen = true; page = 'settings'; }} startSync={() => page = 'workbench'} />
   {:else if page === 'playlists'}
     <PlaylistsView bind:path={playlistPath} result={playlistResult} notice={playlistNotice} bind:output={playlistOutput} chooseOutput={choosePlaylistOutput} bind:selected={selectedPlaylist} choose={() => chooseFolder('playlists')} scan={scanPlaylists} exportList={exportSelectedPlaylist}
       {selectedPlaylistDetail} {reorderTracks} {moveTrack} {reorderPlan} {reorderNotice} {reviewReorder} {confirmReorder}
@@ -372,7 +375,7 @@
   {:else if page === 'marketplace'}
     <MarketplaceView card={path} />
   {:else if page === 'cores'}
-    <CoresView card={path} />
+    <CoresView card={path} {cores} openLibrary={openCoreLibrary} reloadCard={() => { void openFolder(); }} />
   {:else if page === 'meters'}
     <MetersView />
   {:else if page === 'diagnostics'}
@@ -399,25 +402,6 @@
       <p>Every write anywhere in the app goes through <strong>plan → review → confirm</strong> — nothing is copied, moved, or deleted until you've seen exactly what will change and confirmed it.</p>
       <p>This is all read-only until you explicitly confirm a plan on Library, Compare cores, Backup, or Packages.</p>
     </div>
-  </div>
-{/if}
-
-{#if detailCore}
-  <div class="detail-backdrop" role="presentation" on:click={closeCoreDetail}></div>
-  <div class="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title" use:modal>
-    <div class="detail-panel-header"><h2 id="detail-title">{detailCore.shortname || detailCore.id}</h2><button class="quiet" aria-label="Close details" on:click={closeCoreDetail}>✕</button></div>
-    <div class="detail-panel-body">
-      <div><span>Core ID</span><strong>{detailCore.id}</strong></div>
-      <div><span>Developer</span><strong>{detailCore.author || 'Unknown'}</strong></div>
-      <div><span>Version</span><strong>{detailCore.version || 'Unknown'}</strong></div>
-      <div><span>Platform</span><strong>{detailCore.platform || 'None declared'}</strong></div>
-      {#if detailCore.platform_category}<div><span>Category</span><strong>{detailCore.platform_category}</strong></div>{/if}
-      <div><span>Library</span><strong>{detailCore.library_capable ? 'Library ready' : 'Legacy core'}</strong></div>
-      <div><span>Index</span><strong>{detailCore.index_status}</strong></div>
-      <div><span>Tracks</span><strong>{detailCore.tracks ?? '—'}</strong></div>
-    </div>
-    {#if detailCore.library_capable && detailCore.media_platform}{#key detailCore.id}<RefreshLibrary mediaRoot={`${path.replace(/\/$/, '')}/Assets/${detailCore.media_platform}/common`} coreName={detailCore.shortname || detailCore.id} onChanged={() => { void openFolder(); }} />{/key}{/if}
-    <button class="primary" on:click={() => { if (detailCore) openCoreLibrary(detailCore); closeCoreDetail(); }}>Open library</button>
   </div>
 {/if}
 

@@ -23,7 +23,7 @@ const axeSource = fs.readFileSync(process.env.AXE || require.resolve('axe-core/a
   await pk.getByLabel('Select Blue Train').check(); await p.getByRole('button', { name: 'Edit…' }).click(); await audit('Edit drawer');
   await p.getByRole('button', { name: 'Cancel' }).click();
   await p.getByRole('button', { name: /Tools & settings/ }).click();
-  await p.getByRole('button', { name: 'Sync history' }).click(); await p.waitForTimeout(400); await audit('Sync history (empty)');
+  await p.getByRole('button', { name: 'Card', exact: true }).click(); await p.getByRole('tab', { name: 'History' }).click(); await p.waitForTimeout(400); await audit('Sync history (empty)');
   await p.evaluate(() => window.__tauMock.seedHistory()); await p.getByRole('button', { name: 'Refresh' }).click(); await p.waitForTimeout(400); await audit('Sync history (with entries)');
   await p.getByRole('button', { name: 'Settings', exact: true }).click(); await p.waitForTimeout(400); await audit('Settings > Library, sync history preferences');
   await p.setViewportSize({ width: 720, height: 450 }); await p.waitForTimeout(300);

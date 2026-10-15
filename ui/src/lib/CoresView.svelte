@@ -11,8 +11,10 @@
   import { coreDetail, coreFiles, readPlatformImage } from './tau-api';
   import { coresGroups, coresSelection, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
   import { plural } from './coresFormat';
-  import type { CoreDetail, CoreFiles } from './types';
+  import type { Core, CoreDetail, CoreFiles } from './types';
   export let card = '';
+  /** The card-level core records (library facts) and what to do with them. */
+  export let cores: Core[] = []; export let openLibrary: (c: Core) => void = () => {}; export let reloadCard: () => void = () => {};
 
   type Tab = 'files' | 'saves' | 'screens' | 'settings';
   const TABS: [Tab, string][] = [['files', 'Files'], ['saves', 'Saves'], ['screens', 'Screenshots'], ['settings', 'Settings']];
@@ -79,7 +81,7 @@
             {:else}{#key detail.id}<CoreSettingsTab {card} {detail} {files} {addMissing} />{/key}{/if}
           </div>
         </div>
-        {#if $inspectorOpen}<div id="core-details" class="cores-side"><CoreInspector {card} {detail} {files} on:close={() => inspectorOpen.set(false)} /></div>{/if}
+        {#if $inspectorOpen}<div id="core-details" class="cores-side"><CoreInspector {card} {detail} {files} lib={cores.find((c) => c.id === detail?.id) ?? null} {openLibrary} libraryChanged={reloadCard} on:close={() => inspectorOpen.set(false)} /></div>{/if}
       </div>
     {/if}
   {:else if node}

@@ -2,7 +2,7 @@
 // Usage: (npm run dev &) && node scripts/screenshots.cjs [outDir]
 const { chromium } = require('playwright');
 const out = process.argv[2] || 'screenshots';
-const main = ['Cards', 'Library', 'Playlists'];
+const main = ['Card', 'Library', 'Playlists'];
 const tools = ['Compare cores', 'Backup', 'Packages', 'Problems', 'Recent jobs', 'Settings'];
 (async () => {
   require('fs').mkdirSync(out, { recursive: true });
