@@ -51,6 +51,14 @@
     const t = e.target as HTMLElement | null;
     if (e.key.toLowerCase() === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey && $coresSelection.core && t?.tagName !== 'INPUT' && t?.tagName !== 'SELECT' && t?.tagName !== 'TEXTAREA') { e.preventDefault(); inspectorOpen.update((v) => !v); }
   }
+  // A category page (`c:Console`) or a manufacturer page (`m:Console/Nintendo`), chosen in the menu.
+  $: grp = (() => {
+    const key = $coresSelection.group ?? ''; if (!key || $coresSelection.platform || $coresSelection.core) return null;
+    const [kind, rest] = [key.slice(0, 1), key.slice(2)]; const cat = kind === 'c' ? rest : rest.split('/')[0]; const maker = kind === 'm' ? rest.slice(cat.length + 1) : '';
+    const g = $coresGroups.find((x) => x.name === cat); if (!g) return null;
+    const makers = maker ? g.makers.filter((m) => m.name === maker) : g.makers;
+    return makers.length ? { cat: g.name, maker, makers, cores: makers.reduce((n, m) => n + m.cores, 0), platforms: makers.reduce((n, m) => n + m.platforms.length, 0) } : null;
+  })();
   // Search lives here, on the Cores page: cores, platforms, manufacturers and categories.
   let query = '';
   $: q = query.trim().toLowerCase();
@@ -94,6 +102,22 @@
         {#if $inspectorOpen}<div id="core-details" class="cores-side"><CoreInspector {card} {detail} {files} lib={cores.find((c) => c.id === detail?.id) ?? null} {openLibrary} libraryChanged={reloadCard} on:close={() => inspectorOpen.set(false)} /></div>{/if}
       </div>
     {/if}
+  {:else if grp}
+    <header><div>
+      <nav class="crumbs" aria-label="Where you are"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '' })}>Cores</button>{#if grp.maker}<span aria-hidden="true">›</span><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '', group: `c:${grp.cat}` })}>{grp.cat}</button>{/if}</nav>
+      <p class="eyebrow">{grp.maker ? 'MANUFACTURER' : 'CATEGORY'}</p><h1 id="cores-title"><span class="ov-ic"><Icon name={categoryIcon(grp.cat)} size={22} /></span>{grp.maker || grp.cat}</h1>
+      <p class="lede">{grp.maker ? `${grp.cat} · ` : ''}{plural(grp.platforms, 'platform')}, {plural(grp.cores, 'core')} on this card</p></div></header>
+    {#each grp.makers as m (m.name)}
+      {#if !grp.maker && m.name}<h3 class="ov-maker"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '', group: `m:${grp.cat}/${m.name}` })}>{m.name}</button></h3>{/if}
+      <ul class="ov-grid" aria-label={`${grp.cat}${m.name ? ', ' + m.name : ''}`}>
+        {#each m.platforms as n (n.platform.id)}
+          <li><button class="ov-card" on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}. Open`}>
+            <span class="ov-pi"><Icon name={categoryIcon(grp.cat)} size={24} /></span><strong>{n.platform.name}</strong><small>{n.platform.year || ''}</small>
+            <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
+          </button></li>
+        {/each}
+      </ul>
+    {/each}
   {:else if node}
     <header><div>
       <nav class="crumbs" aria-label="Where you are"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '' })}>Cores</button></nav>

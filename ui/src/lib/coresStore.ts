@@ -3,7 +3,7 @@ import { coresTree } from './tau-api';
 import type { PlatformNode, CoreRow } from './types';
 
 /** What the Cores section is showing: a platform (all its cores), or one core. */
-export type CoresSelection = { platform: string; core: string };
+export type CoresSelection = { platform: string; core: string; /** A category page (`c:Console`) or a manufacturer page (`m:Console/Nintendo`) when neither a platform nor a core is chosen. */ group?: string };
 
 export const coresTreeStore = writable<PlatformNode[]>([]);
 export const coresSelection = writable<CoresSelection>({ platform: '', core: '' });
