@@ -90,6 +90,21 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await panel().getByText('Needs attention').count(), 0); assert.equal(await p.locator('.tab-dot').count(), 0); ok('dropping the BIOS clears the needs-attention list');
   assert.equal(await tree.locator('.nt-core .nt-dot').count(), 0); ok('and the dot leaves the menu');
 
+  // ---- removing files
+  const rows = () => panel().locator('.cf-row');
+  const before = await rows().count();
+  await p.getByRole('checkbox', { name: 'Select Metroid Fusion 2 (USA).gba' }).check(); await p.waitForTimeout(150);
+  await panel().getByRole('button', { name: /Remove 1 selected/ }).click(); await p.waitForTimeout(400);
+  const rm = p.locator('.rs');
+  assert.match(await rm.innerText(), /1 file[\s\S]*Metroid Fusion 2 \(USA\)\.gba[\s\S]*also read by 1 other core[\s\S]*copied to a backup folder outside the card/); ok('removing opens a review that names the file, who else reads it and the backup');
+  await rm.getByRole('button', { name: 'Cancel' }).click(); await p.waitForTimeout(200);
+  assert.equal(await rows().count(), before); ok('cancelling removes nothing');
+  await panel().getByRole('button', { name: /Remove 1 selected/ }).click(); await p.waitForTimeout(400);
+  await rm.getByRole('button', { name: /^Remove 1 file$/ }).click(); await p.waitForTimeout(500);
+  assert.match(await rm.innerText(), /1 file removed[\s\S]*Copies are kept in/); ok('removing says where the copies are kept');
+  await rm.getByRole('button', { name: 'Done' }).click(); await p.waitForTimeout(400);
+  assert.equal(await rows().count(), before - 1); assert.equal(await panel().getByRole('button', { name: /selected/ }).count(), 0); ok('the file leaves the list and the selection clears');
+
   // ---- Saves
   await tab('Saves').click(); await p.waitForTimeout(200);
   assert.match(await panel().innerText(), /Boktai 2 \(USA\)[\s\S]*Mother 3[\s\S]*Save states[\s\S]*Boktai 2 \(USA\)/); ok('saves and save states are listed with their game names');

@@ -26,6 +26,7 @@ pub mod convert;
 pub mod core_add;
 pub mod core_files;
 pub mod core_package;
+pub mod core_remove;
 pub mod core_screens;
 pub mod core_settings;
 pub mod core_update;

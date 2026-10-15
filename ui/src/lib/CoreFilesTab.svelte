@@ -4,6 +4,7 @@
   import { onDestroy } from 'svelte';
   import { open as pick } from '@tauri-apps/plugin-dialog';
   import AddFilesSheet from './AddFilesSheet.svelte';
+  import RemoveFilesSheet from './RemoveFilesSheet.svelte';
   import VirtualList from './VirtualList.svelte';
   import { onFileDrop, zoneAt } from './dropTarget';
   import { KIND_LABEL, day, plural, size } from './coresFormat';
@@ -13,6 +14,10 @@
   export let changed: () => void;
 
   let dragging = false; let hot = ''; let sheet: { sources: string[]; destination: AddDestination; platform: string } | null = null;
+  let removing: string[] | null = null; let picked: Record<string, string[]> = {};
+  const isPicked = (z: string, rel: string) => (picked[z] ?? []).includes(rel);
+  const toggle = (z: string, rel: string) => { const cur = picked[z] ?? []; picked = { ...picked, [z]: cur.includes(rel) ? cur.filter((r) => r !== rel) : [...cur, rel] }; };
+  const relOf = (f: FolderListing, e: FileEntry) => `${f.folder.rel_path}/${e.rel_path}`;
   let query: Record<string, string> = {}; let sortBy: Record<string, 'name' | 'size' | 'date'> = {};
 
   $: assets = files.folders.filter((f) => f.folder.role === 'AssetsShared' || f.folder.role === 'AssetsCore');
@@ -65,7 +70,7 @@
     <section class="cf-folder" class:hot={hot === zoneId(f)} data-drop-zone={zoneId(f)} aria-label={f.folder.label}>
       <header>
         <div><h3>{f.folder.label}</h3><p class="cf-path"><code>{f.folder.rel_path}</code> · {plural(f.total_files, 'file')}{f.total_bytes ? `, ${size(f.total_bytes)}` : ''}{f.exists ? '' : ' · not created yet'}</p></div>
-        <span class="cf-actions"><button class="quiet" on:click={() => choose(f, false)}>Add files…</button><button class="quiet" on:click={() => choose(f, true)}>Add folder…</button></span>
+        <span class="cf-actions">{#if (picked[zoneId(f)] ?? []).length}<button class="danger-quiet" on:click={() => (removing = (picked[zoneId(f)] ?? []).map((r) => `${f.folder.rel_path}/${r}`))}>Remove {(picked[zoneId(f)] ?? []).length} selected…</button>{/if}<button class="quiet" on:click={() => choose(f, false)}>Add files…</button><button class="quiet" on:click={() => choose(f, true)}>Add folder…</button></span>
       </header>
       {#if f.entries.length}
         <div class="cf-tools"><label><span class="sr">Search {f.folder.label}</span><input type="search" placeholder="Search these files" bind:value={query[zoneId(f)]} /></label>
@@ -74,6 +79,7 @@
           <div class="cf-list" style={`height:${Math.min(list.length * 40, 360)}px`}>
             <VirtualList items={list} rowHeight={40} key={(e) => e.rel_path} label={f.folder.label} let:item>
               <div class="cf-row" role="listitem">
+                <input type="checkbox" class="cf-pick" aria-label={`Select ${item.rel_path}`} checked={isPicked(zoneId(f), item.rel_path)} on:change={() => toggle(zoneId(f), item.rel_path)} />
                 <span class="cf-name" title={item.rel_path}>{item.rel_path}</span>
                 {#if item.slot}<span class="chip">{item.slot}</span>{/if}
                 <span class="chip" class:capable={item.kind === 'Rom' || item.kind === 'Bios'}>{KIND_LABEL[item.kind]}</span>
@@ -91,6 +97,9 @@
   {/each}
   {#if files.folders.some((f) => f.folder.role === 'AssetsShared' && f.entries.length)}<p class="cf-sub">Tip: drop files anywhere on this page to add them to the shared folder.</p>{/if}
 </div>
+{#if removing}
+  <RemoveFilesSheet {card} coreId={detail.id} coreName={detail.shortname} files={removing} on:close={() => (removing = null)} on:done={() => { picked = {}; changed(); }} />
+{/if}
 {#if sheet}
   <AddFilesSheet {card} coreId={detail.id} platform={sheet.platform} platformName={platformName(sheet.platform)} coreName={detail.shortname} sources={sheet.sources} destination={sheet.destination}
     on:close={() => (sheet = null)} on:done={changed} />
@@ -106,6 +115,7 @@
   .cf-tools{display:flex;gap:8px;margin:6px 0 8px}.cf-tools input,.cf-tools select{font:inherit;font-size:12.5px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:7px 10px}.cf-tools label:first-child{flex:1}.cf-tools input{width:100%;box-sizing:border-box}
   .cf-list{display:flex;flex-direction:column;border:1px solid #2c393a;border-radius:9px;overflow:hidden;background:#141c1d}
   .cf-row{height:40px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid #222d2f;font-size:12.5px}
+  .cf-pick{flex:none;accent-color:#c1f0ad;width:15px;height:15px}.danger-quiet{background:none;border:1px solid #6b3a3a;color:#ff9b9b;border-radius:8px;padding:6px 10px;font:inherit;font-size:12.5px;cursor:pointer}
   .cf-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e8ecec}.cf-size{width:70px;text-align:right;color:#a6b3b2;flex:none}.cf-date{width:78px;text-align:right;color:#8f9e9d;font-size:11.5px;flex:none}
   .cf-drop{border:1.5px dashed #3b4a4b;border-radius:10px;padding:22px 16px;text-align:center;color:#a6b3b2;font-size:13px}.cf-drop p{margin:0}
   .cf-empty{font-size:12.5px;color:#a6b3b2}

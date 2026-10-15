@@ -23,3 +23,4 @@
 
 ## Not in this release
 Tau's own cores in the Marketplace.
+- Cores: remove files from a core's Files tab (reviewed first, every file backed up outside the card and verified before it is deleted).

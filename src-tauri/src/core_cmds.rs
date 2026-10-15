@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use tau_core::{
     TauError,
     core_add::{AddPlan, AddReport, Destination},
+    core_remove::{RemoveFilesPlan, RemoveFilesReport},
     core_files::CoreFiles,
     core_screens::ScreenshotView,
     core_settings::CoreSettings,
@@ -73,4 +74,18 @@ pub fn execute_core_add(
     let _write = crate::begin_card_write(&app, &card)?;
     let backup = crate::install_backup_root(&app)?;
     tau_core::core_add::execute_add(Path::new(&card), &core_id, &platform, destination, &paths(sources), replace, &confirmation, Some(&backup))
+}
+
+/// Plans removing files from one of the core's asset folders. Reads the card; deletes nothing.
+#[tauri::command(async)]
+pub fn plan_core_remove(card: String, core_id: String, files: Vec<String>) -> Result<RemoveFilesPlan, TauError> {
+    tau_core::core_remove::plan_remove_files(Path::new(&card), &core_id, &files)
+}
+
+/// Removes the reviewed files. Each is copied to the app's backup folder and verified before it is deleted.
+#[tauri::command(async)]
+pub fn execute_core_remove(app: tauri::AppHandle, card: String, core_id: String, files: Vec<String>, confirmation: String) -> Result<RemoveFilesReport, TauError> {
+    let _write = crate::begin_card_write(&app, &card)?;
+    let backup = crate::install_backup_root(&app)?;
+    tau_core::core_remove::execute_remove_files(Path::new(&card), &core_id, &files, &confirmation, &backup)
 }
