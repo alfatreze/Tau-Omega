@@ -68,6 +68,28 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await page().getByRole('button', { name: 'Remove scheme My scheme' }).click(); await page().getByRole('button', { name: 'Save schemes' }).click(); await p.waitForTimeout(400);
   assert.match(await page().locator('summary').innerText(), /^Naming schemes\s*3 built in/); ok('a scheme can be removed');
 
+  // ---- carry media from the previous build
+  await page().locator('.b-row', { hasText: 'TAU DEV 110' }).getByRole('button', { name: /Install TAU_DEV_110/ }).click(); await p.waitForTimeout(500);
+  const sheet3 = p.getByRole('dialog', { name: /TAU DEV 110/ });
+  assert.equal(await sheet3.getByText('Carry media from the previous build').count(), 0); ok('nothing about carrying media is offered before the install');
+  await sheet3.getByRole('button', { name: 'Review update' }).click(); await p.waitForTimeout(600);
+  await sheet3.getByLabel('Type the card name to confirm').fill('Pocket');
+  await sheet3.getByRole('button', { name: 'Confirm and install' }).click(); await p.waitForTimeout(800);
+  const carry = sheet3.getByRole('region', { name: 'Carry media from the previous build' });
+  assert.equal(await carry.count(), 1); ok('after the install the sheet offers to carry media from the older builds');
+  const items = carry.locator('.cm-list li');
+  assert.equal(await items.count(), 3); assert.match(await carry.innerText(), /nothing already on the card is overwritten/i); ok('it lists what each older build kept, and says nothing is overwritten');
+  assert.match(await items.nth(1).innerText(), /Same library[\s\S]*nothing to carry/i); assert.equal(await items.nth(1).locator('button').count(), 0); ok('a build that reads the same library has nothing to copy');
+  await items.nth(0).getByRole('button', { name: /Review carrying files from TAU DEV 111/ }).click(); await p.waitForTimeout(500);
+  assert.match(await items.nth(0).innerText(), /2 to copy \([\d.]+ MB\) · 1 already there · 1 different, kept as they are/); ok('reviewing a folder shows what is new, already there, and different (kept)');
+  await items.nth(0).getByRole('button', { name: /Copy 2 files/ }).click(); await p.waitForTimeout(600);
+  assert.match(await items.nth(0).innerText(), /Copied 2 files[\s\S]*each checked after copying[\s\S]*1 file were already there[\s\S]*1 file differ from the old build's and were left alone/); ok('copying reports what it copied and what it left alone');
+  await items.nth(2).getByRole('button', { name: /Review carrying the library from TAU DEV 105/ }).click(); await p.waitForTimeout(500);
+  assert.match(await items.nth(2).innerText(), /120 to copy, 0 to update[\s\S]*index is rebuilt for the new root/); ok('a library in another platform is reviewed with the index-aware copy');
+  await items.nth(2).getByRole('button', { name: 'Copy the library' }).click(); await p.waitForTimeout(600);
+  assert.match(await items.nth(2).innerText(), /Copied 120 files, verified, and rebuilt the index/); ok('and copying it rebuilds the index');
+  await sheet3.getByRole('button', { name: 'Close', exact: true }).click(); await p.waitForTimeout(300);
+
   // ---- the core check gate before an install
   await page().locator('.b-row', { hasText: 'Weird' }).getByRole('button', { name: /Install weird.zip/ }).click(); await p.waitForTimeout(500);
   const sheet2 = p.getByRole('dialog', { name: /Weird/ });

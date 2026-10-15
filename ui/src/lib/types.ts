@@ -247,7 +247,7 @@ export type MarketplaceDownload = { download: { path: string; bytes: number; sha
 
 /** Mirrors `tau_core::corehub` / `core_files` / `core_settings` / `core_screens` / `core_add` (serde output). */
 export type PlatformInfo = { id: string; name: string; category: string; manufacturer: string; year: number; has_image: boolean };
-export type CoreRow = { id: string; shortname: string; author: string; version: string; platform: string; platforms: string[]; missing: number };
+export type CoreRow = { id: string; shortname: string; author: string; version: string; platform: string; platforms: string[]; missing: number; disabled: boolean };
 export type PlatformNode = { platform: PlatformInfo; cores: CoreRow[] };
 export type SlotInfo = { id: string; name: string; required: boolean; filename: string; extensions: string[]; nonvolatile: boolean; core_specific: boolean; platform: string; size_exact: number | null; size_maximum: number | null };
 export type CoreDetail = {
@@ -335,3 +335,10 @@ export type RunNote = { id: string; card: string; stamp: string; core_id: string
 /** The Check page. */
 export type CheckResult = { title: string; lint: LintReport; symptoms: LintFinding[] };
 export type CardCheckRow = { id: string; shortname: string; errors: number; warnings: number; notes: number };
+
+/** Carrying media from the previous build. */
+export type CarryKind = 'folder' | 'library' | 'shared';
+export type CarryCandidate = { kind: CarryKind; from_id: string; from_name: string; platform: string; source_rel: string; dest_rel: string; files: number; bytes: number; note: string };
+export type CarryItem = { rel: string; bytes: number; state: 'new' | 'identical' | 'different' };
+export type CarryPlan = { id: string; source_rel: string; dest_rel: string; items: CarryItem[]; new_files: number; identical: number; different: number; bytes_to_write: number; blocked: string | null };
+export type CarryReport = { copied: number; identical: number; left_different: number; bytes_written: number };

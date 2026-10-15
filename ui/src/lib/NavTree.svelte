@@ -112,8 +112,8 @@
                                 <ul role="group" class="nt-sub">
                                   {#each n.cores as k (k.id)}
                                     <li role="treeitem" aria-level="4" aria-selected={active && $coresSelection.core === k.id}>
-                                      <button class="nt-item nt-core" class:sel={active && $coresSelection.core === k.id} data-kind="core" data-level="4" data-id={k.id} on:click={() => pickCore(n.platform.id, k.id)}>
-                                        <span class="nt-name">{k.shortname}</span>{#if k.missing}<span class="nt-dot" role="img" aria-label="Needs a file" title="Needs a file"></span>{/if}
+                                      <button class="nt-item nt-core" class:off={k.disabled} class:sel={active && $coresSelection.core === k.id} data-kind="core" data-level="4" data-id={k.id} on:click={() => pickCore(n.platform.id, k.id)}>
+                                        <span class="nt-name">{k.shortname}</span>{#if k.disabled}<span class="nt-off" role="img" aria-label="Disabled on the Pocket" title="Disabled on the Pocket: the Pocket does not list this core">off</span>{/if}{#if k.missing}<span class="nt-dot" role="img" aria-label="Needs a file" title="Needs a file"></span>{/if}
                                       </button>
                                     </li>
                                   {/each}
@@ -150,7 +150,7 @@
   .nt-item.sel{background:#243628;color:#c1f0ad;box-shadow:inset 3px 0 0 #c1f0ad}
   .nt-cat{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9fb3aa}
   .nt-maker{font-size:12px;color:#8f9e9d}
-  .nt-core{width:100%}
+  .nt-core{width:100%}.nt-core.off .nt-name{opacity:.6}.nt-off{flex:none;margin-left:6px;padding:0 6px;border-radius:99px;background:#3a2e14;color:#e5d9a8;font-size:10px;line-height:15px;letter-spacing:.04em;text-transform:uppercase}
   .nt-item :global(.ico){margin-right:7px;opacity:.85}.nt-item .nt-name{flex:1}
   .nt-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .nt-count{flex:none;font-size:11px;color:#8f9e9d;margin-left:6px}

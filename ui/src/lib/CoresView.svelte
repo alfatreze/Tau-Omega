@@ -43,10 +43,19 @@
   // Hiding from the Pocket: the switch in a core's header, and the Disabled section on the overview.
   $: if (card) void refreshDisabled(card);
   let stateBusy = false; let stateNote = '';
-  async function hideCore(id: string) {
-    stateBusy = true; stateNote = '';
-    try { await setCoresEnabled(card, [id], false); coresSelection.set({ platform: '', core: '' }); reloadCard(); }
-    catch (e) { stateNote = `Nothing was changed. ${errorMessage(e)}`; }
+  /** The open core is in Disabled Cores: still here, still fixable, just not listed by the Pocket. */
+  $: isDisabled = !!row?.disabled;
+  let confirmEnable = false;
+  async function setVisible(id: string, on: boolean) {
+    if (on && files?.missing.length && !confirmEnable) { confirmEnable = true; return; }
+    confirmEnable = false; stateBusy = true; stateNote = '';
+    try {
+      const why: [string, string[]][] = on ? [] : [[id, (files?.missing ?? []).map((m) => `It needs ${m.filename} (${m.slot}).`)]];
+      await setCoresEnabled(card, [id], on, why);
+      if (on) await coreKeep(card, [id], true);
+      await reload(); reloadCard();
+      stateNote = on ? 'This core is visible on the Pocket again.' : 'This core is now hidden from the Pocket. It stays here so you can fix what it needs.';
+    } catch (e) { stateNote = `Nothing was changed. ${errorMessage(e)}`; }
     finally { stateBusy = false; }
   }
   async function showCores(ids: string[]) {
@@ -103,10 +112,12 @@
         <p class="lede">{$coresSelection.core}{detail?.version ? ` · version ${detail.version}` : ''}</p>
       </div>
       <div class="cp-actions">
-      {#if detail}<button class="vis" role="switch" aria-checked="true" disabled={stateBusy} on:click={() => hideCore(detail?.id ?? '')} title="Turn off to hide this core from the Pocket's menu (nothing is deleted)"><span class="vis-knob" aria-hidden="true"></span>Visible on the Pocket</button>{/if}
+      {#if detail}<button class="vis" class:off={isDisabled} role="switch" aria-checked={!isDisabled} disabled={stateBusy} on:click={() => setVisible(detail?.id ?? '', isDisabled)} title={isDisabled ? 'Turn on to show this core in the Pocket’s menu again' : 'Turn off to hide this core from the Pocket’s menu (nothing is deleted; it stays here)'}><span class="vis-knob" aria-hidden="true"></span>Visible on the Pocket</button>{/if}
       {#if detail}<button class="quiet" aria-expanded={$inspectorOpen} aria-controls="core-details" on:click={() => inspectorOpen.update((v) => !v)} title="Show or hide the details (I)">{$inspectorOpen ? 'Hide details' : 'Show details'}</button>{/if}
       </div>
     </header>
+    {#if isDisabled && detail}<p class="dis-banner" role="status"><strong>Disabled on the Pocket.</strong> The Pocket does not list this core. {files && files.missing.length ? `It still needs ${files.missing.map((m) => m.filename).join(', ')}: add ${files.missing.length === 1 ? 'it' : 'them'} in Files, then switch “Visible on the Pocket” on.` : 'Switch “Visible on the Pocket” on to bring it back.'}</p>{/if}
+    {#if confirmEnable && files}<p class="dis-warn" role="alert">It still lacks {files.missing.map((m) => m.filename).join(', ')}, so it may not start. Enable it anyway? <button class="quiet" on:click={() => setVisible(detail?.id ?? '', true)}>Enable anyway</button><button class="quiet" on:click={() => (confirmEnable = false)}>Cancel</button></p>{/if}
     {#if stateNote}<p class="cores-note" role="status">{stateNote}</p>{/if}
     {#if error}<div class="empty"><h2>This core could not be read</h2><p>{error}</p><button class="primary" on:click={() => load($coresSelection.core)}>Try again</button></div>
     {:else if !detail || !files}<p class="cores-note" role="status">Reading the card…</p>
@@ -139,7 +150,7 @@
         {#each m.platforms as n (n.platform.id)}
           <li><button class="ov-card" on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}. Open`}>
             <span class="ov-pi"><Icon name={categoryIcon(grp.cat)} size={24} /></span><strong>{n.platform.name}</strong><small>{n.platform.year || ''}</small>
-            <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
+            <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.disabled)}{' '}· {n.cores.filter((c) => c.disabled).length} disabled{/if}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
           </button></li>
         {/each}
       </ul>
@@ -157,6 +168,7 @@
             <span class="core-icon" aria-hidden="true">{c.shortname.slice(0, 2).toUpperCase()}</span>
             <span class="pv-main"><strong>{c.shortname}</strong><small>{c.id}</small></span>
             <span class="pv-ver">{c.version}</span>
+            {#if c.disabled}<span class="chip warn">Disabled on the Pocket</span>{/if}
             {#if c.missing}<span class="chip warn">Needs {plural(c.missing, 'file')}</span>{/if}
           </button>
         </li>
@@ -173,7 +185,7 @@
           <li><button class="pv-open" aria-label={`${h.core.shortname}, ${h.platform.name}. Open`} on:click={() => { query = ''; pickCore(h.platform.id, h.core.id); }}>
             <span class="core-icon" aria-hidden="true"><Icon name={categoryIcon(h.category)} size={20} /></span>
             <span class="pv-main"><strong>{h.core.shortname}</strong><small>{h.category} › {h.maker} › {h.platform.name} · {h.core.id}</small></span>
-            <span class="pv-ver">{h.core.version}</span>{#if h.core.missing}<span class="chip warn">Needs {plural(h.core.missing, 'file')}</span>{/if}
+            <span class="pv-ver">{h.core.version}</span>{#if h.core.disabled}<span class="chip warn">Disabled on the Pocket</span>{/if}{#if h.core.missing}<span class="chip warn">Needs {plural(h.core.missing, 'file')}</span>{/if}
           </button></li>{/each}</ul>
       {:else}<div class="empty"><h2>Nothing matches “{query}”</h2><p>Try a core name, a platform or a manufacturer.</p></div>{/if}
     {:else}
@@ -195,7 +207,7 @@
               {#each m.platforms as n (n.platform.id)}
                 <li><button class="ov-card" on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}. Open`}>
                   <span class="ov-pi"><Icon name={categoryIcon(g.name)} size={24} /></span><strong>{n.platform.name}</strong><small>{n.platform.year || ''}</small>
-                  <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
+                  <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.disabled)}{' '}· {n.cores.filter((c) => c.disabled).length} disabled{/if}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
                 </button></li>
               {/each}
             </ul>
@@ -205,12 +217,12 @@
     {/if}
     {#if $disabledList.length}
       <section class="ov-cat dis" aria-labelledby="ov-disabled"><h2 id="ov-disabled"><span class="ov-ic"><Icon name="folder" size={20} /></span>Disabled <small>{plural($disabledList.length, 'core')} hidden from the Pocket</small></h2>
-        <p class="dis-lede">Moved to <code>Disabled Cores</code> on the card. Nothing was deleted: saves and settings are where they were.</p>
+        <p class="dis-lede">Hidden from the Pocket, but still listed with their platform above, tagged “disabled”: open one to add what it needs. Nothing was deleted; saves and settings are where they were.</p>
         <ul class="core-list pv-list" aria-label="Disabled cores">
           {#each $disabledList as d (d.id)}
             <li class="dis-row"><span class="core-icon" aria-hidden="true">{(d.shortname || d.id).slice(0, 2).toUpperCase()}</span>
               <span class="pv-main"><strong>{d.shortname || d.id}</strong><small>{d.id}{d.version ? ` · ${d.version}` : ''} · {d.disabled_at ? `disabled ${when(d.disabled_at)}` : 'disabled by hand'}{d.reasons.length ? ` · ${d.reasons.join(' ')}` : ''}</small></span>
-              <button class="quiet" disabled={stateBusy} aria-label={`Enable ${d.shortname || d.id}`} on:click={() => showCores([d.id])}>Enable</button></li>
+              <button class="quiet" aria-label={`Open ${d.shortname || d.id}`} on:click={() => { const h = findCore($coresTreeStore, d.id); if (h) pickCore(h.node.platform.id, d.id); }}>Open</button><button class="quiet" disabled={stateBusy} aria-label={`Enable ${d.shortname || d.id}`} on:click={() => showCores([d.id])}>Enable</button></li>
           {/each}
         </ul>
         {#if $disabledList.length > 1}<div class="dis-all"><button class="quiet" disabled={stateBusy} on:click={() => showCores($disabledList.map((d) => d.id))}>Enable all</button></div>{/if}
@@ -227,6 +239,8 @@
   .cp-actions{display:flex;align-items:center;gap:10px;flex:none}
   .vis{display:inline-flex;align-items:center;gap:9px;padding:7px 12px 7px 9px;font-size:12.5px;color:#dce6e4;background:#1a2325;border:1px solid #2c393a;border-radius:999px}
   .vis:hover{border-color:#3d5254}.vis:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}.vis:disabled{opacity:.55}
+  .vis.off{color:#a6b3b2}.vis.off .vis-knob{background:#4b5a5b}.vis.off .vis-knob::after{left:2px}
+  .dis-banner,.dis-warn{margin:0 0 12px;padding:10px 14px;border:1px solid #5c5030;background:#241f12;color:#e5d9a8;border-radius:10px;font-size:12.5px;line-height:1.55}.dis-warn button{margin-left:8px}
   .vis-knob{position:relative;width:28px;height:16px;border-radius:999px;background:#6fa35a;flex:none}.vis-knob::after{content:'';position:absolute;top:2px;left:14px;width:12px;height:12px;border-radius:50%;background:#101617}
   .dis .dis-lede{font-size:12.5px;color:#95a5a4;margin:0 0 10px}.dis-row{display:flex;align-items:center;gap:13px;padding:11px 16px}.dis-all{margin-top:8px}.dis-row .core-icon{opacity:.6}
   .dis :global(code){font-size:11.5px}
