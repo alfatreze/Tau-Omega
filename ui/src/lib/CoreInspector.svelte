@@ -1,7 +1,7 @@
 <script lang="ts">
   // The core's details (the right-hand panel). Facts come straight from the core's own files on the card; nothing here is a guess.
   import { createEventDispatcher, onMount } from 'svelte';
-  import { readCoreIcon } from './tau-api';
+  import { readCoreIcon, readPlatformImage } from './tau-api';
   import { plural, size } from './coresFormat';
   import type { CoreDetail, CoreFiles } from './types';
   export let card: string; export let detail: CoreDetail; export let files: CoreFiles | null = null;
@@ -11,6 +11,11 @@
   $: void loadIcon(detail.id);
   async function loadIcon(id: string) { icon = null; try { icon = await readCoreIcon(card, id); } catch { icon = null; } }
   onMount(() => { void loadIcon(detail.id); });
+  // The core's picture: its platform's banner (Platforms/_images), shown above the facts.
+  let banner: string | null = null;
+  $: bannerPlatform = detail.platforms.find((p) => p.has_image)?.id ?? '';
+  $: void loadBanner(bannerPlatform);
+  async function loadBanner(id: string) { banner = null; if (!id) return; try { banner = await readPlatformImage(card, id); } catch { banner = null; } }
 
   const yn = (v: boolean | null) => (v === true ? 'Yes' : v === false ? 'No' : 'Not stated');
   let copied = false;
@@ -26,6 +31,7 @@
     <div class="ci-head"><h2 id="ci-title">{detail.shortname || detail.id}</h2><p>{detail.id}</p></div>
     <button class="quiet" on:click={() => dispatch('close')} aria-label="Hide core details" title="Hide details (I)">Hide</button>
   </header>
+  {#if banner}<img class="ci-banner" src={banner} alt={`${detail.platforms.find((p) => p.has_image)?.name ?? 'Platform'} artwork`} />{/if}
   {#if detail.description}<p class="ci-desc">{detail.description}</p>{/if}
 
   <dl class="ci-facts">
@@ -58,6 +64,7 @@
   .ci{background:#161f20;border:1px solid #2c393a;border-radius:12px;padding:16px;display:grid;gap:10px;align-content:start}
   .ci header{display:flex;align-items:center;gap:12px}.ci-head{flex:1;min-width:0}.ci-head h2{margin:0;font-size:16px;overflow:hidden;text-overflow:ellipsis}.ci-head p{margin:2px 0 0;font-size:11.5px;color:#8f9e9d;overflow:hidden;text-overflow:ellipsis}
   .ci-icon{flex:none;width:44px;height:44px;display:grid;place-items:center;background:#273638;border-radius:10px;color:#c1f0ad;font-weight:700}.ci-icon img{width:36px;height:36px;image-rendering:pixelated}
+  .ci-banner{display:block;width:100%;height:auto;border-radius:9px;border:1px solid #2c393a;background:#000}
   .ci-desc{margin:0;font-size:12.5px;color:#c7d1d0;line-height:1.55}
   .ci h3{margin:10px 0 0;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}
   .ci-facts{display:grid;gap:7px;margin:0}.ci-facts>div{display:grid;grid-template-columns:104px 1fr;gap:10px;align-items:baseline}.ci-facts dt{font-size:12px;color:#8f9e9d}.ci-facts dd{margin:0;font-size:12.5px;color:#e8ecec;overflow-wrap:anywhere;line-height:1.45}
