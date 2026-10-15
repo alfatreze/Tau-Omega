@@ -2,6 +2,8 @@
 
 Branch `cores-section` (worktree `../tau-omega-cores`, built on `marketplace`). Owner request: a **Cores** entry in the menu that lists every core on the open card organised by platform, expandable in the side menu; selecting a platform shows its cores, selecting a core opens a **collapsible right panel with the core's details** and main **tabs: Files** (ROMs, tapes, BIOS...; drag and drop in), **Saves**, **Screenshots** (the core's, if it can be known) and **Settings** (saved settings, missing BIOS...). A file parser comes later: the Files model must leave room for it.
 
+> **Status 2026-10-15: C0-C7 built.** Engine (`corehub`, `core_files`, `core_settings`, `core_screens`, `core_add`; 23 new tests plus a read-only run against a real card: 31 platforms, 38 cores, no errors), host commands, CLI (`tau cores`, `core-detail`, `core-files`, `core-settings`, `core-screens`, `core-add-plan`, `core-add`), UI (menu tree `NavTree`, `CoresView`, tabs, `CoreInspector`, `AddFilesSheet`, `dropTarget`), browser checks `ui/scripts/cores-test.cjs` (43, in CI). **Not verified on a real window:** Tauri's native drag-and-drop event (the mock uses the browser's drag events; the "Add files..." and "Add folder..." buttons use the native picker and cover the same flow) and a real card write (the engine's writes are proven on scratch cards; every refusal has a test; the read-side was run read-only on a real card). Mutation check of the add flow: the confirmation check and the backup-outside-the-card rule are caught by tests; the post-copy SHA-256 read-back cannot be exercised without fault injection, so it is covered by design, not by a test.
+
 ## 1. What the card actually holds (verified read-only on a real Pocket card, firmware 2.7)
 
 | Thing | Where | Notes |

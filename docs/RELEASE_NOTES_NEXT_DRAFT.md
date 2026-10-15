@@ -8,8 +8,14 @@
 - A release with no published checksum is allowed and says so.
 - Install an **earlier version** of a core from its details ("Choose this version"); going back is a downgrade you confirm in the plan. Files that exist only in the newer version stay on the card.
 
+## New: Cores
+- **Cores** in the side menu: every core on the open card by platform, expandable, with a dot on cores that need a file. Pick a platform to see its cores, or a core to open it.
+- Each core has **Files** (ROMs, BIOS, tapes and disks, shared by the platform or only for this core), **Saves** (saves and save states), **Screenshots** and **Settings** (missing BIOS, the settings the Pocket saved with their real names, saved controls and video, presets, what the core reads), and a details panel you can hide.
+- **Drag files in** (or use Add files / Add folder): you see exactly what would be added, then each file is copied, read back and verified. Nothing is deleted; a replaced file is backed up outside the card first.
+- Screenshots: the Pocket does not record which core took a screenshot, so Omega shows the ones taken near that core's save states as "likely this core", says why, and lets you see them all.
+
 ## Command line
-`tau catalog`, `tau catalog-core <id>`, `tau core-updates <card>`, `tau core-download <id> --out <folder>` (download, check, no card write) and `tau update-undo <card> --backup <folder>` (put a card back after an install).
+`tau cores <card>`, `tau core-detail`, `tau core-files`, `tau core-settings`, `tau core-screens`, `tau core-add-plan` / `tau core-add` (add files, plan first), `tau catalog`, `tau catalog-core <id>`, `tau core-updates <card>`, `tau core-download <id> --out <folder>` (download, check, no card write) and `tau update-undo <card> --backup <folder>` (put a card back after an install).
 
 ## Fixes and changes
 - Community cores are judged by their version, not by Tau's firmware files (an installed core was always reported as repaired, and a newer package as the same build).
