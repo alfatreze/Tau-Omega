@@ -572,11 +572,18 @@ pub fn core_health(a: &[String], j: bool) -> Result<(), CliError> {
 }
 
 fn state_ids(a: &[String]) -> Vec<String> {
-    a.iter()
-        .skip(1)
-        .filter(|x| !x.starts_with("--"))
-        .cloned()
-        .collect()
+    let mut out = Vec::new();
+    let mut skip = false;
+    for x in a.iter().skip(1) {
+        if skip {
+            skip = false;
+        } else if x == "--confirm" {
+            skip = true;
+        } else if !x.starts_with("--") {
+            out.push(x.clone());
+        }
+    }
+    out
 }
 
 /// `tau core-disable <card-root> <core-id...> [--confirm <token> --yes]` and `tau core-enable ...`: without `--confirm` it prints the plan (and the
