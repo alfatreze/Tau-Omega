@@ -338,6 +338,7 @@ const handlers: Record<string, (args: any) => unknown> = {
     { id: 'agg23.SNES', installed_version: '1.2.0', latest_version: '1.4.0', release_date: '2026-09-02', status: 'UpdateAvailable' },
     { id: 'spiritualized.GB', installed_version: '1.0.0', latest_version: '1.2.1', release_date: '2026-08-14', status: 'UpdateAvailable' },
     { id: 'Mazamars312.PCE', installed_version: '1.9.0', latest_version: '2.0.3', release_date: '2025-12-01', status: 'UpdateAvailable' },
+    { id: 'someone.Unlisted', installed_version: '1.0.0', latest_version: '1.1.0', release_date: '2026-10-01', status: 'UpdateAvailable', manual_url: 'https://github.com/someone/unlisted-core/releases/tag/v1.1.0' },
     { id: 'agg23.Arduboy', installed_version: '0.9.0', latest_version: '0.9.0', release_date: '2022-09-03', status: 'UpToDate' },
     { id: 'old.NES', installed_version: '0.3', latest_version: '1.1.0', release_date: '2025-04-01', status: { ReplacedBy: 'pack.NES' } },
     { id: 'me.Homebrew', installed_version: '0.1', latest_version: '', release_date: '', status: 'NotInCatalog' },

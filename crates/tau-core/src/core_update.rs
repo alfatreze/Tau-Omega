@@ -32,6 +32,9 @@ pub struct CoreStatus {
     pub latest_version: String,
     pub release_date: String,
     pub status: Status,
+    /// For a manually added core with a GitHub source: the address of the newest release (opens the manual-add sheet). `None` for catalog cores.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub manual_url: Option<String>,
 }
 
 /// Tau's cores (`alfatreze.TAU...`) use their own release channels.
@@ -50,6 +53,7 @@ pub fn check(installed: &[Core], catalog: &Catalog) -> Vec<CoreStatus> {
                 latest_version: latest.to_string(),
                 release_date: date.to_string(),
                 status,
+                manual_url: None,
             };
             if is_tau_core(&core.id) {
                 return mk("", "", Status::Excluded);
@@ -81,6 +85,37 @@ pub fn check(installed: &[Core], catalog: &Catalog) -> Vec<CoreStatus> {
             }
         })
         .collect()
+}
+
+/// A newest release found for a manually added core (the Library does not know it): its version (the release tag), date and the address that opens it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManualRelease {
+    pub core_id: String,
+    pub version: String,
+    pub date: String,
+    pub url: String,
+}
+
+/// Folds the releases of manually added cores into the catalog verdicts: a core the Library does not list is compared with its repository's newest
+/// release (same conservative version rule). A core the Library does list keeps the Library's verdict.
+pub fn apply_manual(rows: &mut [CoreStatus], found: &[ManualRelease]) {
+    for f in found {
+        let Some(row) = rows
+            .iter_mut()
+            .find(|r| r.id.eq_ignore_ascii_case(&f.core_id) && r.status == Status::NotInCatalog)
+        else {
+            continue;
+        };
+        row.status = match compare(&row.installed_version, &f.version) {
+            Verdict::Newer => Status::UpdateAvailable,
+            Verdict::Same => Status::UpToDate,
+            Verdict::Older => Status::NewerThanCatalog,
+            Verdict::Unknown => Status::Unknown,
+        };
+        row.latest_version = f.version.trim_start_matches(['v', 'V']).to_string();
+        row.release_date = f.date.clone();
+        row.manual_url = Some(f.url.clone());
+    }
 }
 
 #[cfg(test)]
@@ -172,5 +207,52 @@ mod tests {
             assert!(is_tau_core(id), "{id}");
         }
         assert!(!is_tau_core("alfatreze.Tauntaun") && !is_tau_core("agg23.NES"));
+    }
+
+    #[test]
+    fn a_manually_added_core_is_compared_with_its_repository() {
+        let mut rows = check(
+            &[
+                core("m1.Mine", "1.0.0"),
+                core("m2.Same", "2.0"),
+                core("m3.Odd", "weird"),
+                core("b.Same", "1.0"),
+            ],
+            &cat(),
+        );
+        let rel = |id: &str, v: &str| ManualRelease {
+            core_id: id.into(),
+            version: v.into(),
+            date: "2026-10-01".into(),
+            url: format!("https://github.com/o/{id}/releases/tag/{v}"),
+        };
+        apply_manual(
+            &mut rows,
+            &[
+                rel("M1.mine", "v1.1.0"),
+                rel("m2.Same", "2.0"),
+                rel("m3.Odd", "v3"),
+                rel("b.Same", "9.9"),
+            ],
+        );
+        let by = |id: &str| rows.iter().find(|r| r.id == id).unwrap();
+        assert_eq!(
+            (
+                by("m1.Mine").status.clone(),
+                by("m1.Mine").latest_version.as_str()
+            ),
+            (Status::UpdateAvailable, "1.1.0")
+        );
+        assert!(
+            by("m1.Mine")
+                .manual_url
+                .as_deref()
+                .unwrap()
+                .ends_with("/v1.1.0")
+        );
+        assert_eq!(by("m2.Same").status, Status::UpToDate);
+        assert_eq!(by("m3.Odd").status, Status::Unknown);
+        // a core the Library lists keeps the Library's verdict and gets no manual address
+        assert!(by("b.Same").manual_url.is_none());
     }
 }
