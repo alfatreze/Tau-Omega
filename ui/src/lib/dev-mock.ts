@@ -49,7 +49,8 @@ const PLAT: Record<string, ReturnType<typeof plat>> = {
   amiga: plat('amiga', 'Amiga', 'Computer', 'Commodore', 1985), _none: { id: '_none', name: 'No platform', category: '', manufacturer: '', year: 0, has_image: false },
 };
 const crow = (id: string, platform: string, version: string, missing = 0) => ({ id, shortname: id.split('.')[1], author: id.split('.')[0], version, platform, platforms: [platform], missing });
-let mockRole = 'real';
+let mockRole = 'real'; let mockBuildsDir: string | null = null; let mockSchemes: { name: string; field: string; template: string }[] = [];
+const mockValidate = (t: string): string | null => { if (!t.trim()) return 'The template is empty.'; const toks = [...t.matchAll(/\{(\w+)\}/g)].map((m) => m[1]); if (toks.some((x) => !['series', 'n', 'major', 'minor', 'patch', 'pre', 'any'].includes(x))) return 'A token is not known.'; if (/\}\{/.test(t)) return 'Two tokens touch. Put some text between them so Omega knows where one ends.'; if (!toks.some((x) => ['n', 'major', 'minor', 'patch', 'pre'].includes(x))) return 'Nothing here orders the builds. Add {n}, a SemVer token or {pre}.'; return null; };
 const mockDisabled: { id: string; shortname: string; version: string; disabled_at: number; reasons: string[] }[] = [];
 const coresTreeMock = () => coresTreeAll().map((n) => ({ ...n, cores: n.cores.filter((c) => !mockDisabled.some((d) => d.id === c.id)) })).filter((n) => n.cores.length);
 const coresTreeAll = () => [
@@ -358,6 +359,19 @@ const handlers: Record<string, (args: any) => unknown> = {
     return { mode: prefs.core_disable, cores: flagged };
   },
   card_role: () => (mockRole), set_card_role: (a) => { mockRole = a.test ? 'test' : 'real'; return mockRole; },
+  builds_config: () => ({ dir: mockBuildsDir, builtin: [{ name: 'Name and number (TAU DEV 12)', field: 'shortname', template: '{series} {n}' }, { name: 'SemVer pre-release (0.6.0-alpha.3)', field: 'version', template: '{major}.{minor}.{patch}-{pre}' }, { name: 'SemVer (0.6.0)', field: 'version', template: '{major}.{minor}.{patch}' }], custom: mockSchemes }),
+  set_builds_config: (a) => { for (const s of (a.custom as { name: string; template: string }[])) { if (!s.name.trim()) throw { code: 7, message: 'Every scheme needs a name.' }; const e = mockValidate(s.template); if (e) throw { code: 7, message: `${s.name}: ${e}` }; } mockBuildsDir = (a.dir as string | null) || null; mockSchemes = a.custom as typeof mockSchemes; return handlers.builds_config(a); },
+  try_scheme: (a) => { const e = mockValidate(a.template as string); if (e) return { error: e, placement: null }; const text = (a.field === 'core_id' ? a.coreId : a.field === 'shortname' ? a.shortname : a.field === 'version' ? a.version : a.file) as string; const toks: string[] = []; const re = new RegExp('^' + (a.template as string).replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{(\w+)\}/g, (_m, t) => { toks.push(t); return t === 'series' || t === 'any' ? '(.+?)' : t === 'pre' ? '([0-9A-Za-z.-]+)' : '(\\d+)'; }) + '$', 'i'); const m = re.exec(text.trim()); if (!m) return { error: null, placement: null }; const g = (t: string) => { const i = toks.indexOf(t); return i < 0 ? null : m[i + 1]; }; return { error: null, placement: { scheme: 'try', series: (g('series') ?? (a.coreId as string)).toLowerCase(), order: [+(g('major') ?? 0), +(g('minor') ?? 0), +(g('patch') ?? 0), +(g('n') ?? 0)], pre: g('pre') } }; },
+  builds_list: () => { if (!mockBuildsDir) throw { code: 7, message: 'Choose the folder your builds are in first.' }; const e = (file: string, short: string, ver: string, n: number, extra: Record<string, unknown> = {}) => ({ path: `${mockBuildsDir}/${file}`, kind: file.endsWith('.zip') ? 'zip' : 'folder', file, core_id: `alfatreze.${short}`, shortname: short, version: ver, date_release: '2026-10-14', bytes: 4.8 * MB, modified: 1792000000 + n, placement: { scheme: 'Name and number (TAU DEV 12)', series: 'tau dev', order: [0, 0, 0, n], pre: null }, lint_errors: 0, lint_warnings: 0, error: null, ...extra }); return { dir: mockBuildsDir, rows: [
+      { entry: e('TAU_DEV_113.zip', 'TAU DEV 113', '0.6.0', 113, { lint_warnings: 1 }), relation: 'newer', older: [{ id: 'alfatreze.TAU DEV 111', shortname: 'TAU DEV 111', version: '0.6.0' }, { id: 'alfatreze.TAU DEV 112', shortname: 'TAU DEV 112', version: '0.6.0' }] },
+      { entry: e('TAU_DEV_112.zip', 'TAU DEV 112', '0.6.0', 112), relation: 'same', older: [{ id: 'alfatreze.TAU DEV 111', shortname: 'TAU DEV 111', version: '0.6.0' }] },
+      { entry: e('TAU_DEV_110', 'TAU DEV 110', '0.6.0', 110), relation: 'not_installed', older: [] },
+      { entry: { ...e('weird.zip', 'Weird', '1.0', 0), placement: null, lint_errors: 1 }, relation: 'not_installed', older: [] },
+      { entry: { ...e('broken.zip', '', '', 0), core_id: '', placement: null, bytes: 0, error: 'This zip has no core.json.' }, relation: 'not_installed', older: [] },
+    ] }; },
+  build_zip: (a) => a.path as string,
+  plan_remove_core: (a) => ({ id: `rmc-${a.coreId}`, card_root: '/Volumes/Pocket', core_id: a.coreId, platform: 'tau', platform_shared: true, paths: [`Cores/${a.coreId}`], files_to_remove: 6, bytes_to_remove: 4 * MB, media_kept: true }),
+  execute_remove_core: () => ({ removed_files: 6, bytes_removed: 4 * MB }),
   disabled_cores: () => [...mockDisabled],
   plan_core_state: (a) => ({ token: `st-${a.enable}-${(a.ids as string[]).join('+')}`, enable: a.enable, ids: a.ids, from: (a.ids as string[]).map((i) => `${a.enable ? 'Disabled Cores' : 'Cores'}/${i}`), to: (a.ids as string[]).map((i) => `${a.enable ? 'Cores' : 'Disabled Cores'}/${i}`), blocked: (a.ids as string[]).length ? null : 'No core is selected.', notes: [] }),
   execute_core_state: (a) => {

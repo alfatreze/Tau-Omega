@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { ManualClass, ManualInspect, ManualInspectArgs, RemoveFilesPlan, RemoveFilesReport, MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate, CatalogResult, ArtKind, CoreUpdates, MarketplaceDownload, PlatformNode, CoreDetail, CoreFiles, CoreSettings, ScreenshotView, AddPlan, AddReport, AddDestination  , CoreSuggestions, DisabledCore, StatePlan, StateReport } from './types';
+import type { ManualClass, ManualInspect, ManualInspectArgs, RemoveFilesPlan, RemoveFilesReport, MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate, CatalogResult, ArtKind, CoreUpdates, MarketplaceDownload, PlatformNode, CoreDetail, CoreFiles, CoreSettings, ScreenshotView, AddPlan, AddReport, AddDestination , CoreSuggestions, DisabledCore, StatePlan, StateReport, BuildsConfig, BuildScheme, SchemeField, SchemeTry, BuildList } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -125,3 +125,9 @@ export const coreKeep = (card: string, ids: string[], keep: boolean) => invoke<v
 
 export const cardRole = (card: string) => invoke<'real' | 'test'>('card_role', { card });
 export const setCardRole = (card: string, test: boolean) => invoke<'real' | 'test'>('set_card_role', { card, test });
+
+export const buildsConfig = () => invoke<BuildsConfig>('builds_config');
+export const setBuildsConfig = (dir: string | null, custom: BuildScheme[]) => invoke<BuildsConfig>('set_builds_config', { dir, custom });
+export const trySchemeOn = (field: SchemeField, template: string, coreId: string, shortname: string, version: string, file: string) => invoke<SchemeTry>('try_scheme', { field, template, coreId, shortname, version, file });
+export const buildsList = (card: string) => invoke<BuildList>('builds_list', { card });
+export const buildZip = (path: string) => invoke<string>('build_zip', { path });
