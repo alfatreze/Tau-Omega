@@ -11,7 +11,7 @@ use std::{
 use tau_core::{
     ErrorCode, TauError,
     core_package::Limits,
-    core_pack, core_preview,
+    core_lint, core_pack, core_preview,
     github_release::{self, GhAsset, GhRelease, Pick},
     manual_registry::{self, ManualEntry},
     manual_source::{self, GitHubSource, Source},
@@ -130,6 +130,8 @@ pub enum ManualInspect {
         installed_version: Option<String>,
         /// The registry says this id was added from a different source before.
         different_source: bool,
+        /// The core checker's findings for this package (errors block the install unless the user overrides).
+        lint: core_lint::LintReport,
     },
     /// A release has several zips (or the repository has several releases to pick from): the user chooses.
     #[serde(rename = "choose")]
@@ -297,6 +299,7 @@ pub fn manual_inspect(app: tauri::AppHandle, args: InspectArgs) -> Result<Manual
         _ => None,
     };
 
+    let lint = core_lint::lint_zip(&zip).unwrap_or_default();
     Ok(ManualInspect::Ready {
         zip_path: zip.to_string_lossy().into_owned(),
         preview: Box::new(PreviewView { preview, icon, banner }),
@@ -305,6 +308,7 @@ pub fn manual_inspect(app: tauri::AppHandle, args: InspectArgs) -> Result<Manual
         in_library,
         installed_version,
         different_source,
+        lint,
     })
 }
 

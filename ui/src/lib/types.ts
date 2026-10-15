@@ -293,7 +293,7 @@ export type ManualPreview = {
 export type ManualProvenance = { kind: string; owner: string; repo: string; tag: string; asset: string; bytes: number; sha256: string; checksum: string; packed: string | null };
 export type ManualReleaseChoice = { tag: string; name: string; published: string; prerelease: boolean; zips: string[] };
 export type ManualInspect =
-  | { status: 'ready'; preview: ManualPreview; zip_path: string; provenance: ManualProvenance; readme: { text: string; images: string[] } | null; in_library: boolean; installed_version: string | null; different_source: boolean }
+  | { status: 'ready'; preview: ManualPreview; zip_path: string; provenance: ManualProvenance; readme: { text: string; images: string[] } | null; in_library: boolean; installed_version: string | null; different_source: boolean; lint: LintReport }
   | { status: 'choose'; owner: string; repo: string; releases: ManualReleaseChoice[]; tag: string };
 export type ManualInspectArgs = { input: string; tag?: string | null; asset?: string | null; readme: boolean; card?: string | null };
 
@@ -305,3 +305,6 @@ export type CoreSuggestions = { mode: 'ask' | 'auto' | 'never'; cores: CoreHealt
 export type DisabledCore = { id: string; shortname: string; version: string; disabled_at: number; reasons: string[] };
 export type StatePlan = { token: string; enable: boolean; ids: string[]; from: string[]; to: string[]; blocked: string | null; notes: string[] };
 export type StateReport = { moved: number; caches_cleared: number };
+
+export type LintFinding = { id: string; severity: 'Error' | 'Warning' | 'Note'; message: string; rule: string; fix: string };
+export type LintReport = { core_id: string; findings: LintFinding[]; errors: number; warnings: number; notes: number };
