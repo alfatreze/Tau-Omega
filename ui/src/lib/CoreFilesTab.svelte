@@ -5,6 +5,8 @@
   import { open as pick } from '@tauri-apps/plugin-dialog';
   import AddFilesSheet from './AddFilesSheet.svelte';
   import RemoveFilesSheet from './RemoveFilesSheet.svelte';
+  import Icon from './Icon.svelte';
+  import { fileIcon } from './iconFor';
   import VirtualList from './VirtualList.svelte';
   import { onFileDrop, zoneAt } from './dropTarget';
   import { KIND_LABEL, day, plural, size } from './coresFormat';
@@ -20,7 +22,12 @@
   const relOf = (f: FolderListing, e: FileEntry) => `${f.folder.rel_path}/${e.rel_path}`;
   let query: Record<string, string> = {}; let sortBy: Record<string, 'name' | 'size' | 'date'> = {};
 
-  $: assets = files.folders.filter((f) => f.folder.role === 'AssetsShared' || f.folder.role === 'AssetsCore');
+  // Games only: a core's BIOS and configuration files are listed under Settings. A core-only folder that holds nothing but those is not shown here.
+  $: games = files.folders.map((f) => {
+    const entries = f.entries.filter((e) => !e.support);
+    return f.truncated ? { ...f, entries } : { ...f, entries, total_files: entries.length, total_bytes: entries.reduce((n, e) => n + e.bytes, 0) };
+  });
+  $: assets = games.filter((f) => f.folder.role === 'AssetsShared' || (f.folder.role === 'AssetsCore' && (f.entries.length || f.truncated)));
   const zoneId = (f: FolderListing) => `${f.folder.role}:${f.folder.platform}`;
   const dest = (f: FolderListing): AddDestination => (f.folder.role === 'AssetsShared' ? 'Shared' : 'CoreOnly');
   const platformName = (id: string) => detail.platforms.find((p) => p.id === id)?.name ?? id;
@@ -80,7 +87,7 @@
             <VirtualList items={list} rowHeight={40} key={(e) => e.rel_path} label={f.folder.label} let:item>
               <div class="cf-row" role="listitem">
                 <input type="checkbox" class="cf-pick" aria-label={`Select ${item.rel_path}`} checked={isPicked(zoneId(f), item.rel_path)} on:change={() => toggle(zoneId(f), item.rel_path)} />
-                <span class="cf-name" title={item.rel_path}>{item.rel_path}</span>
+                <span class="cf-fi" aria-hidden="true"><Icon name={fileIcon(item.name, item.group, item.kind)} size={17} /></span><span class="cf-name" title={item.purpose ? `${item.rel_path}: ${item.purpose}` : item.rel_path}>{item.rel_path}</span>
                 {#if item.slot}<span class="chip">{item.slot}</span>{/if}
                 <span class="chip" class:capable={item.kind === 'Rom' || item.kind === 'Bios'}>{KIND_LABEL[item.kind]}</span>
                 <span class="cf-size">{size(item.bytes)}</span><span class="cf-date">{day(item.modified)}</span>
@@ -95,7 +102,7 @@
       {#if dragging}<div class="cf-hint" aria-hidden="true">Drop to add to {f.folder.rel_path}</div>{/if}
     </section>
   {/each}
-  {#if files.folders.some((f) => f.folder.role === 'AssetsShared' && f.entries.length)}<p class="cf-sub">Tip: drop files anywhere on this page to add them to the shared folder.</p>{/if}
+  {#if assets.some((f) => f.folder.role === 'AssetsShared' && f.entries.length)}<p class="cf-sub">Tip: drop files anywhere on this page to add them to the shared folder.</p>{/if}
 </div>
 {#if removing}
   <RemoveFilesSheet {card} coreId={detail.id} coreName={detail.shortname} files={removing} on:close={() => (removing = null)} on:done={() => { picked = {}; changed(); }} />
@@ -116,6 +123,7 @@
   .cf-list{display:flex;flex-direction:column;border:1px solid #2c393a;border-radius:9px;overflow:hidden;background:#141c1d}
   .cf-row{height:40px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid #222d2f;font-size:12.5px}
   .cf-pick{flex:none;accent-color:#c1f0ad;width:15px;height:15px}.danger-quiet{background:none;border:1px solid #6b3a3a;color:#ff9b9b;border-radius:8px;padding:6px 10px;font:inherit;font-size:12.5px;cursor:pointer}
+  .cf-fi{flex:none;display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#1d2a2b;color:#c1f0ad}
   .cf-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e8ecec}.cf-size{width:70px;text-align:right;color:#a6b3b2;flex:none}.cf-date{width:78px;text-align:right;color:#8f9e9d;font-size:11.5px;flex:none}
   .cf-drop{border:1.5px dashed #3b4a4b;border-radius:10px;padding:22px 16px;text-align:center;color:#a6b3b2;font-size:13px}.cf-drop p{margin:0}
   .cf-empty{font-size:12.5px;color:#a6b3b2}

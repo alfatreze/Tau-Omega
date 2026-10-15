@@ -69,6 +69,16 @@ pub struct Entry {
     pub game: Option<String>,
     /// For states: when the Pocket made it (`YYYY-MM-DD HH:MM:SS`, from the file name).
     pub taken: Option<String>,
+    /// What the file is for (see [`crate::file_purpose`]): its group, a plain explanation, where that came from, and whether it is a file the
+    /// core needs to run (BIOS, palettes, configuration) rather than a game.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub group: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub purpose: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub purpose_source: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub support: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -355,6 +365,13 @@ pub fn list_folder(card: &Path, folder: &FolderRef, slots: &[SlotInfo]) -> Folde
             ),
             _ => (None, None),
         };
+        let (group, purpose, purpose_source, support) = match folder.role {
+            FolderRole::AssetsShared | FolderRole::AssetsCore => {
+                let p = crate::file_purpose::describe(folder.role, rel, slots);
+                (p.group, p.summary, p.source, p.support)
+            }
+            _ => (String::new(), String::new(), String::new(), false),
+        };
         entries.push(Entry {
             rel_path: rel.clone(),
             name,
@@ -364,6 +381,10 @@ pub fn list_folder(card: &Path, folder: &FolderRef, slots: &[SlotInfo]) -> Folde
             slot,
             game,
             taken,
+            group,
+            purpose,
+            purpose_source,
+            support,
         });
     }
     FolderListing {

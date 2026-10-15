@@ -66,18 +66,18 @@ const detailFor = (id: string) => {
     : [slotOf('ROM', { required: true, extensions: row.platform === 'amiga' ? ['adf', 'hdf'] : ['gb', 'gbc'], platform: row.platform })];
   return { id, shortname: row.shortname, author: row.author, description: `${row.shortname} for the Analogue Pocket.`, url: `https://example.org/${row.shortname}`, version: row.version, date_release: '2026-01-02', firmware_required: '1.1', dock_supported: true, link_port: false, sleep_supported: false, platforms: p, slots, has_icon: true, has_interact: true };
 };
-const fe = (rel: string, bytes: number, kind: string, slot: string | null, extra: Record<string, unknown> = {}) => ({ rel_path: rel, name: rel.split('/').pop()!, bytes, modified: 1767225600, kind, slot, game: null, taken: null, ...extra });
+const fe = (rel: string, bytes: number, kind: string, slot: string | null, extra: Record<string, unknown> = {}) => ({ rel_path: rel, name: rel.split('/').pop()!, bytes, modified: 1767225600, kind, slot, game: null, taken: null, group: kind === 'Rom' ? 'Game data' : '', purpose: '', purpose_source: '', support: false, ...extra });
 const mockRoms: string[] = ['Advance Wars (USA).gba', 'Boktai 2 (USA).gba', 'Golden Sun (USA).gba', 'Metroid Fusion (USA).gba', 'Mother 3.gba', 'Zelda - Minish Cap (USA).gba'];
 let mockBios = false; const mockAdded: string[] = []; const mockGone: string[] = [];
 const filesFor = (id: string) => {
   const d = detailFor(id); const gba = id === 'Spiritualized.GBA';
-  const roms = gba ? [...mockRoms, ...mockAdded].filter((n) => !mockGone.includes(n)).map((n) => fe(n, 8 * MB, 'Rom', 'Cartridge')).concat(mockBios ? [fe('gba_bios.bin', 16384, 'Bios', 'BIOS')] : []).sort((a, b) => a.name.localeCompare(b.name)) : [];
+  const roms = gba ? [...mockRoms, ...mockAdded].filter((n) => !mockGone.includes(n)).map((n) => fe(n, 8 * MB, 'Rom', 'Cartridge')).concat(mockBios ? [fe('gba_bios.bin', 16384, 'Bios', 'BIOS', { group: 'BIOS and system', support: true, purpose_source: 'known', purpose: 'The Game Boy Advance boot ROM (16 KB). The core needs it to start any game. Slot "BIOS": required, exactly 16 KB.' })] : []).sort((a, b) => a.name.localeCompare(b.name)) : [];
   const folder = (role: string, label: string, rel: string, entries: unknown[], exists = true) => ({ folder: { role, platform: d.platforms[0]?.id ?? '', label, rel_path: rel }, exists, entries, total_files: entries.length, total_bytes: (entries as { bytes: number }[]).reduce((a, e) => a + e.bytes, 0), truncated: false });
   const pid = d.platforms[0]?.id ?? '_none';
   return {
     folders: [
       folder('AssetsShared', `Shared by every ${d.platforms[0]?.name ?? ''} core`, `Assets/${pid}/common`, roms),
-      folder('AssetsCore', `Only ${d.shortname}`, `Assets/${pid}/${id}`, [], false),
+      folder('AssetsCore', `Only ${d.shortname}`, `Assets/${pid}/${id}`, gba ? [fe('C2C03.PAL', 192, 'Bios', 'VS Pal', { group: 'Palettes', support: true, purpose_source: 'core', purpose: 'Colour palette for Nintendo Vs. System arcade games (the RP2C03 picture chip). Only used when playing Vs. System games. Slot "VS Pal": optional, exactly 192 bytes, only this core reads it.' }), fe('mpu.bin', 31616, 'Other', null, { group: 'Other files', support: true, purpose_source: 'guess', purpose: "Not named in the core's file list. It is in the core's own folder, so the core or its helper firmware probably reads it directly." })] : [], !!gba),
       folder('SavesShared', `Saves shared by every ${d.platforms[0]?.name ?? ''} core`, `Saves/${pid}/common`, gba ? [fe('Boktai 2 (USA).sav', 65536, 'Save', 'Save RAM', { game: 'Boktai 2 (USA)' }), fe('Mother 3.sav', 131072, 'Save', 'Save RAM', { game: 'Mother 3' })] : []),
       folder('SaveStates', 'Save states', `Memories/Save States/${id}`, gba ? [fe('20260101_120000_USR_00000000_Boktai 2 (USA).sta', 900000, 'State', null, { game: 'Boktai 2 (USA)', taken: '2026-01-01 12:00:00' })] : []),
     ],

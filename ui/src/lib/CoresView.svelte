@@ -10,6 +10,8 @@
   import { errorMessage } from './backend';
   import { coreDetail, coreFiles, readPlatformImage } from './tau-api';
   import CoreUpdates from './CoreUpdates.svelte';
+  import Icon from './Icon.svelte';
+  import { categoryIcon } from './iconFor';
   import { coreUpdateCount } from './marketStore';
   import { coresGroups, coresSelection, coresTab, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
   import { plural } from './coresFormat';
@@ -80,7 +82,7 @@
             {#if tab === 'files'}<CoreFilesTab bind:this={filesTab} {card} {detail} {files} changed={reload} />
             {:else if tab === 'saves'}<CoreSavesTab {files} />
             {:else if tab === 'screens'}{#key detail.id}<CoreScreenshotsTab {card} coreId={detail.id} />{/key}
-            {:else}{#key detail.id}<CoreSettingsTab {card} {detail} {files} {addMissing} />{/key}{/if}
+            {:else}{#key detail.id}<CoreSettingsTab {card} {detail} {files} {addMissing} changed={reload} />{/key}{/if}
           </div>
         </div>
         {#if $inspectorOpen}<div id="core-details" class="cores-side"><CoreInspector {card} {detail} {files} lib={cores.find((c) => c.id === detail?.id) ?? null} {openLibrary} libraryChanged={reloadCard} on:close={() => inspectorOpen.set(false)} /></div>{/if}
@@ -117,13 +119,13 @@
     {:else}
       {#each $coresGroups as g (g.name)}
         <section class="ov-cat" aria-labelledby={`ov-cat-${g.name.replace(/\W+/g, '-')}`}>
-          <h2 id={`ov-cat-${g.name.replace(/\W+/g, '-')}`}>{g.name} <small>{plural(g.cores, 'core')}</small></h2>
+          <h2 id={`ov-cat-${g.name.replace(/\W+/g, '-')}`}><span class="ov-ic"><Icon name={categoryIcon(g.name)} size={20} /></span>{g.name} <small>{plural(g.cores, 'core')}</small></h2>
           {#each g.makers as m (m.name)}
             {#if m.name}<h3 class="ov-maker">{m.name}</h3>{/if}
             <ul class="ov-grid" aria-label={`${g.name}${m.name ? ', ' + m.name : ''}`}>
               {#each m.platforms as n (n.platform.id)}
                 <li><button class="ov-card" on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}. Open`}>
-                  <strong>{n.platform.name}</strong><small>{n.platform.year || ''}</small>
+                  <span class="ov-pi"><Icon name={categoryIcon(g.name)} size={24} /></span><strong>{n.platform.name}</strong><small>{n.platform.year || ''}</small>
                   <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
                 </button></li>
               {/each}
@@ -153,6 +155,7 @@
   .pv-main{flex:1;min-width:0;display:grid;gap:3px}.pv-main strong{font-size:14px}.pv-main small{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis}.pv-ver{font-size:12.5px;color:#c7d1d0}
   .chip.warn{background:#241f12;color:#e5d9a8}
   .ov-tabs{margin-bottom:18px}.ov-n-chip{margin-left:7px;padding:1px 7px;font-size:11px}
+  .ov-ic{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#1d2a2b;color:#c1f0ad;margin-right:10px;vertical-align:middle}.ov-pi{color:#c1f0ad;margin-bottom:2px}
   .ov-cat{margin:0 0 26px}.ov-cat h2{font-size:15px;margin:0 0 10px}.ov-cat h2 small{font-size:12px;font-weight:400;color:#8f9e9d;margin-left:6px}.ov-maker{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#9fb3aa;margin:14px 0 8px}
   .ov-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
   .ov-card{width:100%;display:grid;gap:4px;padding:14px 16px;background:#161f20;border:1px solid #2c393a;border-radius:12px;color:inherit;text-align:left}.ov-card:hover{border-color:#3d5254}.ov-card:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}
