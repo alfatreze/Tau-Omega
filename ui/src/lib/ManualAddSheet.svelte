@@ -135,7 +135,7 @@
     {#if !installed}<label class="ma-check ma-trust"><input type="checkbox" bind:checked={trust} disabled={!!blocked || lintBlocked} /> I trust this source <small>(asked every time, never remembered)</small></label>{/if}
     <div class="ma-actions"><button class="quiet" on:click={() => (step = 'source')}>Back</button></div>
     {#if trust && !blocked}
-      <UpdatePlanView zipPath={result.zip_path} cardPath={card} on:installed={onInstalled} />
+      <UpdatePlanView zipPath={result.zip_path} cardPath={card} lintGate={false} knownOverrides={override ? result.lint.findings.filter((f) => f.severity === 'Error').map((f) => `${f.id}: ${f.message}`) : []} on:installed={onInstalled} />
     {/if}
   {/if}
 </div>

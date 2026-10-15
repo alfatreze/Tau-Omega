@@ -20,8 +20,8 @@ export function localStamp(d = new Date()): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 /** Remembers "the last install was just now" for the Results page and starts a run note for it (best effort: both are advice, never a reason to fail an install). */
-export async function markInstalled(card: string, zip = '', report: { backup_dir: string; files_written: number; nothing_to_do: boolean } | null = null): Promise<void> {
+export async function markInstalled(card: string, zip = '', report: { backup_dir: string; files_written: number; nothing_to_do: boolean } | null = null, lintOverrides: string[] = []): Promise<void> {
   const stamp = localStamp();
   try { await setLastInstall(card, stamp); } catch { /* ignore */ }
-  if (zip && report && !report.nothing_to_do) { try { await runNoteRecord(card, zip, report.backup_dir, report.files_written, stamp); } catch { /* ignore */ } }
+  if (zip && report && !report.nothing_to_do) { try { await runNoteRecord(card, zip, report.backup_dir, report.files_written, stamp, lintOverrides); } catch { /* ignore */ } }
 }

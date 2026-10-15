@@ -46,6 +46,9 @@ pub struct RunNote {
     pub files_written: u64,
     /// The developer's own line.
     pub text: String,
+    /// Core-check errors the developer chose to install over ("L09: message"); empty when none were overridden.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub lint_overrides: Vec<String>,
     pub results: Vec<RunResult>,
     /// When the results were last attached (stamp), if ever.
     pub results_at: Option<String>,
@@ -249,6 +252,13 @@ pub fn markdown(n: &RunNote) -> String {
         "- Files written: {}\n- Backup: `{}`\n\n",
         n.files_written, n.backup_dir
     ));
+    if !n.lint_overrides.is_empty() {
+        s.push_str("- **Core check errors overridden for this install:**\n");
+        for o in &n.lint_overrides {
+            s.push_str(&format!("  - {o}\n"));
+        }
+        s.push('\n');
+    }
     s.push_str("## Note\n\n");
     s.push_str(if n.text.trim().is_empty() {
         "(none)"
@@ -332,6 +342,7 @@ mod tests {
             backup_dir: "/backups/1".into(),
             files_written: 12,
             text: String::new(),
+            lint_overrides: Vec::new(),
             results: Vec::new(),
             results_at: None,
         }
@@ -397,6 +408,15 @@ mod tests {
     fn a_report_names_the_install_the_hashes_the_note_and_each_result() {
         let mut n = note("Pocket", "2026-10-14T10:05:00", "TAU DEV 112");
         n.text = "Clicks at 1.75x are still there.".into();
+        let clean = markdown(&n);
+        assert!(!clean.contains("overridden"));
+        n.lint_overrides = vec!["L09: The bitstream file is missing.".into()];
+        assert!(
+            markdown(&n).contains(
+                "overridden for this install:**\n  - L09: The bitstream file is missing."
+            )
+        );
+        n.lint_overrides.clear();
         let empty = markdown(&n);
         assert!(
             empty.contains("# TAU DEV 112 0.6.0 on Pocket")

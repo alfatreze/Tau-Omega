@@ -55,6 +55,7 @@
           {#each n.bitstreams as [name, h]}<div><dt>Bitstream</dt><dd><code title={h}>{h.slice(0, 16)}…</code> <small>{name.split('/').pop()}</small></dd></div>{/each}
           <div><dt>Backup</dt><dd><code>{n.backup_dir}</code></dd></div>
         </dl>
+        {#if n.lint_overrides.length}<p class="rn-over" role="note">Installed over {plural(n.lint_overrides.length, 'core check error')}: {n.lint_overrides.join(' · ')}</p>{/if}
         <label class="rn-text">Your note<textarea rows="2" placeholder="What you changed, what you expect, what you noticed" value={n.text} on:blur={(e) => saveText(n, e.currentTarget.value)}></textarea></label>
         <h3>What the Pocket reported</h3>
         {#if !n.results.length}<p class="rn-none">Nothing attached yet.</p>
@@ -86,6 +87,7 @@
   code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px}
   .rn-text{display:grid;gap:5px;font-size:12px;color:#a6b3b2}.rn-text textarea{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:9px;padding:9px 12px;resize:vertical;width:100%;box-sizing:border-box}
   .rn h3{margin:14px 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}.rn-none{font-size:12.5px;color:#95a5a4;margin:4px 0}
+  .rn-over{margin:0 0 10px;padding:8px 11px;border:1px solid #5a3030;background:#241414;border-radius:9px;font-size:12px;color:#ffc4c4}
   .rn-res{list-style:none;margin:0;padding:0;border:1px solid #2c393a;border-radius:9px}.rn-res li{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid #2c393a;font-size:13px}.rn-res li:last-child{border:0}.rn-res small{color:#95a5a4;font-size:12px}
   .chip.bad{background:#3a1c1c;color:#ffb4b4}.rn-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.rn-msg{font-size:12.5px;color:#c7d1d0}
   .rn-report{margin:12px 0 0;padding:12px 14px;background:#101617;border:1px solid #2c393a;border-radius:9px;font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}

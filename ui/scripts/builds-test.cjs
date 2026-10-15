@@ -68,6 +68,23 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await page().getByRole('button', { name: 'Remove scheme My scheme' }).click(); await page().getByRole('button', { name: 'Save schemes' }).click(); await p.waitForTimeout(400);
   assert.match(await page().locator('summary').innerText(), /^Naming schemes\s*3 built in/); ok('a scheme can be removed');
 
+  // ---- the core check gate before an install
+  await page().locator('.b-row', { hasText: 'Weird' }).getByRole('button', { name: /Install weird.zip/ }).click(); await p.waitForTimeout(500);
+  const sheet2 = p.getByRole('dialog', { name: /Weird/ });
+  await sheet2.getByRole('button', { name: 'Review update' }).click(); await p.waitForTimeout(700);
+  assert.match(await sheet2.innerText(), /Core check[\s\S]*1 error found[\s\S]*bitstream file bitstream\.rbf_r is missing/i); ok('a developer install runs the core check and shows what it found');
+  const confirmBtn = sheet2.getByRole('button', { name: 'Confirm and install' });
+  await sheet2.getByLabel('Type the card name to confirm').fill('Pocket');
+  assert.equal(await confirmBtn.isDisabled(), true); assert.match(await sheet2.innerText(), /The core check found 1 error/); ok('an error blocks the install even with the card name typed');
+  await sheet2.getByRole('checkbox', { name: /Install anyway/ }).check();
+  assert.equal(await confirmBtn.isDisabled(), false); ok('ticking Install anyway lets it go ahead');
+  await confirmBtn.click(); await p.waitForTimeout(700);
+  await sheet2.getByRole('button', { name: 'Close', exact: true }).click(); await p.waitForTimeout(300);
+  await p.locator('nav button', { hasText: /^Results$/ }).click(); await p.waitForTimeout(500);
+  await p.getByRole('tab', { name: 'Run notes' }).click(); await p.waitForTimeout(500);
+  assert.match(await p.locator('article.rn').first().innerText(), /Installed over 1 core check error: L09: The bitstream file bitstream\.rbf_r is missing or empty\./); ok('the override is recorded in the run note');
+
+  await p.locator('nav button', { hasText: /^Builds$/ }).click(); await p.waitForTimeout(500); await page().locator('summary').click(); await p.waitForTimeout(150);
   // ---- accessibility basics
   const audit = await p.evaluate(() => { const name = (el) => (el.getAttribute('aria-label') || el.innerText || el.labels?.[0]?.innerText || '').trim(); const bad = []; for (const el of document.querySelectorAll('.builds button, .builds input, .builds select')) if (!name(el)) bad.push(el.outerHTML.slice(0, 80)); const ids = [...document.querySelectorAll('[id]')].map((e) => e.id); return { bad, dup: ids.filter((x, i) => ids.indexOf(x) !== i) }; });
   assert.deepEqual(audit.bad, []); assert.deepEqual(audit.dup, []); ok('every control on the page has a name and ids are unique');

@@ -70,7 +70,7 @@ pub fn run_notes_list(app: tauri::AppHandle, card: String) -> Result<Vec<RunNote
 /// Records an install as a run note (hashes of the package and its bitstreams, the backup, the time). Called when an install finishes with developer
 /// tools on; `stamp` is the host's local clock in the Pocket's stamp shape.
 #[tauri::command(async)]
-pub fn run_note_record(app: tauri::AppHandle, card: String, zip: String, backup_dir: String, files_written: u64, stamp: String) -> Result<RunNote, TauError> {
+pub fn run_note_record(app: tauri::AppHandle, card: String, zip: String, backup_dir: String, files_written: u64, stamp: String, lint_overrides: Vec<String>) -> Result<RunNote, TauError> {
     let zip_path = Path::new(&zip);
     let (package_sha256, bitstreams) = run_notes::package_facts(zip_path)?;
     let (core_id, shortname, version) = core_preview::preview_zip(zip_path, Limits::default()).map_or_else(
@@ -91,6 +91,7 @@ pub fn run_note_record(app: tauri::AppHandle, card: String, zip: String, backup_
         backup_dir,
         files_written,
         text: String::new(),
+        lint_overrides,
         results: Vec::new(),
         results_at: None,
     };
