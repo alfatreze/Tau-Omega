@@ -37,6 +37,7 @@ pub mod details;
 pub mod diag;
 pub mod diagnostics;
 pub mod duplicates;
+pub mod file_purpose;
 pub mod halcyon;
 pub mod icon;
 pub mod image;

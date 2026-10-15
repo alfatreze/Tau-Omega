@@ -3,6 +3,8 @@
   // Nintendo > SNES > a core). Choosing a platform shows its cores in the page, choosing a core opens it. Categories and manufacturers
   // are open until the user closes them; platforms start closed. Keyboard: Up/Down move, Right opens or goes in, Left closes or goes to
   // the parent, Home/End jump.
+  import Icon from './Icon.svelte';
+  import { categoryIcon } from './iconFor';
   import { coresAttention, coresError, coresGroups, coresLoading, coresSelection, coresTotal, coresTreeStore, refreshCores } from './coresStore';
   /** The open card folder (empty when none). */
   export let card = '';
@@ -94,7 +96,7 @@
             <li role="treeitem" aria-level="1" aria-expanded={catOpen[c.name]} aria-selected="false">
               <div class="nt-row">
                 <button class="nt-chev" tabindex="-1" aria-label={`${catOpen[c.name] ? 'Collapse' : 'Expand'} ${c.name}`} on:click={() => toggleClosed(`c:${c.name}`)}><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={catOpen[c.name]}><path d="m9 6 6 6-6 6"/></svg></button>
-                <button class="nt-item nt-cat" data-kind="category" data-level="1" data-id={c.name} on:click={() => toggleClosed(`c:${c.name}`)}><span class="nt-name">{c.name}</span><span class="nt-count">{c.cores}</span></button>
+                <button class="nt-item nt-cat" data-kind="category" data-level="1" data-id={c.name} on:click={() => toggleClosed(`c:${c.name}`)}><Icon name={categoryIcon(c.name)} size={15} /><span class="nt-name">{c.name}</span><span class="nt-count">{c.cores}</span></button>
               </div>
               {#if catOpen[c.name]}
                 <ul role="group" class="nt-sub">
@@ -114,7 +116,7 @@
                               <div class="nt-row">
                                 <button class="nt-chev" tabindex="-1" aria-label={`${platOpen[n.platform.id] ? 'Collapse' : 'Expand'} ${n.platform.name}`} on:click={() => togglePlat(n.platform.id)}><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={platOpen[n.platform.id]}><path d="m9 6 6 6-6 6"/></svg></button>
                                 <button class="nt-item" class:sel={active && $coresSelection.platform === n.platform.id && !$coresSelection.core} data-kind="platform" data-level="3" data-id={n.platform.id} on:click={() => pickPlatform(n.platform.id)}>
-                                  <span class="nt-name">{n.platform.name}</span><span class="nt-count">{n.cores.length}</span>
+                                  <Icon name={categoryIcon(c.name)} size={14} /><span class="nt-name">{n.platform.name}</span><span class="nt-count">{n.cores.length}</span>
                                 </button>
                               </div>
                               {#if platOpen[n.platform.id]}
@@ -162,6 +164,7 @@
   .nt-cat{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#9fb3aa}
   .nt-maker{font-size:12px;color:#8f9e9d}
   .nt-core{width:100%}
+  .nt-item :global(.ico){margin-right:7px;opacity:.85}.nt-item .nt-name{flex:1}
   .nt-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .nt-count{flex:none;font-size:11px;color:#8f9e9d;margin-left:6px}
   .nt-dot{flex:none;display:inline-block;width:7px;height:7px;border-radius:50%;background:#e5c88a;margin-left:6px}

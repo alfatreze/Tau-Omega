@@ -58,11 +58,11 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // ---- Files
   assert.match(await panel().innerText(), /Needs attention[\s\S]*gba_bios\.bin[\s\S]*Assets\/gba\/common/); ok('a missing BIOS is listed with its exact name and folder');
-  assert.match(await panel().innerText(), /Shared by every Game Boy Advance core[\s\S]*Only GBA/); ok('both asset folders are shown, shared and core-only');
+  assert.match(await panel().innerText(), /Shared by every Game Boy Advance core/); assert.ok(!/Only GBA/.test(await panel().innerText())); ok('Files lists the games folder; a core-only folder with only BIOS and palettes is not shown here');
   assert.equal(await panel().locator('.cf-row').count(), 6); ok('the ROMs are listed');
   await panel().getByPlaceholder('Search these files').fill('boktai'); await p.waitForTimeout(150);
   assert.equal(await panel().locator('.cf-row').count(), 1); await panel().getByPlaceholder('Search these files').fill(''); ok('search narrows a folder');
-  assert.match(await panel().innerText(), /Nothing only for this core\. Drop ROMs/); ok('an empty folder invites a drop');
+  assert.match(await panel().innerText(), /drop files anywhere on this page/i); ok('the page invites a drop anywhere');
 
   // ---- drag and drop (browser mock: File objects, paths are /mock/<name>)
   const drop = async (names, zoneSelector) => {
@@ -140,6 +140,8 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(st, /Needs attention[\s\S]*Nothing is missing/); assert.match(st, /High Quality Audio\s*Off\s*\(default On\)/); assert.match(st, /Rumble Strength\s*6\s*\(default 5\)/); assert.match(st, /Edge Masking\s*Auto Masking/); ok('saved settings are decoded with the core\'s own names and show the default');
   assert.match(st, /Core menu[\s\S]*Controls/); assert.match(st, /12 per-game presets in Presets\/Spiritualized\.GBA/); ok('saved files and presets are summarised');
   assert.match(st, /What this core reads[\s\S]*Cartridge[\s\S]*\.gba \.rom[\s\S]*required[\s\S]*BIOS[\s\S]*gba_bios\.bin/); ok('the core\'s data slots are listed');
+  assert.match(st, /Required and configuration files[\s\S]*BIOS and system[\s\S]*gba_bios\.bin[\s\S]*boot ROM[\s\S]*Palettes[\s\S]*C2C03\.PAL[\s\S]*Vs\. System[\s\S]*Other files[\s\S]*mpu\.bin[\s\S]*a guess/i); ok('Settings groups the required files by type and explains each one, saying where the explanation comes from');
+  assert.ok(await panel().locator('.cg-fi svg').count() >= 3); ok('each file and group carries its icon');
 
   // ---- keyboard in the menu tree
   await core('GBA').focus(); await p.keyboard.press('ArrowDown'); assert.match(await p.evaluate(() => document.activeElement.textContent), /GBAlt/);
