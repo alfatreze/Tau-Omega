@@ -92,3 +92,78 @@ Existing language: dark surface `#161f20`/`#1a2325`, border `#2c393a`, accent mi
 3. **GitHub token:** not in v1 (lookups are lazy and cached; 60/hour is enough). Revisit only if rate limits bite.
 4. **Tau's own cores:** skipped for now; a shared approach with the existing Tau update path is a later item.
 5. **Icons and shots:** bring them, and download again only when a core's release changes. Sources: the catalog has no images and no screenshots anywhere; the only art is inside each release zip (`Cores/<id>/icon.bin`, `Platforms/_images/<platform>.bin`). Plan (M3b): read just those entries from the remote zip with HTTP range requests (central directory at the end, then the two entries), decode the Pocket image format, cache by `(core id, release tag)` in the app cache, fetch lazily for visible rows and on an explicit "Download all artwork" action, never block the list on it. If a host does not support range requests, fall back to the whole zip only when the user opens that core. No third-party screenshot scraping (READMEs are untrusted, vary, and would add a second network scope).
+
+## 7. Add a core manually (spec 2026-10-15, not built)
+
+Owner request: add a core that is not in the openFPGA Library, from **local files** (a zip or a folder) or from a **GitHub address typed in**, and fetch the images and information from the core itself and its files. Everything else in this document (plan then confirm, vetting, backup and rollback, no auto-install) applies unchanged; this section only adds a second way in and the preview that makes an unlisted core understandable.
+
+### 7.1 Sources accepted
+
+| Source | What the user gives | What Omega does |
+|---|---|---|
+| **Zip file** | A core package zip as authors publish it (layout of the card root: `Cores/<id>/...`, optional `Assets/<platform>/...`, `Platforms/...`) | `core_package::vet_zip` with the id **read from the zip's own `core.json`** (`author.shortname`) instead of from a catalog entry. |
+| **Folder** | Either a package folder (has `Cores/`) or a **bare core folder** (`core.json` at its root, e.g. an unzipped download or a build output) | Normalised into the package layout in a temporary zip in the app cache (a bare core is wrapped as `Cores/<author.shortname>/`), then the same vetting and install path as a zip: one code path, one set of rules. A raw source repository (no bitstream) is refused with the reason. |
+| **GitHub address** | `https://github.com/<owner>/<repo>` (newest release), `.../releases/tag/<tag>` (that release), `.../releases/download/<tag>/<file>.zip` (that asset), or a commit-pinned `https://raw.githubusercontent.com/<owner>/<repo>/<40-hex>/<path>.zip` | Validated by exact host and path shape (no lookalike hosts, no `user@`, no ports, no `.git`/ssh forms: refused with a plain reason). A repository address lists its releases through the GitHub API (60 lookups an hour unauthenticated, ETag-cached) and picks the zip asset (the one whose name starts with the core id, else the only `.zip`; several zips: the user chooses). The zip is downloaded with a size cap, hashed locally, then treated exactly like a local zip. |
+
+Drag and drop: a zip or folder dropped on the Marketplace page or the Cores overview opens the same sheet (the `dropTarget` helper from the Files tab). A pasted GitHub address in the sheet's address box is enough; no account, no token (an optional token stays a later setting, decision 3 of section 6).
+
+### 7.2 What is read from the core itself (the preview)
+
+After vetting, before any plan, a **Preview** is built purely from the package (`core_preview`, no card needed):
+
+- **Identity:** `core.json` metadata (shortname, author, version, description, url, date_release, platform ids) and `framework` (Pocket firmware required, Dock, link port, sleep).
+- **Image:** `Cores/<id>/icon.bin` decoded (the existing `icon::decode_icon_bin`); the platform banner from `Platforms/_images/<platform>.bin` when the zip carries it, otherwise the Library's platform art from the artwork cache, otherwise a placeholder (never an invented picture).
+- **Where it sits:** category > manufacturer > platform, from the Library snapshot (`taxonomy::resolve`) with the zip's own `Platforms/<id>.json` for platforms the Library does not know, so the preview shows the same grouping the Cores tree will use.
+- **Files it needs:** every `data.json` slot with name, accepted extensions, exact or maximum size, required or optional, core-only or shared, and where on the card each goes; the same `file_purpose` wording as the Settings tab ("Slot "BIOS": required, exactly 16 KB"). A required slot with a fixed file name that is **not inside the zip** is listed as "You supply this file" (a BIOS, a key file), with the exact folder; this is inferred from the slots, labelled as such, and never downloaded.
+- **Settings it offers:** the count and names of the options in `interact.json`.
+- **The author's words:** `info.txt` shown as plain text (length-capped).
+- **README and pictures (GitHub source only, optional):** the repository README (first part, plain text, links not followed) and up to three images it references from GitHub's own image hosts, each size-capped, shown in the preview only and never written to the card. This is the only step that fetches more than the core, so it is a visible switch ("Also read the README and pictures from GitHub", default on for a GitHub address, one extra request each; see decision M-2).
+- **Provenance:** source kind, repository owner/name, tag, asset name, size, the SHA-256 computed locally, GitHub's published digest when present (shown as verified or "no checksum published", as in section 2), and whether the core's id is **already in the Library** (then the sheet offers "Use the Library entry" so it gets updates) or already installed (then it is an update or a replacement of the same id, with the existing downgrade confirmation).
+
+### 7.3 Trust and safety (stricter than the catalog path, because nothing vouches for it)
+
+1. All rules of section 2 apply (paths under `Cores/`, `Assets/`, `Platforms/` only, no traversal or symlinks, size, entry count, ratio, names the card can hold, plan id covers the bytes' hash, backup first, rollback, no auto-anything).
+2. The preview carries a fixed banner: **"Not in the openFPGA Library. Omega cannot tell what this bitstream does; only install cores from authors you trust."** The install button stays disabled until the user ticks "I trust this source" (one tick per core; never remembered).
+3. **Id collisions:** a package whose id is a Tau core, or equals an installed core of a *different* author/source record, is refused; the same id from the same recorded source is an update. A different platform folder is never touched unless the core declares it.
+4. **No hidden extras:** files outside the allowed top folders are refused, not skipped; a `Settings/`, `Saves/` or `Memories/` entry is refused (a core package must not carry user data).
+5. Network scope grows by exactly the GitHub hosts needed for the chosen source: `api.github.com`, `github.com`, `objects.githubusercontent.com`, `raw.githubusercontent.com` and GitHub's image hosts for the optional README pictures; nothing else, one User-Agent, no identifiers.
+6. A local folder or zip is read in place; Omega never modifies the user's source, and the temporary zip lives in the app cache and is removed after the plan.
+
+### 7.4 Keeping a manually added core current
+
+The card has no record of where a core came from, and we do not add files to the card for it. Omega keeps a small **source registry** in its own app-support folder (`manual_cores.json`: core id, source kind, GitHub owner/repo/tag/asset, hash, date added, card name). It is only advice: a GitHub-sourced core appears in **Cores > Updates** with the repository's newest release compared by `core_version` (the same "never newer on a guess" rule), and every update is its own reviewed plan. A zip or folder source has no update path and says so ("Added from a file; Omega cannot check for updates"). If the same id later appears in the Library the registry entry is retired in favour of the Library.
+
+### 7.5 UX (extends section 4; no new colours; Phosphor Duotone icons)
+
+- **Entry points:** an **Add a core manually…** button in the Marketplace header; **Add a core** in the Cores overview (next to Updates); the drop target above.
+- **One sheet, three steps** (focus-trapped dialog like `AddFilesSheet`): **1 Source** (three large choices: *Choose a zip file*, *Choose a folder*, *Paste a GitHub address*; the address box validates as you type and says why an address is refused) -> **2 Preview** (the card described in 7.2: icon and banner on top, name, author, version and date, category > manufacturer > platform, "Needs" list, "You supply" list, info text, provenance, the trust banner and tick) -> **3 Review install** (the existing plan card, then result and Undo). Back is always possible before step 3; nothing is written until the plan is confirmed.
+- **States:** reading (spinner, "Reading the core…"), refused (the one plain reason and what would make it valid), several zips in one release (a chooser), offline for a GitHub source (the local sources still work), rate limit (minutes to wait), no zip in the release ("This release has no download. Choose another release or add the zip yourself").
+- **Accessibility and copy:** as section 4; the address box is a labelled input with `aria-describedby` for the validation text; "core" not "bitstream" except in the banner, where the word is the point.
+
+### 7.6 Engine, host and CLI
+
+| Piece | Job |
+|---|---|
+| `manual_source` (tau_core) | Classify an input (zip path / folder path / GitHub address) into `Source`, parse and normalise GitHub addresses (the shapes in 7.1, built on `catalog_release::parse_download_url`), table-tested including lookalike hosts and ssh/userinfo forms. |
+| `core_pack` (tau_core) | Detect the folder layout (package / bare core / raw repository), wrap into the package layout in a temporary zip, refuse the rest with a reason. |
+| `core_preview` (tau_core) | Build `CorePreview` from a vetted package (7.2); pure, tested on the real Arduboy and Berzerk zips and on synthetic cores with no icon, no `info.txt`, no platform file. |
+| `manual_registry` (tau_core) | Read/write `manual_cores.json` (atomic write, tolerant read); feeds `core_update` for GitHub-sourced cores. |
+| `github_repo` (tau_net) | Releases list (ETag, rate-limit aware), README and image fetch with caps, asset download with host allowlist, through the existing `Transport` trait so tests use a fake. |
+| host | `manual_inspect(source)` -> `CorePreview`, `manual_plan(source, card)` -> plan (feeds the existing executor), card write lock as everywhere. |
+| CLI | `tau core-source <zip\|folder\|github-url> [--json]` (the preview), `tau core-source-plan ... --card <root>`; install through the existing `package-install`/`update` verbs after the plan. |
+
+### 7.7 Tests and verification
+
+Hostile and odd inputs first (traversal, symlink, `Settings/` entry, wrong id, two cores in one zip, zip bomb, empty zip, folder with no `core.json`, raw repository), GitHub address table (valid, lookalike hosts, `@`, ports, `.git`, ssh, tag with slash), `Transport` fake for releases/README/pictures (offline, 403 rate limit, no zip asset, several zips), preview from real fixtures, registry round-trip, Playwright flow (three sources, refusal, trust tick, undo) against the dev mock, then one real install of a core that is not in the Library onto CARDWRITE with approval. Mutation checks: the id-collision rule, the trust tick gate, the "Settings/ entry refused" rule.
+
+### 7.8 Build order
+
+**M7** `manual_source` + `core_pack` + tests (no network, no UI) · **M8** `core_preview` + CLI `core-source` on real zips · **M9** the sheet for local zip and folder (dev mock, drag and drop, trust banner) · **M10** `github_repo` + address box + release chooser + README/pictures switch · **M11** `manual_registry` + GitHub updates in Cores > Updates · **M12** real-card run, docs, release notes.
+
+### 7.9 Open questions for the owner
+
+- **M-1** Accept a **bare core folder** (not only the full package layout)? (Recommended: yes, wrapped as described.)
+- **M-2** README and pictures from GitHub: **on by default** for a GitHub address (recommended) or off until switched on?
+- **M-3** Offer **updates for GitHub-sourced manual cores** (needs the registry in app support, nothing on the card)? (Recommended: yes.)
+- **M-4** One tick per install ("I trust this source") or also a per-author allow-list the user can build? (Recommended: one tick only, no list.)
+- **M-5** Should an unlisted core also appear in the Marketplace gallery (as a local entry) or only in Cores? (Recommended: only in Cores, tagged "Added manually".)
