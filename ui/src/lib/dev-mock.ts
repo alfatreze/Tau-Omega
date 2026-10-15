@@ -49,6 +49,7 @@ const PLAT: Record<string, ReturnType<typeof plat>> = {
   amiga: plat('amiga', 'Amiga', 'Computer', 'Commodore', 1985), _none: { id: '_none', name: 'No platform', category: '', manufacturer: '', year: 0, has_image: false },
 };
 const crow = (id: string, platform: string, version: string, missing = 0) => ({ id, shortname: id.split('.')[1], author: id.split('.')[0], version, platform, platforms: [platform], missing });
+let mockRole = 'real';
 const mockDisabled: { id: string; shortname: string; version: string; disabled_at: number; reasons: string[] }[] = [];
 const coresTreeMock = () => coresTreeAll().map((n) => ({ ...n, cores: n.cores.filter((c) => !mockDisabled.some((d) => d.id === c.id)) })).filter((n) => n.cores.length);
 const coresTreeAll = () => [
@@ -124,7 +125,7 @@ let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voy
 });
 let mounted = true;
 let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
-let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', core_disable: (() => { try { return localStorage.getItem('tau.mock.coreDisable') ?? 'never'; } catch { return 'never'; } })(), core_keep: {} as Record<string, string[]>, speeds: {} as Record<string, number>, connections: {} as Record<string, string>, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
+let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', core_disable: (() => { try { return localStorage.getItem('tau.mock.coreDisable') ?? 'never'; } catch { return 'never'; } })(), core_keep: {} as Record<string, string[]>, developer_tools: (() => { try { return localStorage.getItem('tau.mock.devTools') === '1'; } catch { return false; } })(), speeds: {} as Record<string, number>, connections: {} as Record<string, string>, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
@@ -356,6 +357,7 @@ const handlers: Record<string, (args: any) => unknown> = {
     if (live('solo.Thing')) flagged.push({ id: 'solo.Thing', shortname: 'Thing', verdict: 'Broken', needs_no_files: false, reasons: [{ code: 'lint:L01', message: 'The core has no bitstream (bitstream.rbf_r).', fix: 'Reinstall the core.' }] });
     return { mode: prefs.core_disable, cores: flagged };
   },
+  card_role: () => (mockRole), set_card_role: (a) => { mockRole = a.test ? 'test' : 'real'; return mockRole; },
   disabled_cores: () => [...mockDisabled],
   plan_core_state: (a) => ({ token: `st-${a.enable}-${(a.ids as string[]).join('+')}`, enable: a.enable, ids: a.ids, from: (a.ids as string[]).map((i) => `${a.enable ? 'Disabled Cores' : 'Cores'}/${i}`), to: (a.ids as string[]).map((i) => `${a.enable ? 'Cores' : 'Disabled Cores'}/${i}`), blocked: (a.ids as string[]).length ? null : 'No core is selected.', notes: [] }),
   execute_core_state: (a) => {

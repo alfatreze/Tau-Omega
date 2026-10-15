@@ -6,6 +6,12 @@
   import type { InstallPlan, InstallReport, RollbackReport, UpdateVerdict } from './types';
   /** The package zip and the card folder chosen on the page above. */
   export let zipPath = ''; export let cardPath = '';
+  import { developerTools, roleOf, refreshRole, cardLabel } from './devStore';
+  // With developer tools on, installing onto a Real card needs its name typed first (a test card is exactly what dev installs are for).
+  $: if ($developerTools && cardPath) void refreshRole(cardPath);
+  let typed = '';
+  $: needName = $developerTools && !($roleOf.card === cardPath && $roleOf.role === 'test');
+  $: nameOk = !needName || typed.trim().toLowerCase() === cardLabel(cardPath).toLowerCase();
 
   const dispatch = createEventDispatcher<{ installed: void }>();
   let migrateFrom: string[] = []; let migrateTo: string[] = []; let plan: InstallPlan | null = null; let report: InstallReport | null = null; let undone: RollbackReport | null = null;
@@ -93,7 +99,8 @@
         {#if plan.update.persist_changed?.length}<p class="safety">This release changes how {plan.update.persist_changed.length} saved {plan.update.persist_changed.length === 1 ? 'setting is' : 'settings are'} stored; the core may reset them.</p>{/if}
         {#if plan.superseded_candidates.length}<p class="safety">Older test builds on this card ({plan.superseded_candidates.join(', ')}) are left alone; remove them separately if you no longer need them.</p>{/if}
         {#if plan.capacity}<p class:capacity-ok={plan.capacity.fits} class:capacity-bad={!plan.capacity.fits}>{plan.capacity.fits ? 'Fits' : 'Does not fit'} on the card — {size(plan.capacity.space.available_bytes)} free, {size(plan.capacity.bytes_needed)} needed.</p>{/if}
-        <button class="danger" disabled={busy} on:click={install}>{busy ? 'Installing…' : 'Confirm and install'}</button>
+        {#if needName}<label class="inline real-name">This is a Real card. Type its name, <b>{cardLabel(cardPath)}</b>, to confirm: <input bind:value={typed} autocomplete="off" aria-label="Type the card name to confirm" /></label>{/if}
+        <button class="danger" disabled={busy || !nameOk} on:click={install}>{busy ? 'Installing…' : 'Confirm and install'}</button>
       </div>
     </section>
     <section class="difference-section">
@@ -133,6 +140,7 @@
   </section>
 {/if}
 <style>
+  .real-name{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.real-name input{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:7px 10px;width:170px}
   .package-counts { max-width: 540px; }
   .difference-section { max-width: 720px; }
   .difference-list { padding: 0; margin: 0; border: 1px solid #344244; border-radius: 9px; overflow: auto; max-height: 380px; }
