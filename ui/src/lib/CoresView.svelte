@@ -10,6 +10,8 @@
   import { errorMessage } from './backend';
   import { coreDetail, coreFiles, readPlatformImage } from './tau-api';
   import CoreUpdates from './CoreUpdates.svelte';
+  import { onFileDrop } from './dropTarget';
+  import { openManualAdd } from './manualAddStore';
   import Icon from './Icon.svelte';
   import { categoryIcon } from './iconFor';
   import { coreUpdateCount } from './marketStore';
@@ -59,6 +61,9 @@
     const makers = maker ? g.makers.filter((m) => m.name === maker) : g.makers;
     return makers.length ? { cat: g.name, maker, makers, cores: makers.reduce((n, m) => n + m.cores, 0), platforms: makers.reduce((n, m) => n + m.platforms.length, 0) } : null;
   })();
+  // A zip or folder dropped on the overview, a platform or a category page opens the manual-add sheet (the Files tab keeps its own drop target).
+  const offDrop = onFileDrop((e) => { if (e.type === 'drop' && !$coresSelection.core && e.paths.length === 1) openManualAdd(e.paths[0]); });
+  onDestroy(offDrop);
   // Search lives here, on the Cores page: cores, platforms, manufacturers and categories.
   let query = '';
   $: q = query.trim().toLowerCase();
@@ -138,8 +143,9 @@
     </ul>
   {:else}
     <header><div><p class="eyebrow">YOUR CARD</p><h1 id="cores-title">Cores</h1><p class="lede">Every core on this card, grouped like the openFPGA Library: category, manufacturer, platform. Pick a platform to see its cores, or a core to see its files, saves, screenshots and settings.</p></div></header>
-    <label class="ov-search"><span class="sr">Search cores, platforms and manufacturers</span>
+    <div class="ov-bar"><label class="ov-search"><span class="sr">Search cores, platforms and manufacturers</span>
       <input type="search" placeholder="Search cores, platforms, manufacturers" bind:value={query} /></label>
+      <button class="quiet" on:click={() => openManualAdd()}>Add a core…</button></div>
     {#if q}
       {#if hits.length}
         <ul class="core-list pv-list" aria-label="Search results">{#each hits as h (h.core.id)}
@@ -201,7 +207,7 @@
   .pv-open{width:100%;display:flex;align-items:center;gap:13px;padding:13px 16px;background:transparent;color:inherit;text-align:left}.pv-open:hover{background:#1c282a}.pv-open:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
   .pv-main{flex:1;min-width:0;display:grid;gap:3px}.pv-main strong{font-size:14px}.pv-main small{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis}.pv-ver{font-size:12.5px;color:#c7d1d0}
   .chip.warn{background:#241f12;color:#e5d9a8}
-  .ov-search{display:block;margin:0 0 16px}.ov-search input{width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:10px;padding:10px 14px}
+  .ov-bar{display:flex;gap:10px;align-items:center;margin:0 0 16px}.ov-bar .quiet{flex:none;white-space:nowrap}.ov-search{display:block;flex:1}.ov-search input{width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:10px;padding:10px 14px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .ov-tabs{margin-bottom:18px}.ov-n-chip{margin-left:7px;padding:1px 7px;font-size:11px}
   .ov-ic{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#1d2a2b;color:#c1f0ad;margin-right:10px;vertical-align:middle}.ov-pi{color:#c1f0ad;margin-bottom:2px}

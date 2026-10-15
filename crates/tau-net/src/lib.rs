@@ -5,6 +5,7 @@
 //! No identifier, card name or path is sent. The judgement (is it newer, is the download trustworthy) is
 //! `tau_core::release_check`, tested on real captured responses; this file only moves bytes.
 
+pub mod github_source;
 pub mod marketplace;
 
 use std::{path::PathBuf, time::Duration};

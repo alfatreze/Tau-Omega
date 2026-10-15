@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
+  import { onFileDrop } from './dropTarget';
+  import { openManualAdd } from './manualAddStore';
   import { onMount } from 'svelte';
   import CoreInstall from './CoreInstall.svelte';
   import { modal } from './a11y';
@@ -86,6 +89,9 @@
   const yesNo = (v: boolean | null) => (v === true ? 'yes' : v === false ? 'no' : 'not stated');
   const statusOf = (c: CatalogCore) => statuses.get(c.id.toLowerCase());
   const chip = (c: CatalogCore) => statusLabel(statusOf(c)?.status);
+  // A zip or folder dropped on this page opens the manual-add sheet with it.
+  const offDrop = onFileDrop((e) => { if (e.type === 'drop' && e.paths.length === 1) openManualAdd(e.paths[0]); });
+  onDestroy(offDrop);
 </script>
 <svelte:window on:keydown={onKey} />
 <section class="page" aria-labelledby="market-title">
@@ -95,7 +101,7 @@
       <h1 id="market-title">Marketplace</h1>
       <p class="lede">Cores made by the community for the Analogue Pocket. Nothing is installed until you review it.</p>
     </div>
-    <button class="quiet" disabled={loading} on:click={() => load(true)}>{loading ? 'Checking…' : 'Refresh'}</button>
+    <span class="mk-head-actions"><button class="quiet" on:click={() => openManualAdd()}>Add a core manually…</button><button class="quiet" disabled={loading} on:click={() => load(true)}>{loading ? 'Checking…' : 'Refresh'}</button></span>
   </header>
 
   <div class="mk-filters" role="search" aria-label="Filter cores">

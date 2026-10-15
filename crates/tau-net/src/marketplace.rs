@@ -67,6 +67,7 @@ fn host_allowed(url: &str) -> bool {
         || url.starts_with("https://api.github.com/repos/")
         || url.starts_with("https://github.com/")
         || url.starts_with("https://raw.githubusercontent.com/")
+        || url.starts_with("https://user-images.githubusercontent.com/")
 }
 
 fn explain(error: &ureq::Error) -> String {
@@ -225,7 +226,7 @@ struct Fetched {
 }
 
 /// Plain words for GitHub's limit, with the reset time as minutes from `now`.
-fn limit_message(reset: Option<u64>, now: u64) -> String {
+pub(crate) fn limit_message(reset: Option<u64>, now: u64) -> String {
     match reset {
         Some(r) if r > now => format!(
             "GitHub allows 60 lookups an hour and that limit was reached. Try again in {} minutes.",

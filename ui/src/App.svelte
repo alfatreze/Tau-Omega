@@ -25,6 +25,8 @@
   import MarketplaceView from './lib/MarketplaceView.svelte';
   import NavTree from './lib/NavTree.svelte';
   import CoresView from './lib/CoresView.svelte';
+  import ManualAddSheet from './lib/ManualAddSheet.svelte';
+  import { manualAdd } from './lib/manualAddStore';
   import { coreUpdateCount } from './lib/marketStore';
   import UpdateBanner from './lib/UpdateBanner.svelte';
   import OmegaUpdate from './lib/OmegaUpdate.svelte';
@@ -392,6 +394,8 @@
   {/if}
   </div>
 </main>
+
+{#if $manualAdd.open}{#key $manualAdd.initial}<ManualAddSheet card={path} initial={$manualAdd.initial} close={() => { manualAdd.set({ open: false, initial: '' }); void openFolder(); }} />{/key}{/if}
 
 <button class="help-fab" aria-label="Help" title="Help" on:click={() => showHelp = !showHelp}>?</button>
 {#if showHelp}
