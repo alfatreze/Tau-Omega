@@ -1,5 +1,5 @@
 export type Warning = { code: string; message: string };
-export type Core = { id: string; author: string; shortname: string; version: string; platform: string; platforms: string[]; media_platform: string; platform_category: string | null; library_capable: boolean; index_status: string; tracks: number | null };
+export type Core = { id: string; author: string; shortname: string; version: string; platform: string; platforms: string[]; media_platform: string; platform_category: string | null; library_capable: boolean; audio_formats: string[]; index_status: string; tracks: number | null };
 export type ArtSidecarPreview = { folder: string; cover_source: string };
 export type Plan = { id: string; new_files: number; updates: number; unchanged: number; bytes_to_write: number; art_sidecars: number; art_sidecar_previews: ArtSidecarPreview[]; warnings: Warning[] };
 export type Setting = { id: number; kind: string; value: unknown };

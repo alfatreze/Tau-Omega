@@ -1,50 +1,65 @@
 <script lang="ts">
-  // The Cards page (known cards, player cores, other cores). Moved out of App.svelte unchanged; state and handlers stay there.
+  // The Card page: what is about the card as a whole. Overview (known cards, updates, what needs attention, libraries) and History
+  // (every sync). Cores are not listed here: the Cores section has them, grouped like the openFPGA Library.
   import CoreUpdates from './CoreUpdates.svelte';
+  import { coresAttention, coresTotal, coresTreeStore } from './coresStore';
+  import { plural } from './coresFormat';
   import type { Core } from './types';
   export let cardMounted: boolean | null = null; export let ejectedSafely = ''; export let path = '';
   export let knownCards: string[] = []; export let notice = '';
-  export let cores: Core[] = []; export let playerCores: Core[] = []; export let otherCores: Core[] = [];
-  export let platformImages: Record<string, string | null> = {}; export let coreIcons: Record<string, string | null> = {};
-  export let showOtherCores = false; export let mountedCards: string[] = [];
+  export let cores: Core[] = [];
+  export let mountedCards: string[] = [];
   export let cardName: (cardPath: string) => string;
   export let chooseFolder: (which: 'card') => unknown; export let openFolder: () => unknown; export let openKnownCard: (card: string) => unknown;
-  export let openCoreLibrary: (core: Core) => unknown; export let showCoreDetail: (core: Core) => unknown; export let toggleManualPlayer: (core: Core) => unknown;
+  export let openCoreLibrary: (core: Core) => unknown; export let openCore: (id: string) => unknown; export let browseCores: () => unknown;
+  /** Which tab shows; the page above can switch it (a sync's "View details" opens History). */
+  export let tab: 'overview' | 'history' = 'overview';
+  const TABS: ['overview' | 'history', string][] = [['overview', 'Overview'], ['history', 'History']];
+  $: needing = $coresTreeStore.flatMap((n) => n.cores.filter((c) => c.missing > 0).map((c) => ({ ...c, platformName: n.platform.name })));
+  $: libraries = cores.filter((c) => c.library_capable);
+  function tabKey(e: KeyboardEvent) {
+    const i = TABS.findIndex(([t]) => t === tab);
+    const next = e.key === 'ArrowRight' ? (i + 1) % TABS.length : e.key === 'ArrowLeft' ? (i + TABS.length - 1) % TABS.length : e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : -1;
+    if (next < 0) return;
+    e.preventDefault(); tab = TABS[next][0]; requestAnimationFrame(() => document.getElementById(`card-tab-${tab}`)?.focus());
+  }
 </script>
 
-<section class="page" id="cards"><header><div><p class="eyebrow">YOUR CARDS</p><h1>Cards</h1><p class="lede">Inspect a Pocket card or a staging folder. Your music stays untouched.</p></div><button class="primary" on:click={() => chooseFolder('card')}>Open folder</button></header>
+<section class="page" id="cards"><header><div><p class="eyebrow">YOUR CARD</p><h1>Card</h1><p class="lede">The card as a whole: what is on it, what needs attention, and what was synced.</p></div><button class="primary" on:click={() => chooseFolder('card')}>Open folder</button></header>
     {#if cardMounted === false}<div class="ejected-banner" role="status"><span>{ejectedSafely && ejectedSafely === path ? 'Safely ejected. You can unplug it now.' : 'This card is no longer connected.'}</span><button class="quiet" on:click={() => openKnownCard(path)}>Reconnect</button></div>{/if}
     {#if knownCards.length}<section class="known-cards" aria-labelledby="known-cards-title"><p class="eyebrow">QUICK OPEN</p><h2 id="known-cards-title">Known cards</h2><div class="known-card-list">{#each knownCards as card}<button class="known-card" class:active={path === card} on:click={() => openKnownCard(card)}><span class="known-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="3" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="5" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="16.5" r="1.1" fill="currentColor"/><circle cx="15" cy="16.5" r="1.1" fill="currentColor"/><circle cx="12" cy="19.2" r="1.1" fill="currentColor"/></svg></span><span class="known-card-body"><strong class="known-card-name">{cardName(card)}</strong><span class="known-card-badge" class:mounted={mountedCards.includes(card)}>{mountedCards.includes(card) ? 'Available now' : 'Recently used'}</span><span class="known-card-path">{card}</span></span></button>{/each}</div></section>{/if}
+    <div class="card-tabs" role="tablist" aria-label="Card sections" tabindex="-1" on:keydown={tabKey}>
+      {#each TABS as [id, label]}<button id={`card-tab-${id}`} role="tab" class:current={tab === id} aria-selected={tab === id} aria-controls={`card-panel-${id}`} tabindex={tab === id ? 0 : -1} on:click={() => (tab = id)}>{label}</button>{/each}
+    </div>
+    <div id={`card-panel-${tab}`} role="tabpanel" aria-labelledby={`card-tab-${tab}`} tabindex="-1">
+    {#if tab === 'history'}
+      <slot />
+    {:else}
     <p class="notice" role="status">{notice}</p>
     {#if path}<CoreUpdates card={path} />{/if}
     {#if cores.length}
-      <section aria-labelledby="player-title">
-        <div class="section-title"><div><p class="eyebrow">MEDIA PLAYERS</p><h2 id="player-title">Player cores on this card</h2></div><button class="quiet refresh-btn" aria-label="Refresh this card" title="Refresh" on:click={openFolder}><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-        {#if playerCores.length}
-          <div class="player-grid">
-            {#each playerCores as core}
-              <article class="player-card">
-                <button class="player-card-main" on:click={() => openCoreLibrary(core)}>
-                  <div class="player-card-art" aria-hidden="true">{#if platformImages[core.platform]}<img src={platformImages[core.platform]} alt="" />{:else}<span>{(core.shortname || core.id).slice(0, 2).toUpperCase()}</span>{/if}</div>
-                  <h3>{core.shortname || core.id}</h3>
-                  <div class="player-card-dev">{#if coreIcons[core.id]}<img class="player-card-dev-icon" src={coreIcons[core.id]} alt="" />{:else}<svg viewBox="0 0 24 24" fill="none" width="13" height="13" aria-hidden="true"><path d="M8 6 3 12l5 6M16 6l5 6-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>{/if}<span>{core.author || 'Unknown developer'}</span></div>
-                  <p class="player-card-meta">{core.tracks === null ? 'No index yet' : `${core.tracks} tracks`}</p>
-                </button>
-                <div class="player-card-footer">
-                  <span class:capable={core.library_capable} class="chip">{core.library_capable ? 'Library ready' : 'Legacy core'}</span>
-                  <button class="quiet" aria-label={`Details for ${core.id}`} title="Details" on:click={() => showCoreDetail(core)}>
-                    <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v5.5M12 8v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                  </button>
-                </div>
-              </article>
-            {/each}
-          </div>
-        {:else}<section class="empty"><div class="empty-art">τ</div><h2>No player cores found</h2><p>This card has {cores.length} other core{cores.length === 1 ? '' : 's'} installed. Show them below to set one as a player.</p></section>{/if}
+      <section class="card-sum" aria-labelledby="card-sum-title">
+        <div class="section-title"><div><p class="eyebrow">ON THIS CARD</p><h2 id="card-sum-title">{plural($coresTotal, 'core')} installed</h2></div><span class="sum-actions"><button class="quiet" aria-label="Refresh this card" title="Refresh" on:click={openFolder}>Refresh</button><button class="quiet" on:click={browseCores}>Browse cores</button></span></div>
+        {#if needing.length}
+          <h3 class="sum-h">Needs attention</h3>
+          <ul class="sum-list" aria-label="Cores that need a file">{#each needing as c (c.id)}<li><button class="quiet" on:click={() => openCore(c.id)}><strong>{c.shortname}</strong> <small>{c.platformName} · needs {plural(c.missing, 'file')}</small></button></li>{/each}</ul>
+        {:else}<p class="sum-ok">Every core has the files it needs.</p>{/if}
+        {#if libraries.length}
+          <h3 class="sum-h">Music libraries</h3>
+          <ul class="sum-list" aria-label="Music libraries">{#each libraries as c (c.id)}<li><button class="quiet" on:click={() => openCoreLibrary(c)}><strong>{c.shortname || c.id}</strong> <small>{c.tracks === null ? 'No index yet' : plural(c.tracks, 'track')} · open library</small></button></li>{/each}</ul>
+        {/if}
       </section>
-      {#if otherCores.length}
-        <section aria-labelledby="other-core-title">
-          <div class="section-title"><div><p class="eyebrow">EVERYTHING ELSE</p><h2 id="other-core-title">Other cores on this card</h2></div><label class="show-all"><input type="checkbox" bind:checked={showOtherCores}/> Show {otherCores.length} other core{otherCores.length === 1 ? '' : 's'}</label></div>
-          {#if showOtherCores}<div class="core-list">{#each otherCores as core}<article><div class="core-icon">{#if coreIcons[core.id]}<img src={coreIcons[core.id]} alt="" />{:else}{core.id.split('.').at(-1)?.[0] ?? '?'}{/if}</div><div><h3>{core.id}</h3><p>{core.author || 'Unknown author'} · {core.version || 'Version unknown'} · {core.platform || 'No platform declared'}</p></div><button class="quiet" on:click={() => toggleManualPlayer(core)}>Set as player</button></article>{/each}</div>{/if}
-        </section>
-      {/if}
-    {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}</section>
+    {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}
+    {/if}
+    </div>
+</section>
+<style>
+  .card-tabs{display:flex;gap:4px;border-bottom:1px solid #2c393a;margin:6px 0 16px}
+  .card-tabs [role=tab]{padding:10px 14px;font-size:13.5px;color:#a4b0b0;background:transparent;border-radius:8px 8px 0 0}
+  .card-tabs [role=tab]:hover{color:#eff5f4;background:#1a2325}.card-tabs [role=tab].current{color:#c1f0ad;box-shadow:inset 0 -2px 0 #c1f0ad}
+  .card-tabs [role=tab]:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
+  .card-sum{border:1px solid #2c393a;border-radius:12px;background:#161f20;padding:14px 16px;margin-top:12px}
+  .sum-actions{display:flex;gap:4px}
+  .sum-h{margin:14px 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}.sum-ok{font-size:13px;color:#c5f7ad;margin:10px 0 0}
+  .sum-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}.sum-list .quiet{width:100%;text-align:left;display:flex;gap:8px;align-items:baseline}.sum-list small{color:#8f9e9d;font-size:12px}
+</style>

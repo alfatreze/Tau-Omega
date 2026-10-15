@@ -1,6 +1,6 @@
-# Merging the Cards page into Cores (plan for review, nothing built)
+# Merging the Cards page into Cores
 
-Branch `cores-section`. Status: **proposal, awaiting the owner's decisions** (section 8). No code or card touched for this document.
+Branch `cores-section`. Status: **decided and built 2026-10-15** (steps 1-5). Owner decisions: D1 all Tau cores under one TAU row (a system, like all GBA cores under `gba`); D2 Overview + History tabs; D3 the **openFPGA Library's own grouping, category > manufacturer > platform > core** (not the card's platform files, which sometimes put a manufacturer in the category); D4 "Set as player" dropped, the Library's target core is chosen from cores whose slots take mp3/flac (library cores first), any other core by hand; D5 the page is named **Card**; D6 overview extras (capacity, counts) after the merge. The body below is the plan as reviewed; where it says Media Players / card categories, the built version uses the Library snapshot (`crates/tau-core/src/taxonomy.rs`, `data/library_platforms.json`) with the card's file only for platforms the Library does not know (Tau).
 
 ## 1. What overlaps today
 

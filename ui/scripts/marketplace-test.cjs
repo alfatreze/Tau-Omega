@@ -97,12 +97,12 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.keyboard.press('Escape'); await p.waitForTimeout(150);
   await search(''); await p.waitForTimeout(300);
   await p.evaluate(() => { globalThis.__mkt = 'fail'; });
-  await nav('Cards').click(); await p.waitForTimeout(300); await openMarket();
+  await nav('Card').click(); await p.waitForTimeout(300); await openMarket();
   assert.match(await p.locator('.empty').innerText(), /The list could not be loaded[\s\S]*Try again/); ok('a list that cannot be loaded offers Try again');
   await p.evaluate(() => { globalThis.__mkt = undefined; });
 
   // Core updates on the Cards page
-  await nav('Cards').click(); await p.waitForTimeout(700);
+  await nav('Card').click(); await p.waitForTimeout(700);
   const cu = p.getByRole('region', { name: 'Core updates' });
   assert.match(await cu.innerText(), /3 updates available/); assert.match(await cu.innerText(), /Tau cores update through the Tau update bar/); ok('Core updates lists the updates and defers Tau cores to the Tau bar');
   assert.match(await cu.innerText(), /Replaced by pack\.NES/); assert.match(await cu.innerText(), /Not in the library/); ok('a renamed core and an unknown core get plain statuses');

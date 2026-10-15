@@ -54,7 +54,7 @@ const coresTreeMock = () => [
   { platform: PLAT.gb, cores: [crow('Spiritualized.GB', 'gb', '1.3.0')] },
   { platform: PLAT.gba, cores: [crow('Spiritualized.GBA', 'gba', '1.2.0', mockBios ? 0 : 1), crow('other.GBAlt', 'gba', '0.3')] },
   { platform: PLAT.amiga, cores: [crow('Mazamars312.Amiga', 'amiga', '0.2.3')] },
-  { platform: PLAT.tau, cores: [{ ...crow('alfatreze.TAU', 'tau', '0.6.0'), shortname: 'TAU' }, { ...crow('alfatreze.TAU Preview', 'tau_preview', '0.6.0-preview.1'), shortname: 'TAU Preview', platforms: ['tau_preview', 'tau'] }] },
+  { platform: PLAT.tau, cores: [crow('tau.omega', 'tau', '0.3.0'), { ...crow('tau.player2', 'tau_preview', '0.2.1'), platforms: ['tau_preview', 'tau'] }] },
   { platform: PLAT._none, cores: [crow('solo.Thing', '', '1.0')] },
 ];
 const slotOf = (name: string, o: Record<string, unknown> = {}) => ({ id: '0x100', name, required: false, filename: '', extensions: [] as string[], nonvolatile: false, core_specific: false, platform: 'gba', size_exact: null, size_maximum: null, ...o });
@@ -96,9 +96,10 @@ const addPlanFor = (a: Record<string, unknown>) => {
 };
 
 const cores = [
-  { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platforms: ['tau'], media_platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'ok', tracks: 7180 },
-  { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platforms: ['tau2'], media_platform: 'tau2', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
-  { id: 'agg23.SNES', author: 'agg23', shortname: 'SNES', version: '1.4.0', platform: 'snes', platforms: ['snes'], media_platform: 'snes', platform_category: 'Console', library_capable: false, index_status: 'n/a', tracks: null },
+  { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platforms: ['tau'], media_platform: 'tau', platform_category: 'Media Players', library_capable: true, audio_formats: [], index_status: 'ok', tracks: 7180 },
+  { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platforms: ['tau2'], media_platform: 'tau2', platform_category: 'Media Players', library_capable: true, audio_formats: [], index_status: 'missing', tracks: null },
+  { id: 'harpmudd.Mp3Player', author: 'harpmudd', shortname: 'Mp3Player', version: '1.7.0', platform: 'mp3player', platforms: ['mp3player'], media_platform: 'mp3player', platform_category: 'Others', library_capable: false, audio_formats: ['mp3', 'flac'], index_status: 'n/a', tracks: null },
+  { id: 'agg23.SNES', author: 'agg23', shortname: 'SNES', version: '1.4.0', platform: 'snes', platforms: ['snes'], media_platform: 'snes', platform_category: 'Console', library_capable: false, audio_formats: [], index_status: 'n/a', tracks: null },
 ];
 
 type Album = { id: string; dest_id: string; title: string; artist: string; year: string | null; tracks: number; bytes: number; has_cover: boolean };

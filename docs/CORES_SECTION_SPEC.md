@@ -101,3 +101,9 @@ Adding files is a card write: **plan first, shown, confirmed**; the host takes t
 
 ## 6. Build order
 C0 spec (this); C1 engine `corehub` + `core_files` read side + `core_settings` + `core_screens`, tests on synthetic cards and a read-only run on the real card; C2 `plan_add`/`execute_add` + tests; C3 host commands + CLI; C4 UI shell (tree, page, tabs, inspector, store, mock); C5 Files tab with drag and drop and the review sheet; C6 Saves, Screenshots, Settings tabs; C7 browser checks, accessibility pass, docs, roadmap, test build.
+
+## Update 2026-10-15: grouping and the Card page
+- Tree and overview follow the openFPGA Library: **category > manufacturer > platform > core** (Console > Nintendo > SNES > core). The grouping comes from a built-in snapshot of `api/v3/platforms.json` (`taxonomy.rs`); a platform the Library does not know (Tau) uses its own `Platforms/<id>.json`, with nothing known it is "Other". Category order: Console, Handheld, Computer, Arcade, Arcade Multi, Media Players, others alphabetical, Other last.
+- Tau (library-capable cores and ids starting `alfatreze.TAU`) is one **TAU** row under Media Players / alfatreze, whatever platform each build declares (`tau`, `tau_preview`, `tau_dev`...).
+- The Card page (menu entry **Card**) has Overview (known cards, core updates, needs-attention list, music libraries) and History (the sync history, no longer a menu entry). The player-core grid, the other-cores list, the Details dialog and "Set as player" are gone; a library core's tracks, index, Open library and Refresh library are in the core's details panel.
+- The Library page's **Target core** is chosen from cores whose data slots accept mp3/flac (library cores first), every other core by hand; `Core.audio_formats` carries it.

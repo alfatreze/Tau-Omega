@@ -22,6 +22,9 @@
   export let cores: CoreRef[] = [];
   export let cardLabel = 'Pocket';
   export let coreLabel = '';
+  /** Cores that can play the library's files (first group) and every other core (second group): the target of this screen. */
+  export let targets: { id: string; label: string; note: string }[] = []; export let otherTargets: { id: string; label: string; note: string }[] = []; export let targetId = '';
+  export let chooseTarget: (id: string) => void = () => {};
   /** The selected core's media root on the card (`.../Assets/<platform>/common`). */
   export let mediaRoot = '';
   /** Bumped by the app when the card was re-read (auto-detect or the refresh button). */
@@ -604,7 +607,15 @@
     <div class="wb-ctx">
       <p class="eyebrow">LIBRARY</p>
       <h1 id="wb-title">{cardLabel}</h1>
-      <div class="wb-sub"><span class="wb-dot" aria-hidden="true"></span>{coreLabel ? `Player: ${coreLabel}` : 'No player core'}
+      <div class="wb-sub"><span class="wb-dot" aria-hidden="true"></span>
+        {#if targets.length || otherTargets.length}
+          <label class="wb-target"><span>Target core</span>
+            <select aria-label="Target core" value={targetId} disabled={busy} on:change={(e) => chooseTarget(e.currentTarget.value)}>
+              {#if !targetId}<option value="" disabled selected>Choose a core</option>{/if}
+              {#if targets.length}<optgroup label="Plays mp3 and flac">{#each targets as t}<option value={t.id}>{t.label}{t.note ? ` (${t.note})` : ''}</option>{/each}</optgroup>{/if}
+              {#if otherTargets.length}<optgroup label="Other cores (choose by hand)">{#each otherTargets as t}<option value={t.id}>{t.label}</option>{/each}</optgroup>{/if}
+            </select></label>
+        {:else}{coreLabel ? `Target: ${coreLabel}` : 'No target core'}{/if}
         {#if cardPath}
           <span class="wb-connwrap">
             <button class="wb-conn" class:slow={connKind === 'direct_usb'} aria-haspopup="menu" aria-expanded={connMenu} title={connection.detail ? `Detected: ${connection.detail}` : 'How this card is connected'} on:click={() => (connMenu = !connMenu)}>{connLabel}</button>
@@ -881,6 +892,7 @@
   .wb{padding:24px 40px 20px;display:flex;flex-direction:column;gap:14px;height:100vh;position:relative}
   .wb-top{display:flex;justify-content:space-between;align-items:flex-start;margin:0;padding:0;flex-shrink:0}
   .wb-top h1{margin:0 0 4px;font-size:26px}.wb-ctx .eyebrow{margin:0 0 2px}
+  .wb-target{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#9cacab}.wb-target select{font:inherit;font-size:12.5px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:5px 8px;max-width:260px}
   .wb-sub{margin:0;display:flex;align-items:center;gap:10px;color:#9cacab;font-size:13px}
   .wb-dot{width:7px;height:7px;border-radius:50%;background:#8fd6f2}
   .wb-conn{background:#273032;color:#b7c3c2;border-radius:99px;padding:4px 10px;font-size:11px;font-weight:650}
