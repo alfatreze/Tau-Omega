@@ -38,7 +38,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.locator('.pv-open', { hasText: 'Spiritualized.GBA' }).click(); await p.waitForTimeout(900);
   assert.deepEqual(await p.getByRole('tab').allInnerTexts(), ['Files', 'Saves', 'Screenshots', 'Settings']); ok('a core opens with Files, Saves, Screenshots and Settings tabs');
   assert.equal(await tab('Files').getAttribute('aria-selected'), 'true'); ok('Files is the tab it opens on');
-  assert.match(await p.getByRole('complementary', { name: /GBA/ }).innerText(), /requirements[\s\S]*Pocket firmware\s*1\.1 or newer[\s\S]*Dock\s*Yes[\s\S]*on this card[\s\S]*Games\s*6 files/i); ok('the details panel shows the core, its requirements and what is on the card');
+  assert.match(await p.getByRole('complementary', { name: /GBA/ }).innerText(), /requirements[\s\S]*Pocket firmware\s*1\.1 or newer[\s\S]*Files needed[\s\S]*supported features[\s\S]*Dock\s*Yes[\s\S]*on this card[\s\S]*Games\s*6 files/i); ok('the details panel shows the core, its requirements and what is on the card');
   await p.getByRole('button', { name: /Hide details/ }).click(); await p.waitForTimeout(150);
   assert.equal(await p.locator('.ci').count(), 0); assert.equal(await p.evaluate(() => localStorage.getItem('tau.cores.inspector')), '0'); ok('the details panel can be hidden and the choice is remembered');
   await p.keyboard.press('i'); await p.waitForTimeout(150);
@@ -97,13 +97,18 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // ---- Screenshots
   await tab('Screenshots').click(); await p.waitForTimeout(700);
-  assert.match(await panel().innerText(), /records which core took it \(5 here\)[\s\S]*older screenshots? did not record one/); ok('the tab says each screenshot records its core, and how many older ones do not');
-  assert.equal(await p.getByRole('button', { name: /This core/ }).getAttribute('aria-pressed'), 'true'); assert.equal(await panel().locator('.ct-shot').count(), 7); assert.equal(await panel().locator('.ct-why:not(.soft)').count(), 5); assert.equal(await panel().locator('.ct-why.soft').count(), 2); ok('it opens on this core: 5 exact, 2 marked probably, none from other cores');
-  await p.getByRole('button', { name: /All screenshots/ }).click(); await p.waitForTimeout(500);
-  assert.equal(await panel().locator('.ct-shot').count(), 24); assert.ok(await panel().locator('.ct-shot img').count() >= 4); ok('all screenshots are one click away, with thumbnails');
+  assert.match(await panel().innerText(), /5 screenshots from this core, plus 2 older ones marked “probably”/); ok('the tab counts exact screenshots and the older ones marked probably');
+  assert.equal(await p.getByRole('button', { name: /All screenshots/ }).count(), 0); assert.equal(await panel().locator('.ct-shot').count(), 7); assert.equal(await panel().locator('.ct-why:not(.soft)').count(), 5); assert.equal(await panel().locator('.ct-why.soft').count(), 2); ok('it opens on this core: 5 exact, 2 marked probably, none from other cores');
   await panel().locator('.ct-shot').first().click(); await p.waitForTimeout(500);
   assert.equal(await p.getByRole('dialog', { name: /Screenshot taken/ }).count(), 1); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   assert.equal(await p.getByRole('dialog', { name: /Screenshot taken/ }).count(), 0); ok('a screenshot opens large and Escape closes it');
+  // a core with none of its own shows the empty state, never other cores' screenshots
+  await platform('Game Boy Advance').click(); await p.waitForTimeout(300);
+  await p.locator('.pv-open', { hasText: 'other.GBAlt' }).click(); await p.waitForTimeout(600);
+  await tab('Screenshots').click(); await p.waitForTimeout(500);
+  assert.equal(await panel().locator('.ct-shot').count(), 0); assert.match(await panel().innerText(), /No screenshots from this core yet[\s\S]*Say cheese/); ok('a core with no screenshots of its own shows the friendly empty state');
+  await platform('Game Boy Advance').click(); await p.waitForTimeout(300);
+  await p.locator('.pv-open', { hasText: 'Spiritualized.GBA' }).first().click(); await p.waitForTimeout(600); await tab('Screenshots').click(); await p.waitForTimeout(300);
 
   // ---- Settings
   await tab('Settings').click(); await p.waitForTimeout(500);

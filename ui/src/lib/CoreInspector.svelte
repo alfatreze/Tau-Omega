@@ -26,17 +26,16 @@
   $: bytes = files ? files.folders.reduce((n, f) => n + f.total_bytes, 0) : 0;
 </script>
 <aside class="ci" aria-labelledby="ci-title">
+  {#if banner}<img class="ci-banner" src={banner} alt={`${detail.platforms.find((p) => p.has_image)?.name ?? 'Platform'} artwork`} />{/if}
   <header>
     <span class="ci-icon" aria-hidden="true">{#if icon}<img src={icon} alt="" width="40" height="40" />{:else}{detail.shortname.slice(0, 2).toUpperCase()}{/if}</span>
-    <div class="ci-head"><h2 id="ci-title">{detail.shortname || detail.id}</h2><p>{detail.id}</p></div>
+    <div class="ci-head"><h2 id="ci-title">{detail.shortname || detail.id}</h2><p>{detail.author || detail.id}</p></div>
     <button class="quiet" on:click={() => dispatch('close')} aria-label="Hide core details" title="Hide details (I)">Hide</button>
   </header>
-  {#if banner}<img class="ci-banner" src={banner} alt={`${detail.platforms.find((p) => p.has_image)?.name ?? 'Platform'} artwork`} />{/if}
   {#if detail.description}<p class="ci-desc">{detail.description}</p>{/if}
 
   <dl class="ci-facts">
     <div><dt>Version</dt><dd>{detail.version || 'not stated'}{detail.date_release ? ` · ${detail.date_release}` : ''}</dd></div>
-    <div><dt>Author</dt><dd>{detail.author || 'not stated'}</dd></div>
     {#if detail.url}<div><dt>Source</dt><dd><code>{detail.url}</code> <button class="quiet" on:click={() => copy(detail.url)}>{copied ? 'Copied' : 'Copy'}</button></dd></div>{/if}
     <div><dt>Platform</dt><dd>{detail.platforms.length ? detail.platforms.map((p) => p.name + (p.year ? ` (${p.manufacturer ? p.manufacturer + ', ' : ''}${p.year})` : '')).join(', ') : 'None declared'}</dd></div>
   </dl>
@@ -44,6 +43,11 @@
   <h3>Requirements</h3>
   <dl class="ci-facts">
     <div><dt>Pocket firmware</dt><dd>{detail.firmware_required ? `${detail.firmware_required} or newer` : 'Not stated'}</dd></div>
+    <div><dt>Files needed</dt><dd>{files ? (files.missing.length ? files.missing.map((m) => m.filename).join(', ') : 'None missing') : 'Reading the card…'}</dd></div>
+  </dl>
+
+  <h3>Supported features</h3>
+  <dl class="ci-facts">
     <div><dt>Dock</dt><dd>{yn(detail.dock_supported)}</dd></div>
     <div><dt>Link port</dt><dd>{yn(detail.link_port)}</dd></div>
     <div><dt>Sleep</dt><dd>{yn(detail.sleep_supported)}</dd></div>
@@ -55,7 +59,6 @@
       <div><dt>Games</dt><dd>{plural(roms, 'file')}</dd></div>
       <div><dt>Saves</dt><dd>{plural(saves, 'save')} · {plural(states, 'save state')}</dd></div>
       <div><dt>Disk used</dt><dd>{size(bytes)}</dd></div>
-      <div><dt>Needs</dt><dd>{files.missing.length ? files.missing.map((m) => m.filename).join(', ') : 'Nothing'}</dd></div>
     </dl>
     <ul class="ci-folders" aria-label="Folders on the card">{#each files.folders as f}<li><code>{f.folder.rel_path}</code><span>{f.exists ? plural(f.total_files, 'file') : 'not created'}</span></li>{/each}</ul>
   {:else}<p class="ci-note" role="status">Reading the card…</p>{/if}
