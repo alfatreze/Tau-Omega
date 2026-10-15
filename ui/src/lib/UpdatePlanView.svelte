@@ -38,7 +38,7 @@
   async function install() {
     if (!plan || plan.refused) return;
     busy = true; notice = '';
-    try { const replaced = plan.superseded_candidates.filter((id) => !/DEV|TAU_0_/.test(id)); const installed = plan.update.cores.map((c) => c.package.core_id); report = await executeCoreUpdate(zipPath, cardPath, allowDowngrade, plan.id); migrateFrom = replaced; migrateTo = installed; plan = null; if ($developerTools) void markInstalled(cardPath); dispatch('installed'); }
+    try { const replaced = plan.superseded_candidates.filter((id) => !/DEV|TAU_0_/.test(id)); const installed = plan.update.cores.map((c) => c.package.core_id); report = await executeCoreUpdate(zipPath, cardPath, allowDowngrade, plan.id); migrateFrom = replaced; migrateTo = installed; plan = null; if ($developerTools) void markInstalled(cardPath, zipPath, report); dispatch('installed'); }
     catch (error) { notice = `Nothing was left half-done. ${errorMessage(error)}`; }
     finally { busy = false; }
   }

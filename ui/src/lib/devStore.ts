@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { cardRole, getPrefs, setCardRole, setLastInstall } from './tau-api';
+import { cardRole, getPrefs, runNoteRecord, setCardRole, setLastInstall } from './tau-api';
 
 /** Whether the developer tools are shown (Settings > "Show developer tools"). Off until the user turns it on. */
 export const developerTools = writable(false);
@@ -19,5 +19,9 @@ export function localStamp(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
-/** Remembers "the last install was just now" for the Results page (best effort: it is advice, never a reason to fail an install). */
-export async function markInstalled(card: string): Promise<void> { try { await setLastInstall(card, localStamp()); } catch { /* ignore */ } }
+/** Remembers "the last install was just now" for the Results page and starts a run note for it (best effort: both are advice, never a reason to fail an install). */
+export async function markInstalled(card: string, zip = '', report: { backup_dir: string; files_written: number; nothing_to_do: boolean } | null = null): Promise<void> {
+  const stamp = localStamp();
+  try { await setLastInstall(card, stamp); } catch { /* ignore */ }
+  if (zip && report && !report.nothing_to_do) { try { await runNoteRecord(card, zip, report.backup_dir, report.files_written, stamp); } catch { /* ignore */ } }
+}

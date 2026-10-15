@@ -6,11 +6,13 @@
   import { readImageDataUrl, resultsScan, setLastInstall } from './tau-api';
   import { cardLabel, localStamp } from './devStore';
   import { plural } from './coresFormat';
+  import RunNotes from './RunNotes.svelte';
   import type { ResultRun, ResultShot, ResultsView } from './types';
   export let card = '';
 
   let view: ResultsView | null = null; let error = ''; let busy = false; let note = '';
   let showAll = false; let pics: Record<string, string> = {}; let openPic = '';
+  let tab: 'results' | 'notes' = 'results';
   let askedFor = '';
   $: if (card && card !== askedFor) { askedFor = card; void scan(); }
   onMount(() => { if (card && !askedFor) { askedFor = card; void scan(); } });
@@ -40,6 +42,11 @@
   <header><div><p class="eyebrow">DEVELOPER</p><h1 id="results-title">Results</h1><p class="lede">What the Pocket’s screenshots say about your test build: every Check report is decoded here and compared with the previous one. Nothing is written to the card.</p></div></header>
   {#if !card}<div class="empty"><h2>Open a card first</h2><p>Results are read from the card’s <code>Memories/Screenshots</code> folder.</p></div>
   {:else}
+    <div class="tabs" role="tablist" aria-label="Results sections" tabindex="-1">
+      <button role="tab" id="res-tab-results" aria-selected={tab === 'results'} class:current={tab === 'results'} tabindex={tab === 'results' ? 0 : -1} on:click={() => (tab = 'results')}>Results</button>
+      <button role="tab" id="res-tab-notes" aria-selected={tab === 'notes'} class:current={tab === 'notes'} tabindex={tab === 'notes' ? 0 : -1} on:click={() => (tab = 'notes')}>Run notes</button>
+    </div>
+    {#if tab === 'notes'}<RunNotes {card} />{:else}
     <div class="r-bar">
       <p class="r-since" role="status">{view?.since ? `Showing what the Pocket saved since the last install on ${cardLabel(card)}, ${nice(view.since)}.` : `Showing every screenshot on ${cardLabel(card)}: no install has been recorded.`}</p>
       <div class="r-btns">
@@ -84,9 +91,11 @@
       {/if}
       {#if others.length}<p class="r-note">{plural(others.length, 'other screenshot')} {showAll ? 'on the card' : 'since the last install'} {others.length === 1 ? 'is not a Check report' : 'are not Check reports'}.</p>{/if}
     {/if}
+    {/if}
   {/if}
 </section>
 <style>
+  .tabs{display:flex;gap:4px;border-bottom:1px solid #2c393a;margin:0 0 16px}.tabs [role=tab]{padding:10px 14px;font-size:13.5px;color:#a4b0b0;background:transparent;border-radius:8px 8px 0 0}.tabs [role=tab]:hover{color:#eff5f4;background:#1a2325}.tabs [role=tab].current{color:#c1f0ad;box-shadow:inset 0 -2px 0 #c1f0ad}.tabs [role=tab]:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
   .r-bar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 12px}.r-since{margin:0;font-size:13px;color:#c7d1d0}
   .r-btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.r-all{font-size:12.5px;color:#a6b3b2;display:inline-flex;gap:6px;align-items:center}
   .r-note{font-size:12.5px;color:#95a5a4}.r-err{color:#ff9b9b;font-size:12.5px}.r-ok{font-size:13px;color:#c5f7ad;margin:6px 0}

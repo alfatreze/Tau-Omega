@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { ManualClass, ManualInspect, ManualInspectArgs, RemoveFilesPlan, RemoveFilesReport, MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate, CatalogResult, ArtKind, CoreUpdates, MarketplaceDownload, PlatformNode, CoreDetail, CoreFiles, CoreSettings, ScreenshotView, AddPlan, AddReport, AddDestination , CoreSuggestions, DisabledCore, StatePlan, StateReport, BuildsConfig, BuildScheme, SchemeField, SchemeTry, BuildList, ResultsView } from './types';
+import type { ManualClass, ManualInspect, ManualInspectArgs, RemoveFilesPlan, RemoveFilesReport, MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate, CatalogResult, ArtKind, CoreUpdates, MarketplaceDownload, PlatformNode, CoreDetail, CoreFiles, CoreSettings, ScreenshotView, AddPlan, AddReport, AddDestination , CoreSuggestions, DisabledCore, StatePlan, StateReport, BuildsConfig, BuildScheme, SchemeField, SchemeTry, BuildList, ResultsView, RunNote } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -134,3 +134,11 @@ export const buildZip = (path: string) => invoke<string>('build_zip', { path });
 
 export const resultsScan = (card: string) => invoke<ResultsView>('results_scan', { card });
 export const setLastInstall = (card: string, stamp: string | null) => invoke<void>('set_last_install', { card, stamp });
+
+export const runNotesList = (card: string) => invoke<RunNote[]>('run_notes_list', { card });
+export const runNoteRecord = (card: string, zip: string, backupDir: string, filesWritten: number, stamp: string) => invoke<RunNote>('run_note_record', { card, zip, backupDir, filesWritten, stamp });
+export const runNoteText = (id: string, text: string) => invoke<RunNote>('run_note_text', { id, text });
+export const runNoteDelete = (id: string) => invoke<void>('run_note_delete', { id });
+export const runNoteAttach = (card: string, id: string, now: string) => invoke<RunNote>('run_note_attach', { card, id, now });
+export const runNoteReport = (id: string) => invoke<string>('run_note_report', { id });
+export const runNoteExport = (id: string, destDir: string) => invoke<string>('run_note_export', { id, destDir });
