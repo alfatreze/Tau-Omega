@@ -308,3 +308,15 @@ export type StateReport = { moved: number; caches_cleared: number };
 
 export type LintFinding = { id: string; severity: 'Error' | 'Warning' | 'Note'; message: string; rule: string; fix: string };
 export type LintReport = { core_id: string; findings: LintFinding[]; errors: number; warnings: number; notes: number };
+
+/** Developer builds (the Builds page). */
+export type SchemeField = 'core_id' | 'shortname' | 'version' | 'file';
+export type BuildScheme = { name: string; field: SchemeField; template: string };
+export type BuildsConfig = { dir: string | null; builtin: BuildScheme[]; custom: BuildScheme[] };
+export type Placement = { scheme: string; series: string; order: [number, number, number, number]; pre: string | null };
+export type BuildEntry = { path: string; kind: 'zip' | 'folder'; file: string; core_id: string; shortname: string; version: string; date_release: string; bytes: number; modified: number; placement: Placement | null; lint_errors: number; lint_warnings: number; error: string | null };
+export type BuildRelation = 'not_installed' | 'same' | 'newer' | 'older' | 'different';
+export type InstalledCore = { id: string; shortname: string; version: string };
+export type BuildRow = { entry: BuildEntry; relation: BuildRelation; older: InstalledCore[] };
+export type BuildList = { dir: string; rows: BuildRow[] };
+export type SchemeTry = { error: string | null; placement: Placement | null };
