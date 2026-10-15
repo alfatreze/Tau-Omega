@@ -119,3 +119,9 @@ pub fn build_zip(app: tauri::AppHandle, path: String) -> Result<String, TauError
     let packed = core_pack::pack_folder(&p, &out, Limits::default())?;
     Ok(packed.zip.to_string_lossy().into_owned())
 }
+
+/// The core checker's findings for a package zip (the gate before a developer install).
+#[tauri::command(async)]
+pub fn lint_package(zip: String) -> Result<tau_core::core_lint::LintReport, TauError> {
+    tau_core::core_lint::lint_zip(Path::new(&zip))
+}

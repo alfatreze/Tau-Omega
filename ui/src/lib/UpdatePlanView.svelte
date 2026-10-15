@@ -1,15 +1,23 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import SettingsMigration from './SettingsMigration.svelte';
-  import { planCoreUpdate, executeCoreUpdate, rollbackCoreUpdate } from './tau-api';
+  import { planCoreUpdate, executeCoreUpdate, rollbackCoreUpdate, lintPackage } from './tau-api';
+  import LintFindings from './LintFindings.svelte';
+  import { plural } from './coresFormat';
   import { errorMessage } from './backend';
-  import type { InstallPlan, InstallReport, RollbackReport, UpdateVerdict } from './types';
+  import type { InstallPlan, InstallReport, LintReport, RollbackReport, UpdateVerdict } from './types';
   /** The package zip and the card folder chosen on the page above. */
   export let zipPath = ''; export let cardPath = '';
+  /** Developer tools run the core check before an install and block on errors unless overridden. A caller that already shows it (manual add) turns this off. */
+  export let lintGate = true;
+  /** Errors the caller already showed and the developer overrode (manual add), to be recorded in the run note. */
+  export let knownOverrides: string[] = [];
   import { developerTools, roleOf, refreshRole, cardLabel, markInstalled } from './devStore';
   // With developer tools on, installing onto a Real card needs its name typed first (a test card is exactly what dev installs are for).
   $: if ($developerTools && cardPath) void refreshRole(cardPath);
-  let typed = '';
+  let typed = ''; let lint: LintReport | null = null; let lintNote = ''; let override = false;
+  $: gating = $developerTools && lintGate;
+  $: lintBlocked = gating && (lint?.errors ?? 0) > 0 && !override;
   $: needName = $developerTools && !($roleOf.card === cardPath && $roleOf.role === 'test');
   $: nameOk = !needName || typed.trim().toLowerCase() === cardLabel(cardPath).toLowerCase();
 
@@ -30,7 +38,8 @@
   }
 
   async function review() {
-    busy = true; notice = ''; report = null; undone = null; confirmRollback = false;
+    busy = true; notice = ''; report = null; undone = null; confirmRollback = false; override = false; lint = null; lintNote = '';
+    if (gating) { try { lint = await lintPackage(zipPath); } catch (e) { lintNote = `The core check could not run: ${errorMessage(e)}`; } }
     try { plan = await planCoreUpdate(zipPath, cardPath, allowDowngrade); }
     catch (error) { plan = null; notice = `Could not plan this: ${errorMessage(error)}`; }
     finally { busy = false; }
@@ -38,7 +47,7 @@
   async function install() {
     if (!plan || plan.refused) return;
     busy = true; notice = '';
-    try { const replaced = plan.superseded_candidates.filter((id) => !/DEV|TAU_0_/.test(id)); const installed = plan.update.cores.map((c) => c.package.core_id); report = await executeCoreUpdate(zipPath, cardPath, allowDowngrade, plan.id); migrateFrom = replaced; migrateTo = installed; plan = null; if ($developerTools) void markInstalled(cardPath, zipPath, report); dispatch('installed'); }
+    try { const replaced = plan.superseded_candidates.filter((id) => !/DEV|TAU_0_/.test(id)); const installed = plan.update.cores.map((c) => c.package.core_id); report = await executeCoreUpdate(zipPath, cardPath, allowDowngrade, plan.id); migrateFrom = replaced; migrateTo = installed; plan = null; if ($developerTools) void markInstalled(cardPath, zipPath, report, override && lint ? lint.findings.filter((f) => f.severity === 'Error').map((f) => `${f.id}: ${f.message}`) : knownOverrides); dispatch('installed'); }
     catch (error) { notice = `Nothing was left half-done. ${errorMessage(error)}`; }
     finally { busy = false; }
   }
@@ -84,6 +93,14 @@
 
   {#each plan.cautions as caution}<p class="safety" role="note">⚠ {caution}</p>{/each}
 
+  {#if gating && (lint?.findings.length || lintNote)}
+    <section class="settings-card"><div style="width:100%"><h2>Core check</h2>
+      {#if lint?.findings.length}<LintFindings {lint} />{/if}
+      {#if lintNote}<p class="safety" role="note">{lintNote}</p>{/if}
+      {#if lint?.errors}<label class="inline lint-override"><input type="checkbox" bind:checked={override} /> Install anyway: I know what {lint.errors === 1 ? 'this error means' : 'these errors mean'} <small>(recorded in the run note)</small></label>{/if}
+    </div></section>
+  {/if}
+
   {#if reviewable}
     <section class="comparison-counts package-counts">
       <span><b>{plan.files.new_files}</b> new</span><span><b>{plan.files.updated_files}</b> replaced</span><span><b>{plan.files.unchanged_files}</b> unchanged</span>
@@ -100,7 +117,8 @@
         {#if plan.superseded_candidates.length}<p class="safety">Older test builds on this card ({plan.superseded_candidates.join(', ')}) are left alone; remove them separately if you no longer need them.</p>{/if}
         {#if plan.capacity}<p class:capacity-ok={plan.capacity.fits} class:capacity-bad={!plan.capacity.fits}>{plan.capacity.fits ? 'Fits' : 'Does not fit'} on the card — {size(plan.capacity.space.available_bytes)} free, {size(plan.capacity.bytes_needed)} needed.</p>{/if}
         {#if needName}<label class="inline real-name">This is a Real card. Type its name, <b>{cardLabel(cardPath)}</b>, to confirm: <input bind:value={typed} autocomplete="off" aria-label="Type the card name to confirm" /></label>{/if}
-        <button class="danger" disabled={busy || !nameOk} on:click={install}>{busy ? 'Installing…' : 'Confirm and install'}</button>
+        {#if lintBlocked}<p class="safety" role="alert">The core check found {plural(lint?.errors ?? 0, 'error')}. Fix {lint?.errors === 1 ? 'it' : 'them'}, or tick Install anyway above.</p>{/if}
+        <button class="danger" disabled={busy || !nameOk || lintBlocked} on:click={install}>{busy ? 'Installing…' : 'Confirm and install'}</button>
       </div>
     </section>
     <section class="difference-section">
@@ -140,6 +158,7 @@
   </section>
 {/if}
 <style>
+  .lint-override{margin-top:8px}.lint-override small{color:#8f9e9d}
   .real-name{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.real-name input{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:7px 10px;width:170px}
   .package-counts { max-width: 540px; }
   .difference-section { max-width: 720px; }
