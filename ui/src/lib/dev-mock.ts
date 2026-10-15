@@ -41,6 +41,57 @@ const svgUrl = (w: number, h: number, id: string) => {
   let hue = 0; for (const c of id) hue = (hue * 31 + c.charCodeAt(0)) % 360;
   return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="#000"/><circle cx="${w / 2}" cy="${h / 2}" r="${Math.min(w, h) / 3}" fill="hsl(${hue},0%,85%)"/></svg>`)}`;
 };
+// ---- Cores section mock: a small card with GBA (BIOS missing), GB, Amiga and a core with no platform ----------------------------
+const plat = (id: string, name: string, category: string, manufacturer: string, year: number) => ({ id, name, category, manufacturer, year, has_image: true });
+const PLAT: Record<string, ReturnType<typeof plat>> = {
+  gba: plat('gba', 'Game Boy Advance', 'Nintendo', 'Nintendo', 2001), gb: plat('gb', 'Game Boy', 'Nintendo', 'Nintendo', 1989),
+  amiga: plat('amiga', 'Amiga', 'Computer', 'Commodore', 1985), _none: { id: '_none', name: 'No platform', category: '', manufacturer: '', year: 0, has_image: false },
+};
+const crow = (id: string, platform: string, version: string, missing = 0) => ({ id, shortname: id.split('.')[1], author: id.split('.')[0], version, platform, platforms: [platform], missing });
+const coresTreeMock = () => [
+  { platform: PLAT.amiga, cores: [crow('Mazamars312.Amiga', 'amiga', '0.2.3')] },
+  { platform: PLAT.gb, cores: [crow('Spiritualized.GB', 'gb', '1.3.0')] },
+  { platform: PLAT.gba, cores: [crow('Spiritualized.GBA', 'gba', '1.2.0', 1), crow('other.GBAlt', 'gba', '0.3')] },
+  { platform: PLAT._none, cores: [crow('solo.Thing', '', '1.0')] },
+];
+const slotOf = (name: string, o: Record<string, unknown> = {}) => ({ id: '0x100', name, required: false, filename: '', extensions: [] as string[], nonvolatile: false, core_specific: false, platform: 'gba', size_exact: null, size_maximum: null, ...o });
+const detailFor = (id: string) => {
+  const row = coresTreeMock().flatMap((n) => n.cores).find((c) => c.id === id)!;
+  const p = row.platform ? [PLAT[row.platform]] : [];
+  const slots = row.platform === 'gba' && id === 'Spiritualized.GBA'
+    ? [slotOf('Cartridge', { required: true, extensions: ['gba', 'rom'] }), slotOf('Save RAM', { nonvolatile: true, extensions: ['sav'] }), slotOf('BIOS', { required: true, filename: 'gba_bios.bin', extensions: ['bin'], size_exact: 16384 })]
+    : [slotOf('ROM', { required: true, extensions: row.platform === 'amiga' ? ['adf', 'hdf'] : ['gb', 'gbc'], platform: row.platform })];
+  return { id, shortname: row.shortname, author: row.author, description: `${row.shortname} for the Analogue Pocket.`, url: `https://example.org/${row.shortname}`, version: row.version, date_release: '2026-01-02', firmware_required: '1.1', dock_supported: true, link_port: false, sleep_supported: false, platforms: p, slots, has_icon: true, has_interact: true };
+};
+const fe = (rel: string, bytes: number, kind: string, slot: string | null, extra: Record<string, unknown> = {}) => ({ rel_path: rel, name: rel.split('/').pop()!, bytes, modified: 1767225600, kind, slot, game: null, taken: null, ...extra });
+const mockRoms: string[] = ['Advance Wars (USA).gba', 'Boktai 2 (USA).gba', 'Golden Sun (USA).gba', 'Metroid Fusion (USA).gba', 'Mother 3.gba', 'Zelda - Minish Cap (USA).gba'];
+let mockBios = false; const mockAdded: string[] = [];
+const filesFor = (id: string) => {
+  const d = detailFor(id); const gba = id === 'Spiritualized.GBA';
+  const roms = gba ? [...mockRoms, ...mockAdded].map((n) => fe(n, 8 * MB, 'Rom', 'Cartridge')).concat(mockBios ? [fe('gba_bios.bin', 16384, 'Bios', 'BIOS')] : []).sort((a, b) => a.name.localeCompare(b.name)) : [];
+  const folder = (role: string, label: string, rel: string, entries: unknown[], exists = true) => ({ folder: { role, platform: d.platforms[0]?.id ?? '', label, rel_path: rel }, exists, entries, total_files: entries.length, total_bytes: (entries as { bytes: number }[]).reduce((a, e) => a + e.bytes, 0), truncated: false });
+  const pid = d.platforms[0]?.id ?? '_none';
+  return {
+    folders: [
+      folder('AssetsShared', `Shared by every ${d.platforms[0]?.name ?? ''} core`, `Assets/${pid}/common`, roms),
+      folder('AssetsCore', `Only ${d.shortname}`, `Assets/${pid}/${id}`, [], false),
+      folder('SavesShared', `Saves shared by every ${d.platforms[0]?.name ?? ''} core`, `Saves/${pid}/common`, gba ? [fe('Boktai 2 (USA).sav', 65536, 'Save', 'Save RAM', { game: 'Boktai 2 (USA)' }), fe('Mother 3.sav', 131072, 'Save', 'Save RAM', { game: 'Mother 3' })] : []),
+      folder('SaveStates', 'Save states', `Memories/Save States/${id}`, gba ? [fe('20260101_120000_USR_00000000_Boktai 2 (USA).sta', 900000, 'State', null, { game: 'Boktai 2 (USA)', taken: '2026-01-01 12:00:00' })] : []),
+    ],
+    missing: gba && !mockBios ? [{ slot: 'BIOS', filename: 'gba_bios.bin', folder_rel: 'Assets/gba/common', size_exact: 16384 }] : [],
+    save_backups: [{ name: 'pocket-sync-save-backup__1791411688.zip', bytes: 2.4 * MB, modified: 1767225600 }],
+  };
+};
+const thumb = (name: string) => { let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360; return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="100%" height="100%" fill="hsl(${h},35%,22%)"/><rect x="20" y="20" width="200" height="120" fill="hsl(${h},30%,35%)"/></svg>`)}`; };
+const SHOTS = Array.from({ length: 24 }, (_, i) => ({ file: `202601${String(28 - Math.floor(i / 3)).padStart(2, '0')}_1${i % 6}0${i % 10}00.png`, taken: `2026-01-${String(28 - Math.floor(i / 3)).padStart(2, '0')} 1${i % 6}:0${i % 10}:00`, bytes: 900000, likely: i < 5 ? 'taken within a minute of one of this core\'s save states' : null }));
+const addPlanFor = (a: Record<string, unknown>) => {
+  const sources = (a.sources as string[]) ?? [];
+  const items = sources.map((s) => { const name = s.split('/').pop()!; const dup = mockRoms.includes(name) || mockAdded.includes(name); return { source: s, dest_rel: `Assets/gba/${a.destination === 'CoreOnly' ? a.coreId : 'common'}/${name}`, bytes: 8 * MB, sha256: 'x', state: name.includes(':') ? { Refused: 'the name has a character the card cannot hold' } : dup ? (a.replace ? 'Different' : 'Identical') : 'New' }; });
+  const n = (f: (s: unknown) => boolean) => items.filter((i) => f(i.state)).length;
+  const fresh = n((s) => s === 'New'); const exts = [...new Set(sources.map((s) => s.split('.').pop()!).filter((e) => !['gba', 'rom', 'bin', 'sav'].includes(e)))];
+  return { id: `mockadd-${a.destination}-${a.replace}-${sources.length}`, core_id: a.coreId, platform: a.platform, destination: a.destination, folder_rel: `Assets/gba/${a.destination === 'CoreOnly' ? a.coreId : 'common'}`, replace: a.replace, items, new_files: fresh, identical: n((s) => s === 'Identical'), different: n((s) => s === 'Different'), refused: n((s) => typeof s === 'object'), bytes_to_write: (fresh + n((s) => s === 'Different' && !!a.replace)) * 8 * MB, warnings: exts.length ? [`No file slot of this core reads ${exts.map((e) => '.' + e).join(', ')}; the core may ignore ${exts.length === 1 ? 'it' : 'them'}.`] : [], blocked: fresh + (a.replace ? n((s) => s === 'Different') : 0) === 0 ? 'Nothing to add: everything is already on the card.' : null };
+};
+
 const cores = [
   { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platforms: ['tau'], media_platform: 'tau', platform_category: 'Media Players', library_capable: true, index_status: 'ok', tracks: 7180 },
   { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platforms: ['tau2'], media_platform: 'tau2', platform_category: 'Media Players', library_capable: true, index_status: 'missing', tracks: null },
@@ -289,6 +340,16 @@ const handlers: Record<string, (args: any) => unknown> = {
     { id: 'alfatreze.TAU', installed_version: '0.6.0', latest_version: '', release_date: '', status: 'Excluded' },
   ], source: 'Cache', fetched: Math.floor(Date.now() / 1000) - 3600 }),
   marketplace_download: (a) => ({ download: { path: `/cache/${a.coreId}.zip`, bytes: 3.2 * MB, sha256: 'b'.repeat(64), checksum: a.coreId === 'agg23.Arduboy' ? 'NotPublished' : 'Verified' }, vetted: { core_id: a.coreId as string, version: (a.version as string | null) ?? '1.4.0', date_release: '2026-09-02', platform_ids: ['snes'], firmware_required: '2.0', dock_supported: true, files: 14, uncompressed_bytes: 6 * MB, asset_files: 2 } }),
+  cores_tree: () => coresTreeMock(),
+  core_detail: (a) => detailFor(a.coreId as string),
+  core_files: (a) => filesFor(a.coreId as string),
+  core_settings: (a) => (a.coreId === 'Spiritualized.GBA'
+    ? { values: [{ id: 1, name: 'High Quality Audio', kind: 'check', value: 0, display: 'Off', default_display: 'On', known: true }, { id: 2, name: 'Rumble Strength', kind: 'slider', value: 6, display: '6', default_display: '5', known: true }, { id: 3, name: 'Edge Masking', kind: 'list', value: 3, display: 'Auto Masking', default_display: 'Auto Masking', known: true }], files: [{ group: 'Interact', rel_path: 'Settings/Spiritualized.GBA/Interact/_core/interact_persist.json', bytes: 210, modified: 1767225600 }, { group: 'Input', rel_path: 'Settings/Spiritualized.GBA/Input/_core/input_persist.json', bytes: 540, modified: 1767225600 }], presets: 12, presets_folder: 'Presets/Spiritualized.GBA', unreadable: null }
+    : { values: [], files: [], presets: 0, presets_folder: `Presets/${a.coreId}`, unreadable: null }),
+  core_screenshots: () => ({ shots: SHOTS, total: SHOTS.length + 465, likely: 5, states: 6, window_secs: 600 }),
+  screenshot_thumbnail: (a) => thumb(a.file as string),
+  plan_core_add: (a) => addPlanFor(a),
+  execute_core_add: (a) => { const plan = addPlanFor(a); for (const i of plan.items) if (i.state === 'New') { mockAdded.push(i.source.split('/').pop()!); if (i.source.endsWith('gba_bios.bin')) mockBios = true; } return { written: plan.new_files, replaced: 0, skipped_identical: plan.identical, skipped_different: plan.different, refused: plan.refused, bytes_written: plan.bytes_to_write, backup_dir: null }; },
   update_check: () => null,
   update_download: () => [],
   persist_names: () => ({ 16: 'Halcyon EQ preset' }),

@@ -244,3 +244,34 @@ export type CoreStatus = { id: string; installed_version: string; latest_version
 export type CoreUpdates = { rows: CoreStatus[]; source: MarketSource; fetched: number };
 export type Vetted = { core_id: string; version: string; date_release: string; platform_ids: string[]; firmware_required: string; dock_supported: boolean | null; files: number; uncompressed_bytes: number; asset_files: number };
 export type MarketplaceDownload = { download: { path: string; bytes: number; sha256: string; checksum: 'Verified' | 'NotPublished' }; vetted: Vetted };
+
+/** Mirrors `tau_core::corehub` / `core_files` / `core_settings` / `core_screens` / `core_add` (serde output). */
+export type PlatformInfo = { id: string; name: string; category: string; manufacturer: string; year: number; has_image: boolean };
+export type CoreRow = { id: string; shortname: string; author: string; version: string; platform: string; platforms: string[]; missing: number };
+export type PlatformNode = { platform: PlatformInfo; cores: CoreRow[] };
+export type SlotInfo = { id: string; name: string; required: boolean; filename: string; extensions: string[]; nonvolatile: boolean; core_specific: boolean; platform: string; size_exact: number | null; size_maximum: number | null };
+export type CoreDetail = {
+  id: string; shortname: string; author: string; description: string; url: string; version: string; date_release: string; firmware_required: string;
+  dock_supported: boolean | null; link_port: boolean | null; sleep_supported: boolean | null; platforms: PlatformInfo[]; slots: SlotInfo[]; has_icon: boolean; has_interact: boolean;
+};
+export type FolderRole = 'AssetsShared' | 'AssetsCore' | 'SavesShared' | 'SavesCore' | 'SaveStates';
+export type EntryKind = 'Rom' | 'Bios' | 'Tape' | 'Disk' | 'Save' | 'State' | 'Other';
+export type FolderRef = { role: FolderRole; platform: string; label: string; rel_path: string };
+export type FileEntry = { rel_path: string; name: string; bytes: number; modified: number; kind: EntryKind; slot: string | null; game: string | null; taken: string | null };
+export type FolderListing = { folder: FolderRef; exists: boolean; entries: FileEntry[]; total_files: number; total_bytes: number; truncated: boolean };
+export type MissingFile = { slot: string; filename: string; folder_rel: string; size_exact: number | null };
+export type BackupZip = { name: string; bytes: number; modified: number };
+export type CoreFiles = { folders: FolderListing[]; missing: MissingFile[]; save_backups: BackupZip[] };
+export type SettingValue = { id: number; name: string; kind: string; value: number; display: string; default_display: string; known: boolean };
+export type SavedFile = { group: string; rel_path: string; bytes: number; modified: number };
+export type CoreSettings = { values: SettingValue[]; files: SavedFile[]; presets: number; presets_folder: string; unreadable: string | null };
+export type Shot = { file: string; taken: string; bytes: number; likely: string | null };
+export type ScreenshotView = { shots: Shot[]; total: number; likely: number; states: number; window_secs: number };
+export type AddDestination = 'Shared' | 'CoreOnly';
+export type AddState = 'New' | 'Identical' | 'Different' | { Refused: string };
+export type AddItem = { source: string; dest_rel: string; bytes: number; sha256: string; state: AddState };
+export type AddPlan = {
+  id: string; core_id: string; platform: string; destination: AddDestination; folder_rel: string; replace: boolean; items: AddItem[];
+  new_files: number; identical: number; different: number; refused: number; bytes_to_write: number; warnings: string[]; blocked: string | null;
+};
+export type AddReport = { written: number; replaced: number; skipped_identical: number; skipped_different: number; refused: number; bytes_written: number; backup_dir: string | null };
