@@ -33,6 +33,8 @@ pub struct CoreRow {
     pub version: String,
     pub platform: String,
     pub platforms: Vec<String>,
+    /// Required files with a fixed name (a BIOS) that are not on the card: the tree marks the core when this is not zero.
+    pub missing: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,7 +100,10 @@ pub fn platform_tree(card: &Path) -> Result<Vec<PlatformNode>, TauError> {
         } else {
             c.platform.clone()
         };
+        let missing =
+            core_detail(card, &c.id).map_or(0, |d| crate::core_files::missing(card, &d).len());
         groups.entry(key).or_default().push(CoreRow {
+            missing,
             shortname: if c.shortname.is_empty() {
                 c.id.clone()
             } else {
@@ -414,6 +419,11 @@ mod tests {
         // sorted by display name; a platform with no Platforms file shows its id; "no platform" is always last
         assert_eq!(ids, ["arcgame", "gba", "_none"]);
         let gba = tree.iter().find(|n| n.platform.id == "gba").unwrap();
+        // the GBA core needs its BIOS and the tree says so; the other core does not
+        assert_eq!(
+            gba.cores.iter().map(|c| c.missing).collect::<Vec<_>>(),
+            [1, 0]
+        );
         assert_eq!(
             (
                 gba.platform.name.as_str(),
