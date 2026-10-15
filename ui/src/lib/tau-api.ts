@@ -1,5 +1,5 @@
 import { invoke } from './backend';
-import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate, CatalogResult, ArtKind, CoreUpdates, MarketplaceDownload } from './types';
+import type { MigrationPlan, MigrationReport, MarkerStatus, IndexState, CoverFilePlan, LameStatus, RefreshPlan, RefreshReport, InstallPlan, InstallReport, RollbackReport, UpdateCheck, Downloaded, BackupPlan, ChangePlanView, ChangeResult, ChangeRequest, HistoryContext, HistoryEntry, Thumbnail, ConnectionInfo, EjectResult, ReadbackStatus, CardBreakdown, CoreRef, LibraryListing, Prefs, PrefsView, CapacityCheck, CheckSummary, Comparison, Core, JournalSummary, LibraryScan, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, SyncReport, TaudReport, ThemeInput, ThemeReport, AssetsInstallPlan, AssetsInstallReport, DiagView, HalcyonPreset, ApoImport, OmegaUpdate, CatalogResult, ArtKind, CoreUpdates, MarketplaceDownload, PlatformNode, CoreDetail, CoreFiles, CoreSettings, ScreenshotView, AddPlan, AddReport, AddDestination } from './types';
 
 export const inspectCard = (path: string) => invoke<Core[]>('inspect_card', { path });
 export const readPersistedSettings = (path: string) => invoke<Setting[]>('read_persisted_settings', { path });
@@ -102,3 +102,12 @@ export const marketplaceCatalog = (force = false) => invoke<CatalogResult>('mark
 export const marketplaceArt = (coreId: string, kind: ArtKind) => invoke<string | null>('marketplace_art', { coreId, kind });
 export const marketplaceCoreUpdates = (card: string, force = false) => invoke<CoreUpdates>('marketplace_core_updates', { card, force });
 export const marketplaceDownload = (coreId: string, version: string | null = null) => invoke<MarketplaceDownload>('marketplace_download', { coreId, version });
+
+export const coresTree = (card: string) => invoke<PlatformNode[]>('cores_tree', { card });
+export const coreDetail = (card: string, coreId: string) => invoke<CoreDetail>('core_detail', { card, coreId });
+export const coreFiles = (card: string, coreId: string) => invoke<CoreFiles>('core_files', { card, coreId });
+export const coreSettings = (card: string, coreId: string) => invoke<CoreSettings>('core_settings', { card, coreId });
+export const coreScreenshots = (card: string, coreId: string) => invoke<ScreenshotView>('core_screenshots', { card, coreId });
+export const screenshotThumbnail = (card: string, file: string, longSide = 240) => invoke<string>('screenshot_thumbnail', { card, file, longSide });
+export const planCoreAdd = (card: string, coreId: string, platform: string, destination: AddDestination, sources: string[], replace: boolean) => invoke<AddPlan>('plan_core_add', { card, coreId, platform, destination, sources, replace });
+export const executeCoreAdd = (card: string, coreId: string, platform: string, destination: AddDestination, sources: string[], replace: boolean, confirmation: string) => invoke<AddReport>('execute_core_add', { card, coreId, platform, destination, sources, replace, confirmation });
