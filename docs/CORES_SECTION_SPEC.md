@@ -93,7 +93,7 @@ Tree: `role="tree"`/`treeitem`/`group` with `aria-expanded`, `aria-selected`, ro
 
 ### 4.8 Open questions (answered by building the simplest thing and listing it)
 - Screenshot attribution is exact from the embedded block; the save-state time heuristic remains only for files without it.
-- No delete/rename/export of saves and screenshots in this pass (read-only plus the add-files flow); Pocket Sync already does bulk save backup.
+- Removing files (added 2026-10-15): Files tab, asset folders only (`core_remove`, `tau core-remove-plan` / `core-remove`). Select rows, review (shared-folder readers, "needed to start" flag), then each file is copied outside the card, SHA-256 verified, and only then deleted; a wrong token, a changed file or an inside backup folder removes nothing. Saves and save states are not removable here. No rename/export of saves and screenshots; Pocket Sync already does bulk save backup.
 - No parser yet: entries expose `kind` and `slot`; a `parsed` field is the extension point.
 
 ## 5. Safety (SAFETY_RULES.md)

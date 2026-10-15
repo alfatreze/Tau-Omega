@@ -276,3 +276,7 @@ export type AddPlan = {
   new_files: number; identical: number; different: number; refused: number; bytes_to_write: number; warnings: string[]; blocked: string | null;
 };
 export type AddReport = { written: number; replaced: number; skipped_identical: number; skipped_different: number; refused: number; bytes_written: number; backup_dir: string | null };
+
+export type RemoveItem = { rel_path: string; bytes: number; shared_with: string[]; needed_by: string | null };
+export type RemoveFilesPlan = { id: string; core_id: string; items: RemoveItem[]; total_bytes: number; warnings: string[]; blocked: string | null };
+export type RemoveFilesReport = { removed: number; bytes_removed: number; backup_dir: string };

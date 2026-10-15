@@ -65,10 +65,10 @@ const detailFor = (id: string) => {
 };
 const fe = (rel: string, bytes: number, kind: string, slot: string | null, extra: Record<string, unknown> = {}) => ({ rel_path: rel, name: rel.split('/').pop()!, bytes, modified: 1767225600, kind, slot, game: null, taken: null, ...extra });
 const mockRoms: string[] = ['Advance Wars (USA).gba', 'Boktai 2 (USA).gba', 'Golden Sun (USA).gba', 'Metroid Fusion (USA).gba', 'Mother 3.gba', 'Zelda - Minish Cap (USA).gba'];
-let mockBios = false; const mockAdded: string[] = [];
+let mockBios = false; const mockAdded: string[] = []; const mockGone: string[] = [];
 const filesFor = (id: string) => {
   const d = detailFor(id); const gba = id === 'Spiritualized.GBA';
-  const roms = gba ? [...mockRoms, ...mockAdded].map((n) => fe(n, 8 * MB, 'Rom', 'Cartridge')).concat(mockBios ? [fe('gba_bios.bin', 16384, 'Bios', 'BIOS')] : []).sort((a, b) => a.name.localeCompare(b.name)) : [];
+  const roms = gba ? [...mockRoms, ...mockAdded].filter((n) => !mockGone.includes(n)).map((n) => fe(n, 8 * MB, 'Rom', 'Cartridge')).concat(mockBios ? [fe('gba_bios.bin', 16384, 'Bios', 'BIOS')] : []).sort((a, b) => a.name.localeCompare(b.name)) : [];
   const folder = (role: string, label: string, rel: string, entries: unknown[], exists = true) => ({ folder: { role, platform: d.platforms[0]?.id ?? '', label, rel_path: rel }, exists, entries, total_files: entries.length, total_bytes: (entries as { bytes: number }[]).reduce((a, e) => a + e.bytes, 0), truncated: false });
   const pid = d.platforms[0]?.id ?? '_none';
   return {
@@ -349,6 +349,8 @@ const handlers: Record<string, (args: any) => unknown> = {
   core_screenshots: (a) => a.coreId !== 'Spiritualized.GBA' ? ({ shots: [], total: 489, recorded: 0, likely: 0, with_meta: 489, states: 0, window_secs: 600 }) : ({ shots: SHOTS, total: SHOTS.length + 465, recorded: 5, likely: 2, with_meta: 20, states: 6, window_secs: 600 }),
   screenshot_thumbnail: (a) => thumb(a.file as string),
   plan_core_add: (a) => addPlanFor(a),
+  plan_core_remove: (a) => { const files = (a.files as string[]) ?? []; return { id: 'rm' + files.join('|'), core_id: a.coreId, items: files.map((f) => ({ rel_path: f, bytes: 8 * MB, shared_with: f.includes('/common/') ? ['other.GBAlt'] : [], needed_by: f.endsWith('gba_bios.bin') ? 'BIOS' : null })), total_bytes: files.length * 8 * MB, warnings: files.some((f) => f.endsWith('gba_bios.bin')) ? ['gba_bios.bin is a file this core needs to start.'] : [], blocked: files.length ? null : 'Nothing is selected.' }; },
+  execute_core_remove: (a) => { const files = (a.files as string[]) ?? []; for (const f of files) { const nm = f.split('/').pop()!; if (nm === 'gba_bios.bin') mockBios = false; else mockGone.push(nm); } return { removed: files.length, bytes_removed: files.length * 8 * MB, backup_dir: '/Backups/omega/abc123' }; },
   execute_core_add: (a) => { const plan = addPlanFor(a); for (const i of plan.items) if (i.state === 'New') { const nm = i.source.split('/').pop()!; if (nm === 'gba_bios.bin') mockBios = true; else mockAdded.push(nm); } return { written: plan.new_files, replaced: 0, skipped_identical: plan.identical, skipped_different: plan.different, refused: plan.refused, bytes_written: plan.bytes_to_write, backup_dir: null }; },
   update_check: () => null,
   update_download: () => [],

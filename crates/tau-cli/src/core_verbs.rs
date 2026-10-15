@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tau_core::{
     core_add::{self, AddState, Destination},
-    core_files, core_screens, core_settings, corehub,
+    core_files, core_remove, core_screens, core_settings, corehub,
 };
 
 fn emit<T: Serialize>(j: bool, data: &T, text: impl FnOnce() -> String) -> Result<(), CliError> {
@@ -199,6 +199,59 @@ pub fn core_screens(a: &[String], j: bool) -> Result<(), CliError> {
             v.likely,
             v.window_secs / 60,
             v.states
+        )
+    })
+}
+
+fn rels(a: &[String]) -> Vec<String> {
+    sources(a)
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect()
+}
+
+/// `tau core-remove-plan <card-root> <core-id> <card-relative file paths...>`
+pub fn core_remove_plan(a: &[String], j: bool) -> Result<(), CliError> {
+    let card = a.first().ok_or("core-remove-plan needs a card root")?;
+    let id = a.get(1).ok_or("core-remove-plan needs a core id")?;
+    let p = core_remove::plan_remove_files(Path::new(card), id, &rels(a))?;
+    emit(j, &p, || {
+        let mut s = format!(
+            "{} file(s), {} to remove (backed up outside the card first); plan id {}",
+            p.items.len(),
+            size(p.total_bytes),
+            p.id
+        );
+        for w in &p.warnings {
+            s.push_str(&format!("\nnote: {w}"));
+        }
+        if let Some(b) = &p.blocked {
+            s.push_str(&format!("\nblocked: {b}"));
+        }
+        s
+    })
+}
+
+/// `tau core-remove <card-root> <core-id> <card-relative file paths...> --confirm <plan-id> --backup-dir <outside the card> --yes`
+pub fn core_remove(a: &[String], j: bool) -> Result<(), CliError> {
+    yes(a)?;
+    let card = a.first().ok_or("core-remove needs a card root")?;
+    let id = a.get(1).ok_or("core-remove needs a core id")?;
+    let confirm = need(a, "--confirm", "core-remove")?;
+    let backup = need(a, "--backup-dir", "core-remove")?;
+    let r = core_remove::execute_remove_files(
+        Path::new(card),
+        id,
+        &rels(a),
+        confirm,
+        Path::new(backup),
+    )?;
+    emit(j, &r, || {
+        format!(
+            "removed {} file(s), {}; copies kept in {}",
+            r.removed,
+            size(r.bytes_removed),
+            r.backup_dir.display()
         )
     })
 }
