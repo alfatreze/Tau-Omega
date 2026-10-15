@@ -38,6 +38,28 @@ fn slots_of(data_json: &Value) -> Vec<&Value> {
         .collect()
 }
 
+/// The audio formats a core's data slots accept (`mp3`, `flac`), lower case, in that order. Empty for a core that reads neither.
+pub fn audio_formats(data_json: Option<&Value>) -> Vec<String> {
+    let all: Vec<String> = data_json
+        .map(|j| {
+            slots_of(j)
+                .into_iter()
+                .filter_map(|s| s.get("extensions").and_then(Value::as_array))
+                .flatten()
+                .filter_map(|e| {
+                    e.as_str()
+                        .map(|e| e.trim_start_matches('.').to_ascii_lowercase())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    ["mp3", "flac"]
+        .iter()
+        .filter(|f| all.iter().any(|e| e == *f))
+        .map(|f| (*f).to_string())
+        .collect()
+}
+
 /// The platform ids a core declares, in order (empty when core.json is unreadable).
 pub fn platform_ids(core_json: &Value) -> Vec<String> {
     core_json
@@ -203,6 +225,15 @@ pub fn obsolete_path_allowed(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn audio_formats_come_from_the_slot_extensions() {
+        let j: serde_json::Value = serde_json::from_str(r#"{"data":{"data_slots":[{"name":"Music","extensions":["MP3",".flac","wav"]},{"name":"x","extensions":["gba"]}]}}"#).unwrap();
+        assert_eq!(super::audio_formats(Some(&j)), ["mp3", "flac"]);
+        let only: serde_json::Value =
+            serde_json::from_str(r#"{"data":{"data_slots":[{"extensions":["flac"]}]}}"#).unwrap();
+        assert_eq!(super::audio_formats(Some(&only)), ["flac"]);
+        assert!(super::audio_formats(None).is_empty());
+    }
     use super::*;
     use serde_json::json;
 

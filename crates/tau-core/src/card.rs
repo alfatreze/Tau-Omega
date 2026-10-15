@@ -49,6 +49,9 @@ pub struct Core {
     /// plain core).
     pub media_platform: String,
     pub library_capable: bool,
+    /// `mp3` and/or `flac` when a data slot of the core accepts them (a core that can play the files the library holds).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub audio_formats: Vec<String>,
     pub index_status: IndexStatus,
     /// The declaring platform's own `category` (`Platforms/<platform>.json`'s
     /// `platform.category`, e.g. `"Media Players"`), when that file exists
@@ -130,6 +133,7 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
                 platforms,
                 media_platform,
                 library_capable,
+                audio_formats: cardlayout::audio_formats(data_value.as_ref()),
                 index_status,
                 platform_category,
             });
