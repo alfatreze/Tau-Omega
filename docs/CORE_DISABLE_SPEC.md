@@ -2,7 +2,7 @@
 
 Owner request: a way to disable cores so the Pocket does not see them, for cores that have no files they can read or play, or lack the mandatory files they need; a setting, plus a dialog asking the user when such a core is detected (with a "do not remind me" tick); and a manual way to enable a core again for the ones every check misses (a core that needs no files, say).
 
-**Status:** the detection (`core_health`, `tau core-health`) and the move itself (`core_state`, `tau core-disable` / `core-enable` / `cores-disabled`) are built and tested on synthetic cards; detection was run read-only on the real card. **Not built:** the setting, the dialog, the Cores-page controls. **Not verified:** that the Pocket really ignores the holding folder (section 2: a hardware check on CARDWRITE, needs approval).
+**Status:** the detection (`core_health`, `tau core-health`) and the move itself (`core_state`, `tau core-disable` / `core-enable` / `cores-disabled`) are built and tested on synthetic cards; detection was run read-only on the real card. **Not built:** the setting, the dialog, the Cores-page controls. **Hardware check done 2026-10-15 on CARDWRITE:** both the move to `Disabled Cores/` (method A, ZXSpectrum) and the `core.json.off` rename (method C, Arduboy) hide the core from the openFPGA menu with no entry or error in Tools > Developer > Builds; the control core stayed listed. **Decision: A** (clean `Cores/`, one visible place, `omega-disabled.json` records when and why; C leaves a folder without `core.json` that other tools read as broken). Restore check (both return and start, saves unchanged) is still owed.
 
 ## 1. What decides whether the Pocket lists a core
 
