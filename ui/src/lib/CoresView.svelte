@@ -9,7 +9,7 @@
   import CoreSettingsTab from './CoreSettingsTab.svelte';
   import { errorMessage } from './backend';
   import { coreDetail, coreFiles, readPlatformImage } from './tau-api';
-  import { coresSelection, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
+  import { coresGroups, coresSelection, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
   import { plural } from './coresFormat';
   import type { CoreDetail, CoreFiles } from './types';
   export let card = '';
@@ -101,17 +101,25 @@
       {/each}
     </ul>
   {:else}
-    <header><div><p class="eyebrow">YOUR CARD</p><h1 id="cores-title">Cores</h1><p class="lede">Every core on this card, by platform. Pick a platform to see its cores, or a core to see its files, saves, screenshots and settings.</p></div></header>
+    <header><div><p class="eyebrow">YOUR CARD</p><h1 id="cores-title">Cores</h1><p class="lede">Every core on this card, grouped like the openFPGA Library: category, manufacturer, platform. Pick a platform to see its cores, or a core to see its files, saves, screenshots and settings.</p></div></header>
     {#if !$coresTreeStore.length}<div class="empty"><h2>No cores on this card</h2><p>Install some from the Marketplace.</p></div>
     {:else}
-      <ul class="ov-grid" aria-label="Platforms">
-        {#each $coresTreeStore as n (n.platform.id)}
-          <li><button class="ov-card" on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}. Open`}>
-            <strong>{n.platform.name}</strong><small>{[n.platform.manufacturer, n.platform.year || ''].filter(Boolean).join(' · ')}</small>
-            <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
-          </button></li>
-        {/each}
-      </ul>
+      {#each $coresGroups as g (g.name)}
+        <section class="ov-cat" aria-labelledby={`ov-cat-${g.name.replace(/\W+/g, '-')}`}>
+          <h2 id={`ov-cat-${g.name.replace(/\W+/g, '-')}`}>{g.name} <small>{plural(g.cores, 'core')}</small></h2>
+          {#each g.makers as m (m.name)}
+            {#if m.name}<h3 class="ov-maker">{m.name}</h3>{/if}
+            <ul class="ov-grid" aria-label={`${g.name}${m.name ? ', ' + m.name : ''}`}>
+              {#each m.platforms as n (n.platform.id)}
+                <li><button class="ov-card" on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}. Open`}>
+                  <strong>{n.platform.name}</strong><small>{n.platform.year || ''}</small>
+                  <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
+                </button></li>
+              {/each}
+            </ul>
+          {/each}
+        </section>
+      {/each}
     {/if}
   {/if}
 </section>
@@ -131,6 +139,7 @@
   .pv-open{width:100%;display:flex;align-items:center;gap:13px;padding:13px 16px;background:transparent;color:inherit;text-align:left}.pv-open:hover{background:#1c282a}.pv-open:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
   .pv-main{flex:1;min-width:0;display:grid;gap:3px}.pv-main strong{font-size:14px}.pv-main small{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis}.pv-ver{font-size:12.5px;color:#c7d1d0}
   .chip.warn{background:#241f12;color:#e5d9a8}
+  .ov-cat{margin:0 0 26px}.ov-cat h2{font-size:15px;margin:0 0 10px}.ov-cat h2 small{font-size:12px;font-weight:400;color:#8f9e9d;margin-left:6px}.ov-maker{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#9fb3aa;margin:14px 0 8px}
   .ov-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
   .ov-card{width:100%;display:grid;gap:4px;padding:14px 16px;background:#161f20;border:1px solid #2c393a;border-radius:12px;color:inherit;text-align:left}.ov-card:hover{border-color:#3d5254}.ov-card:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}
   .ov-card strong{font-size:14.5px}.ov-card small{font-size:12px;color:#95a5a4;min-height:16px}.ov-n{font-size:12px;color:#c7d1d0;margin-top:6px}

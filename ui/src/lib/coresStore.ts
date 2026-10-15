@@ -27,6 +27,22 @@ export async function refreshCores(card: string): Promise<void> {
   finally { coresLoading.set(false); }
 }
 
+/** The Library's grouping: category > manufacturer > platform > core. The tree from the engine is already in this order. */
+export type MakerGroup = { name: string; platforms: PlatformNode[]; cores: number };
+export type CategoryGroup = { name: string; makers: MakerGroup[]; platforms: number; cores: number };
+export function groupTree(tree: PlatformNode[]): CategoryGroup[] {
+  const out: CategoryGroup[] = [];
+  for (const n of tree) {
+    const cat = n.platform.id === '_none' ? 'No platform' : n.platform.category || 'Other';
+    const maker = n.platform.id === '_none' ? '' : n.platform.manufacturer || 'Unknown';
+    let c = out.find((x) => x.name === cat); if (!c) { c = { name: cat, makers: [], platforms: 0, cores: 0 }; out.push(c); }
+    let m = c.makers.find((x) => x.name === maker); if (!m) { m = { name: maker, platforms: [], cores: 0 }; c.makers.push(m); }
+    m.platforms.push(n); m.cores += n.cores.length; c.platforms++; c.cores += n.cores.length;
+  }
+  return out;
+}
+export const coresGroups = derived(coresTreeStore, groupTree);
+
 export function findCore(tree: PlatformNode[], id: string): { node: PlatformNode; core: CoreRow } | null {
   for (const node of tree) { const core = node.cores.find((c) => c.id === id); if (core) return { node, core }; }
   return null;
