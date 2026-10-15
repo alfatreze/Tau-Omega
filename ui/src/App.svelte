@@ -32,6 +32,7 @@
   import OmegaUpdate from './lib/OmegaUpdate.svelte';
   import CardMarkerPrompt from './lib/CardMarkerPrompt.svelte';
   import DisableCoresDialog from './lib/DisableCoresDialog.svelte';
+  import { loadDeveloperTools } from './lib/devStore';
   import { coresSelection, coresTab, coresTreeStore, findCore } from './lib/coresStore';
   import { autoCheckUpdates } from './lib/updatesStore';
   import { get } from 'svelte/store';
@@ -48,6 +49,7 @@
   // Where journals are written (the user's folder, or the app's default). Sync history reads from the same place.
   let reportsDir = ''; let historyEntries: HistoryEntry[] = []; let historyLoading = false; let historyNotice = ''; let historySelect = '';
   onMount(async () => {
+    void loadDeveloperTools();
     try { reportsDir = (await getReportsDir()) ?? ''; } catch { /* Compare cores then asks for a report file */ }
     pruneHistory().catch(() => { /* retention is best-effort */ });
     persistNames().then((names) => { persistLabels = names; }).catch(() => { /* the built-in table still labels the ids */ });

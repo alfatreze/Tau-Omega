@@ -6,7 +6,12 @@
   import { checkStorageCapacity, listScreenshots } from './tau-api';
   import { plural, size } from './coresFormat';
   import type { VolumeSpace } from './types';
+  import { developerTools, roleOf, refreshRole, markTestCard, cardLabel } from './devStore';
+  import { errorMessage } from './backend';
   import type { Core } from './types';
+  $: if ($developerTools && path) void refreshRole(path);
+  let roleBusy = false; let roleNote = '';
+  async function toggleRole(test: boolean) { roleBusy = true; roleNote = ''; try { await markTestCard(path, test); roleNote = test ? 'Marked as a test card.' : 'This card is a Real card again.'; } catch (e) { roleNote = `Nothing was changed. ${errorMessage(e)}`; } finally { roleBusy = false; } }
   export let cardMounted: boolean | null = null; export let ejectedSafely = ''; export let path = '';
   export let knownCards: string[] = []; export let notice = '';
   export let cores: Core[] = [];
@@ -64,6 +69,12 @@
           <div class="sum-space"><div class="sum-bar" role="img" aria-label={`${size(usedBytes)} used of ${size(space.total_bytes)}, ${size(space.available_bytes)} free`}><span style={`width:${usedPct}%`}></span></div>
             <p>{size(usedBytes)} used of {size(space.total_bytes)} · <strong>{size(space.available_bytes)} free</strong></p></div>
         {/if}
+        {#if $developerTools}
+          <h3 class="sum-h">Card role</h3>
+          <div class="role-row"><p><strong>{$roleOf.role === 'test' ? 'Test card' : 'Real card'}</strong> <small>{$roleOf.role === 'test' ? 'Dev installs go through the usual reviewed plan.' : 'Installing onto it asks you to type its name first.'}</small></p>
+            <button class="quiet" role="switch" aria-checked={$roleOf.role === 'test'} aria-label="This is a test card" disabled={roleBusy} on:click={() => toggleRole($roleOf.role !== 'test')}>{$roleOf.role === 'test' ? 'Make this a Real card' : 'This is a test card'}</button></div>
+          <p class="sum-note">Saved as a small hidden file, <code>.omega-role</code>, at the card’s root, so the role follows the card. A card without it is always treated as Real.{roleNote ? ' ' + roleNote : ''}</p>
+        {/if}
         {#if needing.length}
           <h3 class="sum-h">Needs attention</h3>
           <ul class="sum-list" aria-label="Cores that need a file">{#each needing as c (c.id)}<li><button class="quiet" on:click={() => openCore(c.id)}><strong>{c.shortname}</strong> <small>{c.platformName} · needs {plural(c.missing, 'file')}</small></button></li>{/each}</ul>
@@ -87,6 +98,7 @@
   .sum-space{margin:12px 0 0}.sum-space p{margin:6px 0 0;font-size:12.5px;color:#a6b3b2}.sum-bar{height:8px;border-radius:99px;background:#101617;border:1px solid #2c393a;overflow:hidden}.sum-bar span{display:block;height:100%;background:#c1f0ad}
   .sum-link{background:none;border:0;padding:0;font:inherit;font-weight:700;color:#e5d9a8;cursor:pointer;text-align:left}.sum-link small{font-size:11.5px;font-weight:400;color:#c7b97f}.sum-link:hover{text-decoration:underline}.sum-link:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}
   .sum-actions{display:flex;gap:4px}
+  .role-row{display:flex;justify-content:space-between;align-items:center;gap:12px}.role-row p{margin:0;font-size:13px}.role-row small{color:#8f9e9d;font-size:12px;margin-left:6px}.sum-note{font-size:11.5px;color:#8f9e9d;margin:6px 0 0}
   .sum-h{margin:14px 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}.sum-ok{font-size:13px;color:#c5f7ad;margin:10px 0 0}
   .sum-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}.sum-list .quiet{width:100%;text-align:left;display:flex;gap:8px;align-items:baseline}.sum-list small{color:#8f9e9d;font-size:12px}
 </style>

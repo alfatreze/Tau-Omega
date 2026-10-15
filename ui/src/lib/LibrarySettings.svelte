@@ -6,6 +6,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { cardMarkerStatus, removeCardMarker, setCardMarker, clearHistory, errorMessage, getPrefs, listHistory, pruneHistory, setPrefs, setReportsDir } from './tau-api';
   import type { MarkerStatus, Prefs, PrefsView } from './types';
+  import { developerTools } from './devStore';
 
   /** Opens the sync history page. */
   export let openHistory: () => void = () => {};
@@ -113,6 +114,9 @@
     <div class="ls-row"><div><b>Cores the Pocket cannot use</b><small>When a core is missing a file it needs, or is broken, it clutters the Pocket’s menu. Nothing is ever deleted: a hidden core is moved to <code>Disabled Cores</code> and can be enabled again from Cores.</small></div>
       <div><label class="ls-sel"><span class="sr">What to do about cores the Pocket cannot use</span><select value={prefs.core_disable} on:change={(e) => void update({ core_disable: e.currentTarget.value as 'ask' | 'auto' | 'never' }, 'Saved.')}>
         <option value="ask">Ask me when I open a card</option><option value="auto">Hide them automatically</option><option value="never">Never suggest hiding</option></select></label></div></div>
+
+    <div class="ls-row"><div><b>Show developer tools</b><small>For people who build cores. Adds a card role (Real or Test) on the Card page and asks you to type the card’s name before installing onto a Real card. Off by default; nothing changes for everyday use.</small></div>
+      <div><button class="quiet" role="switch" aria-checked={prefs.developer_tools} on:click={async () => { const on = !prefs?.developer_tools; await update({ developer_tools: on }, on ? 'Developer tools are on.' : 'Developer tools are off.'); developerTools.set(!!prefs?.developer_tools); }}>{prefs.developer_tools ? 'Turn off' : 'Turn on'}</button></div></div>
 
     <div class="ls-row"><div><b>Notices</b><small>Show the one-time messages again.</small></div>
       <div><button class="quiet" disabled={!prefs.remove_explained && !prefs.slow_alert_suppressed && prefs.card_marker === 'ask' && !prefs.update_notice_shown} on:click={() => update({ remove_explained: false, slow_alert_suppressed: false, update_notice_shown: false, card_marker: 'ask' }, 'Notices will show again.')}>Reset notices</button></div></div>

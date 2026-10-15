@@ -50,3 +50,4 @@ jobs:
           NODE_PATH=$(npm root -g) node scripts/cores-test.cjs
           NODE_PATH=$(npm root -g) node scripts/manual-test.cjs
           NODE_PATH=$(npm root -g) node scripts/disable-test.cjs
+          NODE_PATH=$(npm root -g) node scripts/devtools-test.cjs

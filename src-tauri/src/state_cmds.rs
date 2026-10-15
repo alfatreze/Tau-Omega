@@ -80,3 +80,27 @@ pub fn core_keep(app: tauri::AppHandle, card: String, ids: Vec<String>, keep: bo
     )?;
     Ok(())
 }
+
+/// The card's role (`"test"` only when the card carries the marker; every other card is `"real"`).
+#[tauri::command(async)]
+pub fn card_role(card: String) -> String {
+    match tau_core::card_role::read(Path::new(&card)) {
+        tau_core::card_role::Role::Test => "test".into(),
+        tau_core::card_role::Role::Real => "real".into(),
+    }
+}
+
+/// Marks the card as a test card (writes `.omega-role`) or makes it Real again (removes it). A card write, so under the lock.
+#[tauri::command(async)]
+pub fn set_card_role(app: tauri::AppHandle, card: String, test: bool) -> Result<String, TauError> {
+    {
+        let _write = crate::begin_card_write(&app, &card)?;
+        if test {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            tau_core::card_role::set_test(Path::new(&card), &card_key(&card), now)?;
+        } else {
+            tau_core::card_role::clear(Path::new(&card))?;
+        }
+    }
+    Ok(card_role(card))
+}

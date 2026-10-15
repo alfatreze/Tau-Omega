@@ -122,3 +122,6 @@ export const disabledCores = (card: string) => invoke<DisabledCore[]>('disabled_
 export const planCoreState = (card: string, ids: string[], enable: boolean) => invoke<StatePlan>('plan_core_state', { card, ids, enable });
 export const executeCoreState = (card: string, ids: string[], enable: boolean, confirmation: string, reasons: [string, string[]][]) => invoke<StateReport>('execute_core_state', { card, ids, enable, confirmation, reasons });
 export const coreKeep = (card: string, ids: string[], keep: boolean) => invoke<void>('core_keep', { card, ids, keep });
+
+export const cardRole = (card: string) => invoke<'real' | 'test'>('card_role', { card });
+export const setCardRole = (card: string, test: boolean) => invoke<'real' | 'test'>('set_card_role', { card, test });
