@@ -70,7 +70,7 @@
   onDestroy(() => {});
 </script>
 <svelte:window on:keydown={onKey} />
-<section class="page cores" aria-labelledby="cores-title">
+<section class="page cores" class:has-core={!!$coresSelection.core && !!card} aria-labelledby="cores-title">
   {#if !card}
     <header><div><p class="eyebrow">CORES</p><h1 id="cores-title">Cores</h1><p class="lede">Open a card to see the cores on it, organised by platform.</p></div></header>
   {:else if $coresSelection.core}
@@ -92,7 +92,7 @@
               <button id={`cores-tab-${id}`} role="tab" class:current={tab === id} aria-selected={tab === id} aria-controls={`cores-panel-${id}`} tabindex={tab === id ? 0 : -1} on:click={() => (tab = id)}>{label}{#if id === 'files' && files.missing.length}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</button>
             {/each}
           </div>
-          <div id={`cores-panel-${tab}`} role="tabpanel" aria-labelledby={`cores-tab-${tab}`} tabindex="-1">
+          <div class="cores-scroll" id={`cores-panel-${tab}`} role="tabpanel" aria-labelledby={`cores-tab-${tab}`} tabindex="-1">
             {#if tab === 'files'}<CoreFilesTab bind:this={filesTab} {card} {detail} {files} changed={reload} />
             {:else if tab === 'saves'}<CoreSavesTab {files} />
             {:else if tab === 'screens'}{#key detail.id}<CoreScreenshotsTab {card} coreId={detail.id} />{/key}
@@ -183,10 +183,14 @@
 </section>
 <style>
   .cores-note{font-size:13px;color:#95a5a4}
-  .cp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+  /* A core's page is one screen tall: the header and tabs stay put, the content and the details column each scroll on their own. */
+  .cores.has-core{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+  .cp-head{flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-right:52px}
+  .cores-main{display:flex;flex-direction:column;min-height:0;min-width:0}.cores-main .tabs{flex:none}
+  .cores-scroll{flex:1;min-height:0;overflow:auto;padding:2px 6px 32px 0}
+  .cores-side{min-height:0;overflow:auto;padding:2px 2px 24px 0}.cores-side :global(.ci){min-height:100%}
   .crumbs{display:flex;align-items:center;gap:2px;font-size:12px;color:#8f9e9d;margin:0 0 8px -8px}.crumbs .quiet{padding:4px 8px;font-size:12px}
-  .cores-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;align-items:start}.cores-grid.no-inspector{grid-template-columns:minmax(0,1fr)}
-  .cores-side{position:sticky;top:16px}
+  .cores-grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;align-items:stretch}.cores-grid.no-inspector{grid-template-columns:minmax(0,1fr)}
   .tabs{display:flex;gap:4px;border-bottom:1px solid #2c393a;margin:0 0 16px}
   .tabs [role=tab]{position:relative;padding:10px 14px;font-size:13.5px;color:#a4b0b0;background:transparent;border-radius:8px 8px 0 0}
   .tabs [role=tab]:hover{color:#eff5f4;background:#1a2325}.tabs [role=tab].current{color:#c1f0ad;box-shadow:inset 0 -2px 0 #c1f0ad}
@@ -205,5 +209,5 @@
   .ov-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
   .ov-card{width:100%;display:grid;gap:4px;padding:14px 16px;background:#161f20;border:1px solid #2c393a;border-radius:12px;color:inherit;text-align:left}.ov-card:hover{border-color:#3d5254}.ov-card:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}
   .ov-card strong{font-size:14.5px}.ov-card small{font-size:12px;color:#95a5a4;min-height:16px}.ov-n{font-size:12px;color:#c7d1d0;margin-top:6px}
-  @media(max-width:1100px){.cores-grid{grid-template-columns:minmax(0,1fr)}.cores-side{position:static}}
+  @media(max-width:1100px){.cores.has-core{overflow:visible}.cores-grid{grid-template-columns:minmax(0,1fr)}.cores-scroll,.cores-side{overflow:visible}}
 </style>
