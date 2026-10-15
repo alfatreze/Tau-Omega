@@ -280,3 +280,19 @@ export type AddReport = { written: number; replaced: number; skipped_identical: 
 export type RemoveItem = { rel_path: string; bytes: number; shared_with: string[]; needed_by: string | null };
 export type RemoveFilesPlan = { id: string; core_id: string; items: RemoveItem[]; total_bytes: number; warnings: string[]; blocked: string | null };
 export type RemoveFilesReport = { removed: number; bytes_removed: number; backup_dir: string };
+
+/** Adding a core that is not in the openFPGA Library (docs/MARKETPLACE_SPEC.md section 7). */
+export type ManualClass = { kind: string; ok: boolean; reason: string };
+export type ManualNeed = { slot: string; filename: string; extensions: string[]; required: boolean; size_exact: number | null; size_maximum: number | null; core_specific: boolean; folder_rel: string; in_package: boolean; you_supply: boolean; purpose: string };
+export type ManualPlatform = { id: string; name: string; category: string; manufacturer: string; in_package: boolean };
+export type ManualPreview = {
+  core_id: string; shortname: string; author: string; description: string; url: string; version: string; date_release: string; firmware_required: string;
+  dock_supported: boolean | null; link_port: boolean | null; sleep_supported: boolean | null; platforms: ManualPlatform[]; needs: ManualNeed[]; settings: string[]; info_text: string;
+  has_bitstream: boolean; sha256: string; zip_bytes: number; files: number; uncompressed_bytes: number; asset_files: number; warnings: string[]; icon: string | null; banner: string | null;
+};
+export type ManualProvenance = { kind: string; owner: string; repo: string; tag: string; asset: string; bytes: number; sha256: string; checksum: string; packed: string | null };
+export type ManualReleaseChoice = { tag: string; name: string; published: string; prerelease: boolean; zips: string[] };
+export type ManualInspect =
+  | { status: 'ready'; preview: ManualPreview; zip_path: string; provenance: ManualProvenance; readme: { text: string; images: string[] } | null; in_library: boolean; installed_version: string | null; different_source: boolean }
+  | { status: 'choose'; owner: string; repo: string; releases: ManualReleaseChoice[]; tag: string };
+export type ManualInspectArgs = { input: string; tag?: string | null; asset?: string | null; readme: boolean; card?: string | null };
