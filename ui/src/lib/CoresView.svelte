@@ -51,6 +51,12 @@
     const t = e.target as HTMLElement | null;
     if (e.key.toLowerCase() === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey && $coresSelection.core && t?.tagName !== 'INPUT' && t?.tagName !== 'SELECT' && t?.tagName !== 'TEXTAREA') { e.preventDefault(); inspectorOpen.update((v) => !v); }
   }
+  // Search lives here, on the Cores page: cores, platforms, manufacturers and categories.
+  let query = '';
+  $: q = query.trim().toLowerCase();
+  $: hits = q ? $coresGroups.flatMap((g) => g.makers.flatMap((m) => m.platforms.flatMap((n) => n.cores
+    .filter((c) => `${c.id} ${c.shortname} ${c.author} ${n.platform.name} ${m.name} ${g.name}`.toLowerCase().includes(q) || n.platform.name.toLowerCase().includes(q))
+    .map((c) => ({ core: c, platform: n.platform, category: g.name, maker: m.name }))))) : [];
   const pickPlatform = (id: string) => coresSelection.set({ platform: id, core: '' });
   const pickCore = (platform: string, core: string) => coresSelection.set({ platform, core });
   onDestroy(() => {});
@@ -108,6 +114,18 @@
     </ul>
   {:else}
     <header><div><p class="eyebrow">YOUR CARD</p><h1 id="cores-title">Cores</h1><p class="lede">Every core on this card, grouped like the openFPGA Library: category, manufacturer, platform. Pick a platform to see its cores, or a core to see its files, saves, screenshots and settings.</p></div></header>
+    <label class="ov-search"><span class="sr">Search cores, platforms and manufacturers</span>
+      <input type="search" placeholder="Search cores, platforms, manufacturers" bind:value={query} /></label>
+    {#if q}
+      {#if hits.length}
+        <ul class="core-list pv-list" aria-label="Search results">{#each hits as h (h.core.id)}
+          <li><button class="pv-open" aria-label={`${h.core.shortname}, ${h.platform.name}. Open`} on:click={() => { query = ''; pickCore(h.platform.id, h.core.id); }}>
+            <span class="core-icon" aria-hidden="true"><Icon name={categoryIcon(h.category)} size={20} /></span>
+            <span class="pv-main"><strong>{h.core.shortname}</strong><small>{h.category} › {h.maker} › {h.platform.name} · {h.core.id}</small></span>
+            <span class="pv-ver">{h.core.version}</span>{#if h.core.missing}<span class="chip warn">Needs {plural(h.core.missing, 'file')}</span>{/if}
+          </button></li>{/each}</ul>
+      {:else}<div class="empty"><h2>Nothing matches “{query}”</h2><p>Try a core name, a platform or a manufacturer.</p></div>{/if}
+    {:else}
     <div class="tabs ov-tabs" role="tablist" aria-label="Cores sections" tabindex="-1">
       <button id="cores-ov-tab-browse" role="tab" class:current={$coresTab === 'browse'} aria-selected={$coresTab === 'browse'} aria-controls="cores-ov-panel" tabindex={$coresTab === 'browse' ? 0 : -1} on:click={() => coresTab.set('browse')}>Platforms</button>
       <button id="cores-ov-tab-updates" role="tab" class:current={$coresTab === 'updates'} aria-selected={$coresTab === 'updates'} aria-controls="cores-ov-panel" tabindex={$coresTab === 'updates' ? 0 : -1} on:click={() => coresTab.set('updates')}>Updates{#if $coreUpdateCount}<span class="chip capable ov-n-chip">{$coreUpdateCount}</span>{/if}</button>
@@ -136,6 +154,7 @@
     {/if}
     {/if}
     </div>
+    {/if}
   {/if}
 </section>
 <style>
@@ -154,6 +173,8 @@
   .pv-open{width:100%;display:flex;align-items:center;gap:13px;padding:13px 16px;background:transparent;color:inherit;text-align:left}.pv-open:hover{background:#1c282a}.pv-open:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
   .pv-main{flex:1;min-width:0;display:grid;gap:3px}.pv-main strong{font-size:14px}.pv-main small{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis}.pv-ver{font-size:12.5px;color:#c7d1d0}
   .chip.warn{background:#241f12;color:#e5d9a8}
+  .ov-search{display:block;margin:0 0 16px}.ov-search input{width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:10px;padding:10px 14px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .ov-tabs{margin-bottom:18px}.ov-n-chip{margin-left:7px;padding:1px 7px;font-size:11px}
   .ov-ic{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:#1d2a2b;color:#c1f0ad;margin-right:10px;vertical-align:middle}.ov-pi{color:#c1f0ad;margin-bottom:2px}
   .ov-cat{margin:0 0 26px}.ov-cat h2{font-size:15px;margin:0 0 10px}.ov-cat h2 small{font-size:12px;font-weight:400;color:#8f9e9d;margin-left:6px}.ov-maker{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#9fb3aa;margin:14px 0 8px}
