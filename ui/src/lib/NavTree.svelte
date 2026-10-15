@@ -20,7 +20,11 @@
   $: nodes = $coresTreeStore
     .map((n) => ({ ...n, cores: needle ? n.cores.filter((c) => `${c.id} ${c.shortname} ${n.platform.name}`.toLowerCase().includes(needle)) : n.cores }))
     .filter((n) => !needle || n.cores.length || n.platform.name.toLowerCase().includes(needle));
-  const isOpen = (id: string) => !!needle || !!expanded[id] || ($coresSelection.platform === id && !!active);
+  // A platform is open when searching or when the user opened it (a function would not see `expanded` change). A platform that gets selected is opened once, so the user can still collapse it.
+  $: openMap = Object.fromEntries($coresTreeStore.map((n) => [n.platform.id, !!needle || !!expanded[n.platform.id]])) as Record<string, boolean>;
+  let lastShown = '';
+  $: if (active && $coresSelection.platform && lastShown !== $coresSelection.platform) { lastShown = $coresSelection.platform; if (!expanded[lastShown]) { expanded = { ...expanded, [lastShown]: true }; save(); } }
+  const isOpen = (id: string) => !!openMap[id];
 
   function toggleGroup() { open = !open; save(); if (open) { coresSelection.set({ platform: '', core: '' }); show(); } }
   function toggleNode(id: string) { expanded = { ...expanded, [id]: !expanded[id] }; save(); }
@@ -64,14 +68,14 @@
         <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
         <ul class="nt-tree" role="tree" aria-label="Cores by platform" on:keydown={key}>
           {#each nodes as n (n.platform.id)}
-            <li role="treeitem" aria-expanded={isOpen(n.platform.id)} aria-selected={active && $coresSelection.platform === n.platform.id && !$coresSelection.core}>
+            <li role="treeitem" aria-expanded={openMap[n.platform.id]} aria-selected={active && $coresSelection.platform === n.platform.id && !$coresSelection.core}>
               <div class="nt-row">
-                <button class="nt-chev" tabindex="-1" aria-label={`${isOpen(n.platform.id) ? 'Collapse' : 'Expand'} ${n.platform.name}`} on:click={() => toggleNode(n.platform.id)}><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={isOpen(n.platform.id)}><path d="m9 6 6 6-6 6"/></svg></button>
+                <button class="nt-chev" tabindex="-1" aria-label={`${openMap[n.platform.id] ? 'Collapse' : 'Expand'} ${n.platform.name}`} on:click={() => toggleNode(n.platform.id)}><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={openMap[n.platform.id]}><path d="m9 6 6 6-6 6"/></svg></button>
                 <button class="nt-item" class:sel={active && $coresSelection.platform === n.platform.id && !$coresSelection.core} data-kind="platform" data-id={n.platform.id} on:click={() => pickPlatform(n.platform.id)}>
                   <span class="nt-name">{n.platform.name}</span><span class="nt-count">{n.cores.length}</span>
                 </button>
               </div>
-              {#if isOpen(n.platform.id)}
+              {#if openMap[n.platform.id]}
                 <ul role="group" class="nt-cores">
                   {#each n.cores as c (c.id)}
                     <li role="treeitem" aria-selected={active && $coresSelection.core === c.id}>
