@@ -168,6 +168,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.deepEqual(await p.getByRole('tab').allInnerTexts(), ['Overview', 'History']); ok('the Card page has Overview and History');
   const card = await p.locator('#cards').innerText();
   assert.ok(!/Player cores on this card|Other cores on this card|Set as player/.test(card)); assert.match(card, /8 cores installed[\s\S]*Every core has the files it needs[\s\S]*Music libraries/i); ok('the simple core lists are gone; the overview says what needs attention (nothing, once the BIOS was added) and lists the libraries');
+  assert.match(await p.locator('.sum-stats').innerText(), /Cores\s*8[\s\S]*Platforms\s*5[\s\S]*Categories\s*4[\s\S]*Library tracks\s*7180[\s\S]*Screenshots\s*0/); assert.match(await p.locator('.sum-space').innerText(), /used of[\s\S]*free/); ok('the overview shows card totals and the space used and free');
   await p.getByRole('button', { name: 'Browse cores' }).click(); await p.waitForTimeout(400);
   assert.match(await p.locator('.cores').innerText(), /grouped like the openFPGA Library/); ok('Browse cores opens the Cores section');
   await p.getByRole('button', { name: 'Card', exact: true }).click(); await p.waitForTimeout(300);
