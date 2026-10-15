@@ -8,11 +8,11 @@ export type DropEvent =
   | { type: 'leave' }
   | { type: 'drop'; x: number; y: number; paths: string[] };
 
-declare global { interface Window { __TAURI_INTERNALS__?: unknown } }
+declare global { interface Window { __TAURI_INTERNALS__?: unknown; __TAU_MOCK__?: boolean } }
 
 export function onFileDrop(handler: (e: DropEvent) => void): () => void {
   let off: (() => void) | null = null; let cancelled = false;
-  if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+  if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__ && !window.__TAU_MOCK__) {
     import('@tauri-apps/api/webview').then(async ({ getCurrentWebview }) => {
       const un = await getCurrentWebview().onDragDropEvent((event) => {
         const p = event.payload;

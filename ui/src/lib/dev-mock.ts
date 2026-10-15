@@ -51,7 +51,7 @@ const crow = (id: string, platform: string, version: string, missing = 0) => ({ 
 const coresTreeMock = () => [
   { platform: PLAT.amiga, cores: [crow('Mazamars312.Amiga', 'amiga', '0.2.3')] },
   { platform: PLAT.gb, cores: [crow('Spiritualized.GB', 'gb', '1.3.0')] },
-  { platform: PLAT.gba, cores: [crow('Spiritualized.GBA', 'gba', '1.2.0', 1), crow('other.GBAlt', 'gba', '0.3')] },
+  { platform: PLAT.gba, cores: [crow('Spiritualized.GBA', 'gba', '1.2.0', mockBios ? 0 : 1), crow('other.GBAlt', 'gba', '0.3')] },
   { platform: PLAT._none, cores: [crow('solo.Thing', '', '1.0')] },
 ];
 const slotOf = (name: string, o: Record<string, unknown> = {}) => ({ id: '0x100', name, required: false, filename: '', extensions: [] as string[], nonvolatile: false, core_specific: false, platform: 'gba', size_exact: null, size_maximum: null, ...o });
@@ -349,7 +349,7 @@ const handlers: Record<string, (args: any) => unknown> = {
   core_screenshots: () => ({ shots: SHOTS, total: SHOTS.length + 465, likely: 5, states: 6, window_secs: 600 }),
   screenshot_thumbnail: (a) => thumb(a.file as string),
   plan_core_add: (a) => addPlanFor(a),
-  execute_core_add: (a) => { const plan = addPlanFor(a); for (const i of plan.items) if (i.state === 'New') { mockAdded.push(i.source.split('/').pop()!); if (i.source.endsWith('gba_bios.bin')) mockBios = true; } return { written: plan.new_files, replaced: 0, skipped_identical: plan.identical, skipped_different: plan.different, refused: plan.refused, bytes_written: plan.bytes_to_write, backup_dir: null }; },
+  execute_core_add: (a) => { const plan = addPlanFor(a); for (const i of plan.items) if (i.state === 'New') { const nm = i.source.split('/').pop()!; if (nm === 'gba_bios.bin') mockBios = true; else mockAdded.push(nm); } return { written: plan.new_files, replaced: 0, skipped_identical: plan.identical, skipped_different: plan.different, refused: plan.refused, bytes_written: plan.bytes_to_write, backup_dir: null }; },
   update_check: () => null,
   update_download: () => [],
   persist_names: () => ({ 16: 'Halcyon EQ preset' }),
@@ -386,6 +386,8 @@ export function installDevMock() {
   for (let i = 0; i < Number(query.get('big') ?? 0); i++) sourceAlbums.push(album(`Artist ${String(i % 97).padStart(2, '0')}`, `Album ${String(i).padStart(4, '0')}`, 8, 100 + (i % 50), 2000));
   const wanted = query.get('connection');
   if (wanted === 'card_reader' || wanted === 'unknown') connection = wanted;
+  // The mock fakes Tauri's IPC, so `__TAURI_INTERNALS__` exists; this flag tells the drag-and-drop helper to use the browser's own events.
+  (window as unknown as { __TAU_MOCK__?: boolean }).__TAU_MOCK__ = true;
   mockIPC((cmd, args) => {
     if (cmd.startsWith('plugin:dialog|')) return (args as any)?.options?.directory ? LIBRARY : '/mock/cover.jpg';
     const h = handlers[cmd];

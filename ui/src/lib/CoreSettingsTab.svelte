@@ -35,7 +35,7 @@
       {#if st.unreadable}<p class="cg-err" role="alert">{st.unreadable}.</p>{/if}
       {#if st.values.length}
         <ul class="cg-list" aria-label="Saved settings">{#each st.values as v (v.id)}
-          <li><span class="cg-k">{v.name}</span><span class="cg-v">{v.display}{#if v.display !== v.default_display && v.default_display}<small> (default {v.default_display})</small>{/if}</span>{#if !v.known}<span class="chip" title="This core's menu no longer has this setting">unknown</span>{/if}</li>
+          <li><span class="cg-k">{v.name}</span><span class="cg-v">{v.display}{#if v.display !== v.default_display && v.default_display}<small class="cg-def">(default {v.default_display})</small>{/if}</span>{#if !v.known}<span class="chip" title="This core's menu no longer has this setting">unknown</span>{/if}</li>
         {/each}</ul>
       {:else}<p class="cg-note">Nothing saved yet. Change a setting in the core's menu on the Pocket and it appears here.</p>{/if}
       {#if st.files.length}
@@ -64,6 +64,7 @@
   .cg-list{list-style:none;margin:0;padding:0;border:1px solid #2c393a;border-radius:9px;background:#141c1d}
   .cg-list li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #222d2f;font-size:12.5px}.cg-list li:last-child{border:0}.cg-list li.warn{background:#241f12;color:#e5d9a8}
   .cg-k{width:190px;flex:none;color:#a6b3b2}.cg-v{flex:1;min-width:0;color:#e8ecec;overflow-wrap:anywhere}.cg-v small,.cg-list small{color:#8f9e9d;font-size:11.5px}.cg-d{color:#8f9e9d;font-size:11.5px}
+  .cg-def{margin-left:6px}
   .cg-note{font-size:12px;color:#95a5a4;margin:8px 0 0;line-height:1.55}.cg-ok{font-size:13px;color:#c5f7ad;margin:0}.cg-err{color:#ff9b9b;font-size:12.5px}
   code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px}
   @media(max-width:720px){.cg-k{width:110px}}

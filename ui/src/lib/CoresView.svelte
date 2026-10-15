@@ -58,7 +58,7 @@
       <div>
         <nav class="crumbs" aria-label="Where you are"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '' })}>Cores</button><span aria-hidden="true">›</span><button class="quiet" on:click={() => pickPlatform($coresSelection.platform)}>{node?.platform.name ?? $coresSelection.platform}</button></nav>
         <h1 id="cores-title">{row?.shortname ?? detail?.shortname ?? $coresSelection.core}</h1>
-        <p class="lede">{detail?.description || $coresSelection.core}</p>
+        <p class="lede">{$coresSelection.core}{detail?.version ? ` · version ${detail.version}` : ''}</p>
       </div>
       {#if detail}<button class="quiet" aria-expanded={$inspectorOpen} aria-controls="core-details" on:click={() => inspectorOpen.update((v) => !v)} title="Show or hide the details (I)">{$inspectorOpen ? 'Hide details' : 'Show details'}</button>{/if}
     </header>
@@ -134,5 +134,5 @@
   .ov-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
   .ov-card{width:100%;display:grid;gap:4px;padding:14px 16px;background:#161f20;border:1px solid #2c393a;border-radius:12px;color:inherit;text-align:left}.ov-card:hover{border-color:#3d5254}.ov-card:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}
   .ov-card strong{font-size:14.5px}.ov-card small{font-size:12px;color:#95a5a4;min-height:16px}.ov-n{font-size:12px;color:#c7d1d0;margin-top:6px}
-  @media(max-width:1100px){.cores-grid{grid-template-columns:minmax(0,1fr)}.cores-side{position:static;order:-1}}
+  @media(max-width:1100px){.cores-grid{grid-template-columns:minmax(0,1fr)}.cores-side{position:static}}
 </style>
