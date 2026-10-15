@@ -1,37 +1,21 @@
 <script lang="ts">
-  // Community cores on the open card against the openFPGA Library: which have a newer release. Checking is automatic only when
-  // the app's update check is on (Settings); installing never is: each update is its own reviewed plan, one at a time.
-  import { onMount } from 'svelte';
+  // Updates for the community cores on the open card: only the cores that actually need one (a newer release, or a replacement the author
+  // published). Checking is automatic only when the app's update check is on (Settings); installing never is: each update is its own reviewed
+  // plan, one at a time.
   import CoreInstall from './CoreInstall.svelte';
-  import { errorMessage } from './backend';
-  import { getPrefs, marketplaceCoreUpdates } from './tau-api';
-  import { coreUpdateCount } from './marketStore';
   import { sourceNote } from './marketplace';
-  import type { CoreStatus, CoreUpdates } from './types';
+  import { checkUpdates, updatesAutomatic, updatesBusy, updatesError, updatesResult } from './updatesStore';
+  import type { CoreStatus } from './types';
   export let card = '';
 
-  let result: CoreUpdates | null = null; let busy = false; let error = ''; let automatic = false; let checkedFor = '';
   /** The core whose plan is open, and the ids still waiting when "Update all" is running. */
   let openId = ''; let queue: string[] = []; let queueTotal = 0; let finishedNote = '';
-
-  $: rows = (result?.rows ?? []).filter((r) => r.status !== 'Excluded');
-  $: updatable = rows.filter((r) => r.status === 'UpdateAvailable');
+  $: result = $updatesResult; $: busy = $updatesBusy; $: error = $updatesError; $: automatic = $updatesAutomatic;
+  $: updatable = (result?.rows ?? []).filter((r) => r.status === 'UpdateAvailable');
+  $: rows = (result?.rows ?? []).filter((r) => r.status === 'UpdateAvailable' || typeof r.status === 'object');
   $: hasTau = (result?.rows ?? []).some((r) => r.status === 'Excluded');
-  $: coreUpdateCount.set(updatable.length);
-  $: if (card !== checkedFor) { checkedFor = card; result = null; error = ''; openId = ''; queue = []; if (card && automatic) void check(false); }
+  const check = (force: boolean) => checkUpdates(card, force);
 
-  onMount(async () => {
-    try { automatic = (await getPrefs()).check_updates; } catch { automatic = false; }
-    if (card && automatic && !result) { checkedFor = card; void check(false); }
-  });
-
-  async function check(force: boolean) {
-    if (!card) return;
-    busy = true; error = '';
-    try { result = await marketplaceCoreUpdates(card, force); }
-    catch (e) { error = errorMessage(e); }
-    finally { busy = false; }
-  }
   const LABEL: Record<string, string> = { UpToDate: 'Up to date', UpdateAvailable: 'Update available', NewerThanCatalog: 'Newer than the list', Unknown: 'Cannot compare versions', NotInCatalog: 'Not in the library' };
   const label = (r: CoreStatus) => (typeof r.status === 'object' ? `Replaced by ${r.status.ReplacedBy}` : LABEL[r.status] ?? '');
   const target = (r: CoreStatus) => (typeof r.status === 'object' ? r.status.ReplacedBy : r.id);
@@ -46,10 +30,7 @@
   }
   function skip() { if (queue.length) { openId = queue[0]; queue = queue.slice(1); } else { openId = ''; queueTotal = 0; } }
 </script>
-<section aria-labelledby="core-updates-title" class="cu">
-  <div class="section-title">
-    <div><p class="eyebrow">COMMUNITY CORES</p><h2 id="core-updates-title">Core updates</h2></div>
-  </div>
+<section aria-label="Core updates" class="cu">
     <div class="cu-actions">
       {#if updatable.length > 1 && !queueTotal}<button class="quiet" on:click={updateAll}>Review all {updatable.length} updates, one at a time</button>{/if}
       <button class="quiet" disabled={busy || !card} on:click={() => check(true)}>{busy ? 'Checking…' : result ? 'Check again' : 'Check for updates'}</button>
@@ -58,7 +39,7 @@
   {:else if error}<p class="cu-err" role="alert">{error}</p>
   {:else if !result}<p class="cu-note" role="status">{busy ? 'Checking the openFPGA Library…' : automatic ? '' : 'Checking is off in Settings. Press Check for updates to look once.'}</p>
   {:else}
-    <p class="cu-note" role="status" aria-live="polite">{#if updatable.length}{updatable.length} {updatable.length === 1 ? 'update' : 'updates'} available{:else}Everything on this card is up to date{/if} · {sourceNote(result.source, result.fetched)}{#if hasTau}{' · '}Tau cores update through the Tau update bar{/if}</p>
+    <p class="cu-note" role="status" aria-live="polite">{#if rows.length}{rows.length} {rows.length === 1 ? 'core needs' : 'cores need'} updating{:else}Everything on this card is up to date{/if} · {sourceNote(result.source, result.fetched)}{#if hasTau}{' · '}Tau cores update through the Tau update bar{/if}</p>
     {#if finishedNote}<p class="cu-note" role="status">{finishedNote}</p>{/if}
     {#if rows.length}
       <div class="core-list">
@@ -80,11 +61,12 @@
           </article>
         {/each}
       </div>
-    {:else}<p class="cu-note">No community cores on this card yet. Find some in the Marketplace.</p>{/if}
+    {:else}<div class="cu-empty"><span aria-hidden="true">✓</span><h3>Nothing to update</h3><p>Every community core on this card is on its latest release.</p></div>{/if}
   {/if}
 </section>
 <style>
-  .cu{margin-top:30px}
+  .cu{margin-top:4px}
+  .cu-empty{display:grid;justify-items:center;gap:4px;text-align:center;padding:34px 16px;border:1px dashed #2c393a;border-radius:14px;background:#141c1d}.cu-empty span{font-size:28px;color:#c1f0ad}.cu-empty h3{margin:4px 0 0;font-size:16px}.cu-empty p{margin:0;font-size:12.5px;color:#95a5a4}
   .cu-actions{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 4px -8px}
   .cu-note{font-size:12px;color:#95a5a4;margin:6px 0}.cu-err{color:#ff9b9b;font-size:12px}
   .cu-row{display:block;padding:0;min-height:0}

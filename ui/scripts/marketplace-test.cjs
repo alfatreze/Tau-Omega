@@ -101,11 +101,16 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await p.locator('.empty').innerText(), /The list could not be loaded[\s\S]*Try again/); ok('a list that cannot be loaded offers Try again');
   await p.evaluate(() => { globalThis.__mkt = undefined; });
 
-  // Core updates on the Cards page
+  // Core updates: a KPI on the Card page, the list in Cores > Updates (only the cores that need one)
   await nav('Card').click(); await p.waitForTimeout(700);
+  assert.equal(await p.locator('#cards').getByText('Core updates').count(), 0); ok('the Card page no longer carries the updates list');
+  const kpi = p.getByRole('button', { name: /3 core updates available/ });
+  assert.equal(await kpi.count(), 1); ok('the Card overview shows an Updates figure with the number available');
+  await kpi.click(); await p.waitForTimeout(500);
+  assert.equal(await p.getByRole('tab', { name: /Updates/ }).getAttribute('aria-selected'), 'true'); ok('it opens the Updates tab of Cores');
   const cu = p.getByRole('region', { name: 'Core updates' });
-  assert.match(await cu.innerText(), /3 updates available/); assert.match(await cu.innerText(), /Tau cores update through the Tau update bar/); ok('Core updates lists the updates and defers Tau cores to the Tau bar');
-  assert.match(await cu.innerText(), /Replaced by pack\.NES/); assert.match(await cu.innerText(), /Not in the library/); ok('a renamed core and an unknown core get plain statuses');
+  assert.match(await cu.innerText(), /4 cores need updating/); assert.match(await cu.innerText(), /Tau cores update through the Tau update bar/); ok('Updates lists the cores that need updating and defers Tau cores to the Tau bar');
+  assert.match(await cu.innerText(), /Replaced by pack\.NES/); assert.ok(!/Up to date|Not in the library/.test(await cu.innerText())); ok('a renamed core is listed, up-to-date and unknown cores are not');
   await cu.getByRole('button', { name: /Review all 3 updates/ }).click(); await p.waitForTimeout(300);
   assert.match(await cu.innerText(), /Update 1 of 3/); ok('Review all starts a one-at-a-time queue');
   await cu.getByRole('button', { name: 'Skip this one' }).click(); await p.waitForTimeout(250);
