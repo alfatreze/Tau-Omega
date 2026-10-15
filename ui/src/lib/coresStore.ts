@@ -7,6 +7,8 @@ export type CoresSelection = { platform: string; core: string };
 
 export const coresTreeStore = writable<PlatformNode[]>([]);
 export const coresSelection = writable<CoresSelection>({ platform: '', core: '' });
+/** The Cores overview shows the platforms, or the updates (only the cores that need one). */
+export const coresTab = writable<'browse' | 'updates'>('browse');
 export const coresLoading = writable(false);
 export const coresError = writable('');
 

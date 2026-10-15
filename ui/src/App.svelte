@@ -29,7 +29,8 @@
   import UpdateBanner from './lib/UpdateBanner.svelte';
   import OmegaUpdate from './lib/OmegaUpdate.svelte';
   import CardMarkerPrompt from './lib/CardMarkerPrompt.svelte';
-  import { coresSelection, coresTreeStore, findCore } from './lib/coresStore';
+  import { coresSelection, coresTab, coresTreeStore, findCore } from './lib/coresStore';
+  import { autoCheckUpdates } from './lib/updatesStore';
   import { get } from 'svelte/store';
   let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
@@ -137,7 +138,9 @@
   $: if (page === 'cards' && cardTab === 'history') void loadHistory();
   /** Opens one core in the Cores section. */
   function openCore(id: string) { const hit = findCore(get(coresTreeStore), id); if (hit) coresSelection.set({ platform: hit.node.platform.id, core: id }); page = 'cores'; }
-  function browseCores() { coresSelection.set({ platform: '', core: '' }); page = 'cores'; }
+  function browseCores() { coresSelection.set({ platform: '', core: '' }); coresTab.set('browse'); page = 'cores'; }
+  function openUpdates() { coresSelection.set({ platform: '', core: '' }); coresTab.set('updates'); page = 'cores'; }
+  $: void autoCheckUpdates(path);
   const autoJournalPath = (kind: string) => `${reportsDir}/${Date.now()}-${kind}.json`;
   let notice = 'Open a card folder to inspect it. Tau Omega will not write anything at this stage.';
   let leftCore = ''; let rightCore = ''; let comparison: Comparison | null = null; let compareNotice = ''; let copyReportPath = ''; let coreCopyPlan: Plan | null = null; let moveSource = false; let moveBackupPath = ''; let approveDeletion = false;
@@ -353,7 +356,7 @@
   <UpdateBanner card={path} openPackage={(zip) => { packageZipPath = zip; if (!packageCardPath) packageCardPath = path; page = 'package'; void inspectPackageZip(); }} />
   <OmegaUpdate />
   {#if page === 'cards'}
-    <CardsView {cardMounted} {ejectedSafely} {path} {knownCards} {notice} {cores} {mountedCards} {cardName} {chooseFolder} {openFolder} {openKnownCard} {openCoreLibrary} {openCore} {browseCores} bind:tab={cardTab}>
+    <CardsView {cardMounted} {ejectedSafely} {path} {knownCards} {notice} {cores} {mountedCards} {cardName} {chooseFolder} {openFolder} {openKnownCard} {openCoreLibrary} {openCore} {browseCores} {openUpdates} bind:tab={cardTab}>
       <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} refresh={loadHistory} openSettings={() => { moreOpen = true; page = 'settings'; }} startSync={() => page = 'workbench'} />
     </CardsView>
   {:else if page === 'workbench'}

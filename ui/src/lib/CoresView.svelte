@@ -9,7 +9,9 @@
   import CoreSettingsTab from './CoreSettingsTab.svelte';
   import { errorMessage } from './backend';
   import { coreDetail, coreFiles, readPlatformImage } from './tau-api';
-  import { coresGroups, coresSelection, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
+  import CoreUpdates from './CoreUpdates.svelte';
+  import { coreUpdateCount } from './marketStore';
+  import { coresGroups, coresSelection, coresTab, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
   import { plural } from './coresFormat';
   import type { Core, CoreDetail, CoreFiles } from './types';
   export let card = '';
@@ -104,6 +106,13 @@
     </ul>
   {:else}
     <header><div><p class="eyebrow">YOUR CARD</p><h1 id="cores-title">Cores</h1><p class="lede">Every core on this card, grouped like the openFPGA Library: category, manufacturer, platform. Pick a platform to see its cores, or a core to see its files, saves, screenshots and settings.</p></div></header>
+    <div class="tabs ov-tabs" role="tablist" aria-label="Cores sections" tabindex="-1">
+      <button id="cores-ov-tab-browse" role="tab" class:current={$coresTab === 'browse'} aria-selected={$coresTab === 'browse'} aria-controls="cores-ov-panel" tabindex={$coresTab === 'browse' ? 0 : -1} on:click={() => coresTab.set('browse')}>Platforms</button>
+      <button id="cores-ov-tab-updates" role="tab" class:current={$coresTab === 'updates'} aria-selected={$coresTab === 'updates'} aria-controls="cores-ov-panel" tabindex={$coresTab === 'updates' ? 0 : -1} on:click={() => coresTab.set('updates')}>Updates{#if $coreUpdateCount}<span class="chip capable ov-n-chip">{$coreUpdateCount}</span>{/if}</button>
+    </div>
+    <div id="cores-ov-panel" role="tabpanel" aria-labelledby={`cores-ov-tab-${$coresTab}`} tabindex="-1">
+    {#if $coresTab === 'updates'}<CoreUpdates {card} />
+    {:else}
     {#if !$coresTreeStore.length}<div class="empty"><h2>No cores on this card</h2><p>Install some from the Marketplace.</p></div>
     {:else}
       {#each $coresGroups as g (g.name)}
@@ -123,6 +132,8 @@
         </section>
       {/each}
     {/if}
+    {/if}
+    </div>
   {/if}
 </section>
 <style>
@@ -141,6 +152,7 @@
   .pv-open{width:100%;display:flex;align-items:center;gap:13px;padding:13px 16px;background:transparent;color:inherit;text-align:left}.pv-open:hover{background:#1c282a}.pv-open:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
   .pv-main{flex:1;min-width:0;display:grid;gap:3px}.pv-main strong{font-size:14px}.pv-main small{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis}.pv-ver{font-size:12.5px;color:#c7d1d0}
   .chip.warn{background:#241f12;color:#e5d9a8}
+  .ov-tabs{margin-bottom:18px}.ov-n-chip{margin-left:7px;padding:1px 7px;font-size:11px}
   .ov-cat{margin:0 0 26px}.ov-cat h2{font-size:15px;margin:0 0 10px}.ov-cat h2 small{font-size:12px;font-weight:400;color:#8f9e9d;margin-left:6px}.ov-maker{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#9fb3aa;margin:14px 0 8px}
   .ov-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
   .ov-card{width:100%;display:grid;gap:4px;padding:14px 16px;background:#161f20;border:1px solid #2c393a;border-radius:12px;color:inherit;text-align:left}.ov-card:hover{border-color:#3d5254}.ov-card:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}

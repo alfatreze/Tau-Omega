@@ -1,7 +1,7 @@
 <script lang="ts">
   // The Card page: what is about the card as a whole. Overview (known cards, updates, what needs attention, libraries) and History
   // (every sync). Cores are not listed here: the Cores section has them, grouped like the openFPGA Library.
-  import CoreUpdates from './CoreUpdates.svelte';
+  import { coreUpdateCount } from './marketStore';
   import { coresGroups, coresTotal, coresTreeStore } from './coresStore';
   import { checkStorageCapacity, listScreenshots } from './tau-api';
   import { plural, size } from './coresFormat';
@@ -13,7 +13,7 @@
   export let mountedCards: string[] = [];
   export let cardName: (cardPath: string) => string;
   export let chooseFolder: (which: 'card') => unknown; export let openFolder: () => unknown; export let openKnownCard: (card: string) => unknown;
-  export let openCoreLibrary: (core: Core) => unknown; export let openCore: (id: string) => unknown; export let browseCores: () => unknown;
+  export let openCoreLibrary: (core: Core) => unknown; export let openCore: (id: string) => unknown; export let browseCores: () => unknown; export let openUpdates: () => unknown;
   /** Which tab shows; the page above can switch it (a sync's "View details" opens History). */
   export let tab: 'overview' | 'history' = 'overview';
   const TABS: ['overview' | 'history', string][] = [['overview', 'Overview'], ['history', 'History']];
@@ -49,7 +49,6 @@
       <slot />
     {:else}
     <p class="notice" role="status">{notice}</p>
-    {#if path}<CoreUpdates card={path} />{/if}
     {#if cores.length}
       <section class="card-sum" aria-labelledby="card-sum-title">
         <div class="section-title"><div><p class="eyebrow">ON THIS CARD</p><h2 id="card-sum-title">{plural($coresTotal, 'core')} installed</h2></div><span class="sum-actions"><button class="quiet" aria-label="Refresh this card" title="Refresh" on:click={openFolder}>Refresh</button><button class="quiet" on:click={browseCores}>Browse cores</button></span></div>
@@ -58,6 +57,7 @@
           <div><dt>Platforms</dt><dd>{platformCount}</dd></div>
           <div><dt>Categories</dt><dd>{$coresGroups.filter((g) => g.name !== 'No platform').length}</dd></div>
           {#if libraries.length}<div><dt>Library tracks</dt><dd>{tracks}</dd></div>{/if}
+          <div class:ok={$coreUpdateCount === 0}><dt>Updates</dt><dd>{#if $coreUpdateCount}<button class="sum-link" aria-label={`${$coreUpdateCount} core updates available. Open the updates`} on:click={openUpdates}>{$coreUpdateCount} <small>available</small></button>{:else}0{/if}</dd></div>
           {#if shots !== null}<div><dt>Screenshots</dt><dd>{shots}</dd></div>{/if}
         </dl>
         {#if space}
@@ -85,6 +85,7 @@
   .card-sum{border:1px solid #2c393a;border-radius:12px;background:#161f20;padding:14px 16px;margin-top:12px}
   .sum-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin:12px 0 0}.sum-stats>div{background:#141c1d;border:1px solid #222d2f;border-radius:9px;padding:9px 12px}.sum-stats dt{font-size:11.5px;color:#8f9e9d}.sum-stats dd{margin:2px 0 0;font-size:17px;font-weight:700;color:#e8ecec}
   .sum-space{margin:12px 0 0}.sum-space p{margin:6px 0 0;font-size:12.5px;color:#a6b3b2}.sum-bar{height:8px;border-radius:99px;background:#101617;border:1px solid #2c393a;overflow:hidden}.sum-bar span{display:block;height:100%;background:#c1f0ad}
+  .sum-link{background:none;border:0;padding:0;font:inherit;font-weight:700;color:#e5d9a8;cursor:pointer;text-align:left}.sum-link small{font-size:11.5px;font-weight:400;color:#c7b97f}.sum-link:hover{text-decoration:underline}.sum-link:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}
   .sum-actions{display:flex;gap:4px}
   .sum-h{margin:14px 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}.sum-ok{font-size:13px;color:#c5f7ad;margin:10px 0 0}
   .sum-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}.sum-list .quiet{width:100%;text-align:left;display:flex;gap:8px;align-items:baseline}.sum-list small{color:#8f9e9d;font-size:12px}
