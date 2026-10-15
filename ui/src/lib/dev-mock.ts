@@ -49,7 +49,9 @@ const PLAT: Record<string, ReturnType<typeof plat>> = {
   amiga: plat('amiga', 'Amiga', 'Computer', 'Commodore', 1985), _none: { id: '_none', name: 'No platform', category: '', manufacturer: '', year: 0, has_image: false },
 };
 const crow = (id: string, platform: string, version: string, missing = 0) => ({ id, shortname: id.split('.')[1], author: id.split('.')[0], version, platform, platforms: [platform], missing });
-const coresTreeMock = () => [
+const mockDisabled: { id: string; shortname: string; version: string; disabled_at: number; reasons: string[] }[] = [];
+const coresTreeMock = () => coresTreeAll().map((n) => ({ ...n, cores: n.cores.filter((c) => !mockDisabled.some((d) => d.id === c.id)) })).filter((n) => n.cores.length);
+const coresTreeAll = () => [
   { platform: PLAT.snes, cores: [crow('agg23.SNES', 'snes', '0.4.4')] },
   { platform: PLAT.gb, cores: [crow('Spiritualized.GB', 'gb', '1.3.0')] },
   { platform: PLAT.gba, cores: [crow('Spiritualized.GBA', 'gba', '1.2.0', mockBios ? 0 : 1), crow('other.GBAlt', 'gba', '0.3')] },
@@ -122,7 +124,7 @@ let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voy
 });
 let mounted = true;
 let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
-let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', speeds: {} as Record<string, number>, connections: {} as Record<string, string>, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
+let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', core_disable: (() => { try { return localStorage.getItem('tau.mock.coreDisable') ?? 'never'; } catch { return 'never'; } })(), core_keep: {} as Record<string, string[]>, speeds: {} as Record<string, number>, connections: {} as Record<string, string>, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
@@ -346,6 +348,25 @@ const handlers: Record<string, (args: any) => unknown> = {
   ], source: 'Cache', fetched: Math.floor(Date.now() / 1000) - 3600 }),
   marketplace_download: (a) => ({ download: { path: `/cache/${a.coreId}.zip`, bytes: 3.2 * MB, sha256: 'b'.repeat(64), checksum: a.coreId === 'agg23.Arduboy' ? 'NotPublished' : 'Verified' }, vetted: { core_id: a.coreId as string, version: (a.version as string | null) ?? '1.4.0', date_release: '2026-09-02', platform_ids: ['snes'], firmware_required: '2.0', dock_supported: true, files: 14, uncompressed_bytes: 6 * MB, asset_files: 2 } }),
   cores_tree: () => coresTreeMock(),
+  core_suggestions: () => {
+    const kept = prefs.core_keep.Pocket ?? []; const flagged: unknown[] = [];
+    if (prefs.core_disable === 'never') return { mode: 'never', cores: [] };
+    const live = (id: string) => !mockDisabled.some((d) => d.id === id) && !kept.includes(id);
+    if (!mockBios && live('Spiritualized.GBA')) flagged.push({ id: 'Spiritualized.GBA', shortname: 'GBA', verdict: 'Unusable', needs_no_files: false, reasons: [{ code: 'missing-file', message: 'It needs gba_bios.bin (BIOS), which is not on the card.', fix: 'Put gba_bios.bin in Assets/gba/common.' }] });
+    if (live('solo.Thing')) flagged.push({ id: 'solo.Thing', shortname: 'Thing', verdict: 'Broken', needs_no_files: false, reasons: [{ code: 'lint:L01', message: 'The core has no bitstream (bitstream.rbf_r).', fix: 'Reinstall the core.' }] });
+    return { mode: prefs.core_disable, cores: flagged };
+  },
+  disabled_cores: () => [...mockDisabled],
+  plan_core_state: (a) => ({ token: `st-${a.enable}-${(a.ids as string[]).join('+')}`, enable: a.enable, ids: a.ids, from: (a.ids as string[]).map((i) => `${a.enable ? 'Disabled Cores' : 'Cores'}/${i}`), to: (a.ids as string[]).map((i) => `${a.enable ? 'Cores' : 'Disabled Cores'}/${i}`), blocked: (a.ids as string[]).length ? null : 'No core is selected.', notes: [] }),
+  execute_core_state: (a) => {
+    for (const id of a.ids as string[]) {
+      const at = mockDisabled.findIndex((d) => d.id === id);
+      if (a.enable) { if (at >= 0) mockDisabled.splice(at, 1); }
+      else if (at < 0) { const row = coresTreeAll().flatMap((n) => n.cores).find((c) => c.id === id); const why = ((a.reasons as [string, string[]][]).find((r) => r[0] === id) ?? [id, []])[1]; mockDisabled.push({ id, shortname: row?.shortname ?? id, version: row?.version ?? '', disabled_at: 1792091402, reasons: why }); }
+    }
+    return { moved: (a.ids as string[]).length, caches_cleared: 5 };
+  },
+  core_keep: (a) => { const l = (prefs.core_keep.Pocket ??= []); for (const id of a.ids as string[]) { const i = l.indexOf(id); if (i >= 0) l.splice(i, 1); if (a.keep) l.push(id); } return null; },
   core_detail: (a) => detailFor(a.coreId as string),
   core_files: (a) => filesFor(a.coreId as string),
   core_settings: (a) => (a.coreId === 'Spiritualized.GBA'

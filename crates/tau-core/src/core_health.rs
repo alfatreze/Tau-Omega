@@ -158,6 +158,15 @@ pub fn check_card(card: &Path) -> Result<Vec<CoreHealth>, TauError> {
         .collect()
 }
 
+/// The cores worth offering to disable: not healthy, and not one the user said to keep enabled or to stop reminding about. `exempt` holds core ids.
+pub fn suggestions(health: &[CoreHealth], exempt: &[String]) -> Vec<CoreHealth> {
+    health
+        .iter()
+        .filter(|h| h.verdict != Verdict::Healthy && !exempt.iter().any(|e| e == &h.id))
+        .cloned()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,6 +268,28 @@ mod tests {
                 .iter()
                 .any(|r| r.message.contains("Nothing to load"))
         );
+    }
+
+    #[test]
+    fn exempt_cores_and_healthy_ones_are_never_suggested() {
+        let h = |id: &str, v: Verdict| CoreHealth {
+            id: id.into(),
+            shortname: id.into(),
+            verdict: v,
+            reasons: Vec::new(),
+            needs_no_files: false,
+        };
+        let all = [
+            h("a.Ok", Verdict::Healthy),
+            h("b.Bios", Verdict::Unusable),
+            h("c.Kept", Verdict::Unusable),
+            h("d.Broken", Verdict::Broken),
+        ];
+        let ids: Vec<String> = suggestions(&all, &["c.Kept".to_string()])
+            .into_iter()
+            .map(|x| x.id)
+            .collect();
+        assert_eq!(ids, ["b.Bios", "d.Broken"]);
     }
 
     #[test]

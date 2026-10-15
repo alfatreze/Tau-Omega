@@ -49,3 +49,4 @@ jobs:
           NODE_PATH=$(npm root -g) node scripts/marketplace-test.cjs
           NODE_PATH=$(npm root -g) node scripts/cores-test.cjs
           NODE_PATH=$(npm root -g) node scripts/manual-test.cjs
+          NODE_PATH=$(npm root -g) node scripts/disable-test.cjs
