@@ -95,7 +95,10 @@ pub fn platform_tree(card: &Path) -> Result<Vec<PlatformNode>, TauError> {
     let cores = inspect_card(card)?.cores;
     let mut groups: BTreeMap<String, Vec<CoreRow>> = BTreeMap::new();
     for c in cores {
-        let key = if c.platform.is_empty() {
+        let key = if is_tau_family(&c) {
+            // Tau is one system, like every GBA core is under `gba`: its stable, preview and dev cores share one row and one media folder.
+            TAU_PLATFORM.to_string()
+        } else if c.platform.is_empty() {
             NO_PLATFORM.to_string()
         } else {
             c.platform.clone()
@@ -120,14 +123,59 @@ pub fn platform_tree(card: &Path) -> Result<Vec<PlatformNode>, TauError> {
         .into_iter()
         .map(|(id, mut cores)| {
             cores.sort_by_key(|c| c.shortname.to_lowercase());
-            PlatformNode {
-                platform: platform_info(card, &id),
-                cores,
+            let mut platform = tree_platform_info(card, &id, &cores);
+            let (category, manufacturer) =
+                crate::taxonomy::resolve(&id, &platform.category, &platform.manufacturer);
+            if id != NO_PLATFORM {
+                platform.category = category;
+                platform.manufacturer = manufacturer;
             }
+            PlatformNode { platform, cores }
         })
         .collect();
-    nodes.sort_by_key(|n| (n.platform.id == NO_PLATFORM, n.platform.name.to_lowercase()));
+    nodes.sort_by_key(|n| {
+        (
+            n.platform.id == NO_PLATFORM,
+            crate::taxonomy::category_rank(&n.platform.category),
+            n.platform.manufacturer.to_lowercase(),
+            n.platform.name.to_lowercase(),
+        )
+    });
     Ok(nodes)
+}
+
+pub const TAU_PLATFORM: &str = "tau";
+
+/// A core of the Tau family: it serves the library index, or its id starts with `alfatreze.TAU`.
+fn is_tau_family(c: &crate::card::Core) -> bool {
+    c.library_capable || c.id.to_ascii_lowercase().starts_with("alfatreze.tau")
+}
+
+/// The platform record of a tree row. The Tau row uses `tau`'s own platform file; a card that only has a dev build's platform file
+/// (`tau_dev`) borrows the first Tau-family platform file it finds, so the row still shows the picture and the name.
+fn tree_platform_info(card: &Path, id: &str, cores: &[CoreRow]) -> PlatformInfo {
+    let own = platform_info(card, id);
+    if id != TAU_PLATFORM || card.join("Platforms/tau.json").is_file() {
+        return own;
+    }
+    let borrowed = cores
+        .iter()
+        .flat_map(|c| c.platforms.iter())
+        .find(|p| card.join("Platforms").join(format!("{p}.json")).is_file());
+    match borrowed {
+        Some(p) => PlatformInfo {
+            id: TAU_PLATFORM.into(),
+            name: "TAU".into(),
+            has_image: false,
+            ..platform_info(card, p)
+        },
+        None => PlatformInfo {
+            name: "TAU".into(),
+            category: "Media Players".into(),
+            manufacturer: "alfatreze".into(),
+            ..own
+        },
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -416,8 +464,20 @@ mod tests {
         let card = card("tree");
         let tree = platform_tree(&card).unwrap();
         let ids: Vec<&str> = tree.iter().map(|n| n.platform.id.as_str()).collect();
-        // sorted by display name; a platform with no Platforms file shows its id; "no platform" is always last
-        assert_eq!(ids, ["arcgame", "gba", "_none"]);
+        // sorted by category (the Library's grouping: GBA is a Handheld), then manufacturer, then name; "no platform" is last
+        assert_eq!(ids, ["gba", "arcgame", "_none"]);
+        let gba = tree.iter().find(|n| n.platform.id == "gba").unwrap();
+        // the card's own file says category "Nintendo"; the Library's grouping wins: Handheld > Nintendo
+        assert_eq!(
+            (
+                gba.platform.category.as_str(),
+                gba.platform.manufacturer.as_str()
+            ),
+            ("Handheld", "Nintendo")
+        );
+        let arc = tree.iter().find(|n| n.platform.id == "arcgame").unwrap();
+        // unknown to both the Library and the card: "Other"
+        assert_eq!(arc.platform.category, "Other");
         let gba = tree.iter().find(|n| n.platform.id == "gba").unwrap();
         // the GBA core needs its BIOS and the tree says so; the other core does not
         assert_eq!(
@@ -443,6 +503,66 @@ mod tests {
             ("arcgame", false)
         );
         assert_eq!(tree.last().unwrap().platform.name, "No platform");
+    }
+
+    #[test]
+    fn every_tau_core_sits_under_one_tau_row_in_media_players() {
+        let card = card("taurow");
+        let tau = |id: &str, short: &str, platforms: &[&str]| {
+            write(
+                &card.join("Cores").join(id).join("core.json"),
+                core_json("alfatreze", short, "0.6.0", platforms).as_bytes(),
+            );
+        };
+        tau("alfatreze.TAU", "TAU", &["tau"]);
+        tau(
+            "alfatreze.TAU Preview",
+            "TAU Preview",
+            &["tau_preview", "tau"],
+        );
+        tau("alfatreze.TAU DEV 122", "TAU DEV 122", &["tau_dev", "tau"]);
+        tau("alfatreze.TAU_DEV_105", "TAU_DEV_105", &["tau_dev_105"]);
+        write(&card.join("Platforms/tau.json"), br#"{"platform":{"category":"Media Players","name":"TAU","year":2026,"manufacturer":"alfatreze"}}"#);
+        write(&card.join("Platforms/tau_dev_105.json"), br#"{"platform":{"category":"Media Players","name":"TAU DEV 105","year":2026,"manufacturer":"alfatreze"}}"#);
+        let tree = platform_tree(&card).unwrap();
+        let rows: Vec<&PlatformNode> = tree
+            .iter()
+            .filter(|n| n.cores.iter().any(|c| c.id.starts_with("alfatreze.TAU")))
+            .collect();
+        assert_eq!(rows.len(), 1, "one Tau row, not one per build platform");
+        let t = rows[0];
+        assert_eq!(
+            (
+                t.platform.id.as_str(),
+                t.platform.name.as_str(),
+                t.platform.category.as_str(),
+                t.platform.manufacturer.as_str()
+            ),
+            ("tau", "TAU", "Media Players", "alfatreze")
+        );
+        assert_eq!(t.cores.len(), 4);
+        // other platforms are not touched by the fold
+        assert!(
+            tree.iter()
+                .any(|n| n.platform.id == "gba" && n.cores.len() == 2)
+        );
+    }
+
+    #[test]
+    fn a_card_with_only_a_dev_platform_file_still_shows_the_tau_row() {
+        let card = card("taudev");
+        write(
+            &card.join("Cores/alfatreze.TAU DEV 9/core.json"),
+            core_json("alfatreze", "TAU DEV 9", "0.6.0", &["tau_dev", "tau"]).as_bytes(),
+        );
+        write(&card.join("Platforms/tau_dev.json"), br#"{"platform":{"category":"Media Players","name":"TAU Dev","year":2026,"manufacturer":"alfatreze"}}"#);
+        let tree = platform_tree(&card).unwrap();
+        let t = tree.iter().find(|n| n.platform.id == "tau").unwrap();
+        assert_eq!(
+            (t.platform.name.as_str(), t.platform.category.as_str()),
+            ("TAU", "Media Players")
+        );
+        assert!(!t.platform.has_image);
     }
 
     #[test]

@@ -40,17 +40,28 @@ pub fn cores(a: &[String], j: bool) -> Result<(), CliError> {
     let card = a.first().ok_or("cores needs a card root")?;
     let tree = corehub::platform_tree(Path::new(card))?;
     emit(j, &tree, || {
+        // The Library's grouping: category > manufacturer > platform > core (the tree is already in that order).
         let mut s = String::new();
+        let (mut cat, mut maker) = (String::new(), String::new());
         for n in &tree {
+            if n.platform.category != cat {
+                cat = n.platform.category.clone();
+                maker.clear();
+                s += &format!("{cat}\n");
+            }
+            if n.platform.manufacturer != maker {
+                maker = n.platform.manufacturer.clone();
+                s += &format!("  {maker}\n");
+            }
             s += &format!(
-                "{} ({}, {} core{})\n",
+                "    {} ({}, {} core{})\n",
                 n.platform.name,
                 n.platform.id,
                 n.cores.len(),
                 if n.cores.len() == 1 { "" } else { "s" }
             );
             for c in &n.cores {
-                s += &format!("  {:<34} {:<10} {}\n", c.id, c.version, c.shortname);
+                s += &format!("      {:<34} {:<10} {}\n", c.id, c.version, c.shortname);
             }
         }
         s

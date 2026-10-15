@@ -98,6 +98,7 @@ mod tests {
             platforms: Vec::new(),
             media_platform: String::new(),
             library_capable: false,
+            audio_formats: Vec::new(),
             index_status: crate::card::IndexStatus::NoIndex,
             platform_category: None,
         }

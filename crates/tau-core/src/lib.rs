@@ -59,6 +59,7 @@ pub mod sync;
 pub mod tagedit;
 mod tags;
 pub mod taud;
+pub mod taxonomy;
 use tags::{mp3_seconds, read_flac, read_id3v1, read_id3v2};
 pub mod tpg;
 pub mod update;
