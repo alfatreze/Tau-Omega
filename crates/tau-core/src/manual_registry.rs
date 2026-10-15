@@ -48,8 +48,7 @@ impl Registry {
         self.entries
             .retain(|e| !e.core_id.eq_ignore_ascii_case(&entry.core_id));
         self.entries.push(entry);
-        self.entries
-            .sort_by(|a, b| a.core_id.to_lowercase().cmp(&b.core_id.to_lowercase()));
+        self.entries.sort_by_key(|e| e.core_id.to_lowercase());
     }
 
     /// Forgets a core (it is now in the Library, or was removed).
