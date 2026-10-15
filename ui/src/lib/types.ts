@@ -320,3 +320,10 @@ export type InstalledCore = { id: string; shortname: string; version: string };
 export type BuildRow = { entry: BuildEntry; relation: BuildRelation; older: InstalledCore[] };
 export type BuildList = { dir: string; rows: BuildRow[] };
 export type SchemeTry = { error: string | null; placement: Placement | null };
+
+/** Developer results (the Results page). */
+export type DiffChange = 'better' | 'worse' | 'changed';
+export type DiffLine = { kind: 'verdict' | 'test' | 'build' | 'metric'; label: string; before: string; after: string; change: DiffChange };
+export type ResultShot = { filename: string; path: string; captured_at: string | null; bytes: number; since_install: boolean; report: TaudReport | null; problem: string | null };
+export type ResultRun = { profile: string; latest: string; previous: string | null; diff: DiffLine[]; since_install: boolean };
+export type ResultsView = { since: string | null; shots: ResultShot[]; runs: ResultRun[] };

@@ -6,7 +6,7 @@
   import type { InstallPlan, InstallReport, RollbackReport, UpdateVerdict } from './types';
   /** The package zip and the card folder chosen on the page above. */
   export let zipPath = ''; export let cardPath = '';
-  import { developerTools, roleOf, refreshRole, cardLabel } from './devStore';
+  import { developerTools, roleOf, refreshRole, cardLabel, markInstalled } from './devStore';
   // With developer tools on, installing onto a Real card needs its name typed first (a test card is exactly what dev installs are for).
   $: if ($developerTools && cardPath) void refreshRole(cardPath);
   let typed = '';
@@ -38,7 +38,7 @@
   async function install() {
     if (!plan || plan.refused) return;
     busy = true; notice = '';
-    try { const replaced = plan.superseded_candidates.filter((id) => !/DEV|TAU_0_/.test(id)); const installed = plan.update.cores.map((c) => c.package.core_id); report = await executeCoreUpdate(zipPath, cardPath, allowDowngrade, plan.id); migrateFrom = replaced; migrateTo = installed; plan = null; dispatch('installed'); }
+    try { const replaced = plan.superseded_candidates.filter((id) => !/DEV|TAU_0_/.test(id)); const installed = plan.update.cores.map((c) => c.package.core_id); report = await executeCoreUpdate(zipPath, cardPath, allowDowngrade, plan.id); migrateFrom = replaced; migrateTo = installed; plan = null; if ($developerTools) void markInstalled(cardPath); dispatch('installed'); }
     catch (error) { notice = `Nothing was left half-done. ${errorMessage(error)}`; }
     finally { busy = false; }
   }

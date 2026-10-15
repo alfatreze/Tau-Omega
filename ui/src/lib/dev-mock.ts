@@ -49,7 +49,7 @@ const PLAT: Record<string, ReturnType<typeof plat>> = {
   amiga: plat('amiga', 'Amiga', 'Computer', 'Commodore', 1985), _none: { id: '_none', name: 'No platform', category: '', manufacturer: '', year: 0, has_image: false },
 };
 const crow = (id: string, platform: string, version: string, missing = 0) => ({ id, shortname: id.split('.')[1], author: id.split('.')[0], version, platform, platforms: [platform], missing });
-let mockRole = 'real'; let mockBuildsDir: string | null = null; let mockSchemes: { name: string; field: string; template: string }[] = [];
+let mockRole = 'real'; let mockSince: string | null = '2026-10-14T19:30:00'; let mockBuildsDir: string | null = null; let mockSchemes: { name: string; field: string; template: string }[] = [];
 const mockValidate = (t: string): string | null => { if (!t.trim()) return 'The template is empty.'; const toks = [...t.matchAll(/\{(\w+)\}/g)].map((m) => m[1]); if (toks.some((x) => !['series', 'n', 'major', 'minor', 'patch', 'pre', 'any'].includes(x))) return 'A token is not known.'; if (/\}\{/.test(t)) return 'Two tokens touch. Put some text between them so Omega knows where one ends.'; if (!toks.some((x) => ['n', 'major', 'minor', 'patch', 'pre'].includes(x))) return 'Nothing here orders the builds. Add {n}, a SemVer token or {pre}.'; return null; };
 const mockDisabled: { id: string; shortname: string; version: string; disabled_at: number; reasons: string[] }[] = [];
 const coresTreeMock = () => coresTreeAll().map((n) => ({ ...n, cores: n.cores.filter((c) => !mockDisabled.some((d) => d.id === c.id)) })).filter((n) => n.cores.length);
@@ -372,6 +372,19 @@ const handlers: Record<string, (args: any) => unknown> = {
   build_zip: (a) => a.path as string,
   plan_remove_core: (a) => ({ id: `rmc-${a.coreId}`, card_root: '/Volumes/Pocket', core_id: a.coreId, platform: 'tau', platform_shared: true, paths: [`Cores/${a.coreId}`], files_to_remove: 6, bytes_to_remove: 4 * MB, media_kept: true }),
   execute_remove_core: () => ({ removed_files: 6, bytes_removed: 4 * MB }),
+  results_scan: () => { const t = (id: number, name: string, result: string, value = 0) => ({ id, name, result, value, busy_permille: null, audio_full: null });
+    const rep = (profile: string, tests: ReturnType<typeof t>[], fw: string, underruns: number) => ({ format: 1, profile, tests, unknown: [], verdict: tests.some((x) => x.result === 'FAIL') ? 'some checks failed' : 'all checks passed', entries: { build: { firmware: fw, bitstream: 'bs-5', flags: 0, heap_gap: 9000 }, audio: { late_underruns: underruns, audio_full: true, stall_ms: 0, window_s: 30 } } });
+    const shot = (name: string, at: string, report: unknown, _since: boolean, problem: string | null = null) => ({ filename: name, path: `/Volumes/Pocket/Memories/Screenshots/${name}`, captured_at: at, bytes: 40000, since_install: !mockSince || at >= mockSince, report, problem });
+    const shots = [
+      shot('20261014_201500.png', '2026-10-14T20:15:00', rep('STANDARD', [t(1, 'SDRAM window', 'PASS', 89), t(2, 'Track changes', 'FAIL'), t(3, 'Blit storm', 'PASS', 150)], 'fw-0.6.0+b2', 2), true),
+      shot('20261014_201000.png', '2026-10-14T20:10:00', null, true),
+      shot('20261014_200500.png', '2026-10-14T20:05:00', null, true, 'The pixel grid is damaged: 3 cells could not be read.'),
+      shot('20261014_190000.png', '2026-10-14T19:00:00', rep('STANDARD', [t(1, 'SDRAM window', 'PASS', 89), t(2, 'Track changes', 'FAIL'), t(3, 'Blit storm', 'PASS', 150)], 'fw-0.6.0+b1', 0), false),
+      shot('20261013_100000.png', '2026-10-13T10:00:00', rep('FULL', [t(1, 'SDRAM window', 'PASS', 89)], 'fw-0.6.0+b1', 0), false),
+    ];
+    const runs = [{ profile: 'STANDARD', latest: shots[0].filename, previous: shots[3].filename, since_install: shots[0].since_install, diff: [{ kind: 'build', label: 'Firmware', before: 'fw-0.6.0+b1', after: 'fw-0.6.0+b2', change: 'changed' }, { kind: 'metric', label: 'Late underruns', before: '0', after: '2', change: 'worse' }] }, { profile: 'FULL', latest: shots[4].filename, previous: null, since_install: shots[4].since_install, diff: [] }];
+    return { since: mockSince, shots, runs }; },
+  set_last_install: (a) => { mockSince = (a.stamp as string | null) ?? null; return null; },
   disabled_cores: () => [...mockDisabled],
   plan_core_state: (a) => ({ token: `st-${a.enable}-${(a.ids as string[]).join('+')}`, enable: a.enable, ids: a.ids, from: (a.ids as string[]).map((i) => `${a.enable ? 'Disabled Cores' : 'Cores'}/${i}`), to: (a.ids as string[]).map((i) => `${a.enable ? 'Cores' : 'Disabled Cores'}/${i}`), blocked: (a.ids as string[]).length ? null : 'No core is selected.', notes: [] }),
   execute_core_state: (a) => {
