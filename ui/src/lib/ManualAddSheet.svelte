@@ -19,7 +19,7 @@
   let step: 'source' | 'reading' | 'choose' | 'preview' = 'source';
   let input = initial; let cls: ManualClass | null = null; let error = ''; let readme = true; let installed = false;
   let choose: Extract<ManualInspect, { status: 'choose' }> | null = null; let pickTag = ''; let pickAsset = '';
-  let result: Ready | null = null; let trust = false; let timer: ReturnType<typeof setTimeout> | undefined;
+  let result: Ready | null = null; let trust = false; let override = false; let timer: ReturnType<typeof setTimeout> | undefined;
   $: github = !!cls?.kind.startsWith('github');
   const cardName = (c: string) => c.split('/').filter(Boolean).pop() ?? c;
 
@@ -36,7 +36,7 @@
     try {
       const res = await manualInspect({ input: text, tag, asset, readme, card: card || null });
       if (res.status === 'choose') { choose = res; pickTag = res.tag; pickAsset = res.releases.find((r) => r.tag === res.tag)?.zips[0] ?? ''; step = 'choose'; }
-      else { result = res; trust = false; step = 'preview'; }
+      else { result = res; trust = false; override = false; step = 'preview'; }
     } catch (e) { error = errorMessage(e); step = 'source'; }
   }
   $: releaseOf = (tag: string): ManualReleaseChoice | undefined => choose?.releases.find((r) => r.tag === tag);
@@ -50,6 +50,8 @@
   }
   const yn = (v: boolean | null) => (v === true ? 'Yes' : v === false ? 'No' : 'Not stated');
   $: blocked = !result ? '' : result.different_source ? 'This core id was added before from a different source. Remove the existing core first, or add it from the same source.' : !card ? 'Open a card first: the install is reviewed against a card.' : '';
+  $: lintErrors = result?.lint?.errors ?? 0;
+  $: lintBlocked = lintErrors > 0 && !override;
   $: supply = result?.preview.needs.filter((n) => n.you_supply) ?? [];
   $: group = result?.preview.platforms[0];
 </script>
@@ -94,6 +96,15 @@
     {#if result.installed_version}<p class="ma-note" role="note">Already on this card as version {result.installed_version}: this will be reviewed as an update or replacement.</p>{/if}
     {#each p.warnings as w}<p class="ma-warn" role="note">{w}</p>{/each}
 
+    {#if result.lint.findings.length}
+      <h3>Core check</h3>
+      <p class="ma-note" role="status">{result.lint.errors ? `${plural(result.lint.errors, 'error')} found` : 'No errors'}{result.lint.warnings ? `, ${plural(result.lint.warnings, 'warning')}` : ''}{result.lint.notes ? `, ${plural(result.lint.notes, 'note')}` : ''}. Each finding names the documentation rule it comes from.</p>
+      <ul class="ma-lint" aria-label="Core check findings">{#each result.lint.findings as f}
+        <li class={f.severity.toLowerCase()}><span class="chip {f.severity === 'Error' ? 'bad' : f.severity === 'Warning' ? 'warn' : ''}">{f.severity}</span><div><span>{f.message}</span><small>{f.fix} <em>({f.rule})</em></small></div></li>
+      {/each}</ul>
+      {#if lintErrors}<label class="ma-check ma-override"><input type="checkbox" bind:checked={override} /> Install anyway: I know what {lintErrors === 1 ? 'this error means' : 'these errors mean'} <small>(the core may not start or show in the menu)</small></label>{/if}
+    {/if}
+
     <h3>Requirements</h3>
     <dl class="ma-facts"><div><dt>Pocket firmware</dt><dd>{p.firmware_required ? `${p.firmware_required} or newer` : 'Not stated'}</dd></div><div><dt>Dock</dt><dd>{yn(p.dock_supported)}</dd></div><div><dt>Link port</dt><dd>{yn(p.link_port)}</dd></div><div><dt>Sleep</dt><dd>{yn(p.sleep_supported)}</dd></div></dl>
 
@@ -121,7 +132,7 @@
     </dl>
 
     {#if blocked}<p class="ma-err" role="alert">{blocked}</p>{/if}
-    {#if !installed}<label class="ma-check ma-trust"><input type="checkbox" bind:checked={trust} disabled={!!blocked} /> I trust this source <small>(asked every time, never remembered)</small></label>{/if}
+    {#if !installed}<label class="ma-check ma-trust"><input type="checkbox" bind:checked={trust} disabled={!!blocked || lintBlocked} /> I trust this source <small>(asked every time, never remembered)</small></label>{/if}
     <div class="ma-actions"><button class="quiet" on:click={() => (step = 'source')}>Back</button></div>
     {#if trust && !blocked}
       <UpdatePlanView zipPath={result.zip_path} cardPath={card} on:installed={onInstalled} />
@@ -146,6 +157,7 @@
   .ma-icon{flex:none;width:48px;height:48px;display:grid;place-items:center;background:#273638;border-radius:11px;color:#c1f0ad;font-weight:700}.ma-icon img{image-rendering:pixelated}
   .ma-desc{font-size:13px;color:#c7d1d0;line-height:1.55;margin:10px 0}
   .ma-banner-warn{border:1px solid #5c5030;background:#241f12;color:#e5d9a8;border-radius:10px;padding:10px 12px;font-size:12.5px;margin:10px 0;line-height:1.5}
+  .ma-lint{list-style:none;margin:6px 0;padding:0;border:1px solid #2c393a;border-radius:9px}.ma-lint li{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-bottom:1px solid #2c393a;font-size:12.5px}.ma-lint li:last-child{border:0}.ma-lint small{display:block;color:#95a5a4;font-size:11.5px;margin-top:2px}.ma-lint em{font-style:normal;color:#7f8e8d}.ma-lint .chip.bad{background:#3a1c1c;color:#ffb4b4}.ma-override{border:1px solid #5a3030;background:#241414;border-radius:10px;padding:10px 12px}
   .ma-warn{border:1px solid #3d4a2f;background:#182016;color:#cfe6bd;border-radius:9px;padding:8px 11px;font-size:12px;margin:6px 0}
   .ma h3{margin:16px 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}
   .ma-facts{display:grid;gap:6px;margin:0}.ma-facts>div{display:grid;grid-template-columns:120px 1fr;gap:10px;font-size:12.5px}.ma-facts dt{color:#8f9e9d}.ma-facts dd{margin:0;color:#e8ecec;overflow-wrap:anywhere}

@@ -83,6 +83,23 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.setViewportSize({ width: 375, height: 800 }); await p.waitForTimeout(300);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)); ok('at phone width the sheet does not scroll the page sideways');
 
+  // ---- the core check inside the preview
+  await p.setViewportSize({ width: 1440, height: 900 }); await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.goto(url); await p.waitForTimeout(1100); await nav('Marketplace').click(); await p.waitForTimeout(500);
+  await p.getByRole('button', { name: /Add a core manually/ }).click(); await p.waitForTimeout(300);
+  await type('https://github.com/someone/unlisted-core'); await read();
+  assert.equal(await sheet().getByRole('heading', { name: 'Core check' }).count(), 0); ok('a clean core shows no core-check section');
+  await sheet().getByRole('button', { name: 'Back' }).click(); await p.waitForTimeout(200);
+  await type('https://github.com/someone/warnlint'); await read();
+  assert.match(await text(), /Core check[\s\S]*No errors, 1 warning[\s\S]*description is 71 characters[\s\S]*Shorten the description/i); ok('a warning is listed with its fix and the rule it comes from');
+  assert.equal(await sheet().getByRole('checkbox', { name: /I trust this source/ }).isDisabled(), false); ok('warnings do not block the install');
+  await sheet().getByRole('button', { name: 'Back' }).click(); await p.waitForTimeout(200);
+  await type('https://github.com/someone/badlint'); await read();
+  assert.match(await text(), /1 error found, 1 warning[\s\S]*bitstream file bitstream\.rbf_r is missing/i); ok('an error is listed first');
+  const trustBox = sheet().getByRole('checkbox', { name: /I trust this source/ });
+  assert.equal(await trustBox.isDisabled(), true); ok('an error blocks the install');
+  await sheet().getByRole('checkbox', { name: /Install anyway/ }).check();
+  assert.equal(await trustBox.isDisabled(), false); ok('ticking Install anyway lets the developer go on');
+
   assert.deepEqual(errors, [], errors.join(' | ')); ok('no page errors and no unmocked commands');
   await b.close();
   console.log(`\n${passed} checks passed`);
