@@ -44,14 +44,17 @@ const svgUrl = (w: number, h: number, id: string) => {
 // ---- Cores section mock: a small card with GBA (BIOS missing), GB, Amiga and a core with no platform ----------------------------
 const plat = (id: string, name: string, category: string, manufacturer: string, year: number) => ({ id, name, category, manufacturer, year, has_image: true });
 const PLAT: Record<string, ReturnType<typeof plat>> = {
-  gba: plat('gba', 'Game Boy Advance', 'Nintendo', 'Nintendo', 2001), gb: plat('gb', 'Game Boy', 'Nintendo', 'Nintendo', 1989),
+  gba: plat('gba', 'Game Boy Advance', 'Handheld', 'Nintendo', 2001), gb: plat('gb', 'Game Boy', 'Handheld', 'Nintendo', 1989), snes: plat('snes', 'SNES', 'Console', 'Nintendo', 1990),
+  tau: plat('tau', 'TAU', 'Media Players', 'alfatreze', 2026),
   amiga: plat('amiga', 'Amiga', 'Computer', 'Commodore', 1985), _none: { id: '_none', name: 'No platform', category: '', manufacturer: '', year: 0, has_image: false },
 };
 const crow = (id: string, platform: string, version: string, missing = 0) => ({ id, shortname: id.split('.')[1], author: id.split('.')[0], version, platform, platforms: [platform], missing });
 const coresTreeMock = () => [
-  { platform: PLAT.amiga, cores: [crow('Mazamars312.Amiga', 'amiga', '0.2.3')] },
+  { platform: PLAT.snes, cores: [crow('agg23.SNES', 'snes', '0.4.4')] },
   { platform: PLAT.gb, cores: [crow('Spiritualized.GB', 'gb', '1.3.0')] },
   { platform: PLAT.gba, cores: [crow('Spiritualized.GBA', 'gba', '1.2.0', mockBios ? 0 : 1), crow('other.GBAlt', 'gba', '0.3')] },
+  { platform: PLAT.amiga, cores: [crow('Mazamars312.Amiga', 'amiga', '0.2.3')] },
+  { platform: PLAT.tau, cores: [{ ...crow('alfatreze.TAU', 'tau', '0.6.0'), shortname: 'TAU' }, { ...crow('alfatreze.TAU Preview', 'tau_preview', '0.6.0-preview.1'), shortname: 'TAU Preview', platforms: ['tau_preview', 'tau'] }] },
   { platform: PLAT._none, cores: [crow('solo.Thing', '', '1.0')] },
 ];
 const slotOf = (name: string, o: Record<string, unknown> = {}) => ({ id: '0x100', name, required: false, filename: '', extensions: [] as string[], nonvolatile: false, core_specific: false, platform: 'gba', size_exact: null, size_maximum: null, ...o });

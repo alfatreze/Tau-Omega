@@ -21,12 +21,21 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const panel = () => p.getByRole('tabpanel');
 
   // ---- the menu tree
-  assert.match(await p.locator('nav .nav-group', { hasText: 'Cores' }).innerText(), /cores\s*5/i); ok('the Cores menu entry shows how many cores the card has');
+  assert.match(await p.locator('nav .nav-group', { hasText: 'Cores' }).innerText(), /cores\s*8/i); ok('the Cores menu entry shows how many cores the card has');
   assert.ok(await p.locator('nav .nav-group .nt-dot').count() === 1); ok('it carries a dot when a core needs a file');
-  assert.deepEqual(await tree.locator('.nt-item[data-kind="platform"] .nt-name').allInnerTexts(), ['Amiga', 'Game Boy', 'Game Boy Advance', 'No platform']); ok('platforms are listed by name, with "No platform" last');
+  assert.deepEqual((await tree.locator('.nt-item[data-kind="category"] .nt-name').allInnerTexts()).map((t) => t.toLowerCase()), ['console', 'handheld', 'computer', 'media players', 'no platform']); ok('categories follow the Library order, with "No platform" last');
+  assert.deepEqual(await tree.locator('.nt-item[data-kind="maker"] .nt-name').allInnerTexts(), ['Nintendo', 'Nintendo', 'Commodore', 'alfatreze']); ok('each category lists its manufacturers');
+  assert.deepEqual(await tree.locator('.nt-item[data-kind="platform"] .nt-name').allInnerTexts(), ['SNES', 'Game Boy', 'Game Boy Advance', 'Amiga', 'TAU', 'No platform']); ok('platforms sit under their manufacturer (Console > Nintendo > SNES), Tau under Media Players');
+  assert.deepEqual(await tree.locator('[data-kind="platform"]').evaluateAll((els) => els.map((e) => e.closest('li[role=treeitem]').getAttribute('aria-level'))), ['3','3','3','3','3','3']); ok('the tree has four levels');
   assert.equal(await tree.locator('.nt-core').count(), 0); ok('platforms start collapsed');
   await tree.getByRole('button', { name: 'Expand Game Boy Advance' }).click(); await p.waitForTimeout(150);
   assert.deepEqual(await tree.locator('.nt-core .nt-name').allInnerTexts(), ['GBA', 'GBAlt']); ok('expanding a platform lists its cores');
+  await tree.getByRole('button', { name: 'Expand TAU' }).click(); await p.waitForTimeout(150);
+  assert.deepEqual(await tree.locator('.nt-core .nt-name').allInnerTexts(), ['GBA', 'GBAlt', 'TAU', 'TAU Preview']); ok('every Tau core is under the one TAU platform');
+  await tree.getByRole('button', { name: 'Collapse TAU' }).click(); await p.waitForTimeout(100);
+  await tree.getByRole('button', { name: 'Collapse Handheld' }).click(); await p.waitForTimeout(100);
+  assert.equal(await tree.locator('[data-kind="platform"]').count(), 4); ok('a category can be collapsed with everything under it');
+  await tree.getByRole('button', { name: 'Expand Handheld' }).click(); await p.waitForTimeout(100);
   assert.ok(await core('GBA').locator('.nt-dot').count() === 1 && await core('GBAlt').locator('.nt-dot').count() === 0); ok('only the core that needs a file has the dot');
 
   // ---- platform page
@@ -141,7 +150,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // ---- no card, core with no files, overview
   await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(200); await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(300);
-  assert.match(await p.locator('.cores').innerText(), /Every core on this card, by platform/); assert.equal(await p.locator('.ov-card').count(), 4); ok('the Cores entry itself opens an overview of every platform');
+  assert.match(await p.locator('.cores').innerText(), /grouped like the openFPGA Library/); assert.equal(await p.locator('.ov-card').count(), 6); assert.deepEqual((await p.locator('.ov-cat h2').allInnerTexts()).map((t) => t.split('\n')[0].replace(/\s+\d+ cores?$/, '').toLowerCase()), ['console', 'handheld', 'computer', 'media players', 'no platform']); ok('the Cores entry itself opens an overview of every platform, in category sections');
   await platform('No platform').click(); await p.waitForTimeout(300);
   await p.locator('.pv-open').first().click(); await p.waitForTimeout(700);
   assert.match(await panel().innerText(), /No files yet/); ok('a core with no platform opens without errors');
