@@ -13,6 +13,7 @@ use serde_json::Value;
 /// (immutable, used by the big arcade collections). The owner and repository need not equal the catalog's `repository`
 /// field: authors rename and move repositories, and the zip is vetted (identity, paths, size) whatever its address.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownloadAddress {
     pub owner: String,
     pub repo: String,

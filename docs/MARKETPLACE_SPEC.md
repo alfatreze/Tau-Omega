@@ -93,7 +93,7 @@ Existing language: dark surface `#161f20`/`#1a2325`, border `#2c393a`, accent mi
 4. **Tau's own cores:** skipped for now; a shared approach with the existing Tau update path is a later item.
 5. **Icons and shots:** bring them, and download again only when a core's release changes. Sources: the catalog has no images and no screenshots anywhere; the only art is inside each release zip (`Cores/<id>/icon.bin`, `Platforms/_images/<platform>.bin`). Plan (M3b): read just those entries from the remote zip with HTTP range requests (central directory at the end, then the two entries), decode the Pocket image format, cache by `(core id, release tag)` in the app cache, fetch lazily for visible rows and on an explicit "Download all artwork" action, never block the list on it. If a host does not support range requests, fall back to the whole zip only when the user opens that core. No third-party screenshot scraping (READMEs are untrusted, vary, and would add a second network scope).
 
-## 7. Add a core manually (spec 2026-10-15, not built)
+## 7. Add a core manually (spec 2026-10-15; M7 and M8 built 2026-10-15)
 
 Owner request: add a core that is not in the openFPGA Library, from **local files** (a zip or a folder) or from a **GitHub address typed in**, and fetch the images and information from the core itself and its files. Everything else in this document (plan then confirm, vetting, backup and rollback, no auto-install) applies unchanged; this section only adds a second way in and the preview that makes an unlisted core understandable.
 
@@ -168,3 +168,5 @@ Hostile and odd inputs first (traversal, symlink, `Settings/` entry, wrong id, t
 - **M-4** **One trust tick per install**, never remembered, no allow-list.
 - **M-5** An unlisted core appears **only in Cores**, tagged "Added manually", not in the Marketplace gallery.
 - The developer-side needs that came up alongside this (validator, builds, results) are in `docs/DEV_LOOP_SPEC.md`; the validator (`core_lint`) is shared with the preview step here.
+
+**Built 2026-10-15 (M7, M8):** `manual_source` (classify and validate a zip, folder or GitHub address; 18 refused forms tested), `core_pack` (package and bare-core folders packed into a zip, one wrapper level looked through, source repositories, user data, extra top-level entries, several cores, symlinks and oversize refused; `vet_any` for a zip whose core is not known in advance), `core_preview` (identity, requirements, Library grouping, icon and banner PNG, files it needs with the ones to supply, settings, info text, warnings; checked on synthetic cores and the real Tau package) and `tau core-source <zip|folder|github-address>`. Not built: fetching from GitHub (M10), the sheet (M9), the registry (M11).
