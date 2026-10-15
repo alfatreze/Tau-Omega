@@ -153,6 +153,13 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   // ---- no card, core with no files, overview
   await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(200); await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(300);
   assert.match(await p.locator('.cores').innerText(), /grouped like the openFPGA Library/); assert.equal(await p.locator('.ov-card').count(), 6); assert.deepEqual((await p.locator('.ov-cat h2').allInnerTexts()).map((t) => t.split('\n')[0].replace(/\s+\d+ cores?$/, '').toLowerCase()), ['console', 'handheld', 'computer', 'media players', 'no platform']); ok('the Cores entry itself opens an overview of every platform, in category sections');
+  assert.equal(await p.locator('.nt input').count(), 0); ok('the menu has no search box');
+  await p.getByRole('searchbox', { name: /Search cores/ }).fill('snes'); await p.waitForTimeout(250);
+  assert.match(await p.locator('.cores').innerText(), /SNES[\s\S]*Console[\s\S]*Nintendo[\s\S]*agg23\.SNES/i); assert.equal(await p.locator('.pv-list li').count(), 1); ok('searching on the Cores page lists matching cores with their category, manufacturer and platform');
+  await p.locator('.pv-open').click(); await p.waitForTimeout(700);
+  assert.match(await p.locator('.cores h1').innerText(), /SNES/); ok('picking a result opens that core');
+  await tree.locator('.nt-item[data-kind="platform"]').first().click(); await p.waitForTimeout(250);
+  await p.locator('nav .nav-group', { hasText: 'Cores' }).click().catch(() => {}); await p.waitForTimeout(150); await p.locator('nav .nav-group', { hasText: 'Cores' }).click().catch(() => {}); await p.waitForTimeout(400);
   await platform('No platform').click(); await p.waitForTimeout(300);
   await p.locator('.pv-open').first().click(); await p.waitForTimeout(700);
   assert.match(await panel().innerText(), /No files yet/); ok('a core with no platform opens without errors');
