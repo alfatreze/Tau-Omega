@@ -35,6 +35,9 @@ pub struct CoreRow {
     pub platforms: Vec<String>,
     /// Required files with a fixed name (a BIOS) that are not on the card: the tree marks the core when this is not zero.
     pub missing: usize,
+    /// The core is in `Disabled Cores`: the Pocket does not list it, Omega still does (tagged) so its missing files can be fixed.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub disabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,9 +95,18 @@ pub fn platform_info(card: &Path, id: &str) -> PlatformInfo {
 
 /// Installed cores grouped by main platform, platforms sorted by name, cores by shortname.
 pub fn platform_tree(card: &Path) -> Result<Vec<PlatformNode>, TauError> {
-    let cores = inspect_card(card)?.cores;
+    let enabled = inspect_card(card)?.cores;
+    let held: Vec<crate::card::Core> = crate::card::disabled_cores(card)
+        .into_iter()
+        .filter(|d| !enabled.iter().any(|e| e.id.eq_ignore_ascii_case(&d.id)))
+        .collect();
+    let cores: Vec<(crate::card::Core, bool)> = enabled
+        .into_iter()
+        .map(|c| (c, false))
+        .chain(held.into_iter().map(|c| (c, true)))
+        .collect();
     let mut groups: BTreeMap<String, Vec<CoreRow>> = BTreeMap::new();
-    for c in cores {
+    for (c, disabled) in cores {
         let key = if is_tau_family(&c) {
             // Tau is one system, like every GBA core is under `gba`: its stable, preview and dev cores share one row and one media folder.
             TAU_PLATFORM.to_string()
@@ -107,6 +119,7 @@ pub fn platform_tree(card: &Path) -> Result<Vec<PlatformNode>, TauError> {
             core_detail(card, &c.id).map_or(0, |d| crate::core_files::missing(card, &d).len());
         groups.entry(key).or_default().push(CoreRow {
             missing,
+            disabled,
             shortname: if c.shortname.is_empty() {
                 c.id.clone()
             } else {
@@ -275,7 +288,7 @@ pub fn slots(data_json: Option<&Value>, platform_ids: &[String]) -> Vec<SlotInfo
         .collect()
 }
 
-/// A core id that is a plain folder name under `Cores/` (the UI passes ids back to us).
+/// A core id that is a plain folder name under `Cores/`, or under `Disabled Cores/` (the UI passes ids back to us).
 pub fn core_dir(card: &Path, core_id: &str) -> Result<PathBuf, TauError> {
     if core_id.is_empty() || core_id.contains(['/', '\\', '\0']) || core_id.contains("..") {
         return Err(TauError::e(
@@ -284,8 +297,12 @@ pub fn core_dir(card: &Path, core_id: &str) -> Result<PathBuf, TauError> {
         ));
     }
     let dir = card.join("Cores").join(core_id);
+    // A disabled core (moved to `Disabled Cores`) is still a core Omega can read and fix; it is just not listed by the Pocket.
+    let held = card.join(crate::core_state::DISABLED_DIR).join(core_id);
     if dir.join("core.json").is_file() {
         Ok(dir)
+    } else if held.join("core.json").is_file() {
+        Ok(held)
     } else {
         Err(TauError::e(
             crate::ErrorCode::NotFound,
@@ -602,5 +619,66 @@ mod tests {
             ("gba_bios.bin", Some(16384))
         );
         assert!(core_detail(&card, "../x").is_err() && core_detail(&card, "nobody.Core").is_err());
+    }
+
+    #[test]
+    fn a_disabled_core_stays_in_the_tree_tagged_and_can_still_be_read_and_fixed() {
+        let c = card("disabled-tree");
+        let ids = vec!["Spiritualized.GBA".to_string()];
+        crate::core_state::execute(
+            &c,
+            &ids,
+            false,
+            &crate::core_state::plan(&c, &ids, false).unwrap().token,
+            &[],
+            1,
+        )
+        .unwrap();
+        assert!(
+            !c.join("Cores/Spiritualized.GBA").exists(),
+            "the Pocket no longer sees it"
+        );
+        let tree = platform_tree(&c).unwrap();
+        let row = tree
+            .iter()
+            .flat_map(|n| n.cores.iter())
+            .find(|r| r.id == "Spiritualized.GBA")
+            .expect("still listed");
+        assert!(
+            row.disabled && row.missing == 1,
+            "tagged disabled, and still says what it needs"
+        );
+        assert!(
+            tree.iter()
+                .flat_map(|n| n.cores.iter())
+                .filter(|r| !r.disabled)
+                .all(|r| r.id != "Spiritualized.GBA")
+        );
+        // the detail and the files still resolve, so a missing BIOS can be added
+        let d = core_detail(&c, "Spiritualized.GBA").unwrap();
+        assert_eq!(d.shortname, "GBA");
+        assert!(
+            crate::core_files::missing(&c, &d)
+                .iter()
+                .any(|m| m.filename == "gba_bios.bin")
+        );
+        // the Pocket-facing listing still leaves it out
+        assert!(
+            crate::inspect_card(&c)
+                .unwrap()
+                .cores
+                .iter()
+                .all(|x| x.id != "Spiritualized.GBA")
+        );
+        // enabling it puts it back as an ordinary core
+        let back = crate::core_state::plan(&c, &ids, true).unwrap();
+        crate::core_state::execute(&c, &ids, true, &back.token, &[], 2).unwrap();
+        let tree = platform_tree(&c).unwrap();
+        assert!(
+            tree.iter()
+                .flat_map(|n| n.cores.iter())
+                .find(|r| r.id == "Spiritualized.GBA")
+                .is_some_and(|r| !r.disabled)
+        );
     }
 }

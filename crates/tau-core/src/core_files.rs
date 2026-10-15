@@ -409,7 +409,8 @@ pub fn missing(card: &Path, d: &CoreDetail) -> Vec<MissingFile> {
                 format!("Assets/{}/common", s.platform)
             };
             let present = card.join(&folder).join(&s.filename).is_file()
-                || card.join("Cores").join(&d.id).join(&s.filename).is_file();
+                || crate::corehub::core_dir(card, &d.id)
+                    .is_ok_and(|dir| dir.join(&s.filename).is_file());
             (!present).then(|| MissingFile {
                 slot: s.name.clone(),
                 filename: s.filename.clone(),

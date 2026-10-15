@@ -9,6 +9,7 @@
   import { buildsConfig, buildsList, buildZip, executeRemoveCore, planRemoveCore, setBuildsConfig, trySchemeOn } from './tau-api';
   import { plural, size } from './coresFormat';
   import UpdatePlanView from './UpdatePlanView.svelte';
+  import CarryMedia from './CarryMedia.svelte';
   import { roleOf, refreshRole, cardLabel } from './devStore';
   import type { BuildList, BuildRow, BuildScheme, BuildsConfig, RemovePlan, SchemeField, SchemeTry } from './types';
   export let card = '';
@@ -61,9 +62,9 @@
   const sample = (p: SchemeTry | null) => (p === null ? '' : p.error ? p.error : p.placement ? `Series “${p.placement.series}”, number ${p.placement.order[3]}${p.placement.order[0] || p.placement.order[1] || p.placement.order[2] ? `, version ${p.placement.order[0]}.${p.placement.order[1]}.${p.placement.order[2]}` : ''}${p.placement.pre ? `, pre-release ${p.placement.pre}` : ''}` : 'No match: this name is not part of a series.');
 
   // ---- install
-  let installing: { row: BuildRow; zip: string } | null = null; let installError = '';
+  let installing: { row: BuildRow; zip: string } | null = null; let installError = ''; let installedNow = false;
   async function install(r: BuildRow) {
-    installError = '';
+    installError = ''; installedNow = false;
     try { installing = { row: r, zip: await buildZip(r.entry.path) }; } catch (e) { installError = errorMessage(e); }
   }
   // ---- remove older builds
@@ -146,7 +147,8 @@
   <div class="b-backdrop" role="presentation" on:click={() => (installing = null)}></div>
   <div class="b-sheet" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="bs-title" use:modal on:keydown={(e) => e.key === 'Escape' && (installing = null)}>
     <header class="b-shead"><div><p class="eyebrow">INSTALL A BUILD</p><h2 id="bs-title">{installing.row.entry.shortname || installing.row.entry.file}</h2></div><button class="quiet" data-autofocus on:click={() => { installing = null; void rescan(); }}>Close</button></header>
-    <UpdatePlanView zipPath={installing.zip} cardPath={card} on:installed={() => void rescan()} />
+    <UpdatePlanView zipPath={installing.zip} cardPath={card} on:installed={() => { installedNow = true; void rescan(); }} />
+    {#if installedNow && installing.row.older.length}{#key installing.row.entry.path}<CarryMedia {card} newId={installing.row.entry.core_id} newName={installing.row.entry.shortname} older={installing.row.older} />{/key}{/if}
   </div>
 {/if}
 {#if removing}

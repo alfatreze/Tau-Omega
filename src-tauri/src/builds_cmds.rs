@@ -125,3 +125,23 @@ pub fn build_zip(app: tauri::AppHandle, path: String) -> Result<String, TauError
 pub fn lint_package(zip: String) -> Result<tau_core::core_lint::LintReport, TauError> {
     tau_core::core_lint::lint_zip(Path::new(&zip))
 }
+
+// ---- carry media from the previous build -----------------------------------------------------------------------------
+
+/// What could be carried from the older builds of a series to the build just installed.
+#[tauri::command(async)]
+pub fn carry_candidates(card: String, new_id: String, older: Vec<(String, String)>) -> Result<Vec<tau_core::carry::Candidate>, TauError> {
+    tau_core::carry::candidates(Path::new(&card), &new_id, &older)
+}
+
+#[tauri::command(async)]
+pub fn carry_plan(card: String, from_id: String, to_id: String, platform: String) -> Result<tau_core::carry::CarryPlan, TauError> {
+    tau_core::carry::plan(Path::new(&card), &from_id, &to_id, &platform)
+}
+
+/// Copies the reviewed files (verified, never overwriting a different file). A card write, so under the lock.
+#[tauri::command(async)]
+pub fn carry_execute(app: tauri::AppHandle, card: String, from_id: String, to_id: String, platform: String, confirmation: String) -> Result<tau_core::carry::CarryReport, TauError> {
+    let _write = crate::begin_card_write(&app, &card)?;
+    tau_core::carry::execute(Path::new(&card), &from_id, &to_id, &platform, &confirmation)
+}

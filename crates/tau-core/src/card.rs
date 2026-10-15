@@ -91,52 +91,9 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
         folders.sort_by_key(|p| p.file_name());
         for folder in folders {
             let id = folder.file_name().to_string_lossy().to_string();
-            let core_json = folder.path().join("core.json");
-            if !core_json.is_file() {
-                warnings.push(Warning::new(
-                    WarningCode::MissingCoreJson,
-                    format!("{id}: missing core.json"),
-                ));
-                continue;
+            if let Some(core) = read_core_folder(&root, id, &folder.path(), &mut warnings)? {
+                cores.push(core);
             }
-            let json: Value = serde_json::from_slice(&fs::read(&core_json)?)
-                .map_err(|e| TauError::e(ErrorCode::Json, format!("{id}/core.json: {e}")))?;
-            let metadata = json.pointer("/core/metadata").ok_or_else(|| {
-                TauError::e(
-                    ErrorCode::Json,
-                    format!("{id}/core.json: missing core.metadata"),
-                )
-            })?;
-            let string = |key: &str| {
-                metadata
-                    .get(key)
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string()
-            };
-            let platforms = cardlayout::platform_ids(&json);
-            let platform = platforms.first().cloned().unwrap_or_default();
-            let data_json = folder.path().join("data.json");
-            let data_value = fs::read(&data_json)
-                .ok()
-                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
-            let library_capable = data_value.as_ref().map(slots_have_library).unwrap_or(false);
-            let media_platform = cardlayout::media_platform(&platforms, data_value.as_ref());
-            let index_status = index_status_for(&root, &media_platform);
-            let platform_category = platform_category_for(&root, &platform);
-            cores.push(Core {
-                id,
-                author: string("author"),
-                shortname: string("shortname"),
-                version: string("version"),
-                platform,
-                platforms,
-                media_platform,
-                library_capable,
-                audio_formats: cardlayout::audio_formats(data_value.as_ref()),
-                index_status,
-                platform_category,
-            });
         }
     }
     Ok(Card {
@@ -145,6 +102,87 @@ pub fn inspect_card(root: impl AsRef<Path>) -> Result<Card, TauError> {
         cores,
         warnings,
     })
+}
+
+/// Reads one core folder (`Cores/<id>` or `Disabled Cores/<id>`) into a [`Core`]; `None` (with a warning) when it has no `core.json`.
+fn read_core_folder(
+    root: &Path,
+    id: String,
+    folder: &Path,
+    warnings: &mut Vec<Warning>,
+) -> Result<Option<Core>, TauError> {
+    let core_json = folder.join("core.json");
+    if !core_json.is_file() {
+        warnings.push(Warning::new(
+            WarningCode::MissingCoreJson,
+            format!("{id}: missing core.json"),
+        ));
+        return Ok(None);
+    }
+    let json: Value = serde_json::from_slice(&fs::read(&core_json)?)
+        .map_err(|e| TauError::e(ErrorCode::Json, format!("{id}/core.json: {e}")))?;
+    let metadata = json.pointer("/core/metadata").ok_or_else(|| {
+        TauError::e(
+            ErrorCode::Json,
+            format!("{id}/core.json: missing core.metadata"),
+        )
+    })?;
+    let string = |key: &str| {
+        metadata
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let platforms = cardlayout::platform_ids(&json);
+    let platform = platforms.first().cloned().unwrap_or_default();
+    let data_json = folder.join("data.json");
+    let data_value = fs::read(&data_json)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+    let library_capable = data_value.as_ref().map(slots_have_library).unwrap_or(false);
+    let media_platform = cardlayout::media_platform(&platforms, data_value.as_ref());
+    let index_status = index_status_for(root, &media_platform);
+    let platform_category = platform_category_for(root, &platform);
+    Ok(Some(Core {
+        id,
+        author: string("author"),
+        shortname: string("shortname"),
+        version: string("version"),
+        platform,
+        platforms,
+        media_platform,
+        library_capable,
+        audio_formats: cardlayout::audio_formats(data_value.as_ref()),
+        index_status,
+        platform_category,
+    }))
+}
+
+/// The cores a user (or Omega) moved to `Disabled Cores`: the Pocket does not list them, but they are still cores Omega can open and fix.
+pub fn disabled_cores(root: &Path) -> Vec<Core> {
+    let dir = root.join(crate::core_state::DISABLED_DIR);
+    let mut folders: Vec<_> = fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|p| p.path().join("core.json").is_file())
+        .collect();
+    folders.sort_by_key(|p| p.file_name());
+    let mut sink = Vec::new();
+    folders
+        .iter()
+        .filter_map(|f| {
+            read_core_folder(
+                root,
+                f.file_name().to_string_lossy().to_string(),
+                &f.path(),
+                &mut sink,
+            )
+            .ok()
+            .flatten()
+        })
+        .collect()
 }
 
 /// The media root a core's index lives under, and its current status. Moved
