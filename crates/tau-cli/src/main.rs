@@ -91,6 +91,7 @@ fn main() -> ExitCode {
         "core-screens" => core_verbs::core_screens(&args, json),
         "core-add-plan" => core_verbs::core_add_plan(&args, json),
         "core-add" => core_verbs::core_add(&args, json),
+        "core-source" => core_verbs::core_source(&args, json),
         "core-remove-plan" => core_verbs::core_remove_plan(&args, json),
         "core-remove" => core_verbs::core_remove(&args, json),
         "catalog-core" => market_verbs::catalog_core(&args, json),

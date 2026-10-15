@@ -7,7 +7,8 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tau_core::{
     core_add::{self, AddState, Destination},
-    core_files, core_remove, core_screens, core_settings, corehub,
+    core_files, core_pack, core_preview, core_remove, core_screens, core_settings, corehub,
+    manual_source::{self, Source},
 };
 
 fn emit<T: Serialize>(j: bool, data: &T, text: impl FnOnce() -> String) -> Result<(), CliError> {
@@ -394,5 +395,95 @@ pub fn core_add(a: &[String], j: bool) -> Result<(), CliError> {
                 d.display()
             ))
         )
+    })
+}
+
+/// `tau core-source <zip | folder | github-address> [--json]`: what a core that is not in the Library says about itself (the preview of a manual add).
+/// A folder is packed into a temporary zip first; a GitHub address is validated here and fetched in a later step (nothing is downloaded yet).
+pub fn core_source(a: &[String], j: bool) -> Result<(), CliError> {
+    let input = a
+        .first()
+        .ok_or("core-source needs a zip, a folder or a GitHub address")?;
+    match manual_source::classify(input)? {
+        Source::GitHub(g) => emit(j, &g, || {
+            format!("a GitHub address, valid: {g:?}\n(fetching it is not built yet)")
+        }),
+        Source::Zip(z) => show_preview(&z, None, j),
+        Source::Folder(f) => {
+            let out = std::env::temp_dir().join(format!("tau-core-source-{}", std::process::id()));
+            let packed =
+                core_pack::pack_folder(&f, &out, tau_core::core_package::Limits::default())?;
+            show_preview(&packed.zip, Some(&packed), j)
+        }
+    }
+}
+
+fn show_preview(zip: &Path, packed: Option<&core_pack::Packed>, j: bool) -> Result<(), CliError> {
+    let p = core_preview::preview_zip(zip, tau_core::core_package::Limits::default())?;
+    emit(j, &p, || {
+        let mut s = format!(
+            "{} {} ({})\n{}\nfirmware {} · dock {:?} · {} files, {} · sha256 {}\n",
+            p.core_id,
+            p.version,
+            p.date_release,
+            p.description,
+            if p.firmware_required.is_empty() {
+                "not stated"
+            } else {
+                &p.firmware_required
+            },
+            p.dock_supported,
+            p.files,
+            size(p.uncompressed_bytes),
+            p.sha256
+        );
+        if let Some(pk) = packed {
+            s += &format!(
+                "(packed from a {:?} folder{})\n",
+                pk.layout,
+                pk.descended_into
+                    .as_ref()
+                    .map_or(String::new(), |d| format!(", inside {d}"))
+            );
+        }
+        for pl in &p.platforms {
+            s += &format!(
+                "platform: {} > {} > {}{}\n",
+                pl.category,
+                pl.manufacturer,
+                pl.name,
+                if pl.in_package {
+                    ""
+                } else {
+                    " (no platform file in the package)"
+                }
+            );
+        }
+        for n in &p.needs {
+            s += &format!(
+                "needs: {}{} -> {}{}\n",
+                n.slot,
+                if n.filename.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", n.filename)
+                },
+                n.folder_rel,
+                if n.you_supply {
+                    "  <- you supply this"
+                } else if n.in_package {
+                    "  (in the package)"
+                } else {
+                    ""
+                }
+            );
+        }
+        if !p.settings.is_empty() {
+            s += &format!("settings: {}\n", p.settings.join(", "));
+        }
+        for w in &p.warnings {
+            s += &format!("note: {w}\n");
+        }
+        s
     })
 }
