@@ -160,10 +160,11 @@ Hostile and odd inputs first (traversal, symlink, `Settings/` entry, wrong id, t
 
 **M7** `manual_source` + `core_pack` + tests (no network, no UI) · **M8** `core_preview` + CLI `core-source` on real zips · **M9** the sheet for local zip and folder (dev mock, drag and drop, trust banner) · **M10** `github_repo` + address box + release chooser + README/pictures switch · **M11** `manual_registry` + GitHub updates in Cores > Updates · **M12** real-card run, docs, release notes.
 
-### 7.9 Open questions for the owner
+### 7.9 Decisions (owner, 2026-10-15: all recommendations accepted)
 
-- **M-1** Accept a **bare core folder** (not only the full package layout)? (Recommended: yes, wrapped as described.)
-- **M-2** README and pictures from GitHub: **on by default** for a GitHub address (recommended) or off until switched on?
-- **M-3** Offer **updates for GitHub-sourced manual cores** (needs the registry in app support, nothing on the card)? (Recommended: yes.)
-- **M-4** One tick per install ("I trust this source") or also a per-author allow-list the user can build? (Recommended: one tick only, no list.)
-- **M-5** Should an unlisted core also appear in the Marketplace gallery (as a local entry) or only in Cores? (Recommended: only in Cores, tagged "Added manually".)
+- **M-1** A **bare core folder** is accepted (wrapped as `Cores/<author.shortname>/`), as well as the full package layout.
+- **M-2** README and pictures from GitHub are **on by default** for a GitHub address (visible switch, one extra request each).
+- **M-3** GitHub-sourced manual cores get **update checks** through the app-side registry (nothing added to the card).
+- **M-4** **One trust tick per install**, never remembered, no allow-list.
+- **M-5** An unlisted core appears **only in Cores**, tagged "Added manually", not in the Marketplace gallery.
+- The developer-side needs that came up alongside this (validator, builds, results) are in `docs/DEV_LOOP_SPEC.md`; the validator (`core_lint`) is shared with the preview step here.
