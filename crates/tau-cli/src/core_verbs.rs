@@ -7,7 +7,8 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tau_core::{
     core_add::{self, AddState, Destination},
-    core_files, core_pack, core_preview, core_remove, core_screens, core_settings, corehub,
+    core_files, core_lint, core_pack, core_preview, core_remove, core_screens, core_settings,
+    corehub,
     manual_source::{self, Source},
 };
 
@@ -486,4 +487,61 @@ fn show_preview(zip: &Path, packed: Option<&core_pack::Packed>, j: bool) -> Resu
         }
         s
     })
+}
+
+fn lint_text(r: &core_lint::LintReport) -> String {
+    let mut s = format!(
+        "{}: {} error(s), {} warning(s), {} note(s)\n",
+        r.core_id, r.errors, r.warnings, r.notes
+    );
+    for f in &r.findings {
+        s += &format!(
+            "  [{:?}] {} {}\n      rule: {}\n      fix: {}\n",
+            f.severity, f.id, f.message, f.rule, f.fix
+        );
+    }
+    s
+}
+
+/// `tau core-lint <zip | folder>`, `tau core-lint --card <card-root> <core-id>` or `tau core-lint --card <card-root> --all`: the pre-flight check of a core
+/// against every documented limit (read-only; exit status 1 when a core has errors).
+pub fn core_lint(a: &[String], j: bool) -> Result<(), CliError> {
+    let reports: Vec<core_lint::LintReport> = if let Some(card) = value(a, "--card") {
+        let card = Path::new(card);
+        if a.iter().any(|x| x == "--all") {
+            tau_core::inspect_card(card)?
+                .cores
+                .iter()
+                .map(|c| core_lint::lint_card_core(card, &c.id))
+                .collect::<Result<_, _>>()?
+        } else {
+            let id = a
+                .iter()
+                .find(|x| !x.starts_with("--") && Some(x.as_str()) != value(a, "--card"))
+                .ok_or("core-lint --card needs a core id or --all")?;
+            vec![core_lint::lint_card_core(card, id)?]
+        }
+    } else {
+        let input = a
+            .first()
+            .ok_or("core-lint needs a zip, a folder, or --card <root> <core-id>")?;
+        match manual_source::classify(input)? {
+            Source::Zip(z) => vec![core_lint::lint_zip(&z)?],
+            Source::Folder(f) => vec![core_lint::lint_folder(
+                &f,
+                &std::env::temp_dir().join(format!("tau-core-lint-{}", std::process::id())),
+            )?],
+            Source::GitHub(_) => {
+                return Err("core-lint reads local files: download the zip first".into());
+            }
+        }
+    };
+    let failed = reports.iter().any(|r| r.errors > 0);
+    emit(j, &reports, || {
+        reports.iter().map(lint_text).collect::<String>()
+    })?;
+    if failed {
+        return Err(CliError::Usage("one or more cores have errors".into()));
+    }
+    Ok(())
 }
