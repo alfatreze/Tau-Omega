@@ -327,3 +327,7 @@ export type DiffLine = { kind: 'verdict' | 'test' | 'build' | 'metric'; label: s
 export type ResultShot = { filename: string; path: string; captured_at: string | null; bytes: number; since_install: boolean; report: TaudReport | null; problem: string | null };
 export type ResultRun = { profile: string; latest: string; previous: string | null; diff: DiffLine[]; since_install: boolean };
 export type ResultsView = { since: string | null; shots: ResultShot[]; runs: ResultRun[] };
+
+/** Run notes (the Results page's second tab). */
+export type RunResult = { profile: string; captured_at: string; verdict: string; failing: string[]; firmware: string; bitstream: string; changes: DiffLine[] };
+export type RunNote = { id: string; card: string; stamp: string; core_id: string; shortname: string; version: string; package: string; package_sha256: string; bitstreams: [string, string][]; backup_dir: string; files_written: number; text: string; results: RunResult[]; results_at: string | null };

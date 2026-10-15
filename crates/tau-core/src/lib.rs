@@ -65,6 +65,7 @@ pub mod refresh;
 pub mod release_check;
 pub mod remove;
 pub mod results;
+pub mod run_notes;
 pub mod screenshots;
 pub mod settings_migrate;
 pub mod storage;

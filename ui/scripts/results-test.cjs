@@ -60,6 +60,27 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await nav('Results').click(); await p.waitForTimeout(700);
   assert.match(await page().locator('.r-since').innerText(), /since the last install on Pocket, \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/); ok('finishing an install records it as the new baseline');
 
+  // ---- run notes
+  await page().getByRole('tab', { name: 'Run notes' }).click(); await p.waitForTimeout(500);
+  const notes = page().locator('article.rn');
+  assert.equal(await notes.count(), 2); ok('an install made a run note, next to the one that was already there');
+  const mine = notes.first();
+  assert.match(await mine.innerText(), /Unlisted\s*1\.0\.0[\s\S]*Installed \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[\s\S]*Package SHA-256[\s\S]*eeeeeeeeeeeeeeee…[\s\S]*Bitstream[\s\S]*ffffffffffffffff…[\s\S]*Backup/i); ok('the newest note shows what went on: package, hashes, backup');
+  assert.match(await mine.innerText(), /Nothing attached yet/); ok('and that nothing has been attached');
+  await mine.getByLabel('Your note').fill('Gain click is gone at 1.5x.'); await mine.getByLabel('Your note').blur(); await p.waitForTimeout(400);
+  assert.match(await mine.locator('.rn-msg').innerText(), /Saved/); ok('your own line saves when you leave the box');
+  await mine.getByRole('button', { name: 'Attach the results so far' }).click(); await p.waitForTimeout(500);
+  assert.match(await mine.locator('.rn-res').innerText(), /STANDARD[\s\S]*some checks failed[\s\S]*failing: Track changes[\s\S]*1 change since the previous run/); ok('attaching stores what the Pocket reported');
+  assert.match(await mine.locator('.rn-msg').innerText(), /Attached 1 run/); ok('and says how many runs it attached');
+  await mine.getByRole('button', { name: 'Show the report' }).click(); await p.waitForTimeout(300);
+  assert.match(await mine.locator('pre.rn-report').innerText(), /# Unlisted 1\.0\.0 on Pocket[\s\S]*Gain click is gone at 1\.5x\./); ok('the report is plain text with your note in it');
+  await mine.getByRole('button', { name: 'Hide the report' }).click();
+  await mine.getByRole('button', { name: /Delete the note for Unlisted/ }).click(); await p.waitForTimeout(200);
+  assert.match(await mine.innerText(), /Delete this note\?/); await mine.getByRole('button', { name: 'Keep' }).click(); await p.waitForTimeout(150);
+  assert.equal(await notes.count(), 2); ok('deleting asks first and Keep changes nothing');
+  await mine.getByRole('button', { name: /Delete the note for Unlisted/ }).click(); await mine.getByRole('button', { name: 'Delete', exact: true }).click(); await p.waitForTimeout(400);
+  assert.equal(await notes.count(), 1); assert.match(await notes.first().innerText(), /TAU DEV 112/); ok('confirming deletes only that note');
+
   assert.deepEqual(errors, [], errors.join(' | ')); ok('no page errors and no unmocked commands');
   await b.close();
   console.log(`\n${passed} checks passed`);
