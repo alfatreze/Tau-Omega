@@ -229,8 +229,8 @@ const handlers: Record<string, (args: any) => unknown> = {
   read_check_summary: () => null,
   read_qr_report: () => null,
   list_screenshots: () => [],
-  read_core_icon: () => null,
-  read_platform_image: () => null,
+  read_core_icon: () => `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36"><circle cx="18" cy="18" r="12" fill="white"/></svg>')}`,
+  read_platform_image: () => `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="521" height="165"><rect width="100%" height="100%" fill="#000"/><rect x="190" y="50" width="140" height="70" rx="10" fill="#ddd"/></svg>')}`,
   // A 1x1 grey PNG, so cover previews have something to show.
   read_image_data_url: () => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   list_journals: () => [],

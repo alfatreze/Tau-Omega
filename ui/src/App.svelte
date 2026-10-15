@@ -23,12 +23,14 @@
   import { tick } from 'svelte';
   import PackageView from './lib/PackageView.svelte';
   import MarketplaceView from './lib/MarketplaceView.svelte';
+  import NavTree from './lib/NavTree.svelte';
+  import CoresView from './lib/CoresView.svelte';
   import { coreUpdateCount } from './lib/marketStore';
   import UpdateBanner from './lib/UpdateBanner.svelte';
   import OmegaUpdate from './lib/OmegaUpdate.svelte';
   import CardMarkerPrompt from './lib/CardMarkerPrompt.svelte';
   import RefreshLibrary from './lib/RefreshLibrary.svelte';
-  let page: 'cards' | 'workbench' | 'compare' | 'history' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
+  let page: 'cards' | 'workbench' | 'compare' | 'history' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
   let packageZipPath = ''; let packageCardPath = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
   async function inspectPackageZip() { packageManifest = null; packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packageManifest = await inspectPackage(packageZipPath); packageInspectNotice = `${packageManifest.entries.length} files found. Nothing was changed.`; } catch (error) { packageInspectNotice = `Could not read this package: ${errorMessage(error)}`; } }
@@ -323,6 +325,7 @@
   </div>
   <nav aria-label="Main">
     <button class:active={page === 'cards'} on:click={() => page = 'cards'}>Cards</button>
+    <NavTree card={path} active={page === 'cores'} show={() => (page = 'cores')} />
     <button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Library</button>
     <button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button>
     <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
@@ -368,6 +371,8 @@
     <PackageView bind:removeKeepMedia bind:zipPath={packageZipPath} bind:cardPath={packageCardPath} chooseZip={() => chooseFolder('packageZip')} chooseCard={() => chooseFolder('packageCard')} inspect={inspectPackageZip} manifest={packageManifest} inspectNotice={packageInspectNotice} review={reviewPackageInstall} plan={packagePlan} planNotice={packagePlanNotice} confirm={confirmPackageInstall} report={packageReport} confirmNotice={packageConfirmNotice} loadCoresToRemove={loadCoresToRemove} removeCores={removeCores} removeCoresNotice={removeCoresNotice} bind:removeCoreId={removeCoreId} reviewRemove={reviewRemoveCore} removePlan={removePlan} removePlanNotice={removePlanNotice} confirmRemove={confirmRemoveCore} removeReport={removeReport} removeConfirmNotice={removeConfirmNotice} />
   {:else if page === 'marketplace'}
     <MarketplaceView card={path} />
+  {:else if page === 'cores'}
+    <CoresView card={path} />
   {:else if page === 'meters'}
     <MetersView />
   {:else if page === 'diagnostics'}
