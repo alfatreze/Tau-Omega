@@ -4,6 +4,7 @@ mod updates;
 mod asset_cmds;
 mod convert_cmds;
 mod core_cmds;
+mod state_cmds;
 mod manual_cmds;
 mod marketplace_cmds;
 mod omega_update;
@@ -174,6 +175,12 @@ fn set_card_marker(app: tauri::AppHandle, setting: String, path: Option<String>)
     }
     let mut prefs = read_prefs(&app)?;
     prefs.card_marker = setting.clone();
+    if !matches!(prefs.core_disable.as_str(), "ask" | "auto" | "never") {
+        return Err(TauError { code: ErrorCode::InvalidPathReference, message: "core_disable must be ask, auto or never".into() });
+    }
+    // The keep-enabled lists are changed only by the core_keep command, so a stale Settings page can never overwrite them.
+    let mut prefs = prefs;
+    prefs.core_keep = read_prefs(&app)?.core_keep;
     let dir = config_dir(&app)?;
     std::fs::create_dir_all(&dir)?;
     std::fs::write(dir.join(PREFS_FILE), serde_json::to_vec_pretty(&prefs).map_err(|e| TauError { code: ErrorCode::Json, message: e.to_string() })?)?;
@@ -456,6 +463,10 @@ struct Prefs {
     card_marker: String,
     /// Conversion of files the Pocket cannot play, and ReplayGain, for every sync.
     convert: tau_core::convert::ConvertSettings,
+    /// Cores the Pocket cannot use (missing files, broken): `"ask"` (offer to disable them when a card is opened), `"auto"` (disable them without asking) or `"never"` (no suggestions).
+    core_disable: String,
+    /// Per card (its volume name), core ids the user wants left enabled and never suggested ("keep enabled", "don't remind me again").
+    core_keep: std::collections::BTreeMap<String, Vec<String>>,
 }
 impl Default for Prefs {
     fn default() -> Self {
@@ -472,6 +483,8 @@ impl Default for Prefs {
             update_notice_shown: false,
             card_marker: "ask".into(),
             convert: tau_core::convert::ConvertSettings::product(),
+            core_disable: "ask".into(),
+            core_keep: Default::default(),
         }
     }
 }
@@ -881,7 +894,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, playlist_cmds::export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, diag_cmds::read_persisted_settings, diag_cmds::read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, playlist_cmds::plan_playlist_write, playlist_cmds::execute_playlist_write, playlist_cmds::plan_playlist_rename, playlist_cmds::execute_playlist_rename, playlist_cmds::plan_playlist_import, playlist_cmds::execute_playlist_import, check_storage_capacity, plan_backup, package_cmds::inspect_package, package_cmds::plan_package_install, package_cmds::execute_package_install, package_cmds::plan_remove_core, package_cmds::execute_remove_core, diag_cmds::read_qr_report, diag_cmds::list_screenshots, diag_cmds::read_image_data_url, diag_cmds::read_core_icon, diag_cmds::read_platform_image, diag_cmds::preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, asset_cmds::appearance_check, asset_cmds::appearance_open, asset_cmds::appearance_export, asset_cmds::appearance_plan_install, asset_cmds::appearance_install, asset_cmds::halcyon_open, asset_cmds::halcyon_import_apo, asset_cmds::halcyon_curve, asset_cmds::halcyon_validate, asset_cmds::halcyon_export, asset_cmds::halcyon_plan_install, asset_cmds::halcyon_install, omega_update::omega_update_check, omega_update::omega_update_install, diag_cmds::diag_read, diag_cmds::diag_zip, get_prefs, set_prefs, persist_names, plan_settings_migration, execute_settings_migration, rollback_settings_migration, update_check, update_download, core_cmds::cores_tree, core_cmds::core_detail, core_cmds::core_files, core_cmds::core_settings, core_cmds::core_screenshots, core_cmds::screenshot_thumbnail, core_cmds::plan_core_add, core_cmds::execute_core_add, core_cmds::plan_core_remove, manual_cmds::manual_classify, manual_cmds::manual_inspect, manual_cmds::manual_register, manual_cmds::manual_registry_list, core_cmds::execute_core_remove, marketplace_cmds::marketplace_catalog, marketplace_cmds::marketplace_art, marketplace_cmds::marketplace_core_updates, marketplace_cmds::marketplace_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, convert_cmds::lame_status, convert_cmds::check_lame, convert_cmds::install_lame, library_health, plan_cover_files, execute_cover_files, plan_library_refresh, execute_library_refresh, rollback_library_refresh, library_cmds::list_library, library_cmds::plan_changes, library_cmds::execute_changes, library_cmds::list_history, library_cmds::prune_history, library_cmds::clear_history, library_cmds::album_thumbnails, library_cmds::image_thumbnail])
+        .invoke_handler(tauri::generate_handler![inspect_card, scan_library, scan_media, playlist_cmds::export_playlist, find_problems, compare_media, read_journal, list_journals, get_reports_dir, set_reports_dir, get_recent_cards, record_recent_card, list_mounted_cards, get_manual_players, set_manual_player, diag_cmds::read_persisted_settings, diag_cmds::read_check_summary, plan_sync, plan_core_copy, execute_sync, execute_core_copy, execute_core_move, playlist_cmds::plan_playlist_write, playlist_cmds::execute_playlist_write, playlist_cmds::plan_playlist_rename, playlist_cmds::execute_playlist_rename, playlist_cmds::plan_playlist_import, playlist_cmds::execute_playlist_import, check_storage_capacity, plan_backup, package_cmds::inspect_package, package_cmds::plan_package_install, package_cmds::execute_package_install, package_cmds::plan_remove_core, package_cmds::execute_remove_core, diag_cmds::read_qr_report, diag_cmds::list_screenshots, diag_cmds::read_image_data_url, diag_cmds::read_core_icon, diag_cmds::read_platform_image, diag_cmds::preview_art_sidecar, cancel_job, detect_connection, eject_card, readback_status, card_breakdown, ledger_forget, asset_cmds::appearance_check, asset_cmds::appearance_open, asset_cmds::appearance_export, asset_cmds::appearance_plan_install, asset_cmds::appearance_install, asset_cmds::halcyon_open, asset_cmds::halcyon_import_apo, asset_cmds::halcyon_curve, asset_cmds::halcyon_validate, asset_cmds::halcyon_export, asset_cmds::halcyon_plan_install, asset_cmds::halcyon_install, omega_update::omega_update_check, omega_update::omega_update_install, diag_cmds::diag_read, diag_cmds::diag_zip, get_prefs, set_prefs, persist_names, plan_settings_migration, execute_settings_migration, rollback_settings_migration, update_check, update_download, core_cmds::cores_tree, state_cmds::core_suggestions, state_cmds::disabled_cores, state_cmds::plan_core_state, state_cmds::execute_core_state, state_cmds::core_keep, core_cmds::core_detail, core_cmds::core_files, core_cmds::core_settings, core_cmds::core_screenshots, core_cmds::screenshot_thumbnail, core_cmds::plan_core_add, core_cmds::execute_core_add, core_cmds::plan_core_remove, manual_cmds::manual_classify, manual_cmds::manual_inspect, manual_cmds::manual_register, manual_cmds::manual_registry_list, core_cmds::execute_core_remove, marketplace_cmds::marketplace_catalog, marketplace_cmds::marketplace_art, marketplace_cmds::marketplace_core_updates, marketplace_cmds::marketplace_download, card_marker_status, set_card_marker, remove_card_marker, plan_core_update, execute_core_update, rollback_core_update, convert_cmds::lame_status, convert_cmds::check_lame, convert_cmds::install_lame, library_health, plan_cover_files, execute_cover_files, plan_library_refresh, execute_library_refresh, rollback_library_refresh, library_cmds::list_library, library_cmds::plan_changes, library_cmds::execute_changes, library_cmds::list_history, library_cmds::prune_history, library_cmds::clear_history, library_cmds::album_thumbnails, library_cmds::image_thumbnail])
         .run(tauri::generate_context!())
         .expect("Tau Omega failed to start");
 }

@@ -110,6 +110,10 @@
     <div class="ls-row"><div><b>Keep Spotlight off Pocket cards</b><small>Adds an empty <code>.metadata_never_index</code> file at the card’s root when Tau Omega writes to a card, so macOS stops scanning it (faster writes, fewer “in use” errors). {prefs.card_marker === 'ask' ? 'Not decided yet.' : prefs.card_marker === 'on' ? 'On.' : 'Off.'}{#if marker?.is_card}{' '}This card: {marker.present ? 'has the marker' : 'no marker'}.{/if}</small></div>
       <div class="ls-btns"><button class="quiet" on:click={toggleMarker}>{prefs.card_marker === 'on' ? 'Turn off' : 'Turn on'}</button>{#if marker?.present}<button class="quiet" on:click={dropMarker}>Remove from this card</button>{/if}</div></div>
 
+    <div class="ls-row"><div><b>Cores the Pocket cannot use</b><small>When a core is missing a file it needs, or is broken, it clutters the Pocket’s menu. Nothing is ever deleted: a hidden core is moved to <code>Disabled Cores</code> and can be enabled again from Cores.</small></div>
+      <div><label class="ls-sel"><span class="sr">What to do about cores the Pocket cannot use</span><select value={prefs.core_disable} on:change={(e) => void update({ core_disable: e.currentTarget.value as 'ask' | 'auto' | 'never' }, 'Saved.')}>
+        <option value="ask">Ask me when I open a card</option><option value="auto">Hide them automatically</option><option value="never">Never suggest hiding</option></select></label></div></div>
+
     <div class="ls-row"><div><b>Notices</b><small>Show the one-time messages again.</small></div>
       <div><button class="quiet" disabled={!prefs.remove_explained && !prefs.slow_alert_suppressed && prefs.card_marker === 'ask' && !prefs.update_notice_shown} on:click={() => update({ remove_explained: false, slow_alert_suppressed: false, update_notice_shown: false, card_marker: 'ask' }, 'Notices will show again.')}>Reset notices</button></div></div>
     <p class="ls-notice" role="status">{notice}</p>
@@ -128,4 +132,4 @@
   .ls-btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
   .ls-confirm{display:flex;gap:6px;align-items:center;font-size:13px;color:#f4cfc4}.ls-confirm .danger{color:#ff9d8a}
   .ls-notice{min-height:1.2em;font-size:12px;color:#9cacab;margin:8px 0 0}
-</style>
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.ls-sel select{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:9px;padding:8px 10px}</style>

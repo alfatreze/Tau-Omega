@@ -8,7 +8,8 @@
   import CoreScreenshotsTab from './CoreScreenshotsTab.svelte';
   import CoreSettingsTab from './CoreSettingsTab.svelte';
   import { errorMessage } from './backend';
-  import { coreDetail, coreFiles, readPlatformImage } from './tau-api';
+  import { coreDetail, coreFiles, coreKeep, readPlatformImage } from './tau-api';
+  import { disabledList, refreshDisabled, setCoresEnabled } from './coreStateStore';
   import CoreUpdates from './CoreUpdates.svelte';
   import { onFileDrop } from './dropTarget';
   import { openManualAdd } from './manualAddStore';
@@ -39,6 +40,22 @@
     try { [detail, files] = await Promise.all([coreDetail(card, id), coreFiles(card, id)]); }
     catch (e) { error = errorMessage(e); }
   }
+  // Hiding from the Pocket: the switch in a core's header, and the Disabled section on the overview.
+  $: if (card) void refreshDisabled(card);
+  let stateBusy = false; let stateNote = '';
+  async function hideCore(id: string) {
+    stateBusy = true; stateNote = '';
+    try { await setCoresEnabled(card, [id], false); coresSelection.set({ platform: '', core: '' }); reloadCard(); }
+    catch (e) { stateNote = `Nothing was changed. ${errorMessage(e)}`; }
+    finally { stateBusy = false; }
+  }
+  async function showCores(ids: string[]) {
+    stateBusy = true; stateNote = '';
+    try { await setCoresEnabled(card, ids, true); await coreKeep(card, ids, true); reloadCard(); stateNote = `${plural(ids.length, 'core')} enabled again. ${ids.length === 1 ? 'It' : 'They'} will not be suggested for hiding again.`; }
+    catch (e) { stateNote = `Nothing was changed. ${errorMessage(e)}`; }
+    finally { stateBusy = false; }
+  }
+  const when = (t: number) => (t ? new Date(t * 1000).toLocaleDateString() : 'unknown date');
   async function reload() { if (!$coresSelection.core) return; try { files = await coreFiles(card, $coresSelection.core); void refreshCores(card); } catch (e) { error = errorMessage(e); } }
   async function addMissing(folderRel: string) { tab = 'files'; await tick(); await filesTab?.chooseFor(folderRel); }
 
@@ -85,8 +102,12 @@
         <h1 id="cores-title">{row?.shortname ?? detail?.shortname ?? $coresSelection.core}</h1>
         <p class="lede">{$coresSelection.core}{detail?.version ? ` · version ${detail.version}` : ''}</p>
       </div>
+      <div class="cp-actions">
+      {#if detail}<button class="vis" role="switch" aria-checked="true" disabled={stateBusy} on:click={() => hideCore(detail?.id ?? '')} title="Turn off to hide this core from the Pocket's menu (nothing is deleted)"><span class="vis-knob" aria-hidden="true"></span>Visible on the Pocket</button>{/if}
       {#if detail}<button class="quiet" aria-expanded={$inspectorOpen} aria-controls="core-details" on:click={() => inspectorOpen.update((v) => !v)} title="Show or hide the details (I)">{$inspectorOpen ? 'Hide details' : 'Show details'}</button>{/if}
+      </div>
     </header>
+    {#if stateNote}<p class="cores-note" role="status">{stateNote}</p>{/if}
     {#if error}<div class="empty"><h2>This core could not be read</h2><p>{error}</p><button class="primary" on:click={() => load($coresSelection.core)}>Try again</button></div>
     {:else if !detail || !files}<p class="cores-note" role="status">Reading the card…</p>
     {:else}
@@ -182,6 +203,20 @@
         </section>
       {/each}
     {/if}
+    {#if $disabledList.length}
+      <section class="ov-cat dis" aria-labelledby="ov-disabled"><h2 id="ov-disabled"><span class="ov-ic"><Icon name="folder" size={20} /></span>Disabled <small>{plural($disabledList.length, 'core')} hidden from the Pocket</small></h2>
+        <p class="dis-lede">Moved to <code>Disabled Cores</code> on the card. Nothing was deleted: saves and settings are where they were.</p>
+        <ul class="core-list pv-list" aria-label="Disabled cores">
+          {#each $disabledList as d (d.id)}
+            <li class="dis-row"><span class="core-icon" aria-hidden="true">{(d.shortname || d.id).slice(0, 2).toUpperCase()}</span>
+              <span class="pv-main"><strong>{d.shortname || d.id}</strong><small>{d.id}{d.version ? ` · ${d.version}` : ''} · {d.disabled_at ? `disabled ${when(d.disabled_at)}` : 'disabled by hand'}{d.reasons.length ? ` · ${d.reasons.join(' ')}` : ''}</small></span>
+              <button class="quiet" disabled={stateBusy} aria-label={`Enable ${d.shortname || d.id}`} on:click={() => showCores([d.id])}>Enable</button></li>
+          {/each}
+        </ul>
+        {#if $disabledList.length > 1}<div class="dis-all"><button class="quiet" disabled={stateBusy} on:click={() => showCores($disabledList.map((d) => d.id))}>Enable all</button></div>{/if}
+      </section>
+    {/if}
+    {#if stateNote}<p class="cores-note" role="status">{stateNote}</p>{/if}
     {/if}
     </div>
     {/if}
@@ -189,6 +224,12 @@
 </section>
 <style>
   .cores-note{font-size:13px;color:#95a5a4}
+  .cp-actions{display:flex;align-items:center;gap:10px;flex:none}
+  .vis{display:inline-flex;align-items:center;gap:9px;padding:7px 12px 7px 9px;font-size:12.5px;color:#dce6e4;background:#1a2325;border:1px solid #2c393a;border-radius:999px}
+  .vis:hover{border-color:#3d5254}.vis:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}.vis:disabled{opacity:.55}
+  .vis-knob{position:relative;width:28px;height:16px;border-radius:999px;background:#6fa35a;flex:none}.vis-knob::after{content:'';position:absolute;top:2px;left:14px;width:12px;height:12px;border-radius:50%;background:#101617}
+  .dis .dis-lede{font-size:12.5px;color:#95a5a4;margin:0 0 10px}.dis-row{display:flex;align-items:center;gap:13px;padding:11px 16px}.dis-all{margin-top:8px}.dis-row .core-icon{opacity:.6}
+  .dis :global(code){font-size:11.5px}
   /* A core's page is one screen tall: the header and tabs stay put, the content and the details column each scroll on their own. */
   .cores.has-core{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
   .cp-head{flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-right:52px}

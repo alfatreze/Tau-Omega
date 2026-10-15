@@ -119,7 +119,7 @@ export type Mp3Quality = { vbr: number } | { cbr: number };
 export type ConvertSettings = { enabled: boolean; mode: 'auto' | 'manual'; max_rate: number; flac_bits: number; reduce_playable: boolean; mp3: Mp3Quality; lame_path: string | null; lame_dir: string | null; analysis_cache: string | null; replaygain: 'off' | 'add_missing' | 'rebuild' };
 export type LameInstallOption = { method: string; label: string; command: string; runnable: boolean };
 export type LameStatus = { path: string | null; version: string | null; options: LameInstallOption[] };
-export type Prefs = { convert: ConvertSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; speeds: Record<string, number>; connections: Record<string, string> };
+export type Prefs = { convert: ConvertSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */
@@ -296,3 +296,12 @@ export type ManualInspect =
   | { status: 'ready'; preview: ManualPreview; zip_path: string; provenance: ManualProvenance; readme: { text: string; images: string[] } | null; in_library: boolean; installed_version: string | null; different_source: boolean }
   | { status: 'choose'; owner: string; repo: string; releases: ManualReleaseChoice[]; tag: string };
 export type ManualInspectArgs = { input: string; tag?: string | null; asset?: string | null; readme: boolean; card?: string | null };
+
+/** Why a core cannot work on this card, and what would make it work. */
+export type HealthReason = { code: string; message: string; fix: string };
+export type CoreHealth = { id: string; shortname: string; verdict: 'Healthy' | 'Broken' | 'Unusable'; reasons: HealthReason[]; needs_no_files: boolean };
+export type CoreSuggestions = { mode: 'ask' | 'auto' | 'never'; cores: CoreHealth[] };
+/** A core moved out of `Cores/` so the Pocket does not list it. */
+export type DisabledCore = { id: string; shortname: string; version: string; disabled_at: number; reasons: string[] };
+export type StatePlan = { token: string; enable: boolean; ids: string[]; from: string[]; to: string[]; blocked: string | null; notes: string[] };
+export type StateReport = { moved: number; caches_cleared: number };
