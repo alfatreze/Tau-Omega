@@ -12,6 +12,9 @@ use tau_core::{
 use tau_net::marketplace::{self, ArtKind, CatalogResult, CoreDownloaded, Http, Source};
 use tauri::Manager;
 
+/// Most manually added GitHub cores looked up in one update check (GitHub allows 60 unauthenticated lookups an hour).
+const MANUAL_LIMIT: usize = 8;
+
 fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
@@ -49,7 +52,29 @@ pub struct CoreUpdates {
 pub fn marketplace_core_updates(app: tauri::AppHandle, card: String, force: bool) -> Result<CoreUpdates, TauError> {
     let cat = marketplace::fetch_catalog(&Http, &cache(&app)?, now(), force)?;
     let inspected = tau_core::inspect_card(Path::new(&card))?;
-    Ok(CoreUpdates { rows: core_update::check(&inspected.cores, &cat.catalog), source: cat.source, fetched: cat.fetched })
+    let mut rows = core_update::check(&inspected.cores, &cat.catalog);
+    // Cores added manually from a GitHub repository that the Library does not list: their repository's newest release (one request each, at most
+    // MANUAL_LIMIT per check; a failure leaves that core "not in the Library"). The source record is Omega's own, never read from the card.
+    let reg = tau_core::manual_registry::load(&app.path().app_data_dir().map_err(|e| TauError { code: ErrorCode::Io, message: e.to_string() })?.join("manual_cores.json"));
+    let mut found = Vec::new();
+    for e in reg.github().take(MANUAL_LIMIT) {
+        let unknown = rows.iter().any(|r| r.id.eq_ignore_ascii_case(&e.core_id) && r.status == core_update::Status::NotInCatalog);
+        if !unknown {
+            continue;
+        }
+        if let Ok(releases) = tau_net::github_source::list_releases(&Http, &e.owner, &e.repo, now())
+            && let Some(r) = releases.iter().find(|r| !r.prerelease).or(releases.first())
+        {
+            found.push(core_update::ManualRelease {
+                core_id: e.core_id.clone(),
+                version: r.tag.clone(),
+                date: r.published.clone(),
+                url: format!("https://github.com/{}/{}/releases/tag/{}", e.owner, e.repo, r.tag),
+            });
+        }
+    }
+    core_update::apply_manual(&mut rows, &found);
+    Ok(CoreUpdates { rows, source: cat.source, fetched: cat.fetched })
 }
 
 #[derive(Serialize)]

@@ -3,6 +3,7 @@
   // published). Checking is automatic only when the app's update check is on (Settings); installing never is: each update is its own reviewed
   // plan, one at a time.
   import CoreInstall from './CoreInstall.svelte';
+  import { openManualAdd } from './manualAddStore';
   import { sourceNote } from './marketplace';
   import { checkUpdates, updatesAutomatic, updatesBusy, updatesError, updatesResult } from './updatesStore';
   import type { CoreStatus } from './types';
@@ -22,7 +23,9 @@
   const actionable = (r: CoreStatus) => r.status === 'UpdateAvailable' || typeof r.status === 'object';
 
   function review(r: CoreStatus) { openId = openId === r.id ? '' : r.id; queue = []; finishedNote = ''; }
-  function updateAll() { const ids = updatable.map((r) => r.id); queueTotal = ids.length; openId = ids[0] ?? ''; queue = ids.slice(1); finishedNote = ''; }
+  // A manually added core is reviewed in the manual-add sheet (it asks for the trust tick again); the queue below is for catalog cores.
+  $: queueable = updatable.filter((r) => !r.manual_url);
+  function updateAll() { const ids = updatable.filter((r) => !r.manual_url).map((r) => r.id); queueTotal = ids.length; openId = ids[0] ?? ''; queue = ids.slice(1); finishedNote = ''; }
   async function installed() {
     await check(false);
     if (queue.length) { openId = queue[0]; queue = queue.slice(1); }
@@ -32,7 +35,7 @@
 </script>
 <section aria-label="Core updates" class="cu">
     <div class="cu-actions">
-      {#if updatable.length > 1 && !queueTotal}<button class="quiet" on:click={updateAll}>Review all {updatable.length} updates, one at a time</button>{/if}
+      {#if queueable.length > 1 && !queueTotal}<button class="quiet" on:click={updateAll}>Review all {queueable.length} updates, one at a time</button>{/if}
       <button class="quiet" disabled={busy || !card} on:click={() => check(true)}>{busy ? 'Checking…' : result ? 'Check again' : 'Check for updates'}</button>
     </div>
   {#if !card}<p class="cu-note">Open a card to see which of its cores have updates.</p>
@@ -48,8 +51,8 @@
             <div class="cu-line">
               <span class="core-icon" aria-hidden="true">{r.id.split('.').pop()?.slice(0, 2).toUpperCase()}</span>
               <div><h3>{r.id}</h3><p>{r.installed_version || 'unknown version'}{r.latest_version && r.status === 'UpdateAvailable' ? ` → ${r.latest_version}` : ''}</p></div>
-              <span class="chip" class:capable={r.status === 'UpdateAvailable'}>{label(r)}</span>
-              {#if actionable(r)}<button class="quiet" aria-expanded={openId === r.id} on:click={() => review(r)}>{openId === r.id ? 'Close' : typeof r.status === 'object' ? 'Review replacement' : 'Review update'}</button>{/if}
+              <span class="chip" class:capable={r.status === 'UpdateAvailable'}>{label(r)}</span>{#if r.manual_url}<span class="chip" title="Added manually from GitHub: not in the Library">added manually</span>{/if}
+              {#if actionable(r) && r.manual_url}<button class="quiet" on:click={() => openManualAdd(r.manual_url ?? '')}>Review update</button>{:else if actionable(r)}<button class="quiet" aria-expanded={openId === r.id} on:click={() => review(r)}>{openId === r.id ? 'Close' : typeof r.status === 'object' ? 'Review replacement' : 'Review update'}</button>{/if}
             </div>
             {#if openId === r.id}
               <div class="cu-detail">
