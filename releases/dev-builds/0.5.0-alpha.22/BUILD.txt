@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.0-alpha.22   (NOT a release)
+Release goal : 0.5.0
+Built        : 2026-10-16 09:34 WEST
+Branch       : cores-section
+Commit       : 05182c0   Installing the same core again after an undo or removal no longer fails: the earlier run's backup is moved aside; shorter stop message
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 87ccaeec679624c11d0a0a715b5ce5b8ad0b139aba26cd811f0efaadd58ff6fd  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
