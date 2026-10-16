@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.0-alpha.9   (NOT a release)
+Release goal : 0.5.0
+Built        : 2026-10-16 01:08 WEST
+Branch       : cores-section
+Commit       : 7a2490c   Builder: raw bitstream plus template core to an installable package, with next-name helper, core-check gate and build record
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 6df179471b369397981f9004173b5b8a32e22fde6ad05ea5f3e84f47256e4a0e  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
