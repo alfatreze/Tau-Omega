@@ -139,7 +139,7 @@
   .nt-body{margin:2px 0 4px 6px;padding-left:6px;border-left:1px solid #2c393a;min-width:0}
   .nt-note{font-size:12px;color:#8f9e9d;margin:8px 4px;line-height:1.5}.nt-err{color:#ff9b9b}
   .nt-tree,.nt-sub{list-style:none;margin:0;padding:0}
-  .nt-tree{max-height:min(52vh,480px);overflow:auto;padding-right:2px}
+  .nt-tree{padding-right:2px}
   .nt-sub{margin:0 0 2px 10px}
   .nt-row{display:flex;align-items:center;gap:2px}
   .nt-chev{flex:none;width:28px;height:30px;padding:0;display:grid;place-items:center;background:transparent;color:#8f9e9d;border-radius:6px}

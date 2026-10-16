@@ -1,6 +1,10 @@
 import App from './App.svelte';
 import './styles.css';
 import { mount } from 'svelte';
+import { installOverlayScroll } from './lib/overlayScroll';
+
+// Slim scroll thumbs that appear when useful (lib/overlayScroll.ts).
+installOverlayScroll();
 
 async function start() {
   // Plain browser (no Tauri shell) in dev: run against a mocked backend.
