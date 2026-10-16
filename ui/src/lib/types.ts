@@ -118,10 +118,11 @@ export type EjectResult = { ok: boolean; message: string };
 /** Whether read-backs after a write are checked against the card itself, not memory. */
 export type ReadbackStatus = { checks_the_device: boolean; failed_evictions: number };
 export type Mp3Quality = { vbr: number } | { cbr: number };
+export type TrimSettings = { enabled: boolean; threshold_db10: number; keep_ms: number; min_ms: number; max_ms: number };
 export type ConvertSettings = { enabled: boolean; mode: 'auto' | 'manual'; max_rate: number; flac_bits: number; reduce_playable: boolean; mp3: Mp3Quality; lame_path: string | null; lame_dir: string | null; analysis_cache: string | null; replaygain: 'off' | 'add_missing' | 'rebuild' };
 export type LameInstallOption = { method: string; label: string; command: string; runnable: boolean };
 export type LameStatus = { path: string | null; version: string | null; options: LameInstallOption[] };
-export type Prefs = { convert: ConvertSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; developer_tools: boolean; speeds: Record<string, number>; connections: Record<string, string> };
+export type Prefs = { convert: ConvertSettings; trim: TrimSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; developer_tools: boolean; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */

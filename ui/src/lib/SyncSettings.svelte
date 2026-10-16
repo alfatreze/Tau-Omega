@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
   import { checkLame, errorMessage, getPrefs, installLame, lameStatus, setPrefs } from './tau-api';
-  import type { ConvertSettings, LameStatus, PrefsView } from './types';
+  import type { ConvertSettings, LameStatus, PrefsView, TrimSettings } from './types';
 
   let prefs: PrefsView | null = null; let lame: LameStatus | null = null; let notice = ''; let busy = false;
   onMount(async () => {
@@ -16,6 +16,16 @@
     try { prefs = await setPrefs({ ...prefs, convert: { ...prefs.convert, ...part } }); lame = await lameStatus(); notice = message; }
     catch (error) { notice = `Could not save: ${errorMessage(error)}`; }
   }
+  async function changeTrim(part: Partial<TrimSettings>, message = 'Saved.') {
+    if (!prefs) return;
+    try { prefs = await setPrefs({ ...prefs, trim: { ...prefs.trim, ...part } }); notice = message; }
+    catch (error) { notice = `Could not save: ${errorMessage(error)}`; }
+  }
+  const DB_CHOICES = [-80, -75, -70, -65, -60, -55, -50, -45, -40];
+  const KEEP_CHOICES = [0, 100, 250, 500, 1000];
+  const MIN_CHOICES = [500, 1000, 2000, 3000, 5000, 10000];
+  const MAX_CHOICES = [1000, 3000, 5000, 10000, 30000, 60000];
+  const secs = (ms: number) => (ms < 1000 ? `${ms} ms` : `${ms / 1000} s`);
   async function chooseLame() {
     const selected = await open({ directory: false });
     if (!selected || Array.isArray(selected)) return;
@@ -67,6 +77,22 @@
       <label class="radio"><input type="radio" name="rg" checked={c.replaygain === 'add_missing'} on:change={() => change({ replaygain: 'add_missing' })} /><span><b>Keep existing tags and add what is missing</b><small>Albums that already have ReplayGain are left alone. Measuring takes a little time on the first sync.</small></span></label>
       <label class="radio"><input type="radio" name="rg" checked={c.replaygain === 'rebuild'} on:change={() => change({ replaygain: 'rebuild' })} /><span><b>Always measure again and replace the tags</b><small>Every album gets fresh values in the copies.</small></span></label>
       <label class="radio"><input type="radio" name="rg" checked={c.replaygain === 'off'} on:change={() => change({ replaygain: 'off' })} /><span><b>Do not touch ReplayGain</b><small>Tags are copied as they are.</small></span></label>
+    </fieldset>
+    {@const t = prefs.trim}
+    <fieldset>
+      <legend>Skip silence at the start and end of tracks</legend>
+      <div class="ss-row"><div><b>Skip silence</b><small>Measured when you sync; your files are never changed. The player skips the silence, the track list and clock show the shortened time. Needs a player version that reads it; until then this only records the numbers.</small></div>
+        <div><button class="quiet" on:click={() => changeTrim({ enabled: !t.enabled }, t.enabled ? 'Silence will not be measured.' : 'Silence will be measured at the next sync.')}>{t.enabled ? 'Turn off' : 'Turn on'}</button></div></div>
+      {#if t.enabled}
+        <div class="ss-row"><div><b>Counts as silence below</b><small>-60 dB is quiet enough to be inaudible on headphones in a normal room. Lower catches only digital silence; higher also trims soft room noise and fade tails.</small></div>
+          <select aria-label="Silence level" value={t.threshold_db10} on:change={(e) => changeTrim({ threshold_db10: Number(e.currentTarget.value) })}>{#each DB_CHOICES as d}<option value={d * 10}>{d} dB{d === -60 ? ' (default)' : ''}</option>{/each}</select></div>
+        <div class="ss-row"><div><b>Silence left at each end</b><small>So a track still starts and ends naturally.</small></div>
+          <select aria-label="Silence kept" value={t.keep_ms} on:change={(e) => changeTrim({ keep_ms: Number(e.currentTarget.value) })}>{#each KEEP_CHOICES as k}<option value={k}>{secs(k)}{k === 100 ? ' (default)' : ''}</option>{/each}</select></div>
+        <div class="ss-row"><div><b>Only skip at least</b><small>Shorter silences are left alone, so normal gaps between songs stay.</small></div>
+          <select aria-label="Smallest skip" value={t.min_ms} on:change={(e) => changeTrim({ min_ms: Number(e.currentTarget.value) })}>{#each MIN_CHOICES as k}<option value={k}>{secs(k)}{k === 2000 ? ' (default)' : ''}</option>{/each}</select></div>
+        <div class="ss-row"><div><b>Never skip more than</b><small>At either end, so a long quiet intro or a slow fade is never cut away.</small></div>
+          <select aria-label="Largest skip" value={t.max_ms} on:change={(e) => changeTrim({ max_ms: Number(e.currentTarget.value) })}>{#each MAX_CHOICES as k}<option value={k}>{secs(k)}{k === 10000 ? ' (default)' : ''}</option>{/each}</select></div>
+      {/if}
     </fieldset>
     <p class="ss-notice" role="status">{notice}</p>
   {:else}<p>{notice || 'Loading…'}</p>{/if}

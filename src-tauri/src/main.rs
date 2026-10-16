@@ -461,6 +461,8 @@ struct Prefs {
     card_marker: String,
     /// Conversion of files the Pocket cannot play, and ReplayGain, for every sync.
     convert: tau_core::convert::ConvertSettings,
+    /// Silence skipping: leading and trailing silence the player skips, measured at sync (off by default).
+    trim: tau_core::trim::TrimSettings,
     /// Cores the Pocket cannot use (missing files, broken): `"ask"` (offer to disable them when a card is opened), `"auto"` (disable them without asking) or `"never"` (no suggestions).
     core_disable: String,
     /// Per card (its volume name), core ids the user wants left enabled and never suggested ("keep enabled", "don't remind me again").
@@ -488,6 +490,7 @@ impl Default for Prefs {
             update_notice_shown: false,
             card_marker: "ask".into(),
             convert: tau_core::convert::ConvertSettings::product(),
+            trim: Default::default(),
             core_disable: "ask".into(),
             core_keep: Default::default(),
             developer_tools: false,
@@ -516,7 +519,11 @@ fn data_dir(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
 }
 fn read_prefs(app: &tauri::AppHandle) -> Result<Prefs, TauError> {
     match std::fs::read(config_dir(app)?.join(PREFS_FILE)) {
-        Ok(bytes) => Ok(serde_json::from_slice(&bytes).unwrap_or_default()),
+        Ok(bytes) => {
+            let prefs: Prefs = serde_json::from_slice(&bytes).unwrap_or_default();
+            tau_core::trim::set_active(prefs.trim);
+            Ok(prefs)
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Prefs::default()),
         Err(error) => Err(TauError::from(error)),
     }
@@ -693,6 +700,7 @@ fn set_prefs(app: tauri::AppHandle, prefs: Prefs) -> Result<PrefsView, TauError>
     prefs.builds_dir = stored.builds_dir;
     prefs.build_schemes = stored.build_schemes;
     prefs.last_install = stored.last_install;
+    prefs.trim = prefs.trim.clamped();
     let dir = config_dir(&app)?;
     std::fs::create_dir_all(&dir)?;
     std::fs::write(dir.join(PREFS_FILE), serde_json::to_vec_pretty(&prefs).map_err(|e| TauError { code: ErrorCode::Json, message: e.to_string() })?)?;
