@@ -62,10 +62,18 @@
   const sample = (p: SchemeTry | null) => (p === null ? '' : p.error ? p.error : p.placement ? `Series “${p.placement.series}”, number ${p.placement.order[3]}${p.placement.order[0] || p.placement.order[1] || p.placement.order[2] ? `, version ${p.placement.order[0]}.${p.placement.order[1]}.${p.placement.order[2]}` : ''}${p.placement.pre ? `, pre-release ${p.placement.pre}` : ''}` : 'No match: this name is not part of a series.');
 
   // ---- install
-  let installing: { row: BuildRow; zip: string } | null = null; let installError = ''; let installedNow = false;
+  let installing: { row: BuildRow | null; zips: string[]; title: string } | null = null; let installError = ''; let installedNow = false;
+  /** Builds ticked to install together. */
+  let picked: Record<string, boolean> = {};
+  $: pickedRows = (list?.rows ?? []).filter((r) => picked[r.entry.path] && !r.entry.error);
   async function install(r: BuildRow) {
     installError = ''; installedNow = false;
-    try { installing = { row: r, zip: await buildZip(r.entry.path) }; } catch (e) { installError = errorMessage(e); }
+    try { installing = { row: r, zips: [await buildZip(r.entry.path)], title: r.entry.shortname || r.entry.file }; } catch (e) { installError = errorMessage(e); }
+  }
+  async function installPicked() {
+    installError = ''; installedNow = false;
+    try { const zips = await Promise.all(pickedRows.map((r) => buildZip(r.entry.path))); installing = { row: pickedRows.length === 1 ? pickedRows[0] : null, zips, title: pickedRows.length === 1 ? pickedRows[0].entry.shortname : `${pickedRows.length} builds` }; }
+    catch (e) { installError = errorMessage(e); }
   }
   // ---- remove older builds
   let removing: { row: BuildRow; plans: RemovePlan[] } | null = null; let removeDone = ''; let removeError = ''; let removeBusy = false;
@@ -114,6 +122,7 @@
     <ul class="b-builtin" aria-label="Built-in schemes">{#each cfg?.builtin ?? [] as s}<li><strong>{s.name}</strong><small>reads {fieldLabel(s.field).toLowerCase()} · <code>{s.template}</code></small></li>{/each}</ul>
   </details>
 
+  {#if pickedRows.length}<div class="b-pickbar" role="status"><span><strong>{plural(pickedRows.length, 'build')} selected.</strong> They are reviewed and installed together.</span><span class="b-pickbtns"><button class="quiet" on:click={() => (picked = {})}>Clear</button><button class="primary" disabled={!card} on:click={installPicked}>{pickedRows.length === 1 ? 'Install 1 build' : `Install ${pickedRows.length} builds`}</button></span></div>{/if}
   {#if !cfg?.dir && !list}<div class="empty"><h2>Choose your build folder</h2><p>Point Omega at the folder your builds land in: zips and package folders are listed, never changed.</p></div>
   {:else if list && !list.rows.length}<div class="empty"><h2>No builds in this folder</h2><p>Omega lists core zips and package folders one level down.</p></div>
   {:else}
@@ -122,7 +131,8 @@
         <h2 id={`bg-${g.key.replace(/\W+/g, '-')}`}>{g.label} <small>{plural(g.rows.length, 'build')}</small></h2>
         <ul class="b-list">
           {#each g.rows as r (r.entry.path)}
-            <li class="b-row">
+            <li class="b-row" class:has-pick={!r.entry.error}>
+              {#if !r.entry.error}<input type="checkbox" class="b-pick" bind:checked={picked[r.entry.path]} aria-label={`Select ${r.entry.file} to install with others`} />{/if}
               <div class="b-main"><strong>{r.entry.shortname || r.entry.file}</strong>
                 <small>{r.entry.error ? r.entry.error : `${r.entry.core_id} · version ${r.entry.version || 'not stated'}${r.entry.date_release ? ' · ' + r.entry.date_release : ''} · ${size(r.entry.bytes)} · ${r.entry.file}`}</small></div>
               <div class="b-chips">
@@ -146,9 +156,9 @@
 {#if installing}
   <div class="b-backdrop" role="presentation" on:click={() => (installing = null)}></div>
   <div class="b-sheet" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="bs-title" use:modal on:keydown={(e) => e.key === 'Escape' && (installing = null)}>
-    <header class="b-shead"><div><p class="eyebrow">INSTALL A BUILD</p><h2 id="bs-title">{installing.row.entry.shortname || installing.row.entry.file}</h2></div><button class="quiet" data-autofocus on:click={() => { installing = null; void rescan(); }}>Close</button></header>
-    <UpdatePlanView zipPath={installing.zip} cardPath={card} on:installed={() => { installedNow = true; void rescan(); }} />
-    {#if installedNow && installing.row.older.length}{#key installing.row.entry.path}<CarryMedia {card} newId={installing.row.entry.core_id} newName={installing.row.entry.shortname} older={installing.row.older} />{/key}{/if}
+    <header class="b-shead"><div><p class="eyebrow">{installing.zips.length > 1 ? 'INSTALL BUILDS' : 'INSTALL A BUILD'}</p><h2 id="bs-title">{installing.title}</h2></div><button class="quiet" data-autofocus on:click={() => { installing = null; void rescan(); }}>Close</button></header>
+    <UpdatePlanView zips={installing.zips} cardPath={card} on:installed={() => { installedNow = true; void rescan(); }} />
+    {#if installedNow && installing.row && installing.row.older.length}{#key installing.row.entry.path}<CarryMedia {card} newId={installing.row.entry.core_id} newName={installing.row.entry.shortname} older={installing.row.older} />{/key}{/if}
   </div>
 {/if}
 {#if removing}
@@ -177,6 +187,8 @@
   .b-main{min-width:0;display:grid;gap:3px}.b-main strong{font-size:14px}.b-main small{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis}
   .b-chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.b-act{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
   .chip.warn{background:#3a2e14;color:#e5d9a8}.chip.bad{background:#3a1c1c;color:#ffb4b4}
+  .b-row.has-pick{grid-template-columns:auto minmax(0,1.6fr) auto auto}.b-pick{width:16px;height:16px;accent-color:#c1f0ad}
+  .b-pickbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;border:1px solid #3b5a58;background:#16292a;border-radius:10px;font-size:13px}.b-pickbtns{display:flex;gap:8px}
   .b-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100}
   .b-sheet{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(820px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:#1a2325;border:1px solid #2c393a;border-radius:14px;padding:22px 24px;box-sizing:border-box}.b-sheet.narrow{width:min(620px,calc(100vw - 32px))}
   .b-shead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}.b-shead h2{margin:0}

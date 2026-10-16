@@ -36,7 +36,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   // ---- install sheet
   await row113.getByRole('button', { name: /Install TAU_DEV_113.zip/ }).click(); await p.waitForTimeout(500);
   const sheet = p.getByRole('dialog', { name: /TAU DEV 113/ });
-  assert.equal(await sheet.count(), 1); assert.match(await sheet.innerText(), /INSTALL A BUILD[\s\S]*Review the update/i); ok('Install opens the same reviewed update plan in a sheet');
+  assert.equal(await sheet.count(), 1); assert.match(await sheet.innerText(), /INSTALL A BUILD[\s\S]*Install TAU_DEV_113 on Pocket/i); ok('Install opens the same reviewed update plan in a sheet');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   assert.equal(await p.getByRole('dialog').count(), 0); ok('Escape closes it');
 
@@ -72,9 +72,9 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await page().locator('.b-row', { hasText: 'TAU DEV 110' }).getByRole('button', { name: /Install TAU_DEV_110/ }).click(); await p.waitForTimeout(500);
   const sheet3 = p.getByRole('dialog', { name: /TAU DEV 110/ });
   assert.equal(await sheet3.getByText('Carry media from the previous build').count(), 0); ok('nothing about carrying media is offered before the install');
-  await sheet3.getByRole('button', { name: 'Review update' }).click(); await p.waitForTimeout(600);
+  await p.waitForTimeout(600);
   await sheet3.getByLabel('Type the card name to confirm').fill('Pocket');
-  await sheet3.getByRole('button', { name: 'Confirm and install' }).click(); await p.waitForTimeout(800);
+  await sheet3.getByRole('button', { name: 'Install', exact: true }).click(); await p.waitForTimeout(800);
   const carry = sheet3.getByRole('region', { name: 'Carry media from the previous build' });
   assert.equal(await carry.count(), 1); ok('after the install the sheet offers to carry media from the older builds');
   const items = carry.locator('.cm-list li');
@@ -93,9 +93,9 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   // ---- the core check gate before an install
   await page().locator('.b-row', { hasText: 'Weird' }).getByRole('button', { name: /Install weird.zip/ }).click(); await p.waitForTimeout(500);
   const sheet2 = p.getByRole('dialog', { name: /Weird/ });
-  await sheet2.getByRole('button', { name: 'Review update' }).click(); await p.waitForTimeout(700);
+  await p.waitForTimeout(700);
   assert.match(await sheet2.innerText(), /Core check[\s\S]*1 error found[\s\S]*bitstream file bitstream\.rbf_r is missing/i); ok('a developer install runs the core check and shows what it found');
-  const confirmBtn = sheet2.getByRole('button', { name: 'Confirm and install' });
+  const confirmBtn = sheet2.getByRole('button', { name: 'Install', exact: true });
   await sheet2.getByLabel('Type the card name to confirm').fill('Pocket');
   assert.equal(await confirmBtn.isDisabled(), true); assert.match(await sheet2.innerText(), /The core check found 1 error/); ok('an error blocks the install even with the card name typed');
   await sheet2.getByRole('checkbox', { name: /Install anyway/ }).check();

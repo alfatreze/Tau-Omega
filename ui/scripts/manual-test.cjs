@@ -44,7 +44,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const tick = sheet().getByRole('checkbox', { name: /I trust this source/ });
   assert.equal(await sheet().getByRole('button', { name: /Review|Install/i }).count(), 0, await sheet().getByRole('button').allInnerTexts().then((x) => x.join('|'))); ok('no install plan before the trust tick');
   await tick.check(); await p.waitForTimeout(500);
-  assert.ok((await text()).match(/Review|plan|Nothing is written/i)); ok('ticking the trust box shows the same reviewed install plan as every package');
+  assert.equal(await sheet().getByRole('region', { name: 'Install review' }).count(), 1); assert.match(await text(), /Install .* on Pocket/); ok('ticking the trust box shows the install review: what, one summary line, one button');
   await sheet().getByRole('button', { name: 'Cancel' }).click(); await p.waitForTimeout(200);
   assert.equal(await sheet().count(), 0); ok('Cancel closes the sheet');
 
