@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds a TEST (non-release) copy of the app and files it under
-# releases/dev-builds/<target>-alpha.<n>/ with the next counter. The folder holds the
+# releases/dev-builds/<target>-dev.<n>/ with the next counter. The folder holds the
 # runnable Tau Omega.app itself (not a zip): open it straight from Finder.
 #
 #   tools/dev-build.sh            build, then package
@@ -14,12 +14,12 @@ cd "$(dirname "$0")/.."
 
 TARGET="${1:-$(tr -d '[:space:]' < releases/dev-builds/TARGET)}"
 n=1
-for dir in releases/dev-builds/"$TARGET"-alpha.*; do
+for dir in releases/dev-builds/"$TARGET"-dev.*; do
   [ -d "$dir" ] || continue
-  last="${dir##*-alpha.}"
+  last="${dir##*-dev.}"
   [[ "$last" =~ ^[0-9]+$ ]] && [ "$last" -ge "$n" ] && n=$((last + 1))
 done
-NAME="$TARGET-alpha.$n"
+NAME="$TARGET-dev.$n"
 OUT="releases/dev-builds/$NAME"
 [ -e "$OUT" ] && { echo "refusing to overwrite $OUT" >&2; exit 1; }
 

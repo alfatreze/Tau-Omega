@@ -126,7 +126,7 @@ export type SkipDetail = { rate: number; frames: number; envelope: number[]; aut
 export type ConvertSettings = { enabled: boolean; mode: 'auto' | 'manual'; max_rate: number; flac_bits: number; reduce_playable: boolean; mp3: Mp3Quality; lame_path: string | null; lame_dir: string | null; analysis_cache: string | null; replaygain: 'off' | 'add_missing' | 'rebuild' };
 export type LameInstallOption = { method: string; label: string; command: string; runnable: boolean };
 export type LameStatus = { path: string | null; version: string | null; options: LameInstallOption[] };
-export type Prefs = { omega_channel: 'auto' | 'stable' | 'dev'; convert: ConvertSettings; trim: TrimSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; developer_tools: boolean; speeds: Record<string, number>; connections: Record<string, string> };
+export type Prefs = { omega_channel: 'auto' | 'stable' | 'preview' | 'dev'; convert: ConvertSettings; trim: TrimSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; developer_tools: boolean; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */
@@ -231,7 +231,7 @@ export type HalcyonPreset =
 export type ApoImport = { preset: HalcyonPreset; preamp_db: number; peak_gain_db: number; filters: number };
 
 /** Mirrors `omega_update::OmegaUpdate` (Tau Omega's own updater, not the Tau core update check). */
-export type OmegaUpdate = { current: string; version: string; notes: string | null; date: string | null; channel: 'stable' | 'dev' };
+export type OmegaUpdate = { current: string; version: string; notes: string | null; date: string | null; channel: 'stable' | 'preview'; switch: boolean };
 
 /** Mirrors `tau_core::catalog` / `catalog_release` / `core_update` / `core_package` and `tau_net::marketplace` (serde output). */
 export type CatalogAsset = { platform: string; filename: string; extensions: string[]; core_specific: boolean };

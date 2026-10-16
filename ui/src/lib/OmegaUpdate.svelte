@@ -9,8 +9,9 @@
   export let manual = false;
 
   let found: OmegaUpdate | null = null;
-  let channel: 'auto' | 'stable' | 'dev' = 'auto';
-  async function chooseChannel(value: 'auto' | 'stable' | 'dev') {
+  type Channel = 'auto' | 'stable' | 'preview' | 'dev';
+  let channel: Channel = 'auto';
+  async function chooseChannel(value: Channel) {
     try { const p = await getPrefs(); await setPrefs({ ...p, omega_channel: value }); channel = value; found = null; await check(true); }
     catch (error) { notice = errorMessage(error); }
   }
@@ -37,23 +38,24 @@
     <h3 id="ou-title">Tau Omega updates</h3>
     <p class="muted">Checks GitHub for a newer Tau Omega. Only the public update file is requested; nothing about you or your card is sent.</p>
     <label class="ou-channel">Update channel
-      <select aria-label="Update channel" value={channel} on:change={(e) => chooseChannel(e.currentTarget.value as 'auto' | 'stable' | 'dev')}>
+      <select aria-label="Update channel" value={channel} on:change={(e) => chooseChannel(e.currentTarget.value as Channel)}>
         <option value="auto">Automatic (follows this build)</option>
-        <option value="stable">Stable: published releases only</option>
-        <option value="dev">Dev: the newest test builds, and releases</option>
+        <option value="stable">Stable: published releases</option>
+        <option value="preview">Preview: published pre-releases</option>
+        <option value="dev">Dev: test builds, installed by hand</option>
       </select>
     </label>
-    <p class="muted ou-hint">{channel === 'dev' ? 'Dev builds are test builds: they can have rough edges. You also get every stable release.' : channel === 'stable' ? 'Only published releases are offered, even if you are running a test build.' : 'A test build (such as 0.5.1-alpha.3) follows Dev, a release follows Stable.'}</p>
+    <p class="muted ou-hint">{channel === 'preview' ? 'Preview builds are pre-releases: tested, but with rough edges. You also get every stable release.' : channel === 'stable' ? 'Only published releases are offered. Choosing Stable while running a Preview or Dev build offers a switch to the newest release.' : channel === 'dev' ? 'Dev builds are test builds you install yourself, like the ones in releases/dev-builds. No updates are offered.' : 'A release follows Stable, a Preview build follows Preview, and a Dev build gets no offers.'}</p>
     <div class="ou-row">
       <button class="quiet" disabled={busy || installing} on:click={() => check(true)}>{busy ? 'Checking…' : 'Check now'}</button>
-      {#if found}<button class="primary" disabled={installing} on:click={install}>{installing ? 'Installing…' : `Update to ${found.version}`}</button>{/if}
+      {#if found}<button class="primary" disabled={installing} on:click={install}>{installing ? 'Installing…' : found.switch ? `Switch to ${found.version}` : `Update to ${found.version}`}</button>{/if}
     </div>
-    {#if found}<p>Version {found.version} is available{found.channel === 'dev' ? ' on the dev channel' : ''} (you have {found.current}). Tau Omega restarts to finish.</p>{#if found.notes}<pre class="ou-notes">{found.notes}</pre>{/if}{/if}
+    {#if found}<p>{found.switch ? `Switch to ${found.channel}: version ${found.version}` : `Version ${found.version} is available${found.channel === 'preview' ? ' on the preview channel' : ''}`} (you have {found.current}). Tau Omega restarts to finish.{found.switch ? ' Your settings are kept.' : ''}</p>{#if found.notes}<pre class="ou-notes">{found.notes}</pre>{/if}{/if}
     {#if notice}<p role="status">{notice}</p>{/if}
   </section>
 {:else if found && !dismissed}
   <div class="ou-bar" role="status">
-    <span>Tau Omega {found.version} is available{found.channel === 'dev' ? ' on the dev channel' : ''} (you have {found.current}). It downloads a signed installer and restarts the app.</span>
+    <span>Tau Omega {found.version} is available{found.channel === 'preview' ? ' on the preview channel' : ''} (you have {found.current}). It downloads a signed installer and restarts the app.</span>
     <span class="ou-actions">
       <button class="primary" disabled={installing} on:click={install}>{installing ? 'Installing…' : 'Update Tau Omega'}</button>
       <button class="quiet" disabled={installing} on:click={() => (dismissed = true)}>Not now</button>

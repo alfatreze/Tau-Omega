@@ -1,8 +1,8 @@
 name: Release
 # Builds the installers for a tag (v*) or on demand, and attaches them to a DRAFT GitHub release with SHA256SUMS.
 # Nothing is published until you publish the draft by hand.
-# A tag with a pre-release part (v0.5.1-alpha.1) is a DEV build: its version comes from the tag, Windows gets the NSIS installer only (an MSI
-# cannot carry a word in its version), and the draft is a pre-release. tools/publish_dev.sh publishes it and updates the dev channel's feed.
+# A tag with a pre-release part (v0.5.1-preview.1) is a PREVIEW build: its version comes from the tag, Windows gets the NSIS installer only (an MSI
+# cannot carry a word in its version), and the draft is a pre-release. tools/publish_preview.sh publishes it and updates the Preview channel's feed.
 #
 # Signing is optional and switches on by itself when the secrets exist (Settings > Secrets and variables > Actions):
 #   macOS    APPLE_CERTIFICATE (base64 of the Developer ID Application .p12), APPLE_CERTIFICATE_PASSWORD,
