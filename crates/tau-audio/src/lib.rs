@@ -11,6 +11,7 @@ pub mod meta;
 pub mod mixdown;
 pub mod pipeline;
 pub mod resample;
+pub mod silence;
 
 use std::fmt;
 
