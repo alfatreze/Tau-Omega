@@ -13,10 +13,14 @@ use tau_core::{
 };
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
+/// Parallel tests ask for the same name ("card", "bk") and the clock ticks in microseconds on macOS, so the process
+/// id and time alone gave two tests the same folder. The counter makes every folder unique.
 fn scratch(name: &str) -> PathBuf {
+    static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let d = std::env::temp_dir().join(format!(
-        "tau-generic-{name}-{}-{}",
+        "tau-generic-{name}-{}-{}-{}",
         std::process::id(),
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

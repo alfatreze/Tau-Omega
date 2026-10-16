@@ -701,3 +701,36 @@ pub(crate) fn read_tags(path: &Path) -> Result<(BTreeMap<String, String>, u16, u
         .min(u16::MAX as u64) as u16;
     Ok((tags, secs, 1))
 }
+
+#[cfg(test)]
+mod parallel_tests {
+    use super::par_map;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn par_map_returns_results_in_item_order_whatever_the_thread_count_or_timing() {
+        let items: Vec<u64> = (0..200).collect();
+        for threads in [1, 2, 7, 16, 500] {
+            // Early items take longest, so a worker that finishes later must still land in its own place.
+            let out = par_map(&items, threads, |&n| {
+                std::thread::sleep(std::time::Duration::from_micros((200 - n) * 5));
+                n * 3
+            });
+            assert_eq!(out, items.iter().map(|n| n * 3).collect::<Vec<_>>());
+        }
+    }
+
+    #[test]
+    fn par_map_runs_every_item_exactly_once_and_handles_nothing_to_do() {
+        let calls = AtomicUsize::new(0);
+        let items: Vec<usize> = (0..1000).collect();
+        let out = par_map(&items, 8, |&n| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            n
+        });
+        assert_eq!(calls.load(Ordering::SeqCst), 1000);
+        assert_eq!(out, items);
+        let none: Vec<u8> = Vec::new();
+        assert!(par_map(&none, 8, |&n| n).is_empty());
+    }
+}
