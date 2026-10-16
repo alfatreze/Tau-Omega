@@ -77,6 +77,7 @@ pub mod tagedit;
 mod tags;
 pub mod taud;
 pub mod taxonomy;
+pub mod trim;
 use tags::{mp3_seconds, read_flac, read_id3v1, read_id3v2};
 pub mod tpg;
 pub mod update;
