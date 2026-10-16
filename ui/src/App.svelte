@@ -256,7 +256,7 @@
   const byTarget = (a: Core, b: Core) => audioRank(a) - audioRank(b) || (a.shortname || a.id).localeCompare(b.shortname || b.id);
   $: audioCores = cores.filter((c) => audioRank(c) < 3).sort(byTarget);
   $: otherTargets = cores.filter((c) => audioRank(c) === 3).sort(byTarget);
-  const formatsOf = (c: Core) => (c.library_capable ? 'library' : c.audio_formats.join(' + ').toUpperCase());
+  const formatsOf = (c: Core) => (c.library_capable ? 'library' : c.playlist ? 'playlist' : c.audio_formats.join(' + ').toUpperCase());
 
   // Real per-core artwork (Cores/<id>/icon.bin, decoded server-side). `null`
   // means "asked, no icon" (most cores don't ship one) -- distinct from
@@ -385,7 +385,7 @@
       <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} refresh={loadHistory} openSettings={() => { moreOpen = true; page = 'settings'; }} startSync={() => page = 'workbench'} />
     </CardsView>
   {:else if page === 'workbench'}
-    <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, media_platform: c.media_platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} targets={audioCores.map((c) => ({ id: c.id, label: c.shortname || c.id, note: formatsOf(c) }))} otherTargets={otherTargets.map((c) => ({ id: c.id, label: c.shortname || c.id, note: '' }))} targetId={activeCore?.id ?? ''} chooseTarget={(id) => { const c = cores.find((x) => x.id === id); if (c) activeCore = c; }} mediaRoot={mediaRoot} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
+    <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, media_platform: c.media_platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} targets={audioCores.map((c) => ({ id: c.id, label: c.shortname || c.id, note: formatsOf(c) }))} otherTargets={otherTargets.map((c) => ({ id: c.id, label: c.shortname || c.id, note: '' }))} targetId={activeCore?.id ?? ''} chooseTarget={(id) => { const c = cores.find((x) => x.id === id); if (c) activeCore = c; }} mediaRoot={mediaRoot} playlist={activeCore?.playlist ?? null} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
   {:else if page === 'compare'}
     <CompareView bind:leftCore bind:rightCore bind:copyReportPath {comparison} {compareNotice} {coreCopyPlan} {coreCopyCapacity} {size} {chooseFolder} {compareCores} {reviewCoreCopy} {runCoreCopy} />
   {:else if page === 'playlists'}

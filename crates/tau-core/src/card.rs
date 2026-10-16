@@ -52,6 +52,9 @@ pub struct Core {
     /// `mp3` and/or `flac` when a data slot of the core accepts them (a core that can play the files the library holds).
     #[cfg_attr(feature = "serde", serde(default))]
     pub audio_formats: Vec<String>,
+    /// Set when the core plays music only from a playlist file (and not from a library index): how, and the most tracks it plays.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub playlist: Option<cardlayout::PlaylistSupport>,
     pub index_status: IndexStatus,
     /// The declaring platform's own `category` (`Platforms/<platform>.json`'s
     /// `platform.category`, e.g. `"Media Players"`), when that file exists
@@ -144,6 +147,7 @@ fn read_core_folder(
     let media_platform = cardlayout::media_platform(&platforms, data_value.as_ref());
     let index_status = index_status_for(root, &media_platform);
     let platform_category = platform_category_for(root, &platform);
+    let playlist = cardlayout::playlist_support(data_value.as_ref(), library_capable, &id);
     Ok(Some(Core {
         id,
         author: string("author"),
@@ -154,6 +158,7 @@ fn read_core_folder(
         media_platform,
         library_capable,
         audio_formats: cardlayout::audio_formats(data_value.as_ref()),
+        playlist,
         index_status,
         platform_category,
     }))

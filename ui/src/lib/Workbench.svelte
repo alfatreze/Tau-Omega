@@ -27,6 +27,8 @@
   export let chooseTarget: (id: string) => void = () => {};
   /** The selected core's media root on the card (`.../Assets/<platform>/common`). */
   export let mediaRoot = '';
+  /** Set when the target core plays music only from a playlist: Omega keeps that file in step with the tracks on the card and respects the core's track limit. */
+  export let playlist: { file: string; fixed_name: boolean; max_tracks: number | null; max_bytes: number | null; name_limit: number | null; list_file: string | null; formats: string[] } | null = null;
   /** Bumped by the app when the card was re-read (auto-detect or the refresh button). */
   export let revision = 0;
   export let refresh: () => void | Promise<void> = () => {};
@@ -212,7 +214,8 @@
   $: activePlatform = (mediaRoot.match(/\/Assets\/([^/]+)\/common\/?$/) ?? [])[1] ?? '';
   $: activeSegment = breakdown?.segments.find((s) => s.platform === activePlatform) ?? null;
   // The Pocket's index has hard limits; show how full it is and stop before an over-limit sync.
-  $: limits = card?.limits ?? null;
+  $: limits = playlist?.max_tracks ? { max_tracks: playlist.max_tracks, max_albums: card?.limits?.max_albums ?? 1_000_000 } : (card?.limits ?? null);
+  $: limitWho = playlist?.max_tracks ? `${coreLabel || 'This core'}'s playlist limit` : "the Pocket's library limit";
   $: tracksNow = card?.tracks.length ?? 0;
   $: albumsNow = card?.albums.length ?? 0;
   $: tracksAfter = tracksNow + adds.reduce((n, p) => n + p.tracks - (cardByDest.get(p.destId)?.tracks ?? 0), 0) - removes.reduce((n, p) => n + p.tracks, 0);
@@ -229,7 +232,7 @@
   $: pickOver = afterPick !== null ? Math.max(0, margin - afterPick) : 0;
   $: pickTooMany = !!limits && tracksAfter + pickedNetTracks > limits.max_tracks;
   $: canStart = pendingCount > 0 && !overCapacity && !overLimit && !disconnected && !run && !!card;
-  $: startReason = !pendingCount ? 'Nothing is staged yet.' : overCapacity ? "This won't fit on the card." : overLimit ? "This is over the Pocket's library limit." : disconnected ? 'The card is not connected.' : run ? 'A sync is already running.' : !card ? 'The card is still being read.' : '';
+  $: startReason = !pendingCount ? 'Nothing is staged yet.' : overCapacity ? "This won't fit on the card." : overLimit ? `This is over ${limitWho}.` : disconnected ? 'The card is not connected.' : run ? 'A sync is already running.' : !card ? 'The card is still being read.' : '';
   $: pendingLine = [adds.length && `${plural(adds.length, 'album')} to add (${plural(addTracks, 'track')}, ${size(addBytes)})`, removes.length && `${removes.length} to remove`, edits.length && `${edits.length} to edit`].filter(Boolean).join(' · ');
   $: stagedItems = pending.map((p): StagedItem => {
     const label = p.kind === 'edit' ? editLabel(p) : p.title;
@@ -243,14 +246,14 @@
   $: notes = [
     slowApplies && prefs?.slow_alert_suppressed ? { text: `Direct connection: slow · about ${eta(addBytes, estSpeed)}${estIsDefault ? ' (estimate)' : ''}`, bad: false } : null,
     overCapacity ? { text: "Won't fit on this card", bad: true } : null,
-    overLimit && limits ? { text: `Over the Pocket's library limit (${limits.max_tracks.toLocaleString()} tracks)`, bad: true } : null,
+    overLimit && limits ? { text: `Over ${limitWho} (${limits.max_tracks.toLocaleString()} tracks)`, bad: true } : null,
     disconnected ? { text: ejectedSafely ? 'Card ejected' : 'Card disconnected', bad: true } : null,
   ].filter((n): n is { text: string; bad: boolean } => n !== null);
   $: pendingSummary = [adds.length && `${plural(adds.length, 'album')} to add`, removes.length && `${removes.length} to remove`, edits.length && `${plural(edits.length, 'edit')}`].filter(Boolean).join(', ');
   $: detailsWarnings = [
     overCapacity ? "This won't fit on the card: remove something or add less." : '',
-    overLimit && limits ? `Over the Pocket's library limit (${limits.max_tracks.toLocaleString()} tracks, ${limits.max_albums.toLocaleString()} albums).` : '',
-    nearLimit && limits ? `Close to the Pocket's library limit (${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks).` : '',
+    overLimit && limits ? `Over ${limitWho} (${limits.max_tracks.toLocaleString()} tracks${playlist ? '' : `, ${limits.max_albums.toLocaleString()} albums`}).` : '',
+    nearLimit && limits ? `Close to ${limitWho} (${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks).` : '',
     slowApplies ? "Connected directly to the Pocket: transfers over 10 MB are slow, and the Pocket's own screen says not to use this for large transfers. A card reader is much faster." : '',
     !overCapacity && total && free < total * 0.05 ? 'The card will be nearly full.' : '',
   ].filter(Boolean);
@@ -456,7 +459,7 @@
   // ---- sync ------------------------------------------------------------------
   function buildRequest(): ChangeRequest {
     const editRequests: EditRequest[] = edits.map((p) => ({ album_id: p.id, track: p.track, fields: p.fields, cover: p.cover }));
-    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR } };
+    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR }, playlist: playlist ? { file: playlist.file, max_tracks: playlist.max_tracks, max_bytes: playlist.max_bytes, core_name: coreLabel || 'The core' } : null };
   }
   let preparing = false; let planJob = ''; let planPhase = '';
   async function start() {
@@ -650,10 +653,14 @@
   {#if noCard}
     <section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Connect your Pocket or a card reader, or choose a card on the Cards screen. It will appear here automatically.</p></section>
   {:else}
+  {#if playlist}
+    <div class="wb-info" role="note" aria-label="How this core plays music"><strong>{coreLabel || 'This core'} plays music from a playlist only.</strong>
+      <span>Omega keeps <code>{playlist.file}</code> in step with the tracks on the card ({playlist.formats.map((f) => f.toUpperCase()).join(' and ')}){playlist.max_tracks ? `, and stops a sync that would go over its limit of ${playlist.max_tracks.toLocaleString()} tracks` : ''}. The core itself drops anything past its limits{playlist.max_bytes ? ` (a ${Math.round(playlist.max_bytes / 1024)} KB playlist file too, about 48 characters a track)` : ''}.{playlist.name_limit && playlist.list_file ? ` Playlist names over ${playlist.name_limit} characters are only remembered if listed in ${playlist.list_file}.` : ''} The core does not use the library index.</span></div>
+  {/if}
   <CapacityBar bind:this={capBar} hasSpace={!!space} busy={cardBusy} {total} {used} {addBytes} {removeBytes} {freeNow} freeAfter={free} {margin} {overCapacity}
     {breakdown} measuring={breakdownBusy} {activePlatform}
-    limitText={limits ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (Pocket limit)` : ''}
-    limitTitle={limits ? `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums` : ''}
+    limitText={limits ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (${playlist?.max_tracks ? 'playlist limit' : 'Pocket limit'})` : ''}
+    limitTitle={limits ? (playlist?.max_tracks ? `${coreLabel || 'This core'} plays at most ${limits.max_tracks.toLocaleString()} tracks from its playlist` : `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums`) : ''}
     {overLimit} {nearLimit} sync={syncView} onCancel={cancelSync} onDetails={() => (detailsOpen = true)} {canStart} {startReason} pendingSummary={pendingSummary} onStart={start}
     hasPending={pendingCount > 0} clearDisabled={busy} onClear={clearAll} {notes} />
 
@@ -797,6 +804,7 @@
         {#if review.converted_files}<div><dt>Convert</dt><dd>{plural(review.converted_files, 'file')} the Pocket cannot play become FLAC or MP3 copies. Your originals are not changed.</dd></div>{/if}
         {#if review.replaygain_files}<div><dt>ReplayGain</dt><dd>added to {review.replaygain_files} {review.replaygain_files === 1 ? 'copy' : 'copies'}. Your originals are not changed.</dd></div>{/if}
         {#if review.skipped.length}<div><dt>Left out</dt><dd>{plural(review.skipped.length, 'file')}: {review.skipped.slice(0, 3).map((k) => `${k.file} (${k.reason})`).join('; ')}{review.skipped.length > 3 ? '…' : ''}</dd></div>{/if}
+        {#if playlist}<div><dt>Playlist</dt><dd><code>{playlist.file}</code> is rewritten to list every track on the card after this sync{playlist.max_tracks ? ` (limit ${playlist.max_tracks.toLocaleString()})` : ''}.</dd></div>{/if}
         {#if review.removed_files}<div><dt>Remove</dt><dd>{plural(review.removed_files, 'track')} · {size(review.bytes_to_remove)}{review.playlists_updated ? ` · ${plural(review.playlists_updated, 'playlist')} updated` : ''}</dd></div>{/if}
         {#if review.edited_files}<div><dt>Edit</dt><dd>{plural(review.edited_files, 'track')} (only the copies on the Pocket)</dd></div>{/if}
         {#if reviewEta}<div><dt>Time</dt><dd>about {reviewEta}{#if estIsDefault} <small class="wb-was">(rough estimate; we haven't timed this card yet)</small>{:else} <small class="wb-was">(from your last transfer)</small>{/if}</dd></div>{/if}
@@ -974,6 +982,7 @@
   .wb-fit{color:#c1f0ad}.wb-fit.bad{color:#ff9d8a;font-weight:650}.wb-fit-line{line-height:1.4}
   .wb-was{color:#8c9c9b;font-weight:400;font-size:12px;margin-left:6px}
   .wb-warn{margin:0 0 12px;padding:12px 14px;background:#3d3220;border:1px solid #6b5630;border-radius:10px;color:#f0d59a;font-size:13px}.wb-warn p{margin:6px 0 8px;color:#e5d2a6}.wb-warn .wb-check{margin:0}
+  .wb-info{display:grid;gap:3px;margin:0 0 12px;padding:10px 16px;border:1px solid #3b5a58;background:#16292a;border-radius:10px;color:#dce6e4;font-size:13px;line-height:1.5}.wb-info code{font-size:12px}
   .wb-banner-fail{background:#3d3220;border-color:#6b5630;color:#f0d59a}.wb-banner-actions{display:flex;gap:6px;flex-shrink:0}
   .wb-safe{color:#c1f0ad!important}
   .wb-listwrap{display:flex;flex-direction:column;flex:1;min-height:0}

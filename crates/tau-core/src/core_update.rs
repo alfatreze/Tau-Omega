@@ -134,6 +134,7 @@ mod tests {
             media_platform: String::new(),
             library_capable: false,
             audio_formats: Vec::new(),
+            playlist: None,
             index_status: crate::card::IndexStatus::NoIndex,
             platform_category: None,
         }
