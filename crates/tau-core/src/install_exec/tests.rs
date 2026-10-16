@@ -238,6 +238,27 @@ fn running_the_same_plan_twice_is_refused_the_second_time() {
 }
 
 #[test]
+fn installing_again_after_an_undo_works_and_keeps_the_first_backup() {
+    let card = card("again");
+    let first = install_plan::plan(&alpha4(), &card, &[], false).unwrap();
+    let report = execute(&alpha4(), &card, &first, &first.id, &backups(&card), &[]).unwrap();
+    rollback(&card, &report.backup_dir).unwrap();
+    // The card is as it was, so planning again gives the same plan (and the same backup folder name).
+    let second = install_plan::plan(&alpha4(), &card, &[], false).unwrap();
+    assert_eq!(first.id, second.id);
+    let again = execute(&alpha4(), &card, &second, &second.id, &backups(&card), &[]).unwrap();
+    assert!(card.join("Cores/alfatreze.TAU/core.json").is_file());
+    let kept: Vec<_> = fs::read_dir(backups(&card)).unwrap().flatten().collect();
+    assert_eq!(
+        kept.len(),
+        2,
+        "the first run's backup was moved aside, not deleted"
+    );
+    assert!(again.backup_dir.join(JOURNAL).is_file());
+    fs::remove_dir_all(card.parent().unwrap()).unwrap();
+}
+
+#[test]
 fn a_damaged_backup_is_never_restored() {
     let card = lived_in_card("damaged");
     let plan = install_plan::plan(&alpha4(), &card, &[], false).unwrap();
