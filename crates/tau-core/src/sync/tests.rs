@@ -1,5 +1,6 @@
 use super::*;
 use crate::details;
+use crate::scan_dir_with_progress;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]

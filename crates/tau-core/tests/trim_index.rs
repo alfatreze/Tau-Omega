@@ -247,7 +247,7 @@ fn a_sync_writes_the_tables_and_a_plain_read_of_a_library_measures_nothing() {
     };
     // off: the sync writes no table
     run(false);
-    assert!(common.join("Album/tau-skip.bin").is_file() == false);
+    assert!(!common.join("Album/tau-skip.bin").is_file());
     // a plain read of the library, with the setting on, decodes nothing: no measurement is attached to any track
     trim::set_active(TrimSettings {
         enabled: true,
