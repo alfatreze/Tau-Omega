@@ -313,7 +313,8 @@ const handlers: Record<string, (args: any) => unknown> = {
     warnings: mockAssetsOnCard ? ['The file already there also holds METR, which is not carried over: it will be gone after this install (the backup keeps it).'] : [],
   }),
   appearance_install: (a) => { mockAssetsOnCard = true; return { destination: `${a.mediaRoot}/tau-assets.bin`, bytes_written: 144, replaced: false, backup: a.backup ?? null }; },
-  omega_update_check: () => (prefs.omega_channel === 'dev' ? { current: '0.5.0', version: '0.5.1-alpha.2', notes: 'Test build', date: null, channel: 'dev' } : null),
+  // the mock runs as a dev build (0.5.1-dev.1): Stable and Preview offer a switch, Dev and Automatic offer nothing
+  omega_update_check: () => { if (prefs.omega_channel === 'stable') return { current: '0.5.1-dev.1', version: '0.5.0', notes: 'Release', date: null, channel: 'stable', switch: true }; if (prefs.omega_channel === 'preview') return { current: '0.5.1-dev.1', version: '0.5.1-preview.1', notes: 'Preview build', date: null, channel: 'preview', switch: true }; throw { code: 7, message: 'Development builds are updated by hand. Choose Preview or Stable above to follow releases.' }; },
   omega_update_install: () => undefined,
   halcyon_open: () => [],
   halcyon_import_apo: (a) => ({ preset: { kind: 'raw', name: a.name as string, preamp: 3000000, stages: [[4194304, 0, 0, 0, 0]] }, preamp_db: -2.9, peak_gain_db: 2.9, filters: 1 }),
