@@ -412,6 +412,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_symlink_and_an_oversize_folder_are_refused() {
         let (src, out) = (scratch("s"), scratch("o4"));
