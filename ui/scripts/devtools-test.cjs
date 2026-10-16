@@ -20,7 +20,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
     const box = p.locator('.ma').getByRole('textbox'); await box.fill('https://github.com/someone/unlisted-core'); await p.waitForTimeout(450);
     await p.locator('.ma').getByRole('button', { name: /Read this core/ }).click(); await p.waitForTimeout(500);
     await p.locator('.ma').getByRole('checkbox', { name: /I trust this source/ }).check(); await p.waitForTimeout(400);
-    await p.locator('.ma').getByRole('button', { name: 'Review update' }).click(); await p.waitForTimeout(600);
+    await p.waitForTimeout(600);
   };
 
   // ---- off by default
@@ -50,9 +50,9 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await p.locator('.card-sum').innerText(), /Card role\s*Real card[\s\S]*type its name first[\s\S]*\.omega-role/i); ok('the Card page shows the role: Real by default, and says what that means');
   await installFlow();
   const name = p.getByLabel('Type the card name to confirm');
-  assert.equal(await name.count(), 1); assert.equal(await p.getByRole('button', { name: 'Confirm and install' }).isDisabled(), true); ok('installing onto a Real card asks for its name and blocks the button');
-  await name.fill('Wrong'); assert.equal(await p.getByRole('button', { name: 'Confirm and install' }).isDisabled(), true); ok('a wrong name keeps it blocked');
-  await name.fill('pocket'); assert.equal(await p.getByRole('button', { name: 'Confirm and install' }).isDisabled(), false); ok('the right name (any case) unblocks it');
+  assert.equal(await name.count(), 1); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), true); ok('installing onto a Real card asks for its name and blocks the button');
+  await name.fill('Wrong'); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), true); ok('a wrong name keeps it blocked');
+  await name.fill('pocket'); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), false); ok('the right name (any case) unblocks it');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 
   // ---- mark as a test card
@@ -60,7 +60,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.getByRole('switch', { name: 'This is a test card' }).click(); await p.waitForTimeout(400);
   assert.match(await p.locator('.card-sum').innerText(), /Test card[\s\S]*usual reviewed plan[\s\S]*Marked as a test card/); ok('marking the card as a test card says so');
   await installFlow();
-  assert.equal(await p.getByLabel('Type the card name to confirm').count(), 0); assert.equal(await p.getByRole('button', { name: 'Confirm and install' }).isDisabled(), false); ok('a test card needs no name');
+  assert.equal(await p.getByLabel('Type the card name to confirm').count(), 0); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), false); ok('a test card needs no name');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   await cardPage();
   await p.getByRole('switch', { name: 'This is a test card' }).click(); await p.waitForTimeout(400);

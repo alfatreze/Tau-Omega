@@ -66,7 +66,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await rows().first().click(); await p.waitForTimeout(600);
   await sheet().getByRole('button', { name: 'Download and review' }).click(); await p.waitForTimeout(600);
   assert.match(await sheet().innerText(), /Downloaded[\s\S]*checksum verified[\s\S]*Needs Pocket firmware 2\.0/); ok('download and review shows the checks before any plan');
-  assert.equal(await sheet().getByRole('button', { name: 'Review update' }).count(), 1); ok('the reviewed install plan is offered, nothing is written yet');
+  assert.equal(await sheet().getByRole('region', { name: 'Install review' }).count(), 1); assert.equal(await sheet().getByRole('region', { name: 'Install result' }).count(), 0); ok('the install review is shown at once, and nothing is written yet');
   await p.keyboard.press('Escape'); await p.waitForTimeout(150);
 
   await search(''); await p.waitForTimeout(200);

@@ -11,12 +11,15 @@
   import { categoryIcon } from './iconFor';
   import { plural, size } from './coresFormat';
   import { manualClassify, manualInspect, manualRegister } from './tau-api';
-  import type { ManualClass, ManualInspect, ManualReleaseChoice } from './types';
+  import type { ManualClass, ManualInspect, ManualProvenance, ManualReleaseChoice } from './types';
   export let card = ''; export let initial = '';
   export let close: () => void;
 
   type Ready = Extract<ManualInspect, { status: 'ready' }>;
-  let step: 'source' | 'reading' | 'choose' | 'preview' = 'source';
+  let step: 'source' | 'reading' | 'choose' | 'preview' | 'review' = 'source';
+  /** Cores already read and trusted, waiting to be installed together with the one being looked at. */
+  type Queued = { zip: string; name: string; version: string; coreId: string; prov: ManualProvenance; sha: string };
+  let basket: Queued[] = [];
   let input = initial; let cls: ManualClass | null = null; let error = ''; let readme = true; let installed = false;
   let choose: Extract<ManualInspect, { status: 'choose' }> | null = null; let pickTag = ''; let pickAsset = '';
   let result: Ready | null = null; let trust = false; let override = false; let timer: ReturnType<typeof setTimeout> | undefined;
@@ -44,10 +47,18 @@
 
   async function onInstalled() {
     installed = true;
-    if (!result) return;
-    const p = result.provenance;
-    try { await manualRegister({ core_id: result.preview.core_id, kind: p.kind, owner: p.owner, repo: p.repo, tag: p.tag, asset: p.asset, sha256: p.sha256 || result.preview.sha256, card: cardName(card) }); } catch { /* remembering the source is advice only */ }
+    const all = [...basket, ...(result && step === 'preview' ? [{ zip: result.zip_path, name: '', version: '', coreId: result.preview.core_id, prov: result.provenance, sha: result.preview.sha256 }] : [])];
+    for (const q of all) {
+      const p = q.prov;
+      try { await manualRegister({ core_id: q.coreId, kind: p.kind, owner: p.owner, repo: p.repo, tag: p.tag, asset: p.asset, sha256: p.sha256 || q.sha, card: cardName(card) }); } catch { /* remembering the source is advice only */ }
+    }
   }
+  function addAnother() {
+    if (!result || basket.some((b) => b.zip === result!.zip_path)) return;
+    basket = [...basket, { zip: result.zip_path, name: result.preview.shortname || result.preview.core_id, version: result.preview.version, coreId: result.preview.core_id, prov: result.provenance, sha: result.preview.sha256 }];
+    result = null; trust = false; override = false; input = ''; cls = null; error = ''; step = 'source';
+  }
+  const dropQueued = (zip: string) => { basket = basket.filter((b) => b.zip !== zip); if (!basket.length && step === 'review') step = 'source'; };
   const yn = (v: boolean | null) => (v === true ? 'Yes' : v === false ? 'No' : 'Not stated');
   $: blocked = !result ? '' : result.different_source ? 'This core id was added before from a different source. Remove the existing core first, or add it from the same source.' : !card ? 'Open a card first: the install is reviewed against a card.' : '';
   $: lintErrors = result?.lint?.errors ?? 0;
@@ -58,10 +69,22 @@
 <svelte:window on:keydown={(e) => e.key === 'Escape' && close()} />
 <div class="ma-backdrop" role="presentation" on:click={close}></div>
 <div class="ma" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="ma-title" use:modal>
-  <header class="ma-head"><div><p class="eyebrow">ADD A CORE MANUALLY</p><h2 id="ma-title">{step === 'preview' && result ? result.preview.shortname || result.preview.core_id : 'Add a core that is not in the Library'}</h2>
-    <ol class="ma-steps" aria-label="Steps"><li class:cur={step === 'source' || step === 'reading' || step === 'choose'}>1 Source</li><li class:cur={step === 'preview' && !trust}>2 Preview</li><li class:cur={step === 'preview' && trust}>3 Review install</li></ol></div>
+  <header class="ma-head"><div><p class="eyebrow">ADD A CORE MANUALLY</p><h2 id="ma-title">{step === 'preview' && result ? result.preview.shortname || result.preview.core_id : step === 'review' ? `Install ${basket.length} cores` : 'Add a core that is not in the Library'}</h2>
+    <ol class="ma-steps" aria-label="Steps"><li class:cur={step === 'source' || step === 'reading' || step === 'choose'}>1 Source</li><li class:cur={step === 'preview' && !trust}>2 Preview</li><li class:cur={(step === 'preview' && trust) || step === 'review'}>3 Review install</li></ol></div>
     <button class="quiet" data-autofocus on:click={close}>{installed ? 'Done' : 'Cancel'}</button></header>
 
+  {#if basket.length && step !== 'review' && !installed}
+    <div class="ma-basket" role="region" aria-label="Cores ready to install">
+      <strong>Ready to install ({basket.length})</strong>
+      <ul>{#each basket as b (b.zip)}<li><span>{b.name} <small>{b.version}</small></span><button class="quiet" on:click={() => dropQueued(b.zip)} aria-label={`Remove ${b.name} from the list`}>Remove</button></li>{/each}</ul>
+      {#if step === 'source'}<button class="primary" on:click={() => (step = 'review')}>Review and install {basket.length === 1 ? '1 core' : `${basket.length} cores`}</button>{/if}
+    </div>
+  {/if}
+  {#if step === 'review'}
+    <ul class="ma-basket-list" aria-label="Cores to install">{#each basket as b (b.zip)}<li>{b.name} <small>{b.version}</small></li>{/each}</ul>
+    {#if !installed}<div class="ma-actions"><button class="quiet" on:click={() => (step = 'source')}>Add another core</button></div>{/if}
+    <UpdatePlanView zips={basket.map((b) => b.zip)} cardPath={card} lintGate={false} on:installed={onInstalled} />
+  {/if}
   {#if step === 'source' || step === 'reading'}
     <div class="ma-choices">
       <button class="ma-choice" disabled={step === 'reading'} on:click={() => choosePath(false)}><span class="ma-ci"><Icon name="file-zip" size={26} /></span><strong>Choose a zip file</strong><small>A core package as its author published it</small></button>
@@ -133,13 +156,14 @@
 
     {#if blocked}<p class="ma-err" role="alert">{blocked}</p>{/if}
     {#if !installed}<label class="ma-check ma-trust"><input type="checkbox" bind:checked={trust} disabled={!!blocked || lintBlocked} /> I trust this source <small>(asked every time, never remembered)</small></label>{/if}
-    <div class="ma-actions"><button class="quiet" on:click={() => (step = 'source')}>Back</button></div>
+    <div class="ma-actions"><button class="quiet" on:click={() => (step = 'source')}>Back</button>{#if !installed}<button class="quiet" disabled={!trust || !!blocked || lintBlocked} on:click={addAnother} title="Keep this core on a list and add another, then install them all at once">Add another core</button>{/if}</div>
     {#if trust && !blocked}
-      <UpdatePlanView zipPath={result.zip_path} cardPath={card} lintGate={false} knownOverrides={override ? result.lint.findings.filter((f) => f.severity === 'Error').map((f) => `${f.id}: ${f.message}`) : []} on:installed={onInstalled} />
+      <UpdatePlanView zips={[...basket.map((b) => b.zip), result.zip_path]} cardPath={card} lintGate={false} knownOverrides={override ? result.lint.findings.filter((f) => f.severity === 'Error').map((f) => `${f.id}: ${f.message}`) : []} on:installed={onInstalled} />
     {/if}
   {/if}
 </div>
 <style>
+  .ma-basket{border:1px solid #3b5a58;background:#16292a;border-radius:10px;padding:10px 14px;margin:0 0 14px;font-size:13px}.ma-basket ul,.ma-basket-list{list-style:none;margin:6px 0 8px;padding:0}.ma-basket li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}.ma-basket small,.ma-basket-list small{color:#8f9e9d}.ma-basket-list{font-size:13px;color:#dce6e4;margin:0 0 8px}
   .ma-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100}
   .ma{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:#1a2325;border:1px solid #2c393a;border-radius:14px;padding:22px 24px;box-sizing:border-box}
   .ma-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}.ma-head h2{margin:0 0 8px}
