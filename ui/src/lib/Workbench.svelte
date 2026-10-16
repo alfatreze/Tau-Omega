@@ -52,7 +52,7 @@
    * timed. These are placeholders to be replaced with real figures collected during development; the review sheet
    * always says when an estimate rests on them rather than on a measured transfer. */
   const DEFAULT_SPEED: Record<string, number> = { direct_usb: 1.5 * MB, card_reader: 20 * MB, unknown: 5 * MB };
-  const STAGES: Record<string, string> = { scanning: 'Reading files', hashing: 'Checking files', copying: 'Copying', building_index: 'Updating the library list', verifying: 'Verifying', deleting: 'Removing', editing: 'Updating tags', analysing: 'Measuring loudness', converting: 'Converting' };
+  const STAGES: Record<string, string> = { scanning: 'Reading files', hashing: 'Checking files', copying: 'Copying', building_index: 'Updating the library list', verifying: 'Verifying', deleting: 'Removing', editing: 'Updating tags', analysing: 'Measuring loudness', converting: 'Converting', silence: 'Measuring silence' };
 
   // ---- persistence (per card + core) ---------------------------------------
   const storeKey = (name: string) => `tau.wb.${name}.${mediaRoot}`;
@@ -886,7 +886,7 @@
 {/if}
 {#if syncResult}
   <SyncToast
-    summary={[syncResult.report.copied && `${plural(syncResult.report.copied, 'track')} copied`, syncResult.report.deleted && `${plural(syncResult.report.deleted, 'track')} removed`, syncResult.report.edited && `${plural(syncResult.report.edited, 'track')} edited`].filter(Boolean).join(', ') || 'nothing needed copying'}
+    summary={[syncResult.report.copied && `${plural(syncResult.report.copied, 'track')} copied`, syncResult.report.deleted && `${plural(syncResult.report.deleted, 'track')} removed`, syncResult.report.edited && `${plural(syncResult.report.edited, 'track')} edited`, syncResult.report.skip_tracks && `silence skipped on ${plural(syncResult.report.skip_tracks, 'track')}`].filter(Boolean).join(', ') || 'nothing needed copying'}
     warning={syncResult.warnings.length ? `${syncResult.warnings[0].message}${syncResult.warnings.length > 1 ? ` (and ${syncResult.warnings.length - 1} more in the details)` : ''}` : ''}
     {ejectMsg} {ejectOk} {ejecting} {verifiedOnDevice}
     onEject={eject} onDetails={() => seeDetails(syncResult?.journal ?? '')} onDismiss={closeRun} />

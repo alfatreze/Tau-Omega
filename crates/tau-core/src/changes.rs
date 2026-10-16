@@ -78,6 +78,11 @@ pub struct ChangeReport {
     pub playlist_file: Option<String>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub playlist_tracks: usize,
+    /// Skip silence: the tables on the card and the tracks they mark, after this run (0 when the setting is off).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub skip_tracks: usize,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub skip_files: usize,
     /// How far the run got: `"copy"`, `"edit"`, `"remove"` (the step in progress or last started), or `"done"`.
     pub phase: String,
 }
@@ -436,6 +441,9 @@ fn execute_changes_inner(
             target.max_bytes,
         )?;
         report.playlist_file = Some(target.file.clone());
+    }
+    if crate::trim::active().enabled {
+        (report.skip_files, report.skip_tracks) = crate::trim::summarise(&plan.destination);
     }
     report.phase = "done".into();
     Ok(())

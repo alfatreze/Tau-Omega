@@ -75,6 +75,7 @@ fn a_skip_table_is_written_next_to_the_tracks_from_the_measured_silence() {
     });
     build();
     let t = skip_file(&dir).expect("a skip table");
+    assert_eq!(trim::summarise(&dir), (1, 1), "one table, one marked track");
     assert_eq!(&t[..4], b"TSK1");
     assert_eq!(u16::from_le_bytes([t[4], t[5]]), 1);
     assert_eq!(

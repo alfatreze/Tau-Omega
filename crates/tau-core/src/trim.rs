@@ -259,6 +259,31 @@ pub fn write_skip_files(
     Ok((written, cut))
 }
 
+/// How many `tau-skip.bin` tables are under `common` and how many tracks they mark (read back from the files).
+pub fn summarise(common: &Path) -> (usize, usize) {
+    fn walk(at: &Path, depth: usize, out: &mut (usize, usize)) {
+        let Ok(read) = std::fs::read_dir(at) else {
+            return;
+        };
+        for e in read.flatten() {
+            let p = e.path();
+            if e.file_type().is_ok_and(|t| t.is_dir()) && depth < 12 {
+                walk(&p, depth + 1, out);
+            } else if e.file_name() == SKIP_FILE
+                && let Ok(b) = std::fs::read(&p)
+                && b.len() >= 12
+                && &b[..4] == b"TSK1"
+            {
+                out.0 += 1;
+                out.1 += usize::from(u16::from_le_bytes([b[4], b[5]]));
+            }
+        }
+    }
+    let mut out = (0, 0);
+    walk(common, 0, &mut out);
+    out
+}
+
 /// Rewrites every folder's `tau-skip.bin` from a fresh scan (the ledger keeps the measurements, so only new or changed
 /// files are decoded). Used after a hand edit.
 pub fn rewrite_skip_files(

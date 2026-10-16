@@ -236,6 +236,8 @@ pub enum Stage {
     Analysing,
     /// Converting a file the Pocket cannot play.
     Converting,
+    /// Measuring the silence at the start and end of a track (Skip silence).
+    Silence,
 }
 
 /// One progress report from a long-running scan/plan/execute call. `done` and
