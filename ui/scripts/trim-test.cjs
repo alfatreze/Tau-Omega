@@ -1,4 +1,4 @@
-// Skip silence is an advanced sync option: Library > Advanced > Skip silence options (off by default, the choices and their defaults, saved), the way
+// Skip silence is an advanced sync option: Library > Advanced > Skip silence options (on by default, the choices and their defaults, saved), the way
 // into adjusting the tracks already on the card, and the same options from Settings > Syncing music > Advanced.
 // Usage: (npm run dev &) && NODE_PATH=$(npm root -g) node scripts/trim-test.cjs
 const { chromium } = require('playwright');
@@ -20,9 +20,8 @@ const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await p.keyboard.press('Escape'); await p.getByRole('button', { name: /Advanced/ }).click(); await p.waitForTimeout(100);
   await menu('Skip silence options…');
   const dlg = p.getByRole('dialog', { name: 'Skip silence' });
-  assert.equal(await dlg.getByLabel('Silence level').count(), 0); ok('skip silence is off by default and shows no options');
-  await dlg.getByRole('button', { name: 'Turn on' }).click(); await p.waitForTimeout(300);
-  assert.equal(await dlg.getByLabel('Silence level').inputValue(), '-600'); ok('on: the level starts at -60 dB');
+  assert.equal(await dlg.getByLabel('Silence level').count(), 1); assert.equal(await dlg.getByRole('button', { name: 'Turn off' }).count(), 1); ok('skip silence is on by default and shows its options');
+  assert.equal(await dlg.getByLabel('Silence level').inputValue(), '-600'); ok('the level starts at -60 dB');
   assert.equal(await dlg.getByLabel('Silence kept at the start').inputValue(), '200');
   assert.equal(await dlg.getByLabel('Silence kept at the end').inputValue(), '500');
   assert.equal(await dlg.getByLabel('Smallest silence').inputValue(), '2000'); ok('the defaults: keep 200 ms before and 500 ms after, skip silences of at least 2 s');
