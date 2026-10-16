@@ -141,6 +141,58 @@ pub fn skip_table(entries: &[(String, TrimPoints)]) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// A hand edit of one track: `never` skips nothing; otherwise a typed lead and/or tail replaces the detected one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
+pub struct Override {
+    pub never: bool,
+    pub lead: Option<u32>,
+    pub tail: Option<u32>,
+}
+
+/// The skip a track gets once its override is applied. A typed pair that would leave under 1 s of track is
+/// refused (the detected values stand).
+pub fn with_override(auto: TrimPoints, o: Option<&Override>, edge: &EdgeSilence) -> TrimPoints {
+    let Some(o) = o else { return auto };
+    if o.never {
+        return TrimPoints::default();
+    }
+    let p = TrimPoints {
+        lead_skip: o.lead.unwrap_or(auto.lead_skip),
+        tail_skip: o.tail.unwrap_or(auto.tail_skip),
+    };
+    let one_second = u64::from(edge.rate);
+    if u64::from(p.lead_skip) + u64::from(p.tail_skip) + one_second >= edge.frames {
+        return auto;
+    }
+    p
+}
+
+type OverrideMap = BTreeMap<String, Override>;
+static OVERRIDES: std::sync::RwLock<BTreeMap<std::path::PathBuf, OverrideMap>> =
+    std::sync::RwLock::new(BTreeMap::new());
+
+/// The hand edits kept for the card whose media root is `root` (track path relative to the root). Set by the app
+/// from its preferences; a sync that rebuilds the index applies them.
+pub fn set_overrides(root: &Path, edits: OverrideMap) {
+    let mut all = OVERRIDES.write().unwrap_or_else(|e| e.into_inner());
+    if edits.is_empty() {
+        all.remove(root);
+    } else {
+        all.insert(root.to_path_buf(), edits);
+    }
+}
+
+pub fn overrides_for(root: &Path) -> OverrideMap {
+    OVERRIDES
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(root)
+        .cloned()
+        .unwrap_or_default()
+}
+
 /// Writes (or removes, when a folder has nothing to skip) `tau-skip.bin` in every album folder of `common` that holds
 /// scanned tracks, from each track's `_sil` measurement and `settings`. Other folders are left alone. Returns the
 /// number of files written and the number of tracks beyond [`MAX_ENTRIES`] that were left out.
@@ -149,13 +201,16 @@ pub fn write_skip_files(
     entries: &[crate::scan::Entry],
     settings: &TrimSettings,
 ) -> std::io::Result<(usize, usize)> {
+    let edits = overrides_for(common);
     let mut folders: BTreeMap<&str, Vec<(String, TrimPoints)>> = BTreeMap::new();
     for e in entries {
-        let p = e
-            .tags
-            .get("_sil")
-            .and_then(|t| decode_levels(t))
-            .map(|l| plan_trim_levels(&l, settings))
+        let levels = e.tags.get("_sil").and_then(|t| decode_levels(t));
+        let p = levels
+            .as_ref()
+            .map(|l| {
+                let auto = plan_trim_levels(l, settings);
+                with_override(auto, edits.get(&e.rel), &l[0])
+            })
             .unwrap_or_default();
         folders
             .entry(e.dir.as_str())
@@ -202,6 +257,124 @@ pub fn write_skip_files(
         }
     }
     Ok((written, cut))
+}
+
+/// Rewrites every folder's `tau-skip.bin` from a fresh scan (the ledger keeps the measurements, so only new or changed
+/// files are decoded). Used after a hand edit.
+pub fn rewrite_skip_files(
+    common: &Path,
+    settings: &TrimSettings,
+) -> Result<(usize, usize), crate::TauError> {
+    let scan = crate::scan::scan_dir(common, false)?;
+    write_skip_files(common, &scan.entries, settings).map_err(crate::TauError::from)
+}
+
+/// One track in the skip-silence list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct SkipTrack {
+    pub rel: String,
+    pub dir: String,
+    pub file: String,
+    pub secs: u16,
+    /// Seconds of source rate, so the UI can show times.
+    pub rate: u32,
+    /// `None` until the track has been measured (skip silence was off, or the file could not be read).
+    pub skip: Option<TrimPoints>,
+    pub edit: Option<Override>,
+}
+
+/// Every track under `common` with what would be skipped now (the setting's values and any hand edit).
+pub fn skip_tracks(
+    common: &Path,
+    settings: &TrimSettings,
+) -> Result<Vec<SkipTrack>, crate::TauError> {
+    let scan = crate::scan::scan_dir(common, false)?;
+    let edits = overrides_for(common);
+    Ok(scan
+        .entries
+        .iter()
+        .map(|e| {
+            let levels = e.tags.get("_sil").and_then(|t| decode_levels(t));
+            SkipTrack {
+                rel: e.rel.clone(),
+                dir: e.dir.clone(),
+                file: e.file.clone(),
+                secs: e.secs,
+                rate: levels.as_ref().map_or(0, |l| l[0].rate),
+                skip: levels.as_ref().map(|l| {
+                    with_override(plan_trim_levels(l, settings), edits.get(&e.rel), &l[0])
+                }),
+                edit: edits.get(&e.rel).copied(),
+            }
+        })
+        .collect())
+}
+
+/// What the editor shows for one track.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct SkipDetail {
+    pub rate: u32,
+    pub frames: u64,
+    /// 400 buckets of loudness, 0 (below -80 dB) to 255 (full scale).
+    pub envelope: Vec<u8>,
+    /// What the detector finds with the current settings, before any hand edit.
+    pub auto: TrimPoints,
+    pub skip: TrimPoints,
+    pub edit: Option<Override>,
+}
+
+/// Decodes one track and returns its waveform and what would be skipped.
+pub fn skip_detail(
+    common: &Path,
+    rel: &str,
+    settings: &TrimSettings,
+) -> Result<SkipDetail, crate::TauError> {
+    if rel.split('/').any(|c| c == ".." || c.is_empty()) {
+        return Err(crate::TauError::e(
+            crate::ErrorCode::InvalidPathReference,
+            "not a track path",
+        ));
+    }
+    let a = tau_audio::silence::analyse(&common.join(rel), &mut |_| true)
+        .map_err(|e| crate::TauError::e(crate::ErrorCode::UnsupportedTags, e.to_string()))?;
+    let want = settings.threshold_db();
+    let level = LEVELS_DB
+        .iter()
+        .enumerate()
+        .min_by(|x, y| (x.1 - want).abs().total_cmp(&(y.1 - want).abs()))
+        .map_or(0, |(i, _)| i);
+    let on = TrimSettings {
+        enabled: true,
+        ..*settings
+    };
+    let auto = plan_trim(&a.levels[level], &on);
+    let edit = overrides_for(common).get(rel).copied();
+    let envelope = (0..400)
+        .map(|b| {
+            let (lo, hi) = (
+                b * a.peaks.len() / 400,
+                ((b + 1) * a.peaks.len() / 400).max(b * a.peaks.len() / 400 + 1),
+            );
+            let peak = a.peaks[lo.min(a.peaks.len().saturating_sub(1))..hi.min(a.peaks.len())]
+                .iter()
+                .fold(0f32, |m, &p| m.max(p));
+            if peak <= 0.0 {
+                0
+            } else {
+                (((20.0 * peak.log10() + 80.0) / 80.0).clamp(0.0, 1.0) * 255.0) as u8
+            }
+        })
+        .collect();
+    Ok(SkipDetail {
+        rate: a.rate,
+        frames: a.frames,
+        envelope,
+        auto,
+        skip: with_override(auto, edit.as_ref(), &a.levels[level]),
+        edit,
+    })
 }
 
 /// One track's measurement at every level of [`LEVELS_DB`], kept as text in the scan's tag map so the ledger

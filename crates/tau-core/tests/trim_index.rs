@@ -108,6 +108,89 @@ fn a_skip_table_is_written_next_to_the_tracks_from_the_measured_silence() {
         "the 6 s tail no longer does"
     );
 
+    // a hand edit: typed values are written as typed, "never skip" removes the track, and the list shows both
+    trim::set_active(TrimSettings {
+        enabled: true,
+        ..Default::default()
+    });
+    let key = "Album/01 Long Silences.flac".to_string();
+    trim::set_overrides(
+        &dir,
+        [(
+            key.clone(),
+            trim::Override {
+                lead: Some(8_000),
+                ..Default::default()
+            },
+        )]
+        .into(),
+    );
+    let on = trim::active();
+    trim::rewrite_skip_files(&dir, &on).unwrap();
+    let t = skip_file(&dir).unwrap();
+    assert_eq!(
+        u32::from_le_bytes(t[16..20].try_into().unwrap()),
+        8_000,
+        "typed lead"
+    );
+    assert_eq!(
+        u32::from_le_bytes(t[20..24].try_into().unwrap()),
+        48_000 - 4_000,
+        "the detected tail stays"
+    );
+    let list = trim::skip_tracks(&dir, &on).unwrap();
+    let row = list.iter().find(|r| r.rel == key).unwrap();
+    assert_eq!(
+        (row.skip.unwrap().lead_skip, row.edit.is_some()),
+        (8_000, true)
+    );
+    trim::set_overrides(
+        &dir,
+        [(
+            key.clone(),
+            trim::Override {
+                never: true,
+                ..Default::default()
+            },
+        )]
+        .into(),
+    );
+    trim::rewrite_skip_files(&dir, &on).unwrap();
+    assert!(
+        skip_file(&dir).is_none(),
+        "never skip leaves nothing to write"
+    );
+    // a typed pair that would leave under a second of track is refused
+    trim::set_overrides(
+        &dir,
+        [(
+            key.clone(),
+            trim::Override {
+                lead: Some(100_000),
+                ..Default::default()
+            },
+        )]
+        .into(),
+    );
+    trim::rewrite_skip_files(&dir, &on).unwrap();
+    let t = skip_file(&dir).unwrap();
+    assert_eq!(
+        u32::from_le_bytes(t[16..20].try_into().unwrap()),
+        80_000 - 1_600,
+        "the detected lead stands"
+    );
+    // the detail has the waveform and what the detector finds
+    let d = trim::skip_detail(&dir, &key, &on).unwrap();
+    assert_eq!(
+        (d.rate, d.envelope.len(), d.auto.lead_skip),
+        (8_000, 400, 80_000 - 1_600)
+    );
+    assert!(
+        d.envelope[0] == 0 && d.envelope[240] > 100,
+        "silent at the start, loud in the middle"
+    );
+    trim::set_overrides(&dir, Default::default());
+
     // an album that is gone leaves no orphan table behind
     trim::set_active(TrimSettings {
         enabled: true,
