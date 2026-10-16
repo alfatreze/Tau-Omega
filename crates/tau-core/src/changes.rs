@@ -246,48 +246,47 @@ pub fn plan_changes(
             ));
         }
     }
-    if let Some(target) = &request.playlist {
-        if let Some(max_bytes) = target.max_bytes {
-            // one media-relative path per line: long folder and file names fill the file before the track limit does
-            let root = common.canonicalize()?;
-            let rel = |p: &Path| {
-                p.strip_prefix(&root)
-                    .ok()
-                    .map(|r| r.to_string_lossy().replace('\\', "/"))
-            };
-            let mut rels: std::collections::BTreeSet<String> =
-                crate::scan::scan_dir(common, false)?
-                    .entries
-                    .iter()
-                    .map(|e| e.rel.clone())
-                    .collect();
-            if let Some(r) = &removal {
-                for i in r.items.iter().filter(|i| sync::audio_file(&i.destination)) {
-                    if let Some(x) = rel(&i.destination) {
-                        rels.remove(&x);
-                    }
+    if let Some(target) = &request.playlist
+        && let Some(max_bytes) = target.max_bytes
+    {
+        // one media-relative path per line: long folder and file names fill the file before the track limit does
+        let root = common.canonicalize()?;
+        let rel = |p: &Path| {
+            p.strip_prefix(&root)
+                .ok()
+                .map(|r| r.to_string_lossy().replace('\\', "/"))
+        };
+        let mut rels: std::collections::BTreeSet<String> = crate::scan::scan_dir(common, false)?
+            .entries
+            .iter()
+            .map(|e| e.rel.clone())
+            .collect();
+        if let Some(r) = &removal {
+            for i in r.items.iter().filter(|i| sync::audio_file(&i.destination)) {
+                if let Some(x) = rel(&i.destination) {
+                    rels.remove(&x);
                 }
             }
-            if let Some(sp) = &sync_plan {
-                for i in sp.items.iter().filter(|i| sync::audio_file(&i.destination)) {
-                    if let Some(x) = rel(&i.destination) {
-                        rels.insert(x);
-                    }
+        }
+        if let Some(sp) = &sync_plan {
+            for i in sp.items.iter().filter(|i| sync::audio_file(&i.destination)) {
+                if let Some(x) = rel(&i.destination) {
+                    rels.insert(x);
                 }
             }
-            let bytes: usize = rels.iter().map(|x| x.len() + 1).sum();
-            if bytes > max_bytes as usize {
-                return Err(TauError::e(
-                    ErrorCode::IndexCapExceeded,
-                    format!(
-                        "The playlist for these {} tracks would be {:.1} KB, but {} reads at most {:.0} KB. Remove tracks or shorten folder and file names.",
-                        rels.len(),
-                        bytes as f64 / 1024.0,
-                        target.core_name,
-                        f64::from(max_bytes) / 1024.0
-                    ),
-                ));
-            }
+        }
+        let bytes: usize = rels.iter().map(|x| x.len() + 1).sum();
+        if bytes > max_bytes as usize {
+            return Err(TauError::e(
+                ErrorCode::IndexCapExceeded,
+                format!(
+                    "The playlist for these {} tracks would be {:.1} KB, but {} reads at most {:.0} KB. Remove tracks or shorten folder and file names.",
+                    rels.len(),
+                    bytes as f64 / 1024.0,
+                    target.core_name,
+                    f64::from(max_bytes) / 1024.0
+                ),
+            ));
         }
     }
     let mut hasher = Sha256::new();
@@ -448,32 +447,32 @@ fn write_playlist(
     let scan = crate::scan::scan_dir(common, false)?;
     let mut rels: Vec<&str> = scan.entries.iter().map(|e| e.rel.as_str()).collect();
     rels.sort_unstable();
-    if let Some(max) = max_tracks {
-        if rels.len() > max as usize {
-            return Err(TauError::e(
-                ErrorCode::IndexCapExceeded,
-                format!(
-                    "{} tracks are on the card but the playlist can hold {max}; nothing was written.",
-                    rels.len()
-                ),
-            ));
-        }
+    if let Some(max) = max_tracks
+        && rels.len() > max as usize
+    {
+        return Err(TauError::e(
+            ErrorCode::IndexCapExceeded,
+            format!(
+                "{} tracks are on the card but the playlist can hold {max}; nothing was written.",
+                rels.len()
+            ),
+        ));
     }
     let mut text = String::new();
     for r in &rels {
         text.push_str(r);
         text.push('\n');
     }
-    if let Some(max) = max_bytes {
-        if text.len() > max as usize {
-            return Err(TauError::e(
-                ErrorCode::IndexCapExceeded,
-                format!(
-                    "The playlist would be {} bytes but the core reads at most {max}; nothing was written.",
-                    text.len()
-                ),
-            ));
-        }
+    if let Some(max) = max_bytes
+        && text.len() > max as usize
+    {
+        return Err(TauError::e(
+            ErrorCode::IndexCapExceeded,
+            format!(
+                "The playlist would be {} bytes but the core reads at most {max}; nothing was written.",
+                text.len()
+            ),
+        ));
     }
     let tmp = common.join(format!(".{file}.part"));
     std::fs::write(&tmp, text)?;
