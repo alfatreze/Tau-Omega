@@ -9,7 +9,7 @@
 
 use crate::{
     ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, ascii_name, cover, playlist,
-    scan_dir_with_progress, sync, tick,
+    sync, tick,
 };
 use sha2::{Digest, Sha256};
 use std::{

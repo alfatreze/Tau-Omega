@@ -21,6 +21,8 @@
   export let measuring = false;
   /** The platform folder the staged change belongs to (the core the Library is working with). */
   export let activePlatform = '';
+  /** The name of the core the Library is working with: its media is one category of the bar, every other core's media another. */
+  export let coreLabel = '';
   export let limitText = '';
   export let limitTitle = '';
   export let overLimit = false;
@@ -55,14 +57,15 @@
   const pct = (n: number) => `${Math.max(0, Math.min(100, total ? (n / total) * 100 : 0))}%`;
 
   $: staged = addBytes > 0 || removeBytes > 0;
-  $: segs = (breakdown?.segments ?? []).map((s, i) => ({
-    key: s.platform,
-    label: s.shortnames.length ? s.shortnames.join(' and ') : s.platform,
-    shared: s.core_ids.length > 1,
-    bytes: s.bytes_on_disk,
-    color: RAMP[i % RAMP.length],
-    active: s.platform === activePlatform,
-  }));
+  // The bar shows the selected core against everything else, never one segment per build: the selected core's media, every other
+  // core's media together, and other data. (With no selected core measured, all the cores' media is one category.)
+  $: raw = breakdown?.segments ?? [];
+  $: selectedRaw = raw.find((s) => s.platform === activePlatform);
+  $: othersBytes = raw.filter((s) => s !== selectedRaw).reduce((n, s) => n + s.bytes_on_disk, 0);
+  $: segs = [
+    ...(selectedRaw ? [{ key: 'selected', label: coreLabel || (selectedRaw.shortnames[0] ?? selectedRaw.platform), shared: selectedRaw.core_ids.length > 1, bytes: selectedRaw.bytes_on_disk, color: RAMP[0], active: true }] : []),
+    ...(othersBytes > 0 ? [{ key: 'others', label: selectedRaw ? 'Other cores’ media' : 'Cores’ media', shared: false, bytes: othersBytes, color: RAMP[2], active: false }] : []),
+  ];
   $: activeFound = segs.some((s) => s.active);
   // A removal always sits at the end of the used part of the bar, just before the adding segment, so the
   // two changes read as one stack at the end: what goes, then what comes. The bytes still come out of the
@@ -126,7 +129,7 @@
     <div class="wb-legend">
       {#if breakdown}
         {#each segs as s (s.key)}
-          <span><i class="sw" style="background:{s.color}"></i>{s.label}{s.shared ? ' (shared media)' : ''} {size(s.bytes)}</span>
+          <span><i class="sw" style="background:{s.color}"></i>{s.label}{s.shared ? ' (media shared with other builds)' : ''} {size(s.bytes)}</span>
         {/each}
         <span title="Other cores, saves, screenshots and system files"><i class="sw k-other"></i>Other data {size(breakdown.other_bytes)}</span>
       {:else}
