@@ -466,7 +466,7 @@ struct Prefs {
     card_marker: String,
     /// Conversion of files the Pocket cannot play, and ReplayGain, for every sync.
     convert: tau_core::convert::ConvertSettings,
-    /// Silence skipping: leading and trailing silence the player skips, measured at sync (off by default).
+    /// Silence skipping: leading and trailing silence the player skips, measured at sync (on by default).
     trim: tau_core::trim::TrimSettings,
     /// Hand edits of skip silence, per media root: track path (relative to it) to edit.
     skip_edits: std::collections::BTreeMap<String, std::collections::BTreeMap<String, tau_core::trim::Override>>,
@@ -497,7 +497,8 @@ impl Default for Prefs {
             update_notice_shown: false,
             card_marker: "ask".into(),
             convert: tau_core::convert::ConvertSettings::product(),
-            trim: Default::default(),
+            // Skip silence is on by default: the numbers are only written next to the music; the player skips silence only when its own switch is on.
+            trim: tau_core::trim::TrimSettings { enabled: true, ..Default::default() },
             skip_edits: Default::default(),
             core_disable: "ask".into(),
             core_keep: Default::default(),

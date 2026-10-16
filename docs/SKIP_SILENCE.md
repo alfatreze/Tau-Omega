@@ -3,7 +3,7 @@
 The contract is tau-alpha's `docs/features/SKIP_SILENCE_SPEC.md` (player side built for MP3, Omega side per its section 4). Omega implements it as written; this file says how and where it differs.
 
 ## What Omega does
-- Settings > Syncing music > **Skip silence** (off by default). While on, the index scan measures each MP3 and FLAC once (a full decode) and keeps the result with the other cached tags, so a file is read again only when it changes.
+- Settings > Syncing music > **Skip silence** (on by default; it only writes small files beside the music, and the player skips silence only when its own switch is on). While on, the index scan measures each MP3 and FLAC once (a full decode) and keeps the result with the other cached tags, so a file is read again only when it changes.
 - Silence is measured on the larger of |L| and |R| in **10 ms windows**; a window is silent below the level (default -60 dBFS). One pass measures nine levels (-80 to -40 dB in 5 dB steps) so changing the level never reads a file again; the setting picks the nearest.
 - **Lead** is the silent run touching sample 0, **tail** the run touching the end. A run is written only when it lasts at least the minimum (2 s) and at least its margin plus 1 s. The margin stays in place: 200 ms before the first sound, 500 ms after the last. Silence inside a track is never touched. A silent track, or one where both ends would leave under 1 s, writes nothing.
 - Units are source sample pairs at the file's own rate, counted from the first sample of the music (after the MP3 encoder delay).
