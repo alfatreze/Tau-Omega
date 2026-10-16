@@ -329,6 +329,9 @@ pub struct CatalogResult {
     pub source: Source,
     /// Unix seconds of the last successful fetch of the core list.
     pub fetched: u64,
+    /// Plain-words notes about other marketplace sources that could not be added to the list (the Library list is still shown).
+    #[serde(default)]
+    pub notes: Vec<String>,
 }
 
 /// The catalog (v3 core list plus platform list): cached for [`CATALOG_TTL`], revalidated with ETags, and the saved
@@ -378,6 +381,7 @@ pub fn fetch_catalog(
         catalog,
         source,
         fetched: cores.fetched,
+        notes: Vec::new(),
     })
 }
 

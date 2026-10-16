@@ -75,6 +75,7 @@ pub mod storage;
 pub mod sync;
 pub mod tagedit;
 mod tags;
+pub mod tau_source;
 pub mod taud;
 pub mod taxonomy;
 pub mod trim;

@@ -7,6 +7,7 @@
 
 pub mod github_source;
 pub mod marketplace;
+pub mod tau_source;
 
 use std::{path::PathBuf, time::Duration};
 use tau_core::{

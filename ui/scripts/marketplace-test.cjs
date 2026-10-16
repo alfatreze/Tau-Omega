@@ -27,16 +27,16 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.ok(await p.locator('img.mk-icon').count() >= 5); assert.ok(await p.locator('.mk-art img').count() >= 5); ok('banners and author icons are fetched for the cards that are showing');
   assert.match(await p.locator('.mk-card').first().innerText(), /\S/); assert.ok(await p.locator('.mk-author-name').first().innerText() !== ''); ok('each card shows its author');
   const tags = p.getByRole('group', { name: 'Category' });
-  assert.match(await tags.innerText(), /All\s*20[\s\S]*Handheld\s*\d/); ok('quick category tags show how many cores each holds');
+  assert.match(await tags.innerText(), /All\s*23[\s\S]*Handheld\s*\d/); ok('quick category tags show how many cores each holds');
   await tags.getByRole('button', { name: /^Handheld/ }).click(); await p.waitForTimeout(200);
   assert.equal(await tags.getByRole('button', { name: /^Handheld/ }).getAttribute('aria-pressed'), 'true');
-  const handheld = await rows().count(); assert.ok(handheld >= 1 && handheld < 20);
+  const handheld = await rows().count(); assert.ok(handheld >= 1 && handheld < 23);
   assert.ok((await p.locator('.mk-tag').allInnerTexts()).every((t) => t.trim() === 'Handheld')); ok('choosing a category tag filters the cards');
   await tags.getByRole('button', { name: /^All/ }).click(); await p.waitForTimeout(200);
   await p.locator('.mk-tag', { hasText: 'Console' }).first().click(); await p.waitForTimeout(200);
   assert.equal(await tags.getByRole('button', { name: /^Console/ }).getAttribute('aria-pressed'), 'true'); ok('the category tag on a card filters to that category too');
   await tags.getByRole('button', { name: /^All/ }).click(); await p.waitForTimeout(200);
-  assert.match(await p.locator('.mk-note').innerText(), /of 20 cores/); ok('the list says how many cores it shows and how fresh it is');
+  assert.match(await p.locator('.mk-note').innerText(), /of 23 cores/); ok('the list says how many cores it shows and how fresh it is');
 
   await search('snes'); await p.waitForTimeout(200);
   assert.equal(await rows().count(), 1); assert.match(await rows().first().getAttribute('aria-label'), /^SNES, Console/); ok('search narrows the list by name');
@@ -119,6 +119,20 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await cu.innerText(), /Update 1 of 3/); ok('Review all starts a one-at-a-time queue');
   await cu.getByRole('button', { name: 'Skip this one' }).click(); await p.waitForTimeout(250);
   assert.match(await cu.innerText(), /Update 2 of 3/); ok('Skip moves to the next update without installing');
+
+  // Several sources: the openFPGA Library and Tau Alpha (channels Stable / Preview / Dev).
+  await openMarket();
+  const sources = p.getByRole('group', { name: 'Source' });
+  assert.match(await sources.innerText(), /All sources[\s\S]*openFPGA Library[\s\S]*Tau Alpha/); ok('the sources are offered as filters when more than one lists cores');
+  await sources.getByRole('button', { name: 'Tau Alpha' }).click(); await p.waitForTimeout(250);
+  assert.equal(await rows().count(), 3); ok('choosing Tau Alpha shows only its cores');
+  const gridText = await p.locator('.mk-grid').innerText(); for (const c of ['Stable', 'Preview', 'Dev']) assert.ok(gridText.includes(c), c); ok('each Tau core shows its channel');
+  await rows().filter({ hasText: 'TAU Preview' }).first().click(); await p.waitForTimeout(300);
+  assert.match(await sheet().innerText(), /Listed by[\s\S]*Tau Alpha · Preview channel/); ok('the details say which source and channel it comes from');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  await rows().filter({ hasText: 'TAU DEV' }).first().click(); await p.waitForTimeout(300);
+  assert.match(await sheet().innerText(), /never published/); assert.equal(await sheet().getByRole('button', { name: /Install a local dev build/ }).count(), 1); ok('the Dev core explains it is local and has no download button');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();

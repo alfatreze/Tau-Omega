@@ -242,9 +242,11 @@ export type CatalogCore = {
   version: string; release_date: string; download_url: string; requires_license: boolean; license_filename: string;
   replaces: string[]; declares_ai: string[]; firmware_required: string; dock_supported: boolean | null; link_port: boolean | null; sleep_supported: boolean | null;
   assets: CatalogAsset[]; history: ReleaseSummary[];
+  /** Which marketplace source lists it (`openfpga-library`, `tau-alpha`) and, for sources with channels, `Stable` | `Preview` | `Dev`. */
+  source: string; channel: string;
 };
 export type MarketSource = 'Network' | 'NotModified' | 'Cache' | { Offline: string };
-export type CatalogResult = { catalog: { cores: CatalogCore[] }; source: MarketSource; fetched: number };
+export type CatalogResult = { catalog: { cores: CatalogCore[] }; source: MarketSource; fetched: number; notes?: string[] };
 export type ArtKind = 'Icon' | 'Banner';
 export type CoreStatusKind = 'UpToDate' | 'UpdateAvailable' | 'NewerThanCatalog' | 'Unknown' | 'NotInCatalog' | 'Excluded' | { ReplacedBy: string };
 export type CoreStatus = { id: string; installed_version: string; latest_version: string; release_date: string; status: CoreStatusKind; manual_url?: string | null };
