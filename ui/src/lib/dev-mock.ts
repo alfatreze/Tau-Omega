@@ -175,8 +175,9 @@ let planWarnings: { code: string; message: string }[] = [];
 let planDelayMs = 0;
 let mockAssetsOnCard = false;
 let lastOptions: unknown = null;
+let lastRequest: any = null;
 const plan = (request: any) => {
-  lastOptions = request.options;
+  lastOptions = request.options; lastRequest = request;
   const trackCount = (list: Album[]) => list.reduce((n, a) => n + a.tracks, 0);
   const addList = (request.add_albums as string[]).map((id) => sourceAlbums.find((a) => a.id === id)!).filter(Boolean);
   const rmList = (request.remove_albums as string[]).map((id) => cardAlbums.find((a) => a.id === id)!).filter(Boolean);
@@ -498,6 +499,7 @@ export function installDevMock() {
     setMaxTracks: (value: number) => { maxTracks = value; },
     setPlanWarnings: (list: { code: string; message: string }[]) => { planWarnings = list; },
     lastOptions: () => lastOptions,
+    lastRequest: () => lastRequest,
     failNext: (code: number, message: string, phase = 'copy') => { failNext = { code, message, phase }; },
     seedHistory,
     addOldEntries: (n: number, daysAgo: number) => { for (let i = 0; i < n; i++) addEntry({ state: 'completed', context: { card: 'Pocket', items: [] } }, nowSecs() - daysAgo * 86400 - i); },

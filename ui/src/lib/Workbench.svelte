@@ -44,6 +44,7 @@
   type Pending =
     | { key: string; kind: 'add'; id: string; destId: string; title: string; artist: string; tracks: number; bytes: number }
     | { key: string; kind: 'remove'; id: string; title: string; artist: string; tracks: number; bytes: number }
+    | { key: string; kind: 'playlist'; id: string; file: string; title: string; artist: string; tracks: number; bytes: number }
     | { key: string; kind: 'edit'; id: string; track: string | null; title: string; fields: FieldEdits; cover: string | null; coverPreview: string | null; note: string };
 
   const MB = 1e6, GB = 1e9;
@@ -93,6 +94,7 @@
   let toastTimer: ReturnType<typeof setTimeout>;
   let spinning = false;
   import SkipOptionsSheet from './SkipOptionsSheet.svelte';
+  import PlaylistPicker from './PlaylistPicker.svelte';
   import SkipSilenceSheet from './SkipSilenceSheet.svelte';
   let advMenu = false; let skipOptions = false; let skipAdjust = false;
   let connMenu = false;
@@ -201,6 +203,7 @@
   $: adds = pending.filter((p): p is Extract<Pending, { kind: 'add' }> => p.kind === 'add');
   $: removes = pending.filter((p): p is Extract<Pending, { kind: 'remove' }> => p.kind === 'remove');
   $: edits = pending.filter((p): p is Extract<Pending, { kind: 'edit' }> => p.kind === 'edit');
+  $: plists = pending.filter((p): p is Extract<Pending, { kind: 'playlist' }> => p.kind === 'playlist');
   $: addBytes = adds.reduce((n, p) => n + p.bytes, 0);
   $: removeBytes = removes.reduce((n, p) => n + p.bytes, 0);
   $: addTracks = adds.reduce((n, p) => n + p.tracks, 0);
@@ -225,8 +228,8 @@
   $: activePlatform = (mediaRoot.match(/\/Assets\/([^/]+)\/common\/?$/) ?? [])[1] ?? '';
   $: activeSegment = breakdown?.segments.find((s) => s.platform === activePlatform) ?? null;
   // The Pocket's index has hard limits; show how full it is and stop before an over-limit sync.
-  $: limits = playlist?.max_tracks ? { max_tracks: playlist.max_tracks, max_albums: card?.limits?.max_albums ?? 1_000_000 } : (card?.limits ?? null);
-  $: limitWho = playlist?.max_tracks ? `${coreLabel || 'This core'}'s playlist limit` : "the Pocket's library limit";
+  $: limits = card?.limits ?? null;
+  $: limitWho = "the Pocket's library limit";
   $: tracksNow = card?.tracks.length ?? 0;
   $: albumsNow = card?.albums.length ?? 0;
   $: tracksAfter = tracksNow + adds.reduce((n, p) => n + p.tracks - (cardByDest.get(p.destId)?.tracks ?? 0), 0) - removes.reduce((n, p) => n + p.tracks, 0);
@@ -244,12 +247,12 @@
   $: pickTooMany = !!limits && tracksAfter + pickedNetTracks > limits.max_tracks;
   $: canStart = pendingCount > 0 && !overCapacity && !overLimit && !disconnected && !run && !!card;
   $: startReason = !pendingCount ? 'Nothing is staged yet.' : overCapacity ? "This won't fit on the card." : overLimit ? `This is over ${limitWho}.` : disconnected ? 'The card is not connected.' : run ? 'A sync is already running.' : !card ? 'The card is still being read.' : '';
-  $: pendingLine = [adds.length && `${plural(adds.length, 'album')} to add (${plural(addTracks, 'track')}, ${size(addBytes)})`, removes.length && `${removes.length} to remove`, edits.length && `${edits.length} to edit`].filter(Boolean).join(' · ');
+  $: pendingLine = [adds.length && `${plural(adds.length, 'album')} to add (${plural(addTracks, 'track')}, ${size(addBytes)})`, removes.length && `${removes.length} to remove`, edits.length && `${edits.length} to edit`, plists.length && `${plural(new Set(plists.map((p) => p.file)).size, 'playlist')} to change`].filter(Boolean).join(' · ');
   $: stagedItems = pending.map((p): StagedItem => {
-    const label = p.kind === 'edit' ? editLabel(p) : p.title;
+    const label = p.kind === 'edit' ? editLabel(p) : p.kind === 'playlist' ? `${p.title} → ${p.file.replace(/\.m3u$/i, '')}` : p.title;
     return {
       key: p.key, kind: p.kind, label,
-      artist: p.kind === 'edit' ? undefined : p.artist, tracks: p.kind === 'edit' ? undefined : p.tracks, bytes: p.kind === 'edit' ? undefined : p.bytes,
+      artist: p.kind === 'edit' ? undefined : p.artist, tracks: p.kind === 'edit' ? undefined : p.tracks, bytes: p.kind === 'edit' || p.kind === 'playlist' ? undefined : p.bytes,
       action: p.kind === 'remove' ? `Undo removing ${p.title}` : `Remove ${label} from pending changes`,
       verb: p.kind === 'remove' ? 'Undo' : p.kind === 'edit' ? 'Discard' : 'Remove',
     };
@@ -380,6 +383,32 @@
     focusTray();
   }
   const addPicked = () => addAlbums([...picked]);
+
+  // ---- playlists: put albums in a chosen playlist (a new one, or one that exists) ----
+  let pickerFor: null | 'source' | 'pocket' = null;
+  $: playlistChoices = (() => {
+    const m = new Map<string, { file: string; name: string; tracks: number }>();
+    for (const p of card?.playlists ?? []) m.set(p.file.toLowerCase(), { file: p.file, name: p.name, tracks: p.tracks });
+    for (const p of plists) if (!m.has(p.file.toLowerCase())) m.set(p.file.toLowerCase(), { file: p.file, name: p.file.replace(/\.m3u$/i, ''), tracks: 0 });
+    return [...m.values()];
+  })();
+  function openPlaylistPicker(from: 'source' | 'pocket') { if (busy) return; pickerFor = from; }
+  function choosePlaylist(file: string) {
+    const from = pickerFor; pickerFor = null;
+    const staged: Pending[] = [];
+    if (from === 'source') {
+      const wanted = [...picked].map((id) => source?.albums.find((a) => a.id === id)).filter((a): a is AlbumInfo => !!a);
+      const onCard = new Set(wanted.filter((a) => stateOf(a, queuedIds, cardByDest) === 'on').map((a) => a.id));
+      addAlbums([...picked].filter((id) => !onCard.has(id)));
+      for (const a of wanted) staged.push({ key: `plist:${file}:${a.id}`, kind: 'playlist', id: onCard.has(a.id) ? a.dest_id : a.id, file, title: a.title, artist: a.artist, tracks: a.tracks, bytes: 0 });
+    } else {
+      for (const id of pocketPicked) { const a = card?.albums.find((x) => x.id === id); if (a) staged.push({ key: `plist:${file}:${a.id}`, kind: 'playlist', id: a.id, file, title: a.title, artist: a.artist, tracks: a.tracks, bytes: 0 }); }
+      pocketPicked = new Set();
+    }
+    pending = [...pending.filter((p) => !staged.some((s) => s.key === p.key)), ...staged];
+    say(`${plural(staged.length, 'album')} will go into ${file.replace(/\.m3u$/i, '')} when you sync.`);
+    focusTray();
+  }
   function onDragStart(e: DragEvent, a: AlbumInfo) { const ids = picked.has(a.id) ? [...picked] : [a.id]; e.dataTransfer?.setData('text/tau-albums', JSON.stringify(ids)); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; }
   function onDrop(e: DragEvent) { e.preventDefault(); dropActive = false; const raw = e.dataTransfer?.getData('text/tau-albums'); if (raw) { try { addAlbums(JSON.parse(raw)); } catch { /* not ours */ } } }
 
@@ -468,9 +497,17 @@
   });
 
   // ---- sync ------------------------------------------------------------------
+  /** The albums going into each playlist: those the user chose, and, for a player that plays only from a playlist, every album added without a choice goes into its default playlist. */
+  function playlistAssign(): { file: string; albums: string[] }[] {
+    const by = new Map<string, string[]>();
+    const put = (file: string, id: string) => { const l = by.get(file) ?? []; if (!l.includes(id)) l.push(id); by.set(file, l); };
+    for (const p of plists) put(p.file, p.id);
+    if (playlist) { const chosen = new Set(plists.map((p) => p.id)); for (const a of adds) if (!chosen.has(a.id)) put(playlist.file, a.id); }
+    return [...by].map(([file, albums]) => ({ file, albums }));
+  }
   function buildRequest(): ChangeRequest {
     const editRequests: EditRequest[] = edits.map((p) => ({ album_id: p.id, track: p.track, fields: p.fields, cover: p.cover }));
-    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR }, playlist: playlist ? { file: playlist.file, max_tracks: playlist.max_tracks, max_bytes: playlist.max_bytes, name_limit: playlist.name_limit, core_name: coreLabel || 'The core' } : null };
+    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR }, playlist: playlist ? { file: playlist.file, max_tracks: playlist.max_tracks, max_bytes: playlist.max_bytes, name_limit: playlist.name_limit, list_file: playlist.list_file, core_name: coreLabel || 'The core' } : null, playlist_assign: playlistAssign() };
   }
   let preparing = false; let planJob = ''; let planPhase = '';
   async function start() {
@@ -674,13 +711,13 @@
     <section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Connect your Pocket or a card reader, or choose a card on the Cards screen. It will appear here automatically.</p></section>
   {:else}
   {#if playlist}
-    <div class="wb-info" role="note" aria-label="How this core plays music"><strong>{coreLabel || 'This core'} plays music from a playlist only.</strong>
-      <span>Omega keeps <code>{playlist.file}</code> in step with the tracks on the card ({playlist.formats.map((f) => f.toUpperCase()).join(' and ')}){playlist.max_tracks ? `, and stops a sync that would go over its limit of ${playlist.max_tracks.toLocaleString()} tracks` : ''}. The core itself drops anything past its limits{playlist.max_bytes ? ` (a ${Math.round(playlist.max_bytes / 1024)} KB playlist file too, about 48 characters a track)` : ''}.{playlist.name_limit && playlist.list_file ? ` Playlist names over ${playlist.name_limit} characters are only remembered if listed in ${playlist.list_file}.` : ''} The core does not use the library index.</span></div>
+    <div class="wb-info" role="note" aria-label="How this core plays music"><strong>{coreLabel || 'This core'} plays music from playlists only.</strong>
+      <span>Choose where albums go with <b>Add to playlist…</b>; albums added with the other button go into <code>{playlist.file}</code>, the playlist it opens by default. Omega writes the playlists ({playlist.formats.map((f) => f.toUpperCase()).join(' and ')}) and checks the limits before anything is copied{playlist.max_tracks ? `: ${playlist.max_tracks.toLocaleString()} tracks` : ''}{playlist.max_bytes ? ` and ${Math.round(playlist.max_bytes / 1024)} KB per playlist` : ''}.{playlist.list_file ? ` It also keeps ${playlist.list_file} (the list of playlists), so any playlist name works.` : playlist.name_limit ? ` Playlist names are at most ${playlist.name_limit} characters.` : ''} The core does not use the library index.</span></div>
   {/if}
   <CapacityBar bind:this={capBar} hasSpace={!!space} busy={cardBusy} {total} {used} {addBytes} {removeBytes} {freeNow} freeAfter={free} {margin} {overCapacity}
     {breakdown} measuring={breakdownBusy} {activePlatform} {coreLabel}
-    limitText={limits ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (${playlist?.max_tracks ? 'playlist limit' : 'Pocket limit'})` : ''}
-    limitTitle={limits ? (playlist?.max_tracks ? `${coreLabel || 'This core'} plays at most ${limits.max_tracks.toLocaleString()} tracks from its playlist` : `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums`) : ''}
+    limitText={limits && !playlist ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (Pocket limit)` : ''}
+    limitTitle={limits && !playlist ? `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums` : ''}
     {overLimit} {nearLimit} sync={syncView} onCancel={cancelSync} onDetails={() => (detailsOpen = true)} {canStart} {startReason} pendingSummary={pendingSummary} onStart={start}
     hasPending={pendingCount > 0} clearDisabled={busy} onClear={clearAll} {notes} />
 
@@ -725,6 +762,7 @@
         </div>
         <div class="wb-pane-foot">
           <span class="wb-fit-line" aria-live="polite">{#if picked.size}{picked.size} selected · {size(pickedBytes)}{#if afterPick !== null}<span class="wb-fit" class:bad={!pickFits}>{' '}{#if pickFits}· Fits, {size(afterPick)} free afterwards{:else if pickTooMany}· Too many tracks for the Pocket's library{:else}· Won't fit: {size(pickOver)} too big. You could remove something else in the same sync.{/if}</span>{/if}{:else}{plural(source.albums.length, 'album')} · click albums to select them, or drag them across →{/if}</span>
+          <button class="quiet" disabled={busy || !picked.size} on:click={() => openPlaylistPicker('source')} title="Copy the albums if they are not on the card yet, and put them in a playlist you choose">Add to playlist…</button>
           <button class="primary" disabled={busy || !picked.size} on:click={addPicked}>Add {picked.size || ''} to Analogue Pocket →</button>
         </div>
       {/if}
@@ -753,6 +791,7 @@
             <span>{pocketPicked.size} selected</span>
             {#if view === 'albums'}
               <button on:click={openEdit} disabled={busy || pocketPicked.size !== 1} title="Change the title, artist, year or cover">Edit…</button>
+              <button on:click={() => openPlaylistPicker('pocket')} disabled={busy} title="Put the selected albums in a playlist">Add to playlist…</button>
               <button class="danger" disabled={busy} on:click={requestRemove}>Remove</button>
             {:else}
               <button on:click={openEdit} disabled={busy || pocketPicked.size !== 1}>Rename…</button>
@@ -826,7 +865,7 @@
         {#if review.converted_files}<div><dt>Convert</dt><dd>{plural(review.converted_files, 'file')} the Pocket cannot play become FLAC or MP3 copies. Your originals are not changed.</dd></div>{/if}
         {#if review.replaygain_files}<div><dt>ReplayGain</dt><dd>added to {review.replaygain_files} {review.replaygain_files === 1 ? 'copy' : 'copies'}. Your originals are not changed.</dd></div>{/if}
         {#if review.skipped.length}<div><dt>Left out</dt><dd>{plural(review.skipped.length, 'file')}: {review.skipped.slice(0, 3).map((k) => `${k.file} (${k.reason})`).join('; ')}{review.skipped.length > 3 ? '…' : ''}</dd></div>{/if}
-        {#if playlist}<div><dt>Playlist</dt><dd><code>{playlist.file}</code> is rewritten to list every track on the card after this sync{playlist.max_tracks ? ` (limit ${playlist.max_tracks.toLocaleString()})` : ''}.</dd></div>{/if}
+        {#if playlist}<div><dt>Playlists</dt><dd>{[...new Set(playlistAssign().map((a) => a.file))].map((f) => f.replace(/\.m3u$/i, '')).join(', ') || 'none'}: the tracks are added to the end of each, none twice.</dd></div>{:else if plists.length}<div><dt>Playlists</dt><dd>{[...new Set(plists.map((a) => a.file))].map((f) => f.replace(/\.m3u$/i, '')).join(', ')}: the tracks are added to the end of each, none twice.</dd></div>{/if}
         {#if review.removed_files}<div><dt>Remove</dt><dd>{plural(review.removed_files, 'track')} · {size(review.bytes_to_remove)}{review.playlists_updated ? ` · ${plural(review.playlists_updated, 'playlist')} updated` : ''}</dd></div>{/if}
         {#if review.edited_files}<div><dt>Edit</dt><dd>{plural(review.edited_files, 'track')} (only the copies on the Pocket)</dd></div>{/if}
         {#if reviewEta}<div><dt>Time</dt><dd>about {reviewEta}{#if estIsDefault} <small class="wb-was">(rough estimate; we haven't timed this card yet)</small>{:else} <small class="wb-was">(from your last transfer)</small>{/if}</dd></div>{/if}
@@ -918,6 +957,7 @@
   fits={!!space && !overCapacity && !overLimit} {canStart} {startReason} onClose={() => (detailsOpen = false)} onRemove={unstage} onClear={clearAll}
   onStart={() => { detailsOpen = false; start(); }} />
 
+{#if pickerFor}<PlaylistPicker albums={pickerFor === 'source' ? picked.size : pocketPicked.size} playlists={playlistChoices} defaultFile={playlist?.file ?? ''} maxTracks={playlist?.max_tracks ?? null} maxFileChars={playlist && !playlist.list_file ? (playlist.name_limit ?? null) : null} close={() => (pickerFor = null)} chosen={choosePlaylist} />{/if}
 {#if skipOptions}<SkipOptionsSheet card={cardPath} {mediaRoot} close={() => (skipOptions = false)} />{/if}
 {#if skipAdjust}<SkipSilenceSheet card={cardPath} {mediaRoot} close={() => (skipAdjust = false)} />{/if}
 <style>
