@@ -8,7 +8,7 @@
 //! name can be read back from it ([`asset_of_url`]) for the verified download.
 
 use crate::{
-    catalog::{CatalogCore, ReleaseSummary, Repository},
+    catalog::{CatalogCore, InstallOption, ReleaseSummary, Repository},
     compat::{self, CompatDoc},
     release_check::{self, Channel, GithubRelease},
 };
@@ -66,7 +66,12 @@ pub fn is_source_core(id: &str) -> bool {
     crate::core_update::is_tau_core(id)
 }
 
-/// The Tau cores of `releases` as catalog cores (one per core id, newest release first), plus the Dev placeholder.
+/// The id of the single Tau card.
+pub const CARD_ID: &str = "alfatreze.TAU";
+
+/// The Tau cores of `releases` as ONE catalog core ("Tau") whose [`CatalogCore::options`] are the installable choices: Stable,
+/// Preview and Dev, each standard or Diagnostics, every one with its releases newest first. The card's own version is the newest
+/// Stable (else Preview) standard build.
 pub fn catalog_cores(releases: &[GithubRelease], docs: &[CompatDoc]) -> Vec<CatalogCore> {
     let mut sorted: Vec<&GithubRelease> = releases.iter().collect();
     sorted.sort_by(|a, b| compat::compare_tags(&b.tag, &a.tag));
@@ -83,20 +88,42 @@ pub fn catalog_cores(releases: &[GithubRelease], docs: &[CompatDoc]) -> Vec<Cata
             });
         }
     }
-    let mut cores: Vec<CatalogCore> = by_id
+    let option = |core_id: String, channel: &str, history: Vec<ReleaseSummary>| InstallOption {
+        diagnostics: release_check::is_diagnostics_zip(&core_id),
+        core_id,
+        channel: channel.to_string(),
+        history,
+    };
+    let mut options: Vec<InstallOption> = by_id
         .into_iter()
         .map(|(id, history)| {
-            let newest = history.first().cloned().unwrap_or_default();
-            let mut core = base(&id, channel_name(&id));
-            core.version = newest.version;
-            core.release_date = newest.release_date;
-            core.download_url = newest.download_url;
-            core.history = history;
-            core
+            let channel = channel_name(&id);
+            option(id, channel, history)
         })
         .collect();
-    cores.push(base(DEV_CORE_ID, "Dev"));
-    cores
+    // Stable, then Preview; standard before Diagnostics; the Dev choice last (installed from a local file).
+    options.sort_by_key(|o| (u8::from(o.channel != "Stable"), o.diagnostics));
+    options.push(option(DEV_CORE_ID.to_string(), "Dev", Vec::new()));
+    let newest = options
+        .iter()
+        .find(|o| !o.diagnostics && !o.history.is_empty())
+        .and_then(|o| o.history.first().cloned())
+        .unwrap_or_default();
+    let mut card = base(CARD_ID, "");
+    card.name = "Tau".into();
+    card.version = newest.version;
+    card.release_date = newest.release_date;
+    card.download_url = newest.download_url;
+    card.options = options;
+    vec![card]
+}
+
+/// The install choice whose core folder is `core_id`, among the Tau card's options.
+pub fn find_option<'a>(cards: &'a [CatalogCore], core_id: &str) -> Option<&'a InstallOption> {
+    cards
+        .iter()
+        .flat_map(|c| &c.options)
+        .find(|o| o.core_id.eq_ignore_ascii_case(core_id))
 }
 
 fn base(id: &str, channel: &str) -> CatalogCore {
@@ -164,33 +191,61 @@ mod tests {
     }
 
     #[test]
-    fn one_catalog_core_per_core_id_newest_first_and_a_dev_core_without_a_download() {
+    fn one_tau_card_with_stable_preview_and_dev_choices_each_newest_first() {
         let releases = [
             release("v0.5.0", false, &["alfatreze.TAU_0.5.0_2026-09-27.zip"]),
             release(
                 "v0.6.0-preview.1",
                 true,
-                &["alfatreze.TAU_Preview_0.6.0-preview.1_2026-10-09.zip"],
+                &[
+                    "alfatreze.TAU_Preview_0.6.0-preview.1_2026-10-09.zip",
+                    "alfatreze.TAU_Preview_Diagnostics_0.6.0-preview.1_2026-10-09.zip",
+                ],
             ),
-            release("v0.5.1", false, &["alfatreze.TAU_0.5.1_2026-10-16.zip"]),
+            release(
+                "v0.5.1",
+                false,
+                &[
+                    "alfatreze.TAU_0.5.1_2026-10-16.zip",
+                    "alfatreze.TAU_Diagnostics_0.5.1_2026-10-16.zip",
+                ],
+            ),
         ];
-        let cores = catalog_cores(&releases, &[]);
-        let stable = cores.iter().find(|c| c.id == "alfatreze.TAU").unwrap();
+        let cards = catalog_cores(&releases, &[]);
+        assert_eq!(cards.len(), 1);
+        let card = &cards[0];
         assert_eq!(
-            (stable.channel.as_str(), stable.version.as_str()),
-            ("Stable", "0.5.1")
+            (card.id.as_str(), card.name.as_str(), card.version.as_str()),
+            (CARD_ID, "Tau", "0.5.1")
         );
-        assert_eq!(stable.history.len(), 2);
-        assert_eq!(stable.history[1].version, "0.5.0");
-        let preview = cores
+        let order: Vec<_> = card
+            .options
             .iter()
-            .find(|c| c.id == "alfatreze.TAU Preview")
-            .unwrap();
-        assert_eq!(preview.channel, "Preview");
-        let dev = cores.iter().find(|c| c.id == DEV_CORE_ID).unwrap();
-        assert!(dev.download_url.is_empty() && dev.history.is_empty());
+            .map(|o| (o.channel.as_str(), o.diagnostics))
+            .collect();
+        assert_eq!(
+            order,
+            [
+                ("Stable", false),
+                ("Stable", true),
+                ("Preview", false),
+                ("Preview", true),
+                ("Dev", false)
+            ]
+        );
+        let stable = find_option(&cards, "alfatreze.TAU").unwrap();
+        assert_eq!(
+            stable
+                .history
+                .iter()
+                .map(|h| h.version.as_str())
+                .collect::<Vec<_>>(),
+            ["0.5.1", "0.5.0"]
+        );
+        let dev = find_option(&cards, DEV_CORE_ID).unwrap();
+        assert!(dev.history.is_empty());
         assert!(
-            cores
+            cards
                 .iter()
                 .all(|c| c.source == SOURCE_ID && is_source_core(&c.id))
         );

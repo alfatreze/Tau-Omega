@@ -21,6 +21,13 @@
   let selected: CatalogCore | null = null;
   /** The version chosen in the history ('' = the newest). */
   let chosen = '';
+  /** For a card with install choices (Tau): the channel, build and version picked in the dropdowns. */
+  let optChannel = ''; let optDiag = false; let optVersion = '';
+  $: opts = selected?.options ?? [];
+  $: channels = [...new Set(opts.map((o) => o.channel))];
+  $: builds = opts.filter((o) => o.channel === optChannel);
+  $: option = opts.find((o) => o.channel === optChannel && o.diagnostics === optDiag) ?? builds[0] ?? null;
+  const pickChannel = (c: string) => { optChannel = c; optDiag = false; optVersion = ''; };
   /** Pictures by `kind:id`: undefined = not asked yet, null = the library has none. Fetched only for rows that are shown. */
   let art: Record<string, string | null | undefined> = {}; const asking = new Set<string>(); let queue: string[] = [];
   let announce = '';
@@ -74,7 +81,7 @@
   }
   const toggleCategory = (c: string) => (filters.category = filters.category === c ? '' : c);
 
-  function open(core: CatalogCore) { selected = core; chosen = ''; wantArt('Banner', core.id); wantArt('Icon', core.id); }
+  function open(core: CatalogCore) { selected = core; chosen = ''; optVersion = ''; optDiag = false; optChannel = core.options?.[0]?.channel ?? ''; wantArt('Banner', core.id); wantArt('Icon', core.id); }
   function close() { selected = null; }
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
   let copied = false;
@@ -171,9 +178,9 @@
             </span>
           </button>
           <div class="mk-foot">
-            {#if card && item.download_url}<label class="mk-pick"><input type="checkbox" checked={picked.has(item.id)} on:change={() => toggle(item.id)} aria-label={`Select ${item.name} to install together`} /> Select</label>{/if}
+            {#if card && item.download_url && !item.options?.length}<label class="mk-pick"><input type="checkbox" checked={picked.has(item.id)} on:change={() => toggle(item.id)} aria-label={`Select ${item.name} to install together`} /> Select</label>{/if}
             {#if item.category}<button class="chip toggle mk-tag" aria-pressed={filters.category === item.category} aria-label={`Show only ${item.category}`} on:click={() => toggleCategory(item.category)}>{item.category}</button>{/if}
-            {#if item.channel}<span class="chip">{item.channel}</span>{/if}
+            {#if item.options?.length}{#each [...new Set(item.options.map((o) => o.channel))] as ch}<span class="chip">{ch}</span>{/each}{:else if item.channel}<span class="chip">{item.channel}</span>{/if}
             {#if chip(item)}<span class="chip" class:capable={statusOf(item)?.status === 'UpdateAvailable'}>{chip(item)}</span>{/if}
             <span class="mk-ver">{item.version || '—'}<small>{item.release_date}</small></span>
           </div>
@@ -218,7 +225,7 @@
       {/if}
     </dl>
     {#if selected.declares_ai.length}<p class="mk-callout soft" role="note">The author says they used AI tools to build this core: {selected.declares_ai.join(', ')}.</p>{/if}
-    {#if selected.history.length > 1}
+    {#if selected.history.length > 1 && !opts.length}
       <details class="mk-history"><summary>Earlier versions ({selected.history.length - 1})</summary>
         <ul>{#each selected.history.slice(1) as h}<li><span>{h.version} · {h.release_date}</span>{#if card && selected.download_url}<button class="quiet" aria-pressed={chosen === h.version} on:click={() => (chosen = chosen === h.version ? '' : h.version)}>{chosen === h.version ? 'Use the newest instead' : 'Choose this version'}</button>{/if}</li>{/each}</ul>
         <p class="mk-small">An older version replaces a newer one on the card only if you confirm the downgrade in the plan. Your files are kept, as with any update.</p>
@@ -226,7 +233,21 @@
     {/if}
 
     <h3>Install</h3>
-    {#if !card}
+    {#if opts.length}
+      <div class="mk-opts">
+        <label>Channel<select value={optChannel} on:change={(e) => pickChannel(e.currentTarget.value)}>{#each channels as c}<option value={c}>{c}</option>{/each}</select></label>
+        {#if builds.length > 1}<label>Build<select value={optDiag ? 'diag' : 'std'} on:change={(e) => { optDiag = e.currentTarget.value === 'diag'; optVersion = ''; }}><option value="std">Standard</option><option value="diag">Diagnostics</option></select></label>{/if}
+        {#if option && option.history.length}<label>Version<select bind:value={optVersion}>{#each option.history as h, i}<option value={i === 0 ? '' : h.version}>{h.version} · {h.release_date}{i === 0 ? ' (newest)' : ''}</option>{/each}</select></label>{/if}
+      </div>
+      {#if option?.channel === 'Dev'}
+        <p class="mk-small">Dev builds are made locally and never published, so there is nothing to download. Install one from its zip or folder with the same review as any core.</p>
+        <button class="primary" on:click={() => { close(); openManualAdd(); }}>Install a local dev build…</button>
+      {:else if !card}
+        <p class="mk-small">Open a card first (Cards page) to install this core.</p>
+      {:else if option}
+        {#key `${option.core_id}|${optVersion}`}<CoreInstall coreId={option.core_id} {card} version={optVersion} label={optVersion ? `Download version ${optVersion} and review` : 'Download and review'} on:installed={() => loadStatuses(card)} />{/key}
+      {/if}
+    {:else if !card}
       <p class="mk-small">Open a card first (Cards page) to install this core.</p>
     {:else if selected.channel === 'Dev'}
       <p class="mk-small">Dev builds are made locally and never published, so there is nothing to download. Install one from its zip or folder with the same review as any core.</p>
@@ -248,6 +269,7 @@
   .mk-skel{pointer-events:none}
   @keyframes sk-sweep{to{transform:translateX(100%)}}
   @media (prefers-reduced-motion:reduce){.sk::after{animation:none;display:none}}
+  .mk-opts{display:grid;gap:10px;margin:6px 0 12px}.mk-opts label{display:grid;gap:4px;font-size:12px;color:#95a5a4}.mk-opts select{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:10px 12px}
   .mk-pick{font-size:12px;color:#a6b3b2;display:inline-flex;gap:5px;align-items:center;margin-right:auto}
   .mk-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:5;background:#16292a;border:1px solid #3b5a58;border-radius:10px;padding:8px 14px;margin:0 0 10px;font-size:13px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

@@ -94,6 +94,23 @@ pub struct CatalogCore {
     /// The release channel of a core from a source that has them (`Stable`, `Preview`, `Dev`); empty otherwise.
     #[cfg_attr(feature = "serde", serde(default))]
     pub channel: String,
+    /// What can be installed from this one card when a source offers several cores or channels under one name (Tau: Stable, Preview,
+    /// Dev, each standard or Diagnostics); empty for an ordinary core.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub options: Vec<InstallOption>,
+}
+
+/// One installable choice of a core that offers several (see [`CatalogCore::options`]).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct InstallOption {
+    /// The core folder this choice installs (`alfatreze.TAU Preview`).
+    pub core_id: String,
+    pub channel: String,
+    /// A Diagnostics build rather than the standard one.
+    pub diagnostics: bool,
+    /// Its releases, newest first; empty when nothing is published (a Dev build is installed from a local file).
+    pub history: Vec<ReleaseSummary>,
 }
 
 /// The id of the openFPGA Library source (the default marketplace source).
@@ -309,6 +326,7 @@ pub fn parse(cores_json: &[u8], platforms_json: &[u8]) -> Result<Catalog, TauErr
             assets,
             source: LIBRARY_SOURCE.to_string(),
             channel: String::new(),
+            options: Vec::new(),
             history,
         });
     }
