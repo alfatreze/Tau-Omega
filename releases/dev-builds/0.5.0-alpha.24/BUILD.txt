@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.0-alpha.24   (NOT a release)
+Release goal : 0.5.0
+Built        : 2026-10-16 11:46 WEST
+Branch       : cores-section
+Commit       : b6d63c5   Add to playlist: choose an existing playlist or name a new one for albums on this computer or on the card; playlist-only players get named playlists (per-playlist limits, default playlist.m3u, playlists.m3u kept)
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 384e51cb486cd08ddbff78a402376f4d1e5995921d0843464b385046427f9097  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
