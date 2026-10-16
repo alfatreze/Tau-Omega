@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.0-alpha.23   (NOT a release)
+Release goal : 0.5.0
+Built        : 2026-10-16 10:21 WEST
+Branch       : cores-section
+Commit       : d8cd908   The Cores list refreshes after an install or update (it only re-read the card when the card changed)
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 5f516d9c29e9763776771335d3619a48a09a6a1a53d3e36d7ea639ae8236050a  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
