@@ -357,6 +357,8 @@ const handlers: Record<string, (args: any) => unknown> = {
     // Failure modes for checking the error states by hand: set window.__mkt = 'fail' | 'offline' in the console.
     const mode = (globalThis as { __mkt?: string }).__mkt;
     if (mode === 'fail') throw { code: 'E_IO', message: 'Could not reach the server. Are you offline?' };
+    // `slow` keeps the skeleton on screen for a moment (set window.__mkt = 'slow').
+    if (mode === 'slow') return new Promise((resolve) => setTimeout(() => resolve({ notes: [], catalog: { cores: marketCores }, source: 'Network', fetched: Math.floor(Date.now() / 1000) }), 1500));
     return { notes: [], catalog: { cores: marketCores }, source: mode === 'offline' ? { Offline: 'Could not reach the server. Are you offline?' } : 'Network', fetched: Math.floor(Date.now() / 1000) - (mode === 'offline' ? 3 * 86400 : 120) };
   },
   marketplace_art: (a) => (a.coreId === 'zz.NoRelease' ? null : a.kind === 'Banner' ? svgUrl(521, 165, a.coreId as string) : svgUrl(36, 36, a.coreId as string)),
