@@ -49,7 +49,8 @@
     "longDescription": "Tau Omega manages the music, themes, Halcyon EQ presets and Tau cores on an Analogue Pocket SD card: it builds and verifies the library index, syncs music, installs and updates Tau, and reads the Pocket's diagnostic reports.",
     "copyright": "alfatreze",
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
     },
     "windows": {
       "nsis": {

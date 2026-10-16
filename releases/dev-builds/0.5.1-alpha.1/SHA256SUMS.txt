@@ -1,1 +1,0 @@
-b70d233575798c3389a4af5645f69dc3f906539c534ac3c5cf9779a182bb0f95  Tau Omega.app/Contents/MacOS/tau-omega
