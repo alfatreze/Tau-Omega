@@ -331,7 +331,7 @@ fn fit_long_side(width: u32, height: u32, long_side: u32) -> (u32, u32) {
     (round(width), round(height))
 }
 
-fn decode_source_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), TauError> {
+pub(crate) fn decode_source_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), TauError> {
     if bytes.starts_with(&[0xff, 0xd8]) {
         decode_jpeg(bytes)
     } else if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {

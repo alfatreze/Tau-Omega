@@ -82,3 +82,39 @@ pub fn builder_next_name(app: tauri::AppHandle, field: Field, text: String) -> R
     let schemes = build_series::with_custom(read_prefs(&app)?.build_schemes);
     Ok(build_series::next_name(&schemes, field, &text).map(|(scheme, next)| NextName { scheme, next }))
 }
+
+// ---- the template editor and its card preview -----------------------------------------------------------------------
+
+fn data_url(png: &[u8]) -> String {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    format!("data:image/png;base64,{}", STANDARD.encode(png))
+}
+
+#[derive(Serialize)]
+pub struct TemplateViewDto {
+    #[serde(flatten)]
+    view: builder::TemplateView,
+    icon: Option<String>,
+    banner: Option<String>,
+}
+
+/// A template as editable fields, its pictures and the files it puts on a card. Reads only.
+#[tauri::command(async)]
+pub fn builder_template_view(source: TemplateSource) -> Result<TemplateViewDto, TauError> {
+    let view = builder::view_template(&source)?;
+    let (icon, banner) = (view.icon_png.as_deref().map(data_url), view.banner_png.as_deref().map(data_url));
+    Ok(TemplateViewDto { view, icon, banner })
+}
+
+/// What the Pocket will actually show for a picture: the PNG or JPEG is turned into the Pocket bitmap and back into a PNG (so the quantising and the
+/// fit are visible). `kind` is `icon` (36x36) or `banner` (521x165).
+#[tauri::command(async)]
+pub fn builder_preview_image(path: String, kind: String, fit: tau_core::icon::Fit) -> Result<String, TauError> {
+    let bytes = std::fs::read(&path)?;
+    let png = match kind.as_str() {
+        "icon" => tau_core::icon::decode_icon_bin(&tau_core::icon::encode_icon_from_image(&bytes, fit)?)?,
+        "banner" => tau_core::icon::decode_platform_image(&tau_core::icon::encode_platform_image(&bytes, fit)?)?,
+        _ => return Err(err("kind must be icon or banner")),
+    };
+    Ok(data_url(&png))
+}

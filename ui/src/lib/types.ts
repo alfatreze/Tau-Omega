@@ -346,9 +346,13 @@ export type CarryReport = { copied: number; identical: number; left_different: n
 /** The Builder: a raw bitstream plus a template core becomes an installable package. */
 export type TemplateSource = { kind: 'card'; card: string; id: string } | { kind: 'zip'; path: string } | { kind: 'folder'; path: string };
 export type ExtraFile = { src: string; dest: string };
-export type BuildSpec = { rbf: string; template: TemplateSource; shortname: string; version: string; date_release: string; description: string | null; icon_png: string | null; extra: ExtraFile[] };
+export type Fit = 'contain' | 'cover' | 'stretch';
+export type PlatformEdit = { id: string; name: string; category: string; manufacturer: string; year: number | null };
+export type TemplateEdits = { icon_fit: Fit; author: string | null; url: string | null; firmware_required: string | null; dock_supported: boolean | null; link_port: boolean | null; sleep_supported: boolean | null; platform_ids: string[] | null; platform: PlatformEdit | null; banner: { path: string; fit: Fit } | null };
+export type BuildSpec = { rbf: string; template: TemplateSource; shortname: string; version: string; date_release: string; description: string | null; icon_png: string | null; extra: ExtraFile[]; edits: TemplateEdits };
+export type TemplateViewData = { core_id: string; shortname: string; author: string; description: string; url: string; version: string; date_release: string; firmware_required: string; dock_supported: boolean | null; link_port: boolean | null; sleep_supported: boolean | null; platform_ids: string[]; platform: PlatformEdit | null; files: [string, number][]; icon: string | null; banner: string | null };
 export type TemplateInfo = { core_id: string; shortname: string; author: string; version: string; description: string; platforms: string[] };
-export type PlanFile = { rel: string; bytes: number; origin: 'bitstream' | 'template' | 'generated' | 'icon' | 'extra'; sha256: string };
+export type PlanFile = { rel: string; bytes: number; origin: 'bitstream' | 'template' | 'generated' | 'icon' | 'banner' | 'extra'; sha256: string };
 export type BuildPlan = { core_id: string; files: PlanFile[]; raw_sha256: string; converted_sha256: string; bitstream_bytes: number; lint: LintReport; blocked: string | null };
 export type BuildResult = { zip: string; record: string; zip_bytes: number; zip_sha256: string; plan: BuildPlan };
 export type NextName = { scheme: string; next: string };
