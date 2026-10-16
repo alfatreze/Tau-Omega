@@ -118,7 +118,7 @@ export type EjectResult = { ok: boolean; message: string };
 /** Whether read-backs after a write are checked against the card itself, not memory. */
 export type ReadbackStatus = { checks_the_device: boolean; failed_evictions: number };
 export type Mp3Quality = { vbr: number } | { cbr: number };
-export type TrimSettings = { enabled: boolean; threshold_db10: number; keep_ms: number; min_ms: number; max_ms: number };
+export type TrimSettings = { enabled: boolean; threshold_db10: number; lead_margin_ms: number; tail_margin_ms: number; min_ms: number };
 export type ConvertSettings = { enabled: boolean; mode: 'auto' | 'manual'; max_rate: number; flac_bits: number; reduce_playable: boolean; mp3: Mp3Quality; lame_path: string | null; lame_dir: string | null; analysis_cache: string | null; replaygain: 'off' | 'add_missing' | 'rebuild' };
 export type LameInstallOption = { method: string; label: string; command: string; runnable: boolean };
 export type LameStatus = { path: string | null; version: string | null; options: LameInstallOption[] };

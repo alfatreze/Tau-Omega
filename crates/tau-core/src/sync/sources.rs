@@ -63,6 +63,20 @@ pub(crate) fn rebuild_index(
     }
     parse(&reparse)?;
     swap_in_index(&temp, &media_root.join("tau-library.tdb"))?;
+    // Skip silence: one `tau-skip.bin` per album folder, from the measurements the scan just made (only while the
+    // setting is on; with it off, existing files are left alone).
+    let trim = crate::trim::active();
+    if trim.enabled {
+        let (_, cut) = crate::trim::write_skip_files(media_root, &scan.entries, &trim)?;
+        if cut > 0 {
+            warnings.push(Warning::new(
+                WarningCode::PlaylistTruncated,
+                format!(
+                    "{cut} tracks are past the 340 a skip-silence file holds; they play whole."
+                ),
+            ));
+        }
+    }
     Ok(())
 }
 pub(super) fn collect_files(

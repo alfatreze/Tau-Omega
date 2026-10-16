@@ -3,8 +3,8 @@
 use std::{fs, path::Path};
 use tau_audio::flac_out;
 use tau_audio::pipeline::{Pipeline, Target};
+use tau_core::scan_dir;
 use tau_core::trim::{self, TrimSettings};
-use tau_core::{ROOT_PREFIX, build_index, scan_dir};
 
 fn wav(path: &Path, rate: u32, lead: usize, tone: usize, tail: usize) {
     let mut pcm: Vec<i16> = vec![0; lead];
@@ -36,67 +36,93 @@ fn flac(dir: &Path, name: &str, rate: u32, lead: usize, tone: usize, tail: usize
     fs::remove_file(src).unwrap();
 }
 
-fn details_header(index: &[u8]) -> (u16, u16) {
-    let at = index
-        .windows(4)
-        .position(|w| w == b"TDET")
-        .expect("a details section");
-    (
-        u16::from_le_bytes([index[at + 4], index[at + 5]]),
-        u16::from_le_bytes([index[at + 6], index[at + 7]]),
-    )
+fn skip_file(dir: &Path) -> Option<Vec<u8>> {
+    fs::read(dir.join("Album").join("tau-skip.bin")).ok()
 }
 
 #[test]
-fn skips_are_measured_at_scan_and_written_as_a_version_2_details_section() {
+fn a_skip_table_is_written_next_to_the_tracks_from_the_measured_silence() {
     let dir = std::env::temp_dir().join(format!("tau-trim-index-{}", std::process::id()));
     let album = dir.join("Album");
     fs::create_dir_all(&album).unwrap();
-    // 8 kHz, mono: 5 s of silence, 3 s of tone, 3 s of silence
+    // 8 kHz, mono: 10 s of silence, 3 s of tone, 6 s of silence; and a track with no long silence
     flac(
         &album,
         "01 Long Silences.flac",
         8_000,
-        40_000,
+        80_000,
         24_000,
-        24_000,
+        48_000,
     );
+    flac(&album, "02 Plain.flac", 8_000, 400, 24_000, 400);
     let build = || {
         let scan = scan_dir(&dir, false).unwrap();
-        build_index(&scan.entries, &scan.playlists, ROOT_PREFIX, &mut Vec::new()).unwrap()
+        let t = trim::active();
+        if t.enabled {
+            trim::write_skip_files(&dir, &scan.entries, &t).unwrap();
+        }
     };
 
-    // off (the default): version 1, 32-byte records
+    // off (the default): no file
     trim::set_active(TrimSettings::default());
-    assert_eq!(details_header(&build()), (1, 32));
+    build();
+    assert!(skip_file(&dir).is_none());
 
-    // on: version 2, 40-byte records, the skips are the silence minus the 100 ms kept
+    // on: one entry, the long silences minus the margins (200 ms at the start, 500 ms at the end)
     trim::set_active(TrimSettings {
         enabled: true,
         ..Default::default()
     });
-    let index = build();
-    assert_eq!(details_header(&index), (2, 40));
-    let at = index.windows(4).position(|w| w == b"TDET").unwrap() + 16;
-    let lead = u32::from_le_bytes(index[at + 32..at + 36].try_into().unwrap());
-    let tail = u32::from_le_bytes(index[at + 36..at + 40].try_into().unwrap());
-    assert_eq!((lead, tail), (40_000 - 800, 24_000 - 800));
-
-    // a second scan reuses the stored measurement, and a stricter setting changes the answer without reading the file
-    trim::set_active(TrimSettings {
-        enabled: true,
-        keep_ms: 500,
-        ..Default::default()
-    });
-    let index = build();
-    let at = index.windows(4).position(|w| w == b"TDET").unwrap() + 16;
+    build();
+    let t = skip_file(&dir).expect("a skip table");
+    assert_eq!(&t[..4], b"TSK1");
+    assert_eq!(u16::from_le_bytes([t[4], t[5]]), 1);
     assert_eq!(
-        u32::from_le_bytes(index[at + 32..at + 36].try_into().unwrap()),
-        40_000 - 4_000
+        u32::from_le_bytes(t[8..12].try_into().unwrap()),
+        crc32fast::hash(&t[12..])
+    );
+    assert_eq!(
+        u32::from_le_bytes(t[12..16].try_into().unwrap()),
+        trim::name_hash("01 Long Silences.flac")
+    );
+    assert_eq!(
+        u32::from_le_bytes(t[16..20].try_into().unwrap()),
+        80_000 - 1_600
+    );
+    assert_eq!(
+        u32::from_le_bytes(t[20..24].try_into().unwrap()),
+        48_000 - 4_000
     );
 
-    // back to off: version 1 again
+    // a longer minimum than the silences: nothing to write, and the old file goes
+    trim::set_active(TrimSettings {
+        enabled: true,
+        min_ms: 10_000,
+        ..Default::default()
+    });
+    build();
+    let t = skip_file(&dir).expect("the 10 s lead still qualifies");
+    assert_eq!(
+        u32::from_le_bytes(t[20..24].try_into().unwrap()),
+        0,
+        "the 6 s tail no longer does"
+    );
+
+    // an album that is gone leaves no orphan table behind
+    trim::set_active(TrimSettings {
+        enabled: true,
+        ..Default::default()
+    });
+    build();
+    fs::remove_file(album.join("01 Long Silences.flac")).unwrap();
+    fs::remove_file(album.join("02 Plain.flac")).unwrap();
+    fs::create_dir_all(dir.join("Other")).unwrap();
+    flac(&dir.join("Other"), "01 x.flac", 8_000, 400, 24_000, 400);
+    build();
+    assert!(
+        skip_file(&dir).is_none(),
+        "the table of a folder with no tracks is removed"
+    );
     trim::set_active(TrimSettings::default());
-    assert_eq!(details_header(&build()), (1, 32));
     fs::remove_dir_all(dir).ok();
 }

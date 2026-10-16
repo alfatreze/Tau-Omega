@@ -23,40 +23,62 @@ pub fn amplitude(db: f32) -> f32 {
     10f32.powf(db / 20.0)
 }
 
-/// Accumulates silence over interleaved frames, any chunking.
+/// Accumulates silence over interleaved frames, any chunking, in windows of 10 ms (the spec's unit): a window
+/// is silent when the larger of |L| and |R| stays below the level in all of it. The edges are therefore
+/// window boundaries, except the last partial window, which counts at its real length.
 pub struct Scanner {
     channels: usize,
     limit: f32,
+    window: u64,
     frames: u64,
+    in_window: u64,
+    peak: f32,
     first_loud: Option<u64>,
-    last_loud: u64,
+    last_loud_end: u64,
 }
 
 impl Scanner {
-    pub fn new(channels: u16, threshold_db: f32) -> Self {
+    pub fn new(channels: u16, rate: u32, threshold_db: f32) -> Self {
         Self {
             channels: channels.max(1) as usize,
             limit: amplitude(threshold_db),
+            window: u64::from(rate / 100).max(1),
             frames: 0,
+            in_window: 0,
+            peak: 0.0,
             first_loud: None,
-            last_loud: 0,
+            last_loud_end: 0,
         }
+    }
+
+    fn close_window(&mut self) {
+        if self.in_window > 0 && self.peak >= self.limit {
+            let start = self.frames - self.in_window;
+            if self.first_loud.is_none() {
+                self.first_loud = Some(start);
+            }
+            self.last_loud_end = self.frames;
+        }
+        self.in_window = 0;
+        self.peak = 0.0;
     }
 
     /// Feeds interleaved samples (a whole number of frames).
     pub fn feed(&mut self, interleaved: &[f32]) {
         for frame in interleaved.chunks_exact(self.channels) {
-            if frame.iter().any(|s| s.abs() > self.limit) {
-                if self.first_loud.is_none() {
-                    self.first_loud = Some(self.frames);
-                }
-                self.last_loud = self.frames;
+            for s in frame {
+                self.peak = self.peak.max(s.abs());
             }
             self.frames += 1;
+            self.in_window += 1;
+            if self.in_window == self.window {
+                self.close_window();
+            }
         }
     }
 
-    pub fn finish(&self, rate: u32) -> EdgeSilence {
+    pub fn finish(&mut self, rate: u32) -> EdgeSilence {
+        self.close_window();
         match self.first_loud {
             None => EdgeSilence {
                 rate,
@@ -68,7 +90,7 @@ impl Scanner {
                 rate,
                 frames: self.frames,
                 lead: first,
-                tail: self.frames - 1 - self.last_loud,
+                tail: self.frames - self.last_loud_end,
             },
         }
     }
@@ -87,7 +109,11 @@ pub fn measure_levels(
 ) -> Result<Vec<EdgeSilence>, AudioError> {
     let mut dec = Decoder::open(path)?;
     let ch = dec.info.channels;
-    let mut scans: Vec<Scanner> = LEVELS_DB.iter().map(|&d| Scanner::new(ch, d)).collect();
+    let rate = dec.info.rate;
+    let mut scans: Vec<Scanner> = LEVELS_DB
+        .iter()
+        .map(|&d| Scanner::new(ch, rate, d))
+        .collect();
     let mut buf = Vec::new();
     let mut frames = 0u64;
     while {
@@ -102,7 +128,7 @@ pub fn measure_levels(
             return Err(AudioError::Process("cancelled".into()));
         }
     }
-    Ok(scans.iter().map(|s| s.finish(dec.info.rate)).collect())
+    Ok(scans.iter_mut().map(|s| s.finish(rate)).collect())
 }
 
 /// Decodes `path` once and measures its edge silence. `progress` gets the frames read so far; `false` cancels.
@@ -112,7 +138,7 @@ pub fn measure_edges(
     progress: &mut dyn FnMut(u64) -> bool,
 ) -> Result<EdgeSilence, AudioError> {
     let mut dec = Decoder::open(path)?;
-    let mut scan = Scanner::new(dec.info.channels, threshold_db);
+    let mut scan = Scanner::new(dec.info.channels, dec.info.rate, threshold_db);
     let mut buf = Vec::new();
     let mut frames = 0u64;
     loop {
@@ -138,16 +164,17 @@ mod tests {
     }
 
     #[test]
-    fn leading_and_trailing_silence_are_counted_in_frames_whatever_the_chunking() {
+    fn leading_and_trailing_silence_are_counted_in_windows_whatever_the_chunking() {
+        // 1000 Hz rate: a window is 10 frames
         let mut all = tone(1000, 2, 0.0);
         all.extend(tone(5000, 2, 0.3));
         all.extend(tone(2500, 2, 0.0005)); // -66 dB: still silence at -60
         for chunk in [2usize, 7, 1000, 100_000] {
-            let mut s = Scanner::new(2, -60.0);
+            let mut s = Scanner::new(2, 1000, -60.0);
             for c in all.chunks(chunk * 2) {
                 s.feed(c);
             }
-            let e = s.finish(44_100);
+            let e = s.finish(1000);
             assert_eq!(
                 (e.frames, e.lead, e.tail),
                 (8500, 1000, 2500),
@@ -157,27 +184,49 @@ mod tests {
     }
 
     #[test]
-    fn one_loud_channel_is_enough_and_a_silent_track_has_no_tail() {
-        let mut s = Scanner::new(2, -60.0);
-        s.feed(&[0.0, 0.0, 0.0, 0.5, 0.0, 0.0]);
-        let e = s.finish(48_000);
-        assert_eq!((e.lead, e.tail), (1, 1));
-        let mut s = Scanner::new(1, -60.0);
+    fn a_sound_inside_a_window_makes_the_whole_window_loud() {
+        let mut s = Scanner::new(1, 1000, -60.0);
+        s.feed(&tone(35, 1, 0.0));
+        s.feed(&[0.5]); // frame 35, in the window 30..40
+        s.feed(&tone(64, 1, 0.0));
+        let e = s.finish(1000);
+        assert_eq!((e.frames, e.lead, e.tail), (100, 30, 60));
+    }
+
+    #[test]
+    fn the_larger_channel_decides_and_a_silent_track_has_no_tail() {
+        let mut s = Scanner::new(2, 1000, -60.0);
+        s.feed(&tone(20, 2, 0.0));
+        s.feed(&[0.0, 0.5]);
+        s.feed(&tone(9, 2, 0.0));
+        s.feed(&tone(20, 2, 0.0));
+        let e = s.finish(1000);
+        assert_eq!((e.lead, e.tail), (20, 20));
+        let mut s = Scanner::new(1, 1000, -60.0);
         s.feed(&tone(300, 1, 0.0));
-        let e = s.finish(48_000);
+        let e = s.finish(1000);
         assert_eq!((e.frames, e.lead, e.tail), (300, 300, 0));
+    }
+
+    #[test]
+    fn a_partial_last_window_counts_at_its_real_length() {
+        let mut s = Scanner::new(1, 1000, -60.0);
+        s.feed(&tone(10, 1, 0.5));
+        s.feed(&tone(14, 1, 0.0)); // one full silent window and 4 frames
+        let e = s.finish(1000);
+        assert_eq!((e.lead, e.tail), (0, 14));
     }
 
     #[test]
     fn a_louder_threshold_counts_more_silence() {
         let mut all = tone(100, 1, 0.01); // -40 dB
         all.extend(tone(100, 1, 0.5));
-        let mut quiet = Scanner::new(1, -60.0);
+        let mut quiet = Scanner::new(1, 1000, -60.0);
         quiet.feed(&all);
-        let mut loud = Scanner::new(1, -30.0);
+        let mut loud = Scanner::new(1, 1000, -30.0);
         loud.feed(&all);
-        assert_eq!(quiet.finish(8000).lead, 0);
-        assert_eq!(loud.finish(8000).lead, 100);
+        assert_eq!(quiet.finish(1000).lead, 0);
+        assert_eq!(loud.finish(1000).lead, 100);
     }
 
     #[test]
