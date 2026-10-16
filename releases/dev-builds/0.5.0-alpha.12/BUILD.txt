@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.0-alpha.12   (NOT a release)
+Release goal : 0.5.0
+Built        : 2026-10-16 02:19 WEST
+Branch       : cores-section
+Commit       : 8c99bd5   Collapse nested ifs (clippy) in the playlist limits
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 8d784024525c016b384fcce89233ddcbcc82b327b2f95c963072646082848f74  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
