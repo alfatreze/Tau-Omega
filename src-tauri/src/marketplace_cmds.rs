@@ -26,7 +26,19 @@ fn cache(app: &tauri::AppHandle) -> Result<std::path::PathBuf, TauError> {
 /// The whole catalog (about 330 cores; the page filters and sorts it locally). Cached; `force` is the Refresh button.
 #[tauri::command(async)]
 pub fn marketplace_catalog(app: tauri::AppHandle, force: bool) -> Result<CatalogResult, TauError> {
-    marketplace::fetch_catalog(&Http, &cache(&app)?, now(), force)
+    let dir = cache(&app)?;
+    let mut result = marketplace::fetch_catalog(&Http, &dir, now(), force)?;
+    // Other sources are added to the Library's list; one that cannot be reached leaves a note, never an empty page.
+    match tau_net::tau_source::cores(&dir.join("tau-source"), &crate::manifest_cache(&app)?) {
+        Ok((cores, offline)) => {
+            result.catalog.cores.extend(cores);
+            if offline {
+                result.notes.push("Tau Alpha: showing its saved list (offline).".into());
+            }
+        }
+        Err(e) => result.notes.push(format!("Tau Alpha could not be listed: {}", e.message)),
+    }
+    Ok(result)
 }
 
 /// The icon (36x36) or the platform banner (521x165) of one catalog core as a PNG data URL, or `None` when the library has no
@@ -88,6 +100,17 @@ pub struct MarketplaceDownload {
 #[tauri::command(async)]
 pub fn marketplace_download(app: tauri::AppHandle, core_id: String, version: Option<String>) -> Result<MarketplaceDownload, TauError> {
     let dir = cache(&app)?;
+    if tau_core::tau_source::is_source_core(&core_id) {
+        // The Tau Alpha source: its own release checksums and manifest, then the same vetting and review as any core.
+        let download = tau_net::tau_source::download_core(&core_id, version.as_deref(), dir.join("marketplace").join("tau-downloads"), &crate::manifest_cache(&app)?)?;
+        return match core_package::vet_zip(Path::new(&download.path), &core_id, Limits::default()) {
+            Ok(vetted) => Ok(MarketplaceDownload { download, vetted }),
+            Err(e) => {
+                let _ = std::fs::remove_file(&download.path);
+                Err(TauError { code: e.code, message: format!("The download was refused: {}", e.message) })
+            }
+        };
+    }
     let catalog = marketplace::fetch_catalog(&Http, &dir, now(), false)?.catalog;
     let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
     let release = marketplace::resolve_release(&Http, &dir, core, version.as_deref(), now(), true)?.release;

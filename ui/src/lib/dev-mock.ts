@@ -22,9 +22,14 @@ const mc = (id: string, name: string, owner: string, repo: string, category: str
   firmware_required: '1.1', dock_supported: true, link_port: false, sleep_supported: false,
   assets: [{ platform: name.toLowerCase().replace(/\W/g, ''), filename: '', extensions: ['sfc', 'smc'], core_specific: false }],
   history: version ? [{ version, release_date: date, download_url: '' }, { version: '0.9.0', release_date: '2025-05-01', download_url: '' }] : [],
+  source: 'openfpga-library', channel: '',
   ...extra,
 });
+const tauCore = (id: string, name: string, channel: string, version: string, date: string) => mc(id, name, 'alfatreze', 'Tau-Alpha', 'Music player', 'Tau', 0, version, date, false, { source: 'tau-alpha', channel, platform_id: 'tau', sponsor: { links: [] }, assets: [], firmware_required: '', dock_supported: null, link_port: null, sleep_supported: null, history: version ? [{ version, release_date: date, download_url: '' }] : [] });
 const marketCores = [
+  tauCore('alfatreze.TAU', 'TAU', 'Stable', '0.5.0', '2026-09-27'),
+  tauCore('alfatreze.TAU Preview', 'TAU Preview', 'Preview', '0.6.0-preview.1', '2026-10-09'),
+  tauCore('alfatreze.TAU DEV', 'TAU DEV', 'Dev', '', ''),
   mc('agg23.SNES', 'SNES', 'agg23', 'openfpga-SNES', 'Console', 'Nintendo', 1990, '1.4.0', '2026-09-02', false, { firmware_required: '2.0' }),
   mc('agg23.Arduboy', 'Arduboy', 'agg23', 'openfpga-arduboy', 'Handheld', 'Arduboy', 2016, '0.9.0', '2022-09-03', false, { history: [{ version: '0.9.0', release_date: '2022-09-03', download_url: '' }] }),
   mc('Alius.ChisKit', 'ChisKit', 'gpzi994', 'ChisKit', 'Utility', 'Alius', 2026, '0.01b', '2026-10-11', false, { declares_ai: ['Claude'] }),
@@ -352,7 +357,7 @@ const handlers: Record<string, (args: any) => unknown> = {
     // Failure modes for checking the error states by hand: set window.__mkt = 'fail' | 'offline' in the console.
     const mode = (globalThis as { __mkt?: string }).__mkt;
     if (mode === 'fail') throw { code: 'E_IO', message: 'Could not reach the server. Are you offline?' };
-    return { catalog: { cores: marketCores }, source: mode === 'offline' ? { Offline: 'Could not reach the server. Are you offline?' } : 'Network', fetched: Math.floor(Date.now() / 1000) - (mode === 'offline' ? 3 * 86400 : 120) };
+    return { notes: [], catalog: { cores: marketCores }, source: mode === 'offline' ? { Offline: 'Could not reach the server. Are you offline?' } : 'Network', fetched: Math.floor(Date.now() / 1000) - (mode === 'offline' ? 3 * 86400 : 120) };
   },
   marketplace_art: (a) => (a.coreId === 'zz.NoRelease' ? null : a.kind === 'Banner' ? svgUrl(521, 165, a.coreId as string) : svgUrl(36, 36, a.coreId as string)),
   marketplace_core_updates: () => ({ rows: [

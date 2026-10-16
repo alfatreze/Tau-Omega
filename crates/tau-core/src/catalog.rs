@@ -88,7 +88,16 @@ pub struct CatalogCore {
     pub assets: Vec<CatalogAsset>,
     /// Every release, newest first (includes the newest).
     pub history: Vec<ReleaseSummary>,
+    /// Which marketplace source lists this core ([`LIBRARY_SOURCE`], or another source's id such as `tau-alpha`).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub source: String,
+    /// The release channel of a core from a source that has them (`Stable`, `Preview`, `Dev`); empty otherwise.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub channel: String,
 }
+
+/// The id of the openFPGA Library source (the default marketplace source).
+pub const LIBRARY_SOURCE: &str = "openfpga-library";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -298,6 +307,8 @@ pub fn parse(cores_json: &[u8], platforms_json: &[u8]) -> Result<Catalog, TauErr
             link_port: flag(latest, "/core/framework/hardware/link_port"),
             sleep_supported: flag(latest, "/core/framework/sleep_supported"),
             assets,
+            source: LIBRARY_SOURCE.to_string(),
+            channel: String::new(),
             history,
         });
     }

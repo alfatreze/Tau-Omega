@@ -8,14 +8,14 @@
   import { modal } from './a11y';
   import { errorMessage } from './backend';
   import { marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates } from './tau-api';
-  import { categoryCounts, filterCores, size, sourceNote, statusLabel, statusMap, type Filters } from './marketplace';
+  import { categoryCounts, filterCores, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
   import type { CatalogCore, CatalogResult, CoreStatus } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
   export let card = '';
 
   let result: CatalogResult | null = null; let loading = false; let error = '';
-  let filters: Filters = { query: '', category: '', installedOnly: false, sort: 'newest' };
+  let filters: Filters = { query: '', category: '', installedOnly: false, sort: 'newest', source: '' };
   let statuses = new Map<string, CoreStatus>();
   let searchEl: HTMLInputElement;
   let selected: CatalogCore | null = null;
@@ -32,6 +32,7 @@
 
   $: cores = result?.catalog.cores ?? [];
   $: installed = new Set([...statuses.keys()]);
+  $: sources = sourcesOf(cores);
   $: shown = filterCores(cores, filters, installed);
   $: counts = categoryCounts(cores, filters, installed);
   $: note = result ? sourceNote(result.source, result.fetched) : null;
@@ -119,18 +120,24 @@
     </label>
     <button class="chip toggle" aria-pressed={filters.installedOnly} disabled={!card} title={card ? '' : 'Open a card to filter by what it has'} on:click={() => (filters.installedOnly = !filters.installedOnly)}>On this card</button>
   </div>
+  {#if sources.length > 1}
+    <div class="mk-tags" role="group" aria-label="Source">
+      <button class="chip toggle" aria-pressed={!filters.source} on:click={() => (filters.source = '')}>All sources</button>
+      {#each sources as src}<button class="chip toggle" aria-pressed={filters.source === src} on:click={() => (filters.source = filters.source === src ? '' : src)}>{sourceLabel(src)}</button>{/each}
+    </div>
+  {/if}
   <div class="mk-tags" role="group" aria-label="Category">
     <button class="chip toggle" aria-pressed={!filters.category} on:click={() => (filters.category = '')}>All <span class="mk-count">{counts.all}</span></button>
     {#each counts.byCategory as [name, n]}<button class="chip toggle" aria-pressed={filters.category === name} on:click={() => toggleCategory(name)}>{name} <span class="mk-count">{n}</span></button>{/each}
   </div>
-  <p class="mk-note" role="status" aria-live="polite">{#if error && result}<span class="err">{error}</span>{:else if error}{:else if loading && !result}Loading the list…{:else}{announce}{#if note}{' · '}{note}{/if}{/if}</p>
+  <p class="mk-note" role="status" aria-live="polite">{#if error && result}<span class="err">{error}</span>{:else if error}{:else if loading && !result}Loading the list…{:else}{announce}{#if note}{' · '}{note}{/if}{#each result?.notes ?? [] as n}{' · '}{n}{/each}{/if}</p>
 
   {#if picked.size}<div class="mk-bar" role="region" aria-label="Selected cores"><span>{picked.size} {picked.size === 1 ? 'core' : 'cores'} selected</span><span><button class="quiet" on:click={() => (picked = new Set())}>Clear</button> <button class="primary" on:click={() => (multi = true)}>Install {picked.size} together…</button></span></div>{/if}
   {#if error && !result}
     <div class="empty"><h2>The list could not be loaded</h2><p>{error}</p><button class="primary" on:click={() => load(true)}>Try again</button></div>
   {:else if result && !shown.length}
     <div class="empty"><h2>No cores match</h2><p>{filters.query ? `Nothing matches “${filters.query}”` : 'Nothing matches these filters'}{filters.category ? ` in ${filters.category}` : ''}{filters.installedOnly ? ' on this card' : ''}.</p>
-      <button class="quiet" on:click={() => (filters = { ...filters, query: '', category: '', installedOnly: false })}>Clear filters</button></div>
+      <button class="quiet" on:click={() => (filters = { ...filters, query: '', category: '', installedOnly: false, source: '' })}>Clear filters</button></div>
   {:else if result}
     <ul class="mk-grid" aria-busy={loading} aria-label="Cores">
       {#each shown as item (item.id)}
@@ -151,6 +158,7 @@
           <div class="mk-foot">
             {#if card && item.download_url}<label class="mk-pick"><input type="checkbox" checked={picked.has(item.id)} on:change={() => toggle(item.id)} aria-label={`Select ${item.name} to install together`} /> Select</label>{/if}
             {#if item.category}<button class="chip toggle mk-tag" aria-pressed={filters.category === item.category} aria-label={`Show only ${item.category}`} on:click={() => toggleCategory(item.category)}>{item.category}</button>{/if}
+            {#if item.channel}<span class="chip">{item.channel}</span>{/if}
             {#if chip(item)}<span class="chip" class:capable={statusOf(item)?.status === 'UpdateAvailable'}>{chip(item)}</span>{/if}
             <span class="mk-ver">{item.version || '—'}<small>{item.release_date}</small></span>
           </div>
@@ -172,6 +180,7 @@
 
     <dl class="mk-facts">
       <div><dt>Newest version</dt><dd>{selected.version || 'none published'}{selected.release_date ? ` · ${selected.release_date}` : ''}</dd></div>
+      <div><dt>Listed by</dt><dd>{sourceLabel(selected.source)}{selected.channel ? ` · ${selected.channel} channel` : ''}</dd></div>
       <div><dt>Source</dt><dd><code>{repoUrl(selected)}</code> <button class="quiet" on:click={copyRepo}>{copied ? 'Copied' : 'Copy link'}</button></dd></div>
       {#if statusOf(selected) && chip(selected)}<div><dt>On your card</dt><dd>{statusOf(selected)?.installed_version} · {chip(selected)}</dd></div>{/if}
     </dl>
@@ -204,6 +213,9 @@
     <h3>Install</h3>
     {#if !card}
       <p class="mk-small">Open a card first (Cards page) to install this core.</p>
+    {:else if selected.channel === 'Dev'}
+      <p class="mk-small">Dev builds are made locally and never published, so there is nothing to download. Install one from its zip or folder with the same review as any core.</p>
+      <button class="primary" on:click={() => { close(); openManualAdd(); }}>Install a local dev build…</button>
     {:else if !selected.download_url}
       <p class="mk-small">The author has not published a download yet.</p>
     {:else}
