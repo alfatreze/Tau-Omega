@@ -18,6 +18,9 @@ Read `ROADMAP.md` (the one ordered list), then the top "LATEST" block of `docs/S
 - Releases: follow `docs/RELEASING.md` (version in four places, tag `vX.Y.Z`, CI makes a **draft**; publish by hand after checking assets against `SHA256SUMS.txt` and `latest.json`). Installer signing is parked (owner, 2026-10-14).
 - After a push, check CI (`gh run list --repo alfatreze/Tau-Omega`); Windows is the job that has failed before (path separators, unused-on-Windows variables).
 
+## Channels and builds (same three as Tau Alpha)
+Stable = published release `vX.Y.Z`; Preview = published pre-release `vX.Y.Z-preview.N` (tag, CI draft, `tools/publish_preview.sh`); Dev = local `X.Y.Z-dev.N` from `tools/dev-build.sh` (never published). `releases/dev-builds/TARGET` is the version dev builds lead to (0.5.1). Details: `docs/RELEASING.md`. All browser suites: `cd ui && bash scripts/run-all.sh` (needs `npm run dev`).
+
 ## Checks before a commit
 `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --features tau-core/serde`, `cd ui && npm run check`. Test build: `tools/dev-build.sh`.
 
