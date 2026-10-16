@@ -638,6 +638,8 @@ mod tests {
         assert!(c.join("Assets/gba/Spiritualized.GBA/Mine.gba").is_file());
     }
 
+    // The file names under test (a colon, a trailing dot) cannot be created on Windows, so the test cannot set itself up there.
+    #[cfg(unix)]
     #[test]
     fn a_dropped_folder_keeps_its_name_and_bad_names_are_refused_with_reasons() {
         let c = card("add3");
