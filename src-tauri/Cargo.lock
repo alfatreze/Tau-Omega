@@ -3884,7 +3884,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tau-audio"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "ebur128",
  "flacenc",
@@ -3894,7 +3894,7 @@ dependencies = [
 
 [[package]]
 name = "tau-core"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "base64 0.23.1",
  "crc32fast",
@@ -3913,7 +3913,7 @@ dependencies = [
 
 [[package]]
 name = "tau-net"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -3924,7 +3924,7 @@ dependencies = [
 
 [[package]]
 name = "tau-omega"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "base64 0.23.1",
  "libc",
