@@ -78,7 +78,7 @@
       } catch (e) { r.failed = errorMessage(e); break; }
     }
     rows = rows; busy = false;
-    if (done) dispatch('installed');
+    if (done) { dispatch('installed'); window.dispatchEvent(new CustomEvent('tau-cores-changed')); }
     const stopped = rows.find((r) => r.failed);
     if (stopped) notice = `${done ? `${plural(done, 'core')} installed. ` : ''}Stopped at ${stopped.plan ? nameOf(stopped.plan.update.cores[0]) : stopped.zip}. Nothing was left half-done for that core.`;
   }

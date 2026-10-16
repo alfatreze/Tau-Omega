@@ -37,7 +37,7 @@
   import ResultsView from './lib/ResultsView.svelte';
   import CheckView from './lib/CheckView.svelte';
   import BuilderView from './lib/BuilderView.svelte';
-  import { coresSelection, coresTab, coresTreeStore, findCore } from './lib/coresStore';
+  import { coresSelection, coresTab, coresTreeStore, findCore, refreshCores } from './lib/coresStore';
   import { autoCheckUpdates } from './lib/updatesStore';
   import { get } from 'svelte/store';
   let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' | 'check' | 'builder' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
@@ -71,6 +71,8 @@
     // removed.
     window.addEventListener('focus', checkCardMounted);
     window.addEventListener('tau-pending', () => { pendingTick += 1; });
+    // A core was installed or updated: read the card again so the cores list, the menu tree and the Library's target list show it.
+    window.addEventListener('tau-cores-changed', () => { if (path) { void openFolder(); void refreshCores(path); } });
     window.addEventListener('tau-ejected', (event) => { ejectedSafely = (event as CustomEvent<string>).detail; cardMounted = false; });
     window.addEventListener('tau-reports-dir', async () => { try { reportsDir = (await getReportsDir()) ?? ''; } catch { /* keeps the previous folder */ } });
     // Auto-detect a card or Pocket being plugged in or removed: poll the cheap
