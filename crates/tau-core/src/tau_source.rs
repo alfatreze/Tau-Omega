@@ -14,6 +14,8 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
+/// The GitHub account that publishes these cores (its profile picture is the fallback card image).
+pub const OWNER: &str = "alfatreze";
 /// The id of this source in [`CatalogCore::source`].
 pub const SOURCE_ID: &str = "tau-alpha";
 /// The placeholder core for local Dev builds (no download; installed from a local zip or folder).
@@ -132,7 +134,7 @@ fn base(id: &str, channel: &str) -> CatalogCore {
         author: "alfatreze".into(),
         name: id.split_once('.').map_or(id, |(_, n)| n).to_string(),
         repository: Repository {
-            owner: "alfatreze".into(),
+            owner: OWNER.into(),
             name: "Tau-Alpha".into(),
         },
         category: "Media Players".into(),

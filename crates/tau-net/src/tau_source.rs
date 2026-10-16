@@ -128,6 +128,14 @@ fn read_meta(tag: &str, name: &str, cache: &Path, manifest_cache: &Path) -> Opti
         .ok()?;
         let preview = tau_core::core_preview::preview(&zip, &vetted).ok()?;
         let platform = preview.platforms.first()?;
+        for (suffix, png) in [
+            (".icon.png", &preview.icon_png),
+            (".banner.png", &preview.banner_png),
+        ] {
+            if let Some(png) = png {
+                let _ = std::fs::write(cache.join(format!("meta-{tag}{suffix}")), png);
+            }
+        }
         Some(PackageMeta {
             category: platform.category.clone(),
             manufacturer: platform.manufacturer.clone(),
@@ -140,6 +148,21 @@ fn read_meta(tag: &str, name: &str, cache: &Path, manifest_cache: &Path) -> Opti
     })();
     let _ = std::fs::remove_file(&zip);
     result
+}
+
+/// The Tau card's picture from the newest package read so far: the author icon (`Cores/<id>/icon.bin`) or the platform banner,
+/// as PNG bytes. `None` until a package has been read; the caller then falls back to the author's GitHub avatar.
+pub fn art(cache: &Path, banner: bool) -> Option<Vec<u8>> {
+    let suffix = if banner { ".banner.png" } else { ".icon.png" };
+    std::fs::read_dir(cache)
+        .ok()?
+        .flatten()
+        .filter(|e| {
+            let n = e.file_name().to_string_lossy().into_owned();
+            n.starts_with("meta-") && n.ends_with(suffix)
+        })
+        .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
+        .and_then(|e| std::fs::read(e.path()).ok())
 }
 
 /// The core folder a downloaded Tau zip carries, from its own file name (`alfatreze.TAU_Preview_0.6...` is `alfatreze.TAU Preview`).
@@ -240,6 +263,17 @@ mod tests {
             );
         }
         assert_eq!(card.category, "Media Players");
+        let icon = super::art(&dir.join("c"), false).expect("the package icon is kept");
+        assert!(icon.starts_with(b"\x89PNG"));
+        assert!(super::art(&dir.join("c"), true).is_some_and(|b| b.starts_with(b"\x89PNG")));
+        let avatar = crate::marketplace::fetch_avatar(
+            &crate::marketplace::Http,
+            &dir.join("a"),
+            tau_core::tau_source::OWNER,
+            1,
+        )
+        .unwrap();
+        assert!(avatar.is_some_and(|b| b.starts_with(b"\x89PNG") || b.starts_with(&[0xFF, 0xD8])));
         let _ = std::fs::remove_dir_all(dir);
     }
 }
