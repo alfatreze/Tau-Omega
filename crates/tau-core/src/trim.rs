@@ -259,6 +259,30 @@ pub fn write_skip_files(
     Ok((written, cut))
 }
 
+/// After a sync: writes the tables for the tracks just scanned (only while Skip silence is on) and says when a folder had more tracks than a
+/// table holds. A failure to write is a warning, never a failed sync: the music and the index are already on the card.
+pub fn write_after_scan(
+    common: &Path,
+    entries: &[crate::scan::Entry],
+    warnings: &mut Vec<crate::Warning>,
+) {
+    let settings = active();
+    if !settings.enabled {
+        return;
+    }
+    match write_skip_files(common, entries, &settings) {
+        Ok((_, cut)) if cut > 0 => warnings.push(crate::Warning::new(
+            crate::WarningCode::PlaylistTruncated,
+            format!("{cut} tracks are past the 340 a skip-silence file holds; they play whole."),
+        )),
+        Ok(_) => {}
+        Err(e) => warnings.push(crate::Warning::new(
+            crate::WarningCode::CardFileChanged,
+            format!("The skip-silence files could not be written ({e}); the music and the library are fine."),
+        )),
+    }
+}
+
 /// How many `tau-skip.bin` tables are under `common` and how many tracks they mark (read back from the files).
 pub fn summarise(common: &Path) -> (usize, usize) {
     fn walk(at: &Path, depth: usize, out: &mut (usize, usize)) {
@@ -290,7 +314,7 @@ pub fn rewrite_skip_files(
     common: &Path,
     settings: &TrimSettings,
 ) -> Result<(usize, usize), crate::TauError> {
-    let scan = crate::scan::scan_dir(common, false)?;
+    let scan = crate::scan::scan_dir_measuring(common, false, &mut None)?;
     write_skip_files(common, &scan.entries, settings).map_err(crate::TauError::from)
 }
 
@@ -314,7 +338,7 @@ pub fn skip_tracks(
     common: &Path,
     settings: &TrimSettings,
 ) -> Result<Vec<SkipTrack>, crate::TauError> {
-    let scan = crate::scan::scan_dir(common, false)?;
+    let scan = crate::scan::scan_dir_measuring(common, false, &mut None)?;
     let edits = overrides_for(common);
     Ok(scan
         .entries

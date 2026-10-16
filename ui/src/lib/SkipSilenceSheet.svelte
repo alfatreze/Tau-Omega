@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
-  import { getPrefs, skipDetail, skipSetEdit, skipTracks } from './tau-api';
+  import { getPrefs, setPrefs, skipDetail, skipSetEdit, skipTracks } from './tau-api';
   import type { SkipDetail, SkipTrack } from './types';
   export let card = ''; export let mediaRoot = ''; export let close: () => void;
 
@@ -21,6 +21,10 @@
     loading = false;
   }
   onMount(load);
+  async function turnOn() {
+    try { const p = await getPrefs(); await setPrefs({ ...p, trim: { ...p.trim, enabled: true } }); await load(); }
+    catch (e) { error = errorMessage(e); }
+  }
 
   $: groups = (() => { const m = new Map<string, SkipTrack[]>(); for (const t of tracks) (m.get(t.dir) ?? m.set(t.dir, []).get(t.dir)!).push(t); return [...m.entries()]; })();
   $: withSkip = tracks.filter((t) => t.skip && (t.skip.lead_skip || t.skip.tail_skip)).length;
@@ -62,7 +66,8 @@
 <div class="sk" role="dialog" tabindex="-1" aria-modal="true" aria-labelledby="sk-title" use:modal>
   <header class="sk-head"><div><p class="eyebrow">SKIP SILENCE</p><h2 id="sk-title">Tracks and what is skipped</h2></div><button class="quiet" data-autofocus on:click={close}>Done</button></header>
   {#if loading}<p class="sk-note">Reading the tracks…</p>
-  {:else if !enabled}<p class="sk-note you">Skip silence is off. Turn it on in Settings > Syncing music, then sync once so the tracks are measured.</p>
+  {:else if !enabled}<p class="sk-note you">Skip silence is off. Turn it on to measure the tracks already on the card (it reads each track once, so a big library takes a while the first time).</p>
+    <button class="picker" on:click={turnOn}>Turn on and measure</button>
   {:else}
     <p class="sk-note">{withSkip} of {tracks.length} tracks have silence to skip. Lead then tail shown for each track. Changes are written to the card straight away.</p>
     <div class="sk-body">
