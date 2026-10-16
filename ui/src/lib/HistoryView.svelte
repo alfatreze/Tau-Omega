@@ -129,7 +129,7 @@
             <h3>What changed</h3>
             <ul class="hist-items">
               {#each current.context.items as it}
-                <li><span class="k {it.kind}" aria-hidden="true">{it.kind === 'add' ? '+' : it.kind === 'remove' ? '−' : '✎'}</span>
+                <li><span class="k {it.kind}" aria-hidden="true">{it.kind === 'add' ? '+' : it.kind === 'remove' ? '−' : it.kind === 'playlist' ? '≡' : '✎'}</span>
                   <span><b>{it.label ?? it.title}</b>{#if it.kind !== 'edit'} <small>{it.artist || 'Unknown artist'} · {plural(it.tracks ?? 0, 'track')}{it.bytes ? ` · ${size(it.bytes)}` : ''}</small>{/if}</span></li>
               {/each}
             </ul>

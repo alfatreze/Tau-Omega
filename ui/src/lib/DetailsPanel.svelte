@@ -38,10 +38,12 @@
   $: adding = items.filter((i) => i.kind === 'add');
   $: removing = items.filter((i) => i.kind === 'remove');
   $: editing = items.filter((i) => i.kind === 'edit');
+  $: playlisting = items.filter((i) => i.kind === 'playlist');
   $: groups = [
     { title: 'Adding', rows: adding, sign: '+' },
     { title: 'Removing', rows: removing, sign: '−' },
     { title: 'Editing', rows: editing, sign: '✎' },
+    { title: 'Playlists', rows: playlisting, sign: '≡' },
   ];
   $: nothing = items.length === 0;
   const detail = (i: StagedItem) =>

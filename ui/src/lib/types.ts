@@ -102,9 +102,9 @@ export type LibraryListing = { limits: IndexLimits; albums: AlbumInfo[]; tracks:
 /** Mirrors `tau_core::tagedit::{FieldEdits, EditRequest}`. `null` leaves a field alone; `''` clears it. */
 export type FieldEdits = { title: string | null; artist: string | null; album: string | null; album_artist: string | null; year: string | null };
 export type EditRequest = { album_id: string; track: string | null; fields: FieldEdits; cover: string | null };
-export type ChangeRequest = { library_root: string | null; add_albums: string[]; remove_albums: string[]; edits: EditRequest[]; options: { mirror: boolean; embed_covers: boolean; art_sidecar_pal256: boolean }; playlist?: { file: string; max_tracks: number | null; max_bytes: number | null; name_limit: number | null; core_name: string } | null };
+export type ChangeRequest = { library_root: string | null; add_albums: string[]; remove_albums: string[]; edits: EditRequest[]; options: { mirror: boolean; embed_covers: boolean; art_sidecar_pal256: boolean }; playlist?: { file: string; max_tracks: number | null; max_bytes: number | null; name_limit: number | null; list_file: string | null; core_name: string } | null; playlist_assign?: { file: string; albums: string[] }[] };
 export type ChangePlanView = { id: string; new_files: number; updated_files: number; unchanged_files: number; bytes_to_write: number; removed_files: number; bytes_to_remove: number; edited_files: number; playlists_updated: number; warnings: Warning[]; converted_files: number; replaygain_files: number; skipped: { file: string; reason: string }[] };
-export type ChangeReport = { phase: string; plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string; playlist_file?: string | null; playlist_tracks?: number; skip_tracks?: number; skip_files?: number };
+export type ChangeReport = { phase: string; plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string; playlist_file?: string | null; playlist_tracks?: number; playlists_changed?: number; skip_tracks?: number; skip_files?: number };
 export type ConnectionKind = 'direct_usb' | 'card_reader' | 'unknown';
 export type ConnectionInfo = { kind: ConnectionKind; detail: string };
 /** What the app tells the engine about a core, so the card breakdown does not re-read every index. */
@@ -132,7 +132,7 @@ export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: strin
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */
 export type HistoryEntry = JournalSummary & { error_code: number | null; started_at_unix: number | null; duration_secs: number | null; edited: number | null; bytes_written: number | null; bytes_per_sec: number | null; phase: string | null; context: HistoryContext | null };
 /** What the Library screen stores with each sync so history can describe it in words. */
-export type HistoryContext = { card?: string; core?: string; connection?: string; items?: { kind: 'add' | 'remove' | 'edit'; title: string; artist?: string; tracks?: number; bytes?: number; note?: string; label?: string }[] };
+export type HistoryContext = { card?: string; core?: string; connection?: string; items?: { kind: 'add' | 'remove' | 'edit' | 'playlist'; title: string; artist?: string; tracks?: number; bytes?: number; note?: string; label?: string }[] };
 export type ChangeResult = ChangeReport & { journal: string };
 
 /** One album's cover thumbnail: a base64 PNG, or null when it has no readable picture. */
@@ -141,7 +141,7 @@ export type Thumbnail = { id: string; png_base64: string | null; /** Only the de
 /** One staged change as the Library's Details panel lists it. */
 export type StagedItem = {
   key: string;
-  kind: 'add' | 'remove' | 'edit';
+  kind: 'add' | 'remove' | 'edit' | 'playlist';
   label: string;
   artist?: string;
   tracks?: number;

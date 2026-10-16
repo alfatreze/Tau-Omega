@@ -21,11 +21,33 @@ pub struct PlaylistTarget {
     /// The largest playlist file the core reads, in bytes (about 48 characters per line at 256 tracks).
     #[cfg_attr(feature = "serde", serde(default))]
     pub max_bytes: Option<u32>,
-    /// The longest playlist name the core remembers for its next launch (a longer one falls back to `playlist.m3u`).
+    /// The longest playlist name the core remembers for its next launch (a longer one falls back to `playlist.m3u`), unless the
+    /// playlist is listed in `list_file`.
     #[cfg_attr(feature = "serde", serde(default))]
     pub name_limit: Option<u8>,
+    /// The playlist that lists the other playlists by file name (`playlists.m3u`). Omega keeps it in step when the core has one.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub list_file: Option<String>,
     /// The core's name, for messages.
     pub core_name: String,
+}
+
+/// Some albums go into a playlist: an existing one (their tracks are appended, none twice) or a new one. An album is an id from
+/// `add_albums` (being copied in this run) or an album folder already on the card.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PlaylistAssign {
+    /// The playlist file, relative to the media root (`Road Trip.m3u`).
+    pub file: String,
+    pub albums: Vec<String>,
+}
+
+/// An assignment with its albums resolved to their folders on the card.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ResolvedAssign {
+    pub file: String,
+    pub dirs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -42,6 +64,9 @@ pub struct ChangeRequest {
     /// Set when the target core plays only from a playlist (and not from the library index): the file to write and the cap on tracks.
     #[cfg_attr(feature = "serde", serde(default))]
     pub playlist: Option<PlaylistTarget>,
+    /// Albums to put into playlists, in the same run.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub playlist_assign: Vec<PlaylistAssign>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,6 +80,8 @@ pub struct ChangePlan {
     pub edit: Option<tagedit::EditPlan>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub playlist: Option<PlaylistTarget>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub assigns: Vec<ResolvedAssign>,
     pub bytes_to_write: u64,
     pub bytes_to_remove: u64,
     pub files_total: usize,
@@ -78,6 +105,9 @@ pub struct ChangeReport {
     pub playlist_file: Option<String>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub playlist_tracks: usize,
+    /// How many playlist files this run wrote or extended.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub playlists_changed: usize,
     /// Skip silence: the tables on the card and the tracks they mark, after this run (0 when the setting is off).
     #[cfg_attr(feature = "serde", serde(default))]
     pub skip_tracks: usize,
@@ -133,7 +163,10 @@ pub fn plan_changes(
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<ChangePlan, TauError> {
     sync::validate_media_root(common)?;
-    if request.add_albums.is_empty() && request.remove_albums.is_empty() && request.edits.is_empty()
+    if request.add_albums.is_empty()
+        && request.remove_albums.is_empty()
+        && request.edits.is_empty()
+        && request.playlist_assign.is_empty()
     {
         return Err(TauError::e(
             ErrorCode::NoSources,
@@ -234,86 +267,29 @@ pub fn plan_changes(
         },
         workbench::IndexLimits::default(),
     )?;
-    if let Some(max) = request.playlist.as_ref().and_then(|p| p.max_tracks) {
-        let after = (tracks_now + new_tracks).saturating_sub(removed_tracks);
-        if after > max as usize {
-            let name = request
-                .playlist
-                .as_ref()
-                .map_or("The core", |p| p.core_name.as_str());
-            return Err(TauError::e(
-                ErrorCode::IndexCapExceeded,
-                format!(
-                    "This would put {after} tracks on the Pocket, but {name} plays at most {max} from its playlist. Remove {} or add fewer.",
-                    if after - (max as usize) == 1 {
-                        "1 track".to_string()
-                    } else {
-                        format!("{} tracks", after - (max as usize))
-                    }
-                ),
-            ));
-        }
-    }
-    if let Some(target) = &request.playlist
-        && let Some(limit) = target.name_limit
-        && target.file.len() > usize::from(limit)
-    {
-        return Err(TauError::e(
-            ErrorCode::InvalidMediaRoot,
-            format!(
-                "{} only remembers a playlist name of up to {limit} characters, and {:?} is longer, so it would fall back to playlist.m3u at the next launch.",
-                target.core_name, target.file
-            ),
-        ));
-    }
-    if let Some(target) = &request.playlist
-        && let Some(max_bytes) = target.max_bytes
-    {
-        // one media-relative path per line: long folder and file names fill the file before the track limit does
-        let root = common.canonicalize()?;
-        let rel = |p: &Path| {
-            p.strip_prefix(&root)
-                .ok()
-                .map(|r| r.to_string_lossy().replace('\\', "/"))
-        };
-        let mut rels: std::collections::BTreeSet<String> = crate::scan::scan_dir(common, false)?
-            .entries
-            .iter()
-            .map(|e| e.rel.clone())
-            .collect();
-        if let Some(r) = &removal {
-            for i in r.items.iter().filter(|i| sync::audio_file(&i.destination)) {
-                if let Some(x) = rel(&i.destination) {
-                    rels.remove(&x);
-                }
-            }
-        }
-        if let Some(sp) = &sync_plan {
-            for i in sp.items.iter().filter(|i| sync::audio_file(&i.destination)) {
-                if let Some(x) = rel(&i.destination) {
-                    rels.insert(x);
-                }
-            }
-        }
-        let bytes: usize = rels.iter().map(|x| x.len() + 1).sum();
-        if bytes > max_bytes as usize {
-            return Err(TauError::e(
-                ErrorCode::IndexCapExceeded,
-                format!(
-                    "The playlist for these {} tracks would be {:.1} KB, but {} reads at most {:.0} KB. Remove tracks or shorten folder and file names.",
-                    rels.len(),
-                    bytes as f64 / 1024.0,
-                    target.core_name,
-                    f64::from(max_bytes) / 1024.0
-                ),
-            ));
-        }
+    let assigns = resolve_assigns(request)?;
+    if !assigns.is_empty() || request.playlist.is_some() {
+        check_playlists(
+            common,
+            request,
+            &assigns,
+            sync_plan.as_ref(),
+            removal.as_ref(),
+        )?;
     }
     let mut hasher = Sha256::new();
     hasher.update(b"changes-v1");
     if let Some(p) = &request.playlist {
-        hasher
-            .update(format!("playlist:{}:{:?}:{:?}", p.file, p.max_tracks, p.max_bytes).as_bytes());
+        hasher.update(
+            format!(
+                "playlist:{}:{:?}:{:?}:{:?}:{:?}",
+                p.file, p.max_tracks, p.max_bytes, p.name_limit, p.list_file
+            )
+            .as_bytes(),
+        );
+    }
+    for a in &assigns {
+        hasher.update(format!("assign:{}:{}", a.file, a.dirs.join("|")).as_bytes());
     }
     for id in [
         sync_plan.as_ref().map(|p| p.id.as_str()),
@@ -337,6 +313,7 @@ pub fn plan_changes(
         removal,
         edit,
         playlist: request.playlist.clone(),
+        assigns,
     })
 }
 
@@ -433,14 +410,24 @@ fn execute_changes_inner(
         report.backup_dir = done.backup_dir;
     }
     if let Some(target) = &plan.playlist {
-        report.phase = "playlist".into();
-        report.playlist_tracks = write_playlist(
-            &plan.destination,
-            &target.file,
-            target.max_tracks,
-            target.max_bytes,
-        )?;
         report.playlist_file = Some(target.file.clone());
+    }
+    if !plan.assigns.is_empty() {
+        report.phase = "playlist".into();
+        let (changed, tracks) = apply_assigns(plan)?;
+        report.playlists_changed = changed;
+        report.playlist_tracks = tracks;
+        // The library index lists the playlists, so a core that reads it needs the index read again.
+        if plan.playlist.is_none() {
+            let mut warnings = Vec::new();
+            sync::rebuild_index(
+                &plan.destination,
+                &plan.root_prefix,
+                &plan.id[..8],
+                &mut warnings,
+                progress,
+            )?;
+        }
     }
     if crate::trim::active().enabled {
         (report.skip_files, report.skip_tracks) = crate::trim::summarise(&plan.destination);
@@ -449,58 +436,229 @@ fn execute_changes_inner(
     Ok(())
 }
 
-/// Writes `file` in the media root as the playlist of every track now on the card, in folder and name order, one media-relative path per line (the form
-/// a playlist-only core reads). Written beside its final name and renamed, so the core never sees half a playlist. Returns how many tracks it lists.
-fn write_playlist(
+/// Resolves each assignment's albums to folders on the card: an id being added in this run lands in its destination folder, any other
+/// is an album folder already there. Checks the playlist file names.
+fn resolve_assigns(request: &ChangeRequest) -> Result<Vec<ResolvedAssign>, TauError> {
+    let reserved = request
+        .playlist
+        .as_ref()
+        .and_then(|p| p.list_file.as_deref());
+    let mut out: Vec<ResolvedAssign> = Vec::new();
+    for a in &request.playlist_assign {
+        let file = a.file.trim();
+        if file.is_empty()
+            || file.len() > 120
+            || file.contains(['/', '\\', '\0', ':'])
+            || file.starts_with('.')
+            || !file.to_ascii_lowercase().ends_with(".m3u")
+            || reserved.is_some_and(|r| r.eq_ignore_ascii_case(file))
+        {
+            return Err(TauError::e(
+                ErrorCode::InvalidMediaRoot,
+                format!("{file:?} is not a playlist file name."),
+            ));
+        }
+        let dirs: Vec<String> = a
+            .albums
+            .iter()
+            .map(|id| {
+                if request.add_albums.contains(id) {
+                    workbench::dest_dir(id)
+                } else {
+                    id.clone()
+                }
+            })
+            .collect();
+        match out.iter_mut().find(|r| r.file.eq_ignore_ascii_case(file)) {
+            Some(existing) => existing.dirs.extend(dirs),
+            None => out.push(ResolvedAssign {
+                file: file.to_string(),
+                dirs,
+            }),
+        }
+    }
+    Ok(out)
+}
+
+fn in_dirs(rel: &str, dirs: &[String]) -> bool {
+    let dir = rel.rsplit_once('/').map_or("", |(d, _)| d);
+    dirs.iter()
+        .any(|d| dir == d || dir.starts_with(&format!("{d}/")))
+}
+
+/// The lines of an existing playlist file (empty when there is none).
+fn playlist_lines(common: &Path, file: &str) -> Vec<String> {
+    std::fs::read_to_string(common.join(file))
+        .map(|t| {
+            t.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `existing` followed by the tracks of `dirs` found in `rels` (in path order) that are not in it yet.
+fn merged_playlist(
+    existing: Vec<String>,
+    rels: &std::collections::BTreeSet<String>,
+    dirs: &[String],
+) -> Vec<String> {
+    let mut out = existing;
+    let have: std::collections::BTreeSet<String> = out.iter().cloned().collect();
+    out.extend(
+        rels.iter()
+            .filter(|r| in_dirs(r, dirs) && !have.contains(*r))
+            .cloned(),
+    );
+    out
+}
+
+/// Before anything is copied: every playlist the run would write must fit the core's limits (tracks and file size per playlist, and the
+/// name when the core would not remember it).
+fn check_playlists(
     common: &Path,
-    file: &str,
-    max_tracks: Option<u32>,
-    max_bytes: Option<u32>,
-) -> Result<usize, TauError> {
-    if file.is_empty()
-        || file.contains(['/', '\\', '\0'])
-        || file.starts_with('.')
-        || !file.to_ascii_lowercase().ends_with(".m3u")
+    request: &ChangeRequest,
+    assigns: &[ResolvedAssign],
+    sync_plan: Option<&sync::SyncPlan>,
+    removal: Option<&workbench::RemovalPlan>,
+) -> Result<(), TauError> {
+    let Some(target) = &request.playlist else {
+        return Ok(());
+    };
+    let name = target.core_name.as_str();
+    if target.list_file.is_none()
+        && let Some(limit) = target.name_limit
+        && let Some(bad) = assigns
+            .iter()
+            .map(|a| a.file.as_str())
+            .chain(std::iter::once(target.file.as_str()))
+            .find(|f| f.len() > usize::from(limit))
     {
         return Err(TauError::e(
             ErrorCode::InvalidMediaRoot,
-            format!("{file:?} is not a playlist file name."),
-        ));
-    }
-    let scan = crate::scan::scan_dir(common, false)?;
-    let mut rels: Vec<&str> = scan.entries.iter().map(|e| e.rel.as_str()).collect();
-    rels.sort_unstable();
-    if let Some(max) = max_tracks
-        && rels.len() > max as usize
-    {
-        return Err(TauError::e(
-            ErrorCode::IndexCapExceeded,
             format!(
-                "{} tracks are on the card but the playlist can hold {max}; nothing was written.",
-                rels.len()
+                "{name} only remembers a playlist name of up to {limit} characters, and {bad:?} is longer, so it would fall back to playlist.m3u at the next launch."
             ),
         ));
     }
+    if assigns.is_empty() {
+        return Ok(());
+    }
+    // the tracks that will be on the card after this run
+    let root = common.canonicalize()?;
+    let rel = |p: &Path| {
+        p.strip_prefix(&root)
+            .ok()
+            .map(|r| r.to_string_lossy().replace('\\', "/"))
+    };
+    let mut rels: std::collections::BTreeSet<String> = crate::scan::scan_dir(common, false)?
+        .entries
+        .iter()
+        .map(|e| e.rel.clone())
+        .collect();
+    if let Some(r) = removal {
+        for i in r.items.iter().filter(|i| sync::audio_file(&i.destination)) {
+            if let Some(x) = rel(&i.destination) {
+                rels.remove(&x);
+            }
+        }
+    }
+    if let Some(sp) = sync_plan {
+        for i in sp.items.iter().filter(|i| sync::audio_file(&i.destination)) {
+            if let Some(x) = rel(&i.destination) {
+                rels.insert(x);
+            }
+        }
+    }
+    for a in assigns {
+        let lines = merged_playlist(playlist_lines(common, &a.file), &rels, &a.dirs);
+        if let Some(max) = target.max_tracks
+            && lines.len() > max as usize
+        {
+            let over = lines.len() - max as usize;
+            return Err(TauError::e(
+                ErrorCode::IndexCapExceeded,
+                format!(
+                    "{:?} would hold {} tracks, but {name} plays at most {max} from one playlist. Remove {} or put them in another playlist.",
+                    a.file,
+                    lines.len(),
+                    if over == 1 {
+                        "1 track".to_string()
+                    } else {
+                        format!("{over} tracks")
+                    }
+                ),
+            ));
+        }
+        if let Some(max) = target.max_bytes {
+            let bytes: usize = lines.iter().map(|l| l.len() + 1).sum();
+            if bytes > max as usize {
+                return Err(TauError::e(
+                    ErrorCode::IndexCapExceeded,
+                    format!(
+                        "{:?} would be {:.1} KB for {} tracks, but {name} reads at most {:.0} KB (a track's path takes about 48 characters on average). Use fewer tracks or shorten folder and file names.",
+                        a.file,
+                        bytes as f64 / 1024.0,
+                        lines.len(),
+                        f64::from(max) / 1024.0
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Writes (or extends) each assigned playlist beside its final name and renames it, so a core never sees half a playlist. Returns how many
+/// playlists changed and how many tracks they hold together. For a core with a playlist of playlists, that list is kept in step.
+fn apply_assigns(plan: &ChangePlan) -> Result<(usize, usize), TauError> {
+    let common = &plan.destination;
+    let rels: std::collections::BTreeSet<String> = crate::scan::scan_dir(common, false)?
+        .entries
+        .iter()
+        .map(|e| e.rel.clone())
+        .collect();
+    let (mut changed, mut total) = (0, 0);
+    for a in &plan.assigns {
+        let lines = merged_playlist(playlist_lines(common, &a.file), &rels, &a.dirs);
+        write_lines(common, &a.file, &lines)?;
+        changed += 1;
+        total += lines.len();
+    }
+    if let Some(list) = plan.playlist.as_ref().and_then(|t| t.list_file.as_deref()) {
+        let mut names: Vec<String> = std::fs::read_dir(common)?
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| {
+                n.to_ascii_lowercase().ends_with(".m3u")
+                    && !n.starts_with('.')
+                    && !n.eq_ignore_ascii_case(list)
+            })
+            .collect();
+        names.sort_by_key(|n| {
+            (
+                !plan.playlist.as_ref().is_some_and(|t| t.file == *n),
+                n.to_lowercase(),
+            )
+        });
+        write_lines(common, list, &names)?;
+    }
+    Ok((changed, total))
+}
+
+fn write_lines(common: &Path, file: &str, lines: &[String]) -> Result<(), TauError> {
     let mut text = String::new();
-    for r in &rels {
-        text.push_str(r);
+    for l in lines {
+        text.push_str(l);
         text.push('\n');
-    }
-    if let Some(max) = max_bytes
-        && text.len() > max as usize
-    {
-        return Err(TauError::e(
-            ErrorCode::IndexCapExceeded,
-            format!(
-                "The playlist would be {} bytes but the core reads at most {max}; nothing was written.",
-                text.len()
-            ),
-        ));
     }
     let tmp = common.join(format!(".{file}.part"));
     std::fs::write(&tmp, text)?;
     std::fs::rename(&tmp, common.join(file))?;
-    Ok(rels.len())
+    Ok(())
 }
 
 #[cfg(test)]
@@ -567,6 +725,7 @@ mod tests {
             }],
             options: sync::PlanOptions::default(),
             playlist: None,
+            playlist_assign: vec![],
         };
         let plan = plan_changes(&common, &request, &mut None).unwrap();
         assert!(plan.sync.is_some() && plan.removal.is_some() && plan.edit.is_some());
@@ -797,6 +956,7 @@ mod tests {
                 edits: vec![],
                 options: opts.clone(),
                 playlist: None,
+                playlist_assign: vec![],
             },
             &mut None,
         )
@@ -825,6 +985,7 @@ mod tests {
                 edits: vec![],
                 options: opts,
                 playlist: None,
+                playlist_assign: vec![],
             },
             &mut None,
         )
@@ -850,127 +1011,165 @@ mod tests {
         );
     }
 
+    fn target(
+        max_tracks: Option<u32>,
+        max_bytes: Option<u32>,
+        name_limit: Option<u8>,
+        list_file: Option<&str>,
+    ) -> PlaylistTarget {
+        PlaylistTarget {
+            file: "playlist.m3u".into(),
+            max_tracks,
+            max_bytes,
+            name_limit,
+            list_file: list_file.map(String::from),
+            core_name: "Mp3Player".into(),
+        }
+    }
+    fn req(
+        lib: &Path,
+        add: &[&str],
+        assigns: &[(&str, &[&str])],
+        t: Option<PlaylistTarget>,
+    ) -> ChangeRequest {
+        ChangeRequest {
+            library_root: Some(lib.to_path_buf()),
+            add_albums: add.iter().map(|s| s.to_string()).collect(),
+            playlist: t,
+            playlist_assign: assigns
+                .iter()
+                .map(|(f, a)| PlaylistAssign {
+                    file: f.to_string(),
+                    albums: a.iter().map(|s| s.to_string()).collect(),
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+    fn lines(common: &Path, f: &str) -> String {
+        fs::read_to_string(common.join(f)).unwrap()
+    }
+
     #[test]
-    fn a_playlist_only_core_gets_a_playlist_of_every_track_and_a_track_cap() {
+    fn albums_added_to_a_playlist_are_appended_once_and_a_new_playlist_is_created() {
         let lib = library();
         let common = card_with(&lib, &["B/Two"]);
-        let target = |max| PlaylistTarget {
-            file: "playlist.m3u".into(),
-            max_tracks: Some(max),
-            max_bytes: None,
-            name_limit: None,
-            core_name: "Mp3Player".into(),
-        };
-        // 1 on the card + 2 more would be 3 tracks, over a cap of 2: refused before anything is copied
-        let over = ChangeRequest {
-            library_root: Some(lib.clone()),
-            add_albums: vec!["A/One".into(), "C/Three".into()],
-            playlist: Some(target(2)),
-            ..Default::default()
-        };
+        // a new playlist, from an album being copied and an album already on the card
+        let r = req(
+            &lib,
+            &["A/One"],
+            &[("Road Trip.m3u", &["A/One", "B/Two"])],
+            None,
+        );
+        let plan = plan_changes(&common, &r, &mut None).unwrap();
+        let rep = execute_changes(&plan, &plan.id, None, &mut None).unwrap();
+        assert_eq!((rep.playlists_changed, rep.playlist_tracks), (1, 2));
+        assert_eq!(
+            lines(&common, "Road Trip.m3u"),
+            "A/One/01.mp3\nB/Two/01.mp3\n"
+        );
+        // more albums go to the end, none twice
+        let r2 = req(
+            &lib,
+            &["C/Three"],
+            &[("Road Trip.m3u", &["C/Three", "A/One"])],
+            None,
+        );
+        let p2 = plan_changes(&common, &r2, &mut None).unwrap();
+        execute_changes(&p2, &p2.id, None, &mut None).unwrap();
+        assert_eq!(
+            lines(&common, "Road Trip.m3u"),
+            "A/One/01.mp3\nB/Two/01.mp3\nC/Three/01.mp3\n"
+        );
+        // assigning albums already on the card needs no copy at all
+        let r3 = req(&lib, &[], &[("Quiet.m3u", &["B/Two"])], None);
+        let p3 = plan_changes(&common, &r3, &mut None).unwrap();
+        assert!(p3.sync.is_none() && p3.removal.is_none());
+        execute_changes(&p3, &p3.id, None, &mut None).unwrap();
+        assert_eq!(lines(&common, "Quiet.m3u"), "B/Two/01.mp3\n");
+        assert!(!common.join(".Quiet.m3u.part").exists());
+        // the library index lists the playlists for a core that reads it
+        let index = crate::parse(fs::read(common.join("tau-library.tdb")).unwrap()).unwrap();
+        assert!(index.counts.playlists >= 2, "{}", index.counts.playlists);
+    }
+
+    #[test]
+    fn a_playlist_only_core_keeps_to_its_limits_per_playlist_and_keeps_its_list_of_playlists() {
+        let lib = library();
+        let common = card_with(&lib, &["B/Two"]);
+        let t = || Some(target(Some(2), None, Some(12), Some("playlists.m3u")));
+        // 3 tracks into one playlist is over a limit of 2 for that playlist: refused before anything is copied
+        let over = req(
+            &lib,
+            &["A/One", "C/Three"],
+            &[("playlist.m3u", &["A/One", "B/Two", "C/Three"])],
+            t(),
+        );
         let e = plan_changes(&common, &over, &mut None).unwrap_err();
         assert_eq!(e.code(), ErrorCode::IndexCapExceeded);
         assert!(
             e.message.contains("3 tracks")
-                && e.message.contains("Mp3Player plays at most 2")
+                && e.message.contains("at most 2 from one playlist")
                 && e.message.contains("Remove 1 track"),
             "{}",
             e.message
         );
         assert!(!common.join("A/One").exists(), "nothing was copied");
-        // within the cap: the tracks are copied and playlist.m3u lists every track on the card, in order
-        let ok = ChangeRequest {
-            library_root: Some(lib.clone()),
-            add_albums: vec!["A/One".into(), "C/Three".into()],
-            playlist: Some(target(3)),
-            ..Default::default()
-        };
+        // the same three tracks over two playlists are fine, and the card may hold more tracks than one playlist
+        let ok = req(
+            &lib,
+            &["A/One", "C/Three"],
+            &[
+                ("playlist.m3u", &["A/One", "B/Two"]),
+                ("A Long Playlist Name.m3u", &["C/Three"]),
+            ],
+            t(),
+        );
         let plan = plan_changes(&common, &ok, &mut None).unwrap();
-        let report = execute_changes(&plan, &plan.id, None, &mut None).unwrap();
+        let rep = execute_changes(&plan, &plan.id, None, &mut None).unwrap();
         assert_eq!(
-            (report.playlist_file.as_deref(), report.playlist_tracks),
-            (Some("playlist.m3u"), 3)
+            (rep.playlists_changed, rep.playlist_file.as_deref()),
+            (2, Some("playlist.m3u"))
+        );
+        // a name longer than 12 characters is fine because the core's list of playlists names it, and the default playlist comes first
+        assert_eq!(
+            lines(&common, "playlists.m3u"),
+            "playlist.m3u\nA Long Playlist Name.m3u\n"
         );
         assert_eq!(
-            fs::read_to_string(common.join("playlist.m3u")).unwrap(),
-            "A/One/01.mp3\nB/Two/01.mp3\nC/Three/01.mp3\n"
+            lines(&common, "A Long Playlist Name.m3u"),
+            "C/Three/01.mp3\n"
         );
-        assert!(!common.join(".playlist.m3u.part").exists());
-        // removing an album rewrites it, and a request with no playlist target writes none
-        let rm = ChangeRequest {
-            remove_albums: vec!["A/One".into()],
-            playlist: Some(target(3)),
-            ..Default::default()
-        };
-        let rp = plan_changes(&common, &rm, &mut None).unwrap();
-        execute_changes(&rp, &rp.id, Some(&tmp("bk")), &mut None).unwrap();
+        // the list of playlists is not a playlist to write to
+        let reserved = req(&lib, &[], &[("playlists.m3u", &["B/Two"])], t());
         assert_eq!(
-            fs::read_to_string(common.join("playlist.m3u")).unwrap(),
-            "B/Two/01.mp3\nC/Three/01.mp3\n"
+            plan_changes(&common, &reserved, &mut None)
+                .unwrap_err()
+                .code(),
+            ErrorCode::InvalidMediaRoot
         );
-        assert!(
-            plan_changes(
-                &common,
-                &ChangeRequest {
-                    remove_albums: vec!["B/Two".into()],
-                    ..Default::default()
-                },
-                &mut None
-            )
-            .unwrap()
-            .playlist
-            .is_none()
-        );
-        // the target is part of the confirmation, and a bad file name is refused
-        let a = plan_changes(
-            &common,
-            &ChangeRequest {
-                remove_albums: vec!["B/Two".into()],
-                playlist: Some(target(3)),
-                ..Default::default()
-            },
-            &mut None,
-        )
-        .unwrap();
-        let b = plan_changes(
-            &common,
-            &ChangeRequest {
-                remove_albums: vec!["B/Two".into()],
-                playlist: Some(target(5)),
-                ..Default::default()
-            },
-            &mut None,
-        )
-        .unwrap();
-        assert_ne!(a.id, b.id);
-        let mut bad = a.clone();
-        bad.playlist = Some(PlaylistTarget {
-            file: "../x.m3u".into(),
-            max_tracks: None,
-            max_bytes: None,
-            name_limit: None,
-            core_name: "x".into(),
-        });
-        assert!(execute_changes(&bad, &bad.id, Some(&tmp("bk2")), &mut None).is_err());
+        // a bad file name is refused
+        for bad in ["../x.m3u", "x.txt", ".hidden.m3u", ""] {
+            let r = req(&lib, &[], &[(bad, &["B/Two"])], t());
+            assert_eq!(
+                plan_changes(&common, &r, &mut None).unwrap_err().code(),
+                ErrorCode::InvalidMediaRoot,
+                "{bad}"
+            );
+        }
     }
 
     #[test]
-    fn the_playlist_file_size_limit_is_enforced_before_anything_is_copied() {
+    fn the_playlist_file_size_limit_is_per_playlist_and_checked_before_anything_is_copied() {
         let lib = library();
         let common = card_with(&lib, &["B/Two"]);
-        let target = PlaylistTarget {
-            file: "playlist.m3u".into(),
-            max_tracks: Some(256),
-            max_bytes: Some(30),
-            name_limit: None,
-            core_name: "Mp3Player".into(),
-        };
-        let three = ChangeRequest {
-            library_root: Some(lib.clone()),
-            add_albums: vec!["A/One".into(), "C/Three".into()],
-            playlist: Some(target.clone()),
-            ..Default::default()
-        };
+        let t = Some(target(Some(256), Some(30), None, None));
+        let three = req(
+            &lib,
+            &["A/One", "C/Three"],
+            &[("playlist.m3u", &["A/One", "B/Two", "C/Three"])],
+            t.clone(),
+        );
         let e = plan_changes(&common, &three, &mut None).unwrap_err();
         assert_eq!(e.code(), ErrorCode::IndexCapExceeded);
         assert!(
@@ -979,40 +1178,39 @@ mod tests {
             e.message
         );
         assert!(!common.join("A/One").exists(), "nothing was copied");
-        let two = ChangeRequest {
-            library_root: Some(lib),
-            add_albums: vec!["A/One".into()],
-            playlist: Some(target),
-            ..Default::default()
-        };
+        let two = req(
+            &lib,
+            &["A/One"],
+            &[("playlist.m3u", &["A/One", "B/Two"])],
+            t,
+        );
         assert!(plan_changes(&common, &two, &mut None).is_ok());
     }
 
     #[test]
-    fn a_playlist_name_longer_than_the_core_remembers_is_refused() {
+    fn a_playlist_name_longer_than_the_core_remembers_is_refused_unless_the_core_lists_it() {
         let lib = library();
         let common = card_with(&lib, &["B/Two"]);
-        let target = |file: &str| PlaylistTarget {
-            file: file.into(),
-            max_tracks: None,
-            max_bytes: None,
-            name_limit: Some(12),
-            core_name: "Mp3Player".into(),
-        };
-        let req = |f: &str| ChangeRequest {
-            library_root: Some(lib.clone()),
-            add_albums: vec!["A/One".into()],
-            playlist: Some(target(f)),
-            ..Default::default()
-        };
-        let e = plan_changes(&common, &req("my long playlist.m3u"), &mut None).unwrap_err();
+        let t = Some(target(None, None, Some(12), None));
+        let long = req(
+            &lib,
+            &[],
+            &[("my long playlist.m3u", &["B/Two"])],
+            t.clone(),
+        );
+        let e = plan_changes(&common, &long, &mut None).unwrap_err();
         assert!(
             e.message.contains("12 characters") && e.message.contains("playlist.m3u"),
             "{}",
             e.message
         );
         assert!(
-            plan_changes(&common, &req("playlist.m3u"), &mut None).is_ok(),
+            plan_changes(
+                &common,
+                &req(&lib, &[], &[("playlist.m3u", &["B/Two"])], t),
+                &mut None
+            )
+            .is_ok(),
             "exactly 12 is allowed"
         );
     }
