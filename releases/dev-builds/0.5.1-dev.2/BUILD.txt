@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.1-dev.2   (NOT a release)
+Release goal : 0.5.1
+Built        : 2026-10-16 14:15 WEST
+Branch       : cores-section
+Commit       : caccbca   Library: short footer and properly laid out buttons; albums are dragged with the pointer (the browser's own drag and drop is taken over by the app window's file drop)
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 53da1a492b53893c1339047f84c825855934eb09e1cc35f4e89f5028d8cbdc67  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
