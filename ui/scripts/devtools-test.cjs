@@ -35,6 +35,16 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.locator('.ls-row', { hasText: 'Show developer tools' }).getByRole('switch').click(); await p.waitForTimeout(400);
   assert.equal(await p.locator('.ls-row', { hasText: 'Show developer tools' }).getByRole('switch').getAttribute('aria-checked'), 'true'); ok('turning it on saves');
 
+  // ---- the developer tools have their own section in the menu, like Tools & settings
+  const grp = p.locator('nav .nav-group', { hasText: 'Developer tools' });
+  assert.equal(await grp.count(), 1); ok('with developer tools on the menu has a Developer tools section');
+  assert.deepEqual(await p.locator('#dev-tools button').allInnerTexts(), ['Builds', 'Results', 'Check', 'Builder']); ok('holding Builds, Results, Check and Builder');
+  assert.equal(await p.locator('nav > button', { hasText: /^Builds$/ }).count(), 0); ok('and none of them sit loose in the main menu');
+  await grp.click(); await p.waitForTimeout(200);
+  assert.equal(await p.locator('#dev-tools').count(), 0); assert.equal(await grp.getAttribute('aria-expanded'), 'false'); ok('the section collapses');
+  await grp.click(); await p.waitForTimeout(200);
+  assert.equal(await p.locator('#dev-tools').count(), 1); ok('and opens again');
+
   // ---- on: a Real card by default
   await cardPage();
   assert.match(await p.locator('.card-sum').innerText(), /Card role\s*Real card[\s\S]*type its name first[\s\S]*\.omega-role/i); ok('the Card page shows the role: Real by default, and says what that means');

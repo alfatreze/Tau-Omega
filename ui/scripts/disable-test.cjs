@@ -46,6 +46,10 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await p.locator('.ov-cat:not(.dis)').allInnerTexts().then((a) => a.join('\n')), /No platform\s*1 core/); ok('the core left in place is still listed');
   assert.match(await p.locator('.ov-card', { hasText: 'Game Boy Advance' }).innerText(), /2 cores · 1 disabled/); ok('the platform still counts the disabled core, and says how many are disabled');
 
+  const bar = p.locator('.dis-bar');
+  assert.match(await bar.innerText(), /1 core is disabled on the Pocket[\s\S]*hidden from its menu but still listed here, tagged/i); ok('the overview opens with a bar saying how many cores are disabled');
+  assert.equal(await bar.getByRole('button', { name: 'Show them' }).count(), 1); assert.equal(await bar.getByRole('button', { name: 'Enable all' }).count(), 1); ok('with Show them and Enable all');
+  await p.locator('nav .nav-group', { hasText: /^Card/ }).count();
   // ---- a disabled core stays in its place, tagged, and can still be fixed
   const tree = p.getByRole('tree', { name: 'Cores by platform' });
   await tree.getByRole('button', { name: 'Expand Game Boy Advance' }).click(); await p.waitForTimeout(200);
@@ -54,11 +58,16 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await gbaRow.locator('.nt-dot').count(), 1); ok('and it still shows the dot for the file it needs');
   await p.locator('.ov-card', { hasText: 'Game Boy Advance' }).click(); await p.waitForTimeout(300);
   assert.match(await p.locator('.pv-open', { hasText: 'GBA' }).first().innerText(), /Disabled on the Pocket[\s\S]*Needs 1 file/); ok('the platform page tags it Disabled on the Pocket next to what it needs');
+  assert.equal(await p.getByRole('button', { name: /Open GBA to add what it needs, then enable it/ }).count(), 1); ok('a disabled core that still needs a file offers Fix, then enable on its row');
   await p.locator('.pv-open', { hasText: 'GBA' }).first().click(); await p.waitForTimeout(600);
   const sw0 = p.getByRole('switch', { name: 'Visible on the Pocket' });
   assert.equal(await sw0.getAttribute('aria-checked'), 'false'); ok('its page shows the switch off');
   assert.match(await p.locator('.dis-banner').innerText(), /Disabled on the Pocket\.[\s\S]*still needs gba_bios\.bin[\s\S]*add it in Files/); ok('and says what it still needs, and where to add it');
   assert.match(await p.locator('.cores-scroll').innerText(), /gba_bios\.bin/); ok('the Files tab still works for a disabled core');
+  assert.equal(await p.locator('.dis-banner').getByRole('button', { name: 'Enable on the Pocket' }).count(), 1); ok('the banner has an Enable on the Pocket button');
+  await p.locator('.dis-banner').getByRole('button', { name: 'Enable on the Pocket' }).click(); await p.waitForTimeout(300);
+  assert.match(await p.locator('.dis-warn').innerText(), /still lacks gba_bios\.bin/); await p.getByRole('button', { name: 'Cancel' }).click(); await p.waitForTimeout(150); ok('and it asks first while a required file is missing');
+
   await sw0.click(); await p.waitForTimeout(300);
   assert.match(await p.locator('.dis-warn').innerText(), /still lacks gba_bios\.bin[\s\S]*Enable it anyway/); ok('switching it on while it still lacks a file asks first');
   await p.getByRole('button', { name: 'Cancel' }).click(); await p.waitForTimeout(150);
@@ -66,10 +75,20 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // ---- enable again
   await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(150); await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(300);
-  await p.getByRole('button', { name: 'Enable GBA' }).click(); await p.waitForTimeout(600);
+  await p.locator('.dis-bar').getByRole('button', { name: 'Enable all' }).click(); await p.waitForTimeout(600);
   assert.match(await p.locator('.cores').innerText(), /1 core enabled again\. It will not be suggested for hiding again/); ok('enabling says it will not be suggested again');
   assert.equal(await p.locator('#ov-disabled').count(), 0); ok('the Disabled section goes when nothing is disabled');
   assert.doesNotMatch(await p.locator('.ov-card', { hasText: 'Game Boy Advance' }).innerText(), /disabled/); ok('and the platform no longer says anything is disabled');
+
+  // ---- a disabled core with nothing missing can be enabled right from its platform row
+  await p.locator('.ov-card', { hasText: 'Game Boy Advance' }).click(); await p.waitForTimeout(300);
+  await p.locator('.pv-open', { hasText: 'GBAlt' }).click(); await p.waitForTimeout(500);
+  await p.getByRole('switch', { name: 'Visible on the Pocket' }).click(); await p.waitForTimeout(600);
+  await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(150); await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(250);
+  await p.locator('.ov-card', { hasText: 'Game Boy Advance' }).click(); await p.waitForTimeout(300);
+  await p.getByRole('button', { name: 'Enable GBAlt on the Pocket' }).click(); await p.waitForTimeout(600);
+  assert.equal(await p.getByRole('button', { name: 'Enable GBAlt on the Pocket' }).count(), 0); assert.doesNotMatch(await p.locator('.pv-list').innerText(), /Disabled on the Pocket/); ok('the Enable button on a platform row turns the core back on');
+  await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(150); await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(250);
 
   // ---- the header switch: it stays on the page
   await p.locator('.ov-card', { hasText: 'Game Boy Advance' }).click(); await p.waitForTimeout(300);

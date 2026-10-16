@@ -10,6 +10,7 @@
   import { errorMessage } from './backend';
   import type { Core } from './types';
   $: if ($developerTools && path) void refreshRole(path);
+  $: disabledCount = $coresTreeStore.reduce((n, p) => n + p.cores.filter((c) => c.disabled).length, 0);
   let roleBusy = false; let roleNote = '';
   async function toggleRole(test: boolean) { roleBusy = true; roleNote = ''; try { await markTestCard(path, test); roleNote = test ? 'Marked as a test card.' : 'This card is a Real card again.'; } catch (e) { roleNote = `Nothing was changed. ${errorMessage(e)}`; } finally { roleBusy = false; } }
   export let cardMounted: boolean | null = null; export let ejectedSafely = ''; export let path = '';
@@ -60,6 +61,7 @@
         <dl class="sum-stats" aria-label="Card totals">
           <div><dt>Cores</dt><dd>{$coresTotal}</dd></div>
           <div><dt>Platforms</dt><dd>{platformCount}</dd></div>
+          {#if disabledCount}<div><dt>Disabled</dt><dd><button class="sum-link" aria-label={`${disabledCount} cores disabled on the Pocket. Open the Cores page`} on:click={browseCores}>{disabledCount} <small>on the Pocket</small></button></dd></div>{/if}
           <div><dt>Categories</dt><dd>{$coresGroups.filter((g) => g.name !== 'No platform').length}</dd></div>
           {#if libraries.length}<div><dt>Library tracks</dt><dd>{tracks}</dd></div>{/if}
           <div class:ok={$coreUpdateCount === 0}><dt>Updates</dt><dd>{#if $coreUpdateCount}<button class="sum-link" aria-label={`${$coreUpdateCount} core updates available. Open the updates`} on:click={openUpdates}>{$coreUpdateCount} <small>available</small></button>{:else}0{/if}</dd></div>
