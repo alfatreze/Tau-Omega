@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.0-alpha.15   (NOT a release)
+Release goal : 0.5.0
+Built        : 2026-10-16 03:15 WEST
+Branch       : cores-section
+Commit       : 91fbf3b   Skip silence: per-track review sheet (waveform, draggable cuts, typed seconds, never skip), hand edits kept per card and applied on every sync, MP3 encoder delay checked against a real LAME file
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : d8ba0ae6d618ef5214e528d7eaa2829a69c96a58447693a90f9014045434b7d4  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
