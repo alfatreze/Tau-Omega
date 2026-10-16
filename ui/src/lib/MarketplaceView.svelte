@@ -4,6 +4,7 @@
   import { openManualAdd } from './manualAddStore';
   import { onMount } from 'svelte';
   import CoreInstall from './CoreInstall.svelte';
+  import MultiInstall from './MultiInstall.svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
   import { marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates } from './tau-api';
@@ -23,6 +24,11 @@
   /** Pictures by `kind:id`: undefined = not asked yet, null = the library has none. Fetched only for rows that are shown. */
   let art: Record<string, string | null | undefined> = {}; const asking = new Set<string>(); let queue: string[] = [];
   let announce = '';
+  /** Cores ticked for one installation together (only cores with a download, and only with a card open). */
+  let picked = new Set<string>(); let multi = false;
+  const toggle = (id: string) => { picked.has(id) ? picked.delete(id) : picked.add(id); picked = new Set(picked); };
+  $: if (!card) picked = new Set();
+  $: pickedCores = cores.filter((c) => picked.has(c.id)).map((c) => ({ id: c.id, name: c.name }));
 
   $: cores = result?.catalog.cores ?? [];
   $: installed = new Set([...statuses.keys()]);
@@ -119,6 +125,7 @@
   </div>
   <p class="mk-note" role="status" aria-live="polite">{#if error && result}<span class="err">{error}</span>{:else if error}{:else if loading && !result}Loading the list…{:else}{announce}{#if note}{' · '}{note}{/if}{/if}</p>
 
+  {#if picked.size}<div class="mk-bar" role="region" aria-label="Selected cores"><span>{picked.size} {picked.size === 1 ? 'core' : 'cores'} selected</span><span><button class="quiet" on:click={() => (picked = new Set())}>Clear</button> <button class="primary" on:click={() => (multi = true)}>Install {picked.size} together…</button></span></div>{/if}
   {#if error && !result}
     <div class="empty"><h2>The list could not be loaded</h2><p>{error}</p><button class="primary" on:click={() => load(true)}>Try again</button></div>
   {:else if result && !shown.length}
@@ -142,6 +149,7 @@
             </span>
           </button>
           <div class="mk-foot">
+            {#if card && item.download_url}<label class="mk-pick"><input type="checkbox" checked={picked.has(item.id)} on:change={() => toggle(item.id)} aria-label={`Select ${item.name} to install together`} /> Select</label>{/if}
             {#if item.category}<button class="chip toggle mk-tag" aria-pressed={filters.category === item.category} aria-label={`Show only ${item.category}`} on:click={() => toggleCategory(item.category)}>{item.category}</button>{/if}
             {#if chip(item)}<span class="chip" class:capable={statusOf(item)?.status === 'UpdateAvailable'}>{chip(item)}</span>{/if}
             <span class="mk-ver">{item.version || '—'}<small>{item.release_date}</small></span>
@@ -152,6 +160,7 @@
   {/if}
 </section>
 
+{#if multi}<MultiInstall {card} cores={pickedCores} close={() => { multi = false; }} installed={() => { picked = new Set(); void loadStatuses(card); }} />{/if}
 {#if selected}
   <div class="mk-backdrop" role="presentation" on:click={close}></div>
   <div class="mk-sheet" role="dialog" aria-modal="true" aria-labelledby="mk-title" use:modal>
@@ -203,6 +212,8 @@
   </div>
 {/if}
 <style>
+  .mk-pick{font-size:12px;color:#a6b3b2;display:inline-flex;gap:5px;align-items:center;margin-right:auto}
+  .mk-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:5;background:#16292a;border:1px solid #3b5a58;border-radius:10px;padding:8px 14px;margin:0 0 10px;font-size:13px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .mk-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 8px}
   .mk-filters input,.mk-filters select{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:10px 12px}

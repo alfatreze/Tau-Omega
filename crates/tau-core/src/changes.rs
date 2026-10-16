@@ -21,6 +21,9 @@ pub struct PlaylistTarget {
     /// The largest playlist file the core reads, in bytes (about 48 characters per line at 256 tracks).
     #[cfg_attr(feature = "serde", serde(default))]
     pub max_bytes: Option<u32>,
+    /// The longest playlist name the core remembers for its next launch (a longer one falls back to `playlist.m3u`).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub name_limit: Option<u8>,
     /// The core's name, for messages.
     pub core_name: String,
 }
@@ -245,6 +248,18 @@ pub fn plan_changes(
                 ),
             ));
         }
+    }
+    if let Some(target) = &request.playlist
+        && let Some(limit) = target.name_limit
+        && target.file.len() > usize::from(limit)
+    {
+        return Err(TauError::e(
+            ErrorCode::InvalidMediaRoot,
+            format!(
+                "{} only remembers a playlist name of up to {limit} characters, and {:?} is longer, so it would fall back to playlist.m3u at the next launch.",
+                target.core_name, target.file
+            ),
+        ));
     }
     if let Some(target) = &request.playlist
         && let Some(max_bytes) = target.max_bytes
@@ -835,6 +850,7 @@ mod tests {
             file: "playlist.m3u".into(),
             max_tracks: Some(max),
             max_bytes: None,
+            name_limit: None,
             core_name: "Mp3Player".into(),
         };
         // 1 on the card + 2 more would be 3 tracks, over a cap of 2: refused before anything is copied
@@ -924,6 +940,7 @@ mod tests {
             file: "../x.m3u".into(),
             max_tracks: None,
             max_bytes: None,
+            name_limit: None,
             core_name: "x".into(),
         });
         assert!(execute_changes(&bad, &bad.id, Some(&tmp("bk2")), &mut None).is_err());
@@ -937,6 +954,7 @@ mod tests {
             file: "playlist.m3u".into(),
             max_tracks: Some(256),
             max_bytes: Some(30),
+            name_limit: None,
             core_name: "Mp3Player".into(),
         };
         let three = ChangeRequest {
@@ -960,5 +978,34 @@ mod tests {
             ..Default::default()
         };
         assert!(plan_changes(&common, &two, &mut None).is_ok());
+    }
+
+    #[test]
+    fn a_playlist_name_longer_than_the_core_remembers_is_refused() {
+        let lib = library();
+        let common = card_with(&lib, &["B/Two"]);
+        let target = |file: &str| PlaylistTarget {
+            file: file.into(),
+            max_tracks: None,
+            max_bytes: None,
+            name_limit: Some(12),
+            core_name: "Mp3Player".into(),
+        };
+        let req = |f: &str| ChangeRequest {
+            library_root: Some(lib.clone()),
+            add_albums: vec!["A/One".into()],
+            playlist: Some(target(f)),
+            ..Default::default()
+        };
+        let e = plan_changes(&common, &req("my long playlist.m3u"), &mut None).unwrap_err();
+        assert!(
+            e.message.contains("12 characters") && e.message.contains("playlist.m3u"),
+            "{}",
+            e.message
+        );
+        assert!(
+            plan_changes(&common, &req("playlist.m3u"), &mut None).is_ok(),
+            "exactly 12 is allowed"
+        );
     }
 }
