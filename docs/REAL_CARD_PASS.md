@@ -36,7 +36,7 @@ Result column: fill in as you go (ok / what happened). Anything that fails goes 
 | # | Do | Expect | Result |
 |---|---|---|---|
 | D1 | Builds > choose a folder with two test-build zips | Grouped into a series, newest first; the card comparison is right | |
-| D2 | Install the older one (reviewed plan; the type-the-name step on a Real card) | Plan lists files; install verifies; run note created | |
+| D2 | Install the older one (reviewed plan; the type-the-name step only if Settings > Ask for the card’s name is on) | Plan lists files; install verifies; run note created | |
 | D3 | Install the newer one | Carry-media panel appears; "Review the copy" shows new / already there / different; copy is verified; a different file is not overwritten | |
 | D4 | Install a package the Check page reports an Error for | "Confirm and install" stays blocked until "Install anyway"; the override is recorded in the run note | |
 | D5 | Remove older builds | Lists them; backs each up; keeps music and settings | |

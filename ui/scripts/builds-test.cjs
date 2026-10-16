@@ -11,7 +11,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const errors = [];
   p.on('pageerror', (e) => errors.push(e.message));
   p.on('console', (m) => m.text().startsWith('[dev-mock] unmocked') && errors.push(m.text()));
-  const start = async (dev) => { await p.goto(url); await p.evaluate((d) => { localStorage.clear(); if (d) localStorage.setItem('tau.mock.devTools', '1'); }, dev); await p.goto(url); await p.waitForTimeout(1200); };
+  const start = async (dev) => { await p.goto(url); await p.evaluate((d) => { localStorage.clear(); if (d) { localStorage.setItem('tau.mock.devTools', '1'); localStorage.setItem('tau.confirmRealCard', '1'); } }, dev); await p.goto(url); await p.waitForTimeout(1200); };
   const nav = (n) => p.locator('nav button', { hasText: n }).first();
   const page = () => p.locator('.builds');
 

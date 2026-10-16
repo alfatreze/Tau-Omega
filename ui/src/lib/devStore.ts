@@ -3,6 +3,10 @@ import { cardRole, getPrefs, runNoteRecord, setCardRole, setLastInstall } from '
 
 /** Whether the developer tools are shown (Settings > "Show developer tools"). Off until the user turns it on. */
 export const developerTools = writable(false);
+/** Ask for the card's name before installing onto a Real card (developer tools). Off by default, kept on this computer. */
+const CONFIRM_KEY = 'tau.confirmRealCard';
+export const confirmRealCard = writable((() => { try { return localStorage.getItem(CONFIRM_KEY) === '1'; } catch { return false; } })());
+confirmRealCard.subscribe((on) => { try { localStorage.setItem(CONFIRM_KEY, on ? '1' : '0'); } catch { /* not kept */ } });
 /** The open card's role: `test` only when the card carries the marker; every other card is `real`. */
 export const roleOf = writable<{ card: string; role: 'real' | 'test' }>({ card: '', role: 'real' });
 

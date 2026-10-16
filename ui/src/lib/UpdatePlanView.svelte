@@ -7,7 +7,7 @@
   import LintFindings from './LintFindings.svelte';
   import { plural } from './coresFormat';
   import { errorMessage } from './backend';
-  import { developerTools, roleOf, refreshRole, cardLabel, markInstalled } from './devStore';
+  import { developerTools, confirmRealCard, roleOf, refreshRole, cardLabel, markInstalled } from './devStore';
   import type { InstallPlan, InstallReport, LintReport, UpdateAssessment, UpdateVerdict } from './types';
   /** The package zip (or several) and the card folder chosen on the page above. */
   export let zipPath = ''; export let cardPath = ''; export let zips: string[] = [];
@@ -23,9 +23,9 @@
 
   $: targets = zips.length ? zips : zipPath.trim() ? [zipPath] : [];
   $: gating = $developerTools && lintGate;
-  // With developer tools on, installing onto a Real card needs its name typed first (a test card is exactly what dev installs are for).
+  // Only when asked for (developer tools, Settings > "Ask for the card's name"), installing onto a Real card needs its name typed first.
   $: if ($developerTools && cardPath) void refreshRole(cardPath);
-  $: needName = $developerTools && !($roleOf.card === cardPath && $roleOf.role === 'test');
+  $: needName = $developerTools && $confirmRealCard && !($roleOf.card === cardPath && $roleOf.role === 'test');
   $: nameOk = !needName || typed.trim().toLowerCase() === cardLabel(cardPath).toLowerCase();
   // the review starts by itself: no separate "review" step to press
   $: { const key = JSON.stringify([targets, cardPath]); if (key !== lastKey && cardPath.trim() && targets.length) { lastKey = key; void review(); } }
