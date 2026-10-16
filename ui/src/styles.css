@@ -124,9 +124,19 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .content:has(> .cores.has-core){height:100vh;display:flex;flex-direction:column;overflow:hidden}
 @media(max-width:1100px){.content:has(> .cores.has-core){height:auto;overflow:visible;display:block}}
 
-/* Scroll bars: the primary green, half as wide as the system ones. */
-*::-webkit-scrollbar{width:5px;height:5px}
+/* Scroll bars (UX): vertical bars are drawn by lib/overlayScroll.ts (slim, only where content overflows, shown while scrolling or pointing,
+   length capped), so the native vertical bar takes no room and never shows. Horizontal bars stay native, thin and green. */
+*::-webkit-scrollbar:vertical{width:0}
+*::-webkit-scrollbar:horizontal{height:4px}
 *::-webkit-scrollbar-track{background:transparent}
-*::-webkit-scrollbar-thumb{background:#c1f0ad;border-radius:99px}
-*::-webkit-scrollbar-thumb:hover{background:#d6f7c6}
+*::-webkit-scrollbar-thumb{background:rgba(193,240,173,.5);border-radius:99px}
 *::-webkit-scrollbar-corner{background:transparent}
+.os-thumb{position:fixed;left:0;top:0;width:4px;border-radius:99px;background:#c1f0ad;opacity:0;z-index:2000;pointer-events:none;transition:opacity .2s,width .12s;will-change:transform}
+.os-thumb.on{opacity:.85;pointer-events:auto}.os-thumb:hover,.os-thumb.drag{width:7px;opacity:1}
+
+/* The side menu: the app name and the card selector stay put, the menu below them is the one thing that scrolls (the cores tree
+   does not scroll inside it), and the note stays at the bottom. */
+aside{overflow:hidden;padding-bottom:0}
+aside .brand,aside .active-context{flex:none}
+aside > nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;align-content:start;margin-right:-10px;padding-right:10px;padding-bottom:12px}
+aside .offline{flex:none;margin-top:0;padding:10px 0 18px}
