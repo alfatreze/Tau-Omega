@@ -179,6 +179,7 @@ pub fn scan_dir_with_progress(
         is_flac: bool,
         print: Option<ledger::Fingerprint>,
     }
+    let silence_on = crate::trim::active().enabled;
     let mut media = Vec::new();
     for (done, path) in files.into_iter().enumerate() {
         let extension = path
@@ -236,7 +237,10 @@ pub fn scan_dir_with_progress(
             (Some(session), Some(print)) => session.tags(&rel, print),
             _ => None,
         }
-        .filter(|hit| hit.tags.contains_key("_det"));
+        .filter(|hit| {
+            hit.tags.contains_key("_det")
+                && (!silence_on || hit.tags.contains_key("_sil") || hit.tags.contains_key("_silx"))
+        });
         let (tags, secs, fmt) = if let Some(hit) = cached {
             output.reused += 1;
             (hit.tags, hit.secs, hit.fmt)
@@ -248,6 +252,17 @@ pub fn scan_dir_with_progress(
                 if let Ok(det) = crate::details::extract(&path) {
                     result.0.insert("_det".into(), det.to_hex());
                     result.0.insert("_denc".into(), det.encoder);
+                }
+                // Leading and trailing silence at every level, only while trimming is switched on. A file
+                // that cannot be measured is marked so it is not tried again on every scan.
+                if silence_on {
+                    let measured = tau_audio::silence::measure_levels(&path, &mut |_| true)
+                        .ok()
+                        .and_then(|l| crate::trim::encode_levels(&l));
+                    match measured {
+                        Some(text) => result.0.insert("_sil".into(), text),
+                        None => result.0.insert("_silx".into(), "1".into()),
+                    };
                 }
                 result
             }) {

@@ -1,14 +1,14 @@
 //! Silence trimming at sync: how much leading and trailing silence a track gets marked to skip. Nothing
-//! changes a file. The result is two counts of sample frames at the file's own rate, `start` and `end`,
-//! the same pair the player keeps per track (tau-alpha's `PLAYER_V2_SPEC.md`, `trim_start` and `trim_end`),
+//! changes a file. The result is two counts of sample frames at the file's own rate, `lead_skip` and `tail_skip`,
+//! the pair tau-alpha's `PLAYER_V2_SPEC.md` section 10.1 asks for,
 //! counted on top of any encoder delay and padding the file already declares.
 
-use tau_audio::silence::EdgeSilence;
+use tau_audio::silence::{EdgeSilence, LEVELS_DB};
 
 /// Limits the settings are kept within: a setting outside them is brought back, never refused.
 pub const THRESHOLD_DB10: (i16, i16) = (-800, -400);
 pub const KEEP_MS: (u32, u32) = (0, 1_000);
-pub const MIN_MS: (u32, u32) = (100, 5_000);
+pub const MIN_MS: (u32, u32) = (500, 10_000);
 pub const MAX_MS: (u32, u32) = (1_000, 60_000);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,7 +33,7 @@ impl Default for TrimSettings {
             enabled: false,
             threshold_db10: -600,
             keep_ms: 100,
-            min_ms: 300,
+            min_ms: 2_000,
             max_ms: 10_000,
         }
     }
@@ -62,13 +62,15 @@ impl TrimSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TrimPoints {
-    pub start: u32,
-    pub end: u32,
+    /// Frames to skip at the start (`lead_skip` in tau-alpha's `PLAYER_V2_SPEC.md` section 10.1).
+    pub lead_skip: u32,
+    /// Frames to skip at the end (`tail_skip`).
+    pub tail_skip: u32,
 }
 
 impl TrimPoints {
     pub fn is_none(&self) -> bool {
-        self.start == 0 && self.end == 0
+        self.lead_skip == 0 && self.tail_skip == 0
     }
 }
 
@@ -88,8 +90,8 @@ pub fn plan_trim(edge: &EdgeSilence, settings: &TrimSettings) -> TrimPoints {
         }
     };
     TrimPoints {
-        start: end_of(edge.lead),
-        end: end_of(edge.tail),
+        lead_skip: end_of(edge.lead),
+        tail_skip: end_of(edge.tail),
     }
 }
 
@@ -120,23 +122,26 @@ mod tests {
 
     #[test]
     fn silence_is_cut_down_to_what_the_keep_setting_leaves() {
-        // 2 s at the start, 1 s at the end, keep 100 ms
-        let p = plan_trim(&edge(88_200, 44_100), &on());
-        assert_eq!((p.start, p.end), (88_200 - 4_410, 44_100 - 4_410));
+        // 4 s at the start, 2.5 s at the end, keep 100 ms
+        let p = plan_trim(&edge(176_400, 110_250), &on());
+        assert_eq!(
+            (p.lead_skip, p.tail_skip),
+            (176_400 - 4_410, 110_250 - 4_410)
+        );
     }
 
     #[test]
     fn short_silences_are_left_alone() {
-        // 350 ms of silence minus 100 ms kept is 250 ms: under the 300 ms minimum
-        assert!(plan_trim(&edge(15_435, 15_435), &on()).is_none());
-        // 450 ms: 350 ms to skip, over the minimum
-        assert_eq!(plan_trim(&edge(19_845, 0), &on()).start, 19_845 - 4_410);
+        // 2 s of silence minus 100 ms kept is 1.9 s: under the 2 s minimum
+        assert!(plan_trim(&edge(88_200, 88_200), &on()).is_none());
+        // 2.2 s: 2.1 s to skip, over the minimum
+        assert_eq!(plan_trim(&edge(97_020, 0), &on()).lead_skip, 97_020 - 4_410);
     }
 
     #[test]
     fn at_most_the_cap_is_skipped_at_either_end() {
         let p = plan_trim(&edge(44_100 * 60, 44_100 * 30), &on());
-        assert_eq!((p.start, p.end), (441_000, 441_000));
+        assert_eq!((p.lead_skip, p.tail_skip), (441_000, 441_000));
     }
 
     #[test]
@@ -162,12 +167,125 @@ mod tests {
         .clamped();
         assert_eq!(
             (s.threshold_db10, s.keep_ms, s.min_ms, s.max_ms),
-            (-800, 1_000, 100, 1_000)
+            (-800, 1_000, 500, 1_000)
         );
         let s = TrimSettings {
             threshold_db10: 0,
             ..on()
         };
         assert_eq!(s.threshold_db(), -40.0);
+    }
+}
+
+/// One track's measurement at every level of [`LEVELS_DB`], kept as text in the scan's tag map so the ledger
+/// cache holds it with the other tags: `rate,frames;lead,tail;lead,tail;...` (nine pairs).
+pub fn encode_levels(levels: &[EdgeSilence]) -> Option<String> {
+    let first = levels.first()?;
+    if levels.len() != LEVELS_DB.len() {
+        return None;
+    }
+    let mut out = format!("{},{}", first.rate, first.frames);
+    for l in levels {
+        out.push_str(&format!(";{},{}", l.lead, l.tail));
+    }
+    Some(out)
+}
+
+pub fn decode_levels(text: &str) -> Option<Vec<EdgeSilence>> {
+    let mut parts = text.split(';');
+    let (rate, frames) = parts.next()?.split_once(',')?;
+    let (rate, frames): (u32, u64) = (rate.parse().ok()?, frames.parse().ok()?);
+    let levels: Vec<EdgeSilence> = parts
+        .map(|p| {
+            let (l, t) = p.split_once(',')?;
+            Some(EdgeSilence {
+                rate,
+                frames,
+                lead: l.parse().ok()?,
+                tail: t.parse().ok()?,
+            })
+        })
+        .collect::<Option<_>>()?;
+    (levels.len() == LEVELS_DB.len()).then_some(levels)
+}
+
+/// What to skip for a track measured at every level: the level nearest the setting's threshold decides.
+pub fn plan_trim_levels(levels: &[EdgeSilence], settings: &TrimSettings) -> TrimPoints {
+    let want = settings.threshold_db();
+    let nearest = LEVELS_DB
+        .iter()
+        .enumerate()
+        .min_by(|a, b| (a.1 - want).abs().total_cmp(&(b.1 - want).abs()))
+        .map_or(0, |(i, _)| i);
+    levels
+        .get(nearest)
+        .map_or_else(TrimPoints::default, |e| plan_trim(e, settings))
+}
+
+static ACTIVE: std::sync::RwLock<TrimSettings> = std::sync::RwLock::new(TrimSettings {
+    enabled: false,
+    threshold_db10: -600,
+    keep_ms: 100,
+    min_ms: 2_000,
+    max_ms: 10_000,
+});
+
+/// The settings the app is running with: set once from the saved preferences and again when they change. A
+/// scan measures silence only while they are enabled; the index build reads them to decide each track's skip.
+/// Off until the app sets it, so every other caller (tests, the command line) is unchanged.
+pub fn set_active(settings: TrimSettings) {
+    *ACTIVE.write().unwrap_or_else(|e| e.into_inner()) = settings.clamped();
+}
+
+pub fn active() -> TrimSettings {
+    *ACTIVE.read().unwrap_or_else(|e| e.into_inner())
+}
+
+#[cfg(test)]
+mod level_tests {
+    use super::*;
+
+    fn lv(lead: u64, tail: u64) -> Vec<EdgeSilence> {
+        (0..LEVELS_DB.len())
+            .map(|i| EdgeSilence {
+                rate: 44_100,
+                frames: 44_100 * 200,
+                lead: lead + i as u64,
+                tail,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn levels_round_trip_as_text_and_bad_text_is_refused() {
+        let l = lv(88_200, 44_100);
+        assert_eq!(decode_levels(&encode_levels(&l).unwrap()).unwrap(), l);
+        assert!(decode_levels("44100,100;1,2").is_none());
+        assert!(decode_levels("x").is_none());
+        assert!(encode_levels(&l[..3]).is_none());
+    }
+
+    #[test]
+    fn the_level_nearest_the_threshold_decides() {
+        let mut l = lv(0, 0);
+        l[0].lead = 441_000; // -80 dB: 10 s of "silence" only at the most sensitive level
+        let strict = TrimSettings {
+            enabled: true,
+            threshold_db10: -800,
+            ..Default::default()
+        };
+        let normal = TrimSettings {
+            enabled: true,
+            ..Default::default()
+        };
+        assert!(plan_trim_levels(&l, &strict).lead_skip > 0);
+        assert!(plan_trim_levels(&l, &normal).is_none());
+        // between two levels: -62 dB is nearest -60
+        let s = TrimSettings {
+            enabled: true,
+            threshold_db10: -620,
+            ..Default::default()
+        };
+        assert_eq!(plan_trim_levels(&l, &s), plan_trim_levels(&l, &normal));
     }
 }

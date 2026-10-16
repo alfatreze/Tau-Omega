@@ -12,6 +12,10 @@ use std::path::Path;
 
 pub const RECORD: usize = 32;
 pub const VERSION: u16 = 1;
+/// Version 2 appends `lead_skip` and `tail_skip` (u32 each, source pairs) to every record. Written only when at
+/// least one track has a skip, so an index without trimming stays byte for byte what version 1 produces.
+pub const VERSION_SKIP: u16 = 2;
+pub const RECORD_SKIP: usize = 40;
 pub const F_VBR: u8 = 1;
 pub const F_LAME: u8 = 2;
 pub const F_SIDECAR: u8 = 4;
@@ -119,6 +123,22 @@ pub fn section(records: &[u8]) -> Vec<u8> {
     out.extend(((records.len() / RECORD) as u32).to_le_bytes());
     out.extend(0u32.to_le_bytes());
     out.extend(records);
+    out
+}
+
+/// The version 2 section: the 32-byte `records` of every track plus its `(lead_skip, tail_skip)`.
+pub fn section_skip(records: &[u8], skips: &[(u32, u32)]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(16 + skips.len() * RECORD_SKIP);
+    out.extend(b"TDET");
+    out.extend(VERSION_SKIP.to_le_bytes());
+    out.extend((RECORD_SKIP as u16).to_le_bytes());
+    out.extend((skips.len() as u32).to_le_bytes());
+    out.extend(0u32.to_le_bytes());
+    for (rec, (lead, tail)) in records.as_chunks::<RECORD>().0.iter().zip(skips) {
+        out.extend(rec);
+        out.extend(lead.to_le_bytes());
+        out.extend(tail.to_le_bytes());
+    }
     out
 }
 

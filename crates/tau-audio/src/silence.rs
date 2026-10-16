@@ -74,6 +74,37 @@ impl Scanner {
     }
 }
 
+/// The thresholds measured together in one pass, dB below full scale: -80 to -40 in 5 dB steps. A setting picks the
+/// nearest one, so changing it never needs the file read again.
+pub const LEVELS_DB: [f32; 9] = [
+    -80.0, -75.0, -70.0, -65.0, -60.0, -55.0, -50.0, -45.0, -40.0,
+];
+
+/// Decodes `path` once and measures its edge silence at every level of [`LEVELS_DB`] (same order).
+pub fn measure_levels(
+    path: &Path,
+    progress: &mut dyn FnMut(u64) -> bool,
+) -> Result<Vec<EdgeSilence>, AudioError> {
+    let mut dec = Decoder::open(path)?;
+    let ch = dec.info.channels;
+    let mut scans: Vec<Scanner> = LEVELS_DB.iter().map(|&d| Scanner::new(ch, d)).collect();
+    let mut buf = Vec::new();
+    let mut frames = 0u64;
+    while {
+        buf.clear();
+        dec.next(&mut buf)?
+    } {
+        for s in &mut scans {
+            s.feed(&buf);
+        }
+        frames += (buf.len() / ch.max(1) as usize) as u64;
+        if !progress(frames) {
+            return Err(AudioError::Process("cancelled".into()));
+        }
+    }
+    Ok(scans.iter().map(|s| s.finish(dec.info.rate)).collect())
+}
+
 /// Decodes `path` once and measures its edge silence. `progress` gets the frames read so far; `false` cancels.
 pub fn measure_edges(
     path: &Path,
@@ -147,6 +178,12 @@ mod tests {
         loud.feed(&all);
         assert_eq!(quiet.finish(8000).lead, 0);
         assert_eq!(loud.finish(8000).lead, 100);
+    }
+
+    #[test]
+    fn every_level_is_measured_in_one_pass() {
+        assert_eq!(LEVELS_DB.len(), 9);
+        assert!(LEVELS_DB.windows(2).all(|w| w[0] < w[1]));
     }
 
     #[test]
