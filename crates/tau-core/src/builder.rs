@@ -47,6 +47,45 @@ pub struct ExtraFile {
     pub dest: String,
 }
 
+/// The platform's own record (`Platforms/<id>.json`): how the Pocket names and groups the system.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PlatformEdit {
+    pub id: String,
+    pub name: String,
+    pub category: String,
+    pub manufacturer: String,
+    pub year: Option<u32>,
+}
+
+/// A picture to turn into a Pocket bitmap, and how to fit it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ImageEdit {
+    pub path: String,
+    pub fit: crate::icon::Fit,
+}
+
+/// Changes made to the template before it becomes the new build. Every field is optional; what is left out stays as the template has it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
+pub struct TemplateEdits {
+    /// How `BuildSpec::icon_png` is fitted into the 36x36 icon.
+    pub icon_fit: crate::icon::Fit,
+    pub author: Option<String>,
+    pub url: Option<String>,
+    pub firmware_required: Option<String>,
+    pub dock_supported: Option<bool>,
+    pub link_port: Option<bool>,
+    pub sleep_supported: Option<bool>,
+    pub platform_ids: Option<Vec<String>>,
+    /// The platform's name, category, manufacturer and year, written to `Platforms/<id>.json`.
+    pub platform: Option<PlatformEdit>,
+    /// The platform banner (521x165) from a PNG or JPEG, written to `Platforms/_images/<id>.bin` for `platform.id` (or the first platform).
+    pub banner: Option<ImageEdit>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BuildSpec {
@@ -57,8 +96,11 @@ pub struct BuildSpec {
     /// `YYYY-MM-DD`.
     pub date_release: String,
     pub description: Option<String>,
+    /// A PNG or JPEG of any size for the author icon, fitted by `edits.icon_fit`.
     pub icon_png: Option<String>,
     pub extra: Vec<ExtraFile>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub edits: TemplateEdits,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,7 +108,7 @@ pub struct BuildSpec {
 pub struct PlanFile {
     pub rel: String,
     pub bytes: u64,
-    /// `bitstream`, `template`, `generated` (core.json), `icon` or `extra`.
+    /// `bitstream`, `template`, `generated` (core.json, platform json), `icon`, `banner` or `extra`.
     pub origin: String,
     pub sha256: String,
 }
@@ -272,6 +314,31 @@ fn read_template(src: &TemplateSource, tmp: &Path) -> Result<Template, TauError>
     }
 }
 
+fn platform_id_ok(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 31
+        && s.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// Sets `doc[a][b]...` to `value`, creating the objects on the way.
+fn set_path(doc: &mut serde_json::Value, path: &[&str], value: serde_json::Value) {
+    let mut cur = doc;
+    for (i, k) in path.iter().enumerate() {
+        if !cur.is_object() {
+            *cur = serde_json::json!({});
+        }
+        let obj = cur.as_object_mut().expect("made an object above");
+        if i + 1 == path.len() {
+            obj.insert((*k).into(), value);
+            return;
+        }
+        cur = obj
+            .entry((*k).to_string())
+            .or_insert_with(|| serde_json::json!({}));
+    }
+}
+
 /// `dest` must stay inside the package: under `Cores/<id>/`, `Assets/` or `Platforms/`, no `..`, and never user data.
 fn check_dest(dest: &str, id: &str) -> Result<String, TauError> {
     let d = dest.replace("{id}", id).replace('\\', "/");
@@ -337,6 +404,25 @@ fn assemble(
             "The template's core.json has no author, so the core id cannot be made.",
         ));
     }
+    let ed = &spec.edits;
+    let author = match ed.author.as_deref().map(str::trim) {
+        Some(a) if !a.is_empty() => {
+            meta.insert("author".into(), a.into());
+            a.to_string()
+        }
+        _ => author,
+    };
+    if let Some(u) = &ed.url {
+        meta.insert("url".into(), u.trim().into());
+    }
+    if let Some(ids) = &ed.platform_ids {
+        if ids.is_empty() || !ids.iter().all(|i| platform_id_ok(i)) {
+            return Err(refuse(
+                "Platform ids are lowercase letters, digits and underscores, and there must be at least one.",
+            ));
+        }
+        meta.insert("platform_ids".into(), serde_json::json!(ids));
+    }
     meta.insert("shortname".into(), name.into());
     meta.insert("version".into(), spec.version.trim().into());
     meta.insert("date_release".into(), spec.date_release.trim().into());
@@ -344,6 +430,43 @@ fn assemble(
         meta.insert("description".into(), d.trim().into());
     }
     let id = format!("{author}.{name}");
+    let ids_now: Vec<String> = json
+        .pointer("/core/metadata/platform_ids")
+        .and_then(serde_json::Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(v) = &ed.firmware_required {
+        set_path(
+            &mut json,
+            &["core", "framework", "version_required"],
+            v.trim().into(),
+        );
+    }
+    if let Some(v) = ed.dock_supported {
+        set_path(
+            &mut json,
+            &["core", "framework", "dock", "supported"],
+            v.into(),
+        );
+    }
+    if let Some(v) = ed.link_port {
+        set_path(
+            &mut json,
+            &["core", "framework", "hardware", "link_port"],
+            v.into(),
+        );
+    }
+    if let Some(v) = ed.sleep_supported {
+        set_path(
+            &mut json,
+            &["core", "framework", "sleep_supported"],
+            v.into(),
+        );
+    }
     let bitstream_name = json
         .pointer("/core/cores/0/filename")
         .and_then(serde_json::Value::as_str)
@@ -393,8 +516,64 @@ fn assemble(
         (converted, "bitstream"),
     );
     if let Some(png) = &spec.icon_png {
-        let bin = crate::icon::encode_icon_bin(&read_capped(Path::new(png), 4 << 20, "The icon")?)?;
+        let bin = crate::icon::encode_icon_from_image(
+            &read_capped(Path::new(png), 8 << 20, "The icon")?,
+            spec.edits.icon_fit,
+        )?;
         files.insert(format!("Cores/{id}/icon.bin"), (bin, "icon"));
+    }
+    if let Some(pe) = &ed.platform {
+        if !ids_now.contains(&pe.id) {
+            return Err(refuse(format!(
+                "The platform record is for {:?}, which is not one of this core's platforms ({}).",
+                pe.id,
+                ids_now.join(", ")
+            )));
+        }
+        let rel = format!("Platforms/{}.json", pe.id);
+        let mut doc = files
+            .get(&rel)
+            .and_then(|(b, _)| serde_json::from_slice::<serde_json::Value>(b).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+        set_path(&mut doc, &["platform", "name"], pe.name.trim().into());
+        set_path(
+            &mut doc,
+            &["platform", "category"],
+            pe.category.trim().into(),
+        );
+        set_path(
+            &mut doc,
+            &["platform", "manufacturer"],
+            pe.manufacturer.trim().into(),
+        );
+        if let Some(y) = pe.year {
+            set_path(&mut doc, &["platform", "year"], y.into());
+        }
+        files.insert(
+            rel,
+            (
+                serde_json::to_vec_pretty(&doc).map_err(|e| refuse(e.to_string()))?,
+                "generated",
+            ),
+        );
+    }
+    if let Some(b) = &ed.banner {
+        let pid = ed
+            .platform
+            .as_ref()
+            .map(|p| p.id.clone())
+            .or_else(|| ids_now.first().cloned())
+            .ok_or_else(|| refuse("The core declares no platform to put the banner on."))?;
+        if !ids_now.contains(&pid) {
+            return Err(refuse(format!(
+                "The banner is for {pid:?}, which is not one of this core's platforms."
+            )));
+        }
+        let bin = crate::icon::encode_platform_image(
+            &read_capped(Path::new(&b.path), 16 << 20, "The banner picture")?,
+            b.fit,
+        )?;
+        files.insert(format!("Platforms/_images/{pid}.bin"), (bin, "banner"));
     }
     for e in &spec.extra {
         let dest = check_dest(&e.dest, &id)?;
@@ -563,6 +742,128 @@ impl BuildSpec {
     }
 }
 
+/// What a template holds, as fields to look at and change, plus its pictures (as PNG bytes) and the files it would put on a card.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TemplateView {
+    pub core_id: String,
+    pub shortname: String,
+    pub author: String,
+    pub description: String,
+    pub url: String,
+    pub version: String,
+    pub date_release: String,
+    pub firmware_required: String,
+    pub dock_supported: Option<bool>,
+    pub link_port: Option<bool>,
+    pub sleep_supported: Option<bool>,
+    pub platform_ids: Vec<String>,
+    /// The first platform's own record, when the template carries `Platforms/<id>.json`.
+    pub platform: Option<PlatformEdit>,
+    /// `(path in the package, bytes)` for every file the template contributes (not its bitstream).
+    pub files: Vec<(String, u64)>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub icon_png: Option<Vec<u8>>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub banner_png: Option<Vec<u8>>,
+}
+
+/// Reads a template for viewing and editing. Reads only.
+pub fn view_template(src: &TemplateSource) -> Result<TemplateView, TauError> {
+    let tmp = scratch("view");
+    fs::create_dir_all(&tmp)?;
+    let t = read_template(src, &tmp);
+    let _ = fs::remove_dir_all(&tmp);
+    let t = t?;
+    let core = t
+        .core
+        .iter()
+        .find(|(n, _)| n == "core.json")
+        .ok_or_else(|| refuse("The template has no core.json."))?;
+    let json: serde_json::Value = serde_json::from_slice(&core.1)
+        .map_err(|e| refuse(format!("The template's core.json is not valid JSON: {e}")))?;
+    let text = |p: &str| {
+        json.pointer(p)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let flag = |p: &str| json.pointer(p).and_then(serde_json::Value::as_bool);
+    let (author, shortname) = (
+        text("/core/metadata/author"),
+        text("/core/metadata/shortname"),
+    );
+    let platform_ids: Vec<String> = json
+        .pointer("/core/metadata/platform_ids")
+        .and_then(serde_json::Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let core_id = format!("{author}.{shortname}");
+    let first = platform_ids.first().cloned().unwrap_or_default();
+    let pjson = t
+        .platform
+        .iter()
+        .find(|(n, _)| *n == format!("Platforms/{first}.json"))
+        .and_then(|(_, b)| serde_json::from_slice::<serde_json::Value>(b).ok());
+    let platform = pjson.map(|d| {
+        let g = |k: &str| {
+            d.pointer(&format!("/platform/{k}"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        };
+        PlatformEdit {
+            id: first.clone(),
+            name: g("name"),
+            category: g("category"),
+            manufacturer: g("manufacturer"),
+            year: d
+                .pointer("/platform/year")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|y| u32::try_from(y).ok()),
+        }
+    });
+    let icon_png = t
+        .core
+        .iter()
+        .find(|(n, _)| n == "icon.bin")
+        .and_then(|(_, b)| crate::icon::decode_icon_bin(b).ok());
+    let banner_png = t
+        .platform
+        .iter()
+        .find(|(n, _)| *n == format!("Platforms/_images/{first}.bin"))
+        .and_then(|(_, b)| crate::icon::decode_platform_image(b).ok());
+    let mut files: Vec<(String, u64)> = t
+        .core
+        .iter()
+        .map(|(n, b)| (format!("Cores/{core_id}/{n}"), b.len() as u64))
+        .chain(t.platform.iter().map(|(n, b)| (n.clone(), b.len() as u64)))
+        .collect();
+    files.sort();
+    Ok(TemplateView {
+        core_id,
+        shortname,
+        author,
+        description: text("/core/metadata/description"),
+        url: text("/core/metadata/url"),
+        version: text("/core/metadata/version"),
+        date_release: text("/core/metadata/date_release"),
+        firmware_required: text("/core/framework/version_required"),
+        dock_supported: flag("/core/framework/dock/supported"),
+        link_port: flag("/core/framework/hardware/link_port"),
+        sleep_supported: flag("/core/framework/sleep_supported"),
+        platform_ids,
+        platform,
+        files,
+        icon_png,
+        banner_png,
+    })
+}
+
 /// SHA-256s of every converted bitstream the build records in `dir` list, so a later build can refuse a file that was already converted.
 pub fn known_converted(dir: &Path) -> Vec<String> {
     fs::read_dir(dir)
@@ -627,6 +928,7 @@ mod tests {
             description: Some("A test build".into()),
             icon_png: None,
             extra: Vec::new(),
+            edits: TemplateEdits::default(),
         }
     }
 
@@ -823,5 +1125,143 @@ mod tests {
         s.shortname = "  ".into();
         assert!(plan(&s, &[]).unwrap_err().message.contains("shortname"));
         write(&d.join("x"), b"x");
+    }
+
+    fn gray_png(w: u32, h: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        {
+            let mut e = png::Encoder::new(&mut out, w, h);
+            e.set_color(png::ColorType::Grayscale);
+            e.set_depth(png::BitDepth::Eight);
+            e.write_header()
+                .unwrap()
+                .write_image_data(&vec![200u8; (w * h) as usize])
+                .unwrap();
+        }
+        out
+    }
+
+    #[test]
+    fn a_template_can_be_viewed_and_edited_including_platform_text_and_pictures() {
+        let c = card("builder4");
+        complete(&c);
+        let d = tmp("build4");
+        fs::write(d.join("in.rbf"), (1..=60u8).collect::<Vec<_>>()).unwrap();
+        fs::write(d.join("logo.png"), gray_png(120, 80)).unwrap();
+        let tpl = TemplateSource::Card {
+            card: c.to_string_lossy().into(),
+            id: "Spiritualized.GBA".into(),
+        };
+        let v = view_template(&tpl).unwrap();
+        assert_eq!(
+            (
+                v.shortname.as_str(),
+                v.author.as_str(),
+                v.firmware_required.as_str()
+            ),
+            ("GBA", "Spiritualized", "1.1")
+        );
+        assert_eq!(v.platform_ids, ["gba"]);
+        assert_eq!(
+            v.platform.as_ref().map(|p| p.name.as_str()),
+            Some("Game Boy Advance")
+        );
+        assert!(
+            v.files
+                .iter()
+                .any(|(n, _)| n == "Cores/Spiritualized.GBA/core.json")
+                && v.files
+                    .iter()
+                    .any(|(n, _)| n == "Platforms/_images/gba.bin")
+        );
+        let mut s = spec(&d.join("in.rbf"), &c);
+        s.icon_png = Some(d.join("logo.png").to_string_lossy().into());
+        s.edits = TemplateEdits {
+            icon_fit: crate::icon::Fit::Cover,
+            author: Some("someone".into()),
+            url: Some("https://example.org/mine".into()),
+            firmware_required: Some("2.2".into()),
+            dock_supported: Some(false),
+            link_port: Some(true),
+            sleep_supported: Some(true),
+            platform_ids: Some(vec!["gba".into(), "gbp".into()]),
+            platform: Some(PlatformEdit {
+                id: "gba".into(),
+                name: "GBA Mine".into(),
+                category: "Handheld".into(),
+                manufacturer: "Nintendo".into(),
+                year: Some(2001),
+            }),
+            banner: Some(ImageEdit {
+                path: d.join("logo.png").to_string_lossy().into(),
+                fit: crate::icon::Fit::Contain,
+            }),
+        };
+        let r = build(&s, &[], &d.join("out"), "t", 3).unwrap();
+        assert_eq!(
+            r.plan.core_id, "someone.GBA DEV 2",
+            "the author changes the core id"
+        );
+        let mut a = zip::ZipArchive::new(fs::File::open(&r.zip).unwrap()).unwrap();
+        let mut read = |n: &str| {
+            let mut b = Vec::new();
+            a.by_name(n).unwrap().read_to_end(&mut b).unwrap();
+            b
+        };
+        let j: serde_json::Value =
+            serde_json::from_slice(&read("Cores/someone.GBA DEV 2/core.json")).unwrap();
+        assert_eq!(j.pointer("/core/metadata/author").unwrap(), "someone");
+        assert_eq!(
+            j.pointer("/core/metadata/url").unwrap(),
+            "https://example.org/mine"
+        );
+        assert_eq!(
+            j.pointer("/core/metadata/platform_ids").unwrap(),
+            &serde_json::json!(["gba", "gbp"])
+        );
+        assert_eq!(
+            j.pointer("/core/framework/version_required").unwrap(),
+            "2.2"
+        );
+        assert_eq!(j.pointer("/core/framework/dock/supported").unwrap(), false);
+        assert_eq!(
+            j.pointer("/core/framework/hardware/link_port").unwrap(),
+            true
+        );
+        assert_eq!(j.pointer("/core/framework/sleep_supported").unwrap(), true);
+        let pj: serde_json::Value = serde_json::from_slice(&read("Platforms/gba.json")).unwrap();
+        assert_eq!(
+            (
+                pj.pointer("/platform/name").unwrap(),
+                pj.pointer("/platform/year").unwrap()
+            ),
+            (&serde_json::json!("GBA Mine"), &serde_json::json!(2001))
+        );
+        assert_eq!(read("Platforms/_images/gba.bin").len(), 521 * 165 * 2);
+        assert_eq!(read("Cores/someone.GBA DEV 2/icon.bin").len(), 36 * 36 * 2);
+        // the template card is untouched
+        assert_eq!(
+            fs::read(c.join("Platforms/_images/gba.bin")).unwrap().len(),
+            8
+        );
+        // a platform record for a platform the core does not declare, and bad ids, are refused
+        let mut bad = spec(&d.join("in.rbf"), &c);
+        bad.shortname = "GBA DEV 7".into();
+        bad.edits.platform = Some(PlatformEdit {
+            id: "nes".into(),
+            name: "x".into(),
+            ..PlatformEdit::default()
+        });
+        assert!(
+            plan(&bad, &[])
+                .unwrap_err()
+                .message
+                .contains("not one of this core's platforms")
+        );
+        bad.edits = TemplateEdits {
+            platform_ids: Some(vec!["Bad Id".into()]),
+            ..TemplateEdits::default()
+        };
+        assert!(plan(&bad, &[]).unwrap_err().message.contains("lowercase"));
     }
 }

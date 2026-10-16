@@ -4,18 +4,20 @@
   import { onMount } from 'svelte';
   import { open as pick } from '@tauri-apps/plugin-dialog';
   import { errorMessage } from './backend';
-  import { builderBuild, builderNextName, builderPlan, builderTemplateInfo, buildsConfig } from './tau-api';
+  import { builderBuild, builderNextName, builderPlan, builderTemplateView, buildsConfig } from './tau-api';
+  import TemplateEditor from './TemplateEditor.svelte';
   import { coresTreeStore } from './coresStore';
   import { disabledList } from './coreStateStore';
   import { plural, size } from './coresFormat';
   import LintFindings from './LintFindings.svelte';
-  import type { BuildPlan, BuildResult, BuildSpec, ExtraFile, SchemeField, TemplateInfo, TemplateSource } from './types';
+  import type { BuildPlan, BuildResult, BuildSpec, ExtraFile, SchemeField, TemplateEdits, TemplateSource, TemplateViewData } from './types';
   export let card = ''; export let openBuilds: () => void = () => {};
 
   let rbf = ''; let kind: 'card' | 'zip' | 'folder' = 'card'; let coreId = ''; let templatePath = '';
   let shortname = ''; let version = ''; let description = ''; let date = new Date().toISOString().slice(0, 10);
   let icon = ''; let extra: ExtraFile[] = []; let outDir = ''; let buildsDir = '';
-  let info: TemplateInfo | null = null; let plan: BuildPlan | null = null; let result: BuildResult | null = null; let error = ''; let busy = false; let note = '';
+  const noEdits: TemplateEdits = { icon_fit: 'contain', author: null, url: null, firmware_required: null, dock_supported: null, link_port: null, sleep_supported: null, platform_ids: null, platform: null, banner: null };
+  let view: TemplateViewData | null = null; let edits: TemplateEdits = { ...noEdits }; let editOpen = false; let plan: BuildPlan | null = null; let result: BuildResult | null = null; let error = ''; let busy = false; let note = '';
 
   onMount(async () => { try { const c = await buildsConfig(); buildsDir = c.dir ?? ''; outDir = buildsDir; } catch { /* the folder can be typed */ } });
   $: cores = [...$coresTreeStore.flatMap((n) => n.cores.map((c) => ({ id: c.id, label: `${c.shortname} (${c.id})` }))), ...$disabledList.map((d) => ({ id: d.id, label: `${d.shortname || d.id} (${d.id}, disabled)` }))];
@@ -23,8 +25,8 @@
   let lastSource = '';
   $: { const key = JSON.stringify(source); if (key !== lastSource) { lastSource = key; plan = null; result = null; void loadInfo(); } }
   async function loadInfo() {
-    info = null; if (!source) return;
-    try { info = await builderTemplateInfo(source); shortname = info.shortname; version = info.version; description = info.description; error = ''; }
+    view = null; edits = { ...noEdits }; icon = ''; if (!source) return;
+    try { view = await builderTemplateView(source); shortname = view.shortname; version = view.version; description = view.description; error = ''; }
     catch (e) { error = errorMessage(e); }
   }
   async function choose(what: 'rbf' | 'zip' | 'folder' | 'icon' | 'out' | { extra: number }) {
@@ -37,7 +39,7 @@
     if (what === 'rbf') rbf = r; else if (what === 'zip' || what === 'folder') templatePath = r; else if (what === 'icon') icon = r; else if (what === 'out') outDir = r; else { extra[what.extra].src = r; extra = extra; }
     plan = null;
   }
-  $: spec = { rbf: rbf.trim(), template: source ?? { kind: 'zip', path: '' }, shortname, version, date_release: date, description: description.trim() ? description.trim() : null, icon_png: icon.trim() || null, extra: extra.filter((e) => e.src.trim() && e.dest.trim()) } as BuildSpec;
+  $: spec = { rbf: rbf.trim(), template: source ?? { kind: 'zip', path: '' }, shortname, version, date_release: date, description: description.trim() ? description.trim() : null, icon_png: icon.trim() || null, extra: extra.filter((e) => e.src.trim() && e.dest.trim()), edits } as BuildSpec;
   $: ready = !!rbf.trim() && !!source && !!shortname.trim() && !!version.trim() && /^\d{4}-\d{2}-\d{2}$/.test(date);
   async function check() { busy = true; error = ''; note = ''; result = null; try { plan = await builderPlan(spec); } catch (e) { plan = null; error = errorMessage(e); } finally { busy = false; } }
   async function build() { busy = true; error = ''; try { result = await builderBuild(spec, outDir.trim() || null); } catch (e) { error = errorMessage(e); } finally { busy = false; } }
@@ -46,7 +48,7 @@
     try { const n = await builderNextName(field, field === 'version' ? version : shortname); if (!n) { note = `No naming scheme reads “${field === 'version' ? version : shortname}” as a counted name. Add one on the Builds page.`; return; } if (field === 'version') version = n.next; else shortname = n.next; plan = null; note = `Next name by “${n.scheme}”.`; }
     catch (e) { error = errorMessage(e); }
   }
-  const ORIGIN: Record<string, string> = { bitstream: 'bitstream (converted)', template: 'from the template', generated: 'updated', icon: 'new icon', extra: 'extra file' };
+  const ORIGIN: Record<string, string> = { bitstream: 'bitstream (converted)', template: 'from the template', generated: 'updated', icon: 'new icon', banner: 'new banner', extra: 'extra file' };
   $: id = plan?.core_id ?? '';
 </script>
 <section class="page builder" aria-labelledby="builder-title">
@@ -65,7 +67,9 @@
   {:else}
     <div class="bd-row"><label class="bd-in"><span>{kind === 'zip' ? 'Package zip' : 'Package or core folder'}</span><input bind:value={templatePath} placeholder={kind === 'zip' ? '/path/to/core.zip' : '/path/to/folder'} /></label><button class="quiet" on:click={() => choose(kind === 'zip' ? 'zip' : 'folder')}>Choose…</button></div>
   {/if}
-  {#if info}<p class="bd-info" role="status">Template: <strong>{info.shortname || info.core_id}</strong> · {info.core_id} · version {info.version || 'not stated'}{info.platforms.length ? ` · ${info.platforms.join(', ')}` : ''}</p>{/if}
+  {#if view}<p class="bd-info" role="status">Template: <strong>{view.shortname || view.core_id}</strong> · {view.core_id} · version {view.version || 'not stated'}{view.platform_ids.length ? ` · ${view.platform_ids.join(', ')}` : ''}</p>
+    <button class="quiet" aria-expanded={editOpen} aria-controls="template-editor" on:click={() => (editOpen = !editOpen)}>{editOpen ? 'Hide the template editor' : 'View and edit this template…'}</button>
+    {#if editOpen}<div id="template-editor"><TemplateEditor {view} {shortname} {version} bind:edits bind:icon changed={() => (plan = null)} /></div>{/if}{/if}
 
   <h2 class="bd-h">3 · This build</h2>
   <div class="bd-grid">
@@ -77,7 +81,6 @@
   {#if note}<p class="bd-note" role="status">{note}</p>{/if}
 
   <h2 class="bd-h">4 · Optional</h2>
-  <div class="bd-row"><label class="bd-in"><span>Icon: a 36×36 PNG (white is “on”)</span><input bind:value={icon} placeholder="leave empty to keep the template’s icon" on:input={() => (plan = null)} /></label><button class="quiet" on:click={() => choose('icon')}>Choose…</button></div>
   <div class="bd-extra">
     <span class="bd-sub">Extra files <small>(a firmware ROM, data): <code>{'{id}'}</code> stands for the new core id</small></span>
     {#each extra as e, i}
