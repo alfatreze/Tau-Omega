@@ -235,6 +235,36 @@ mod tests {
         );
         assert_eq!(parse_volume_uuid("nonsense"), None);
     }
+
+    #[test]
+    fn a_music_folder_is_remembered_by_its_path_and_two_folders_never_share_a_ledger() {
+        let base = std::env::temp_dir().join(format!("tau-libkey-{}", std::process::id()));
+        let (a, b) = (base.join("Music A"), base.join("Music B"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let key = library_key(&a);
+        assert_eq!(key.len(), 24, "12 bytes as hex");
+        assert_eq!(key, library_key(&a), "the same folder gives the same key");
+        assert_eq!(
+            key,
+            library_key(&a.join("..").join("Music A")),
+            "a different spelling of the same path is the same library"
+        );
+        assert_ne!(key, library_key(&b), "another folder has its own key");
+        // A folder that does not exist yet is keyed by the path as given, and still differs from the others.
+        let missing = base.join("Not there");
+        assert_eq!(library_key(&missing), library_key(&missing));
+        assert_ne!(library_key(&missing), key);
+        // The locator names the file after the key (whichever cache folder the process registered first).
+        init(base.join("cache"));
+        let file = locate(&a).expect("a local folder gets a ledger");
+        assert_eq!(
+            file.file_name().unwrap().to_string_lossy(),
+            format!("lib-{key}.tauledger")
+        );
+        assert_ne!(locate(&a), locate(&b));
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }
 
 /// `#[ignore]`d: mounts a throwaway FAT disk image to prove a real mounted volume gets a ledger path, and that
