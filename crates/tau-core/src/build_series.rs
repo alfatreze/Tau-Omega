@@ -276,6 +276,71 @@ pub fn place(scheme: &Scheme, subject: &Subject, fallback_series: &str) -> Optio
     })
 }
 
+fn captures(scheme: &Scheme, text: &str) -> Option<(Vec<Seg>, BTreeMap<&'static str, String>)> {
+    let segs = parse(&scheme.template).ok()?;
+    let mut caps = BTreeMap::new();
+    matches_at(&segs, text.trim(), 0, &mut caps, &mut BUDGET.clone()).then_some((segs, caps))
+}
+
+/// The name that would come next after `text` under one scheme: the counter plus one (keeping leading zeros), else the number at the end of the
+/// pre-release plus one (`alpha.3` becomes `alpha.4`), else the patch number plus one. `None` when the scheme does not match, has `{any}` (which is not
+/// kept, so the name cannot be rebuilt), or has nothing to count.
+pub fn next_text(scheme: &Scheme, text: &str) -> Option<String> {
+    let (segs, mut caps) = captures(scheme, text)?;
+    if segs.iter().any(|s| matches!(s, Seg::Var(Tok::Any))) {
+        return None;
+    }
+    if let Some(n) = caps.get("n").cloned() {
+        let next = n.parse::<u64>().ok()?.checked_add(1)?;
+        caps.insert("n", format!("{next:0width$}", width = n.len()));
+    } else if let Some(pre) = caps.get("pre").cloned() {
+        let digits_end = pre.trim_end_matches(|c: char| !c.is_ascii_digit()).len();
+        let start = pre[..digits_end]
+            .rfind(|c: char| !c.is_ascii_digit())
+            .map_or(0, |i| i + 1);
+        let n = pre[start..digits_end].parse::<u64>().ok()?;
+        caps.insert(
+            "pre",
+            format!(
+                "{}{}{}",
+                &pre[..start],
+                n.checked_add(1)?,
+                &pre[digits_end..]
+            ),
+        );
+    } else {
+        let p = caps.get("patch").cloned()?;
+        caps.insert("patch", p.parse::<u64>().ok()?.checked_add(1)?.to_string());
+    }
+    Some(
+        segs.iter()
+            .map(|s| match s {
+                Seg::Lit(l) => l.clone(),
+                Seg::Var(t) => {
+                    let k = match t {
+                        Tok::Series => "series",
+                        Tok::N => "n",
+                        Tok::Major => "major",
+                        Tok::Minor => "minor",
+                        Tok::Patch => "patch",
+                        Tok::Pre => "pre",
+                        Tok::Any => "any",
+                    };
+                    caps.get(k).cloned().unwrap_or_default()
+                }
+            })
+            .collect(),
+    )
+}
+
+/// The next name for `text` (a value of `field`), by the first scheme reading that field that matches; returns that scheme's name too.
+pub fn next_name(schemes: &[Scheme], field: Field, text: &str) -> Option<(String, String)> {
+    schemes
+        .iter()
+        .filter(|s| s.field == field)
+        .find_map(|s| next_text(s, text).map(|n| (s.name.clone(), n)))
+}
+
 /// The first scheme that matches.
 pub fn classify(schemes: &[Scheme], subject: &Subject) -> Option<Placement> {
     let fallback = subject.core_id.to_lowercase();
@@ -453,5 +518,51 @@ mod tests {
         let t = std::time::Instant::now();
         let _ = place(&s, &subject("", "", "", &long), "x");
         assert!(t.elapsed().as_secs() < 5);
+    }
+
+    #[test]
+    fn the_next_name_counts_on_keeping_the_shape() {
+        let s = builtin();
+        assert_eq!(
+            next_name(&s, Field::Shortname, "TAU DEV 112").unwrap().1,
+            "TAU DEV 113"
+        );
+        assert_eq!(
+            next_name(&s, Field::Shortname, "Pocket 0099").unwrap().1,
+            "Pocket 0100",
+            "leading zeros stay"
+        );
+        assert_eq!(
+            next_name(&s, Field::Version, "0.6.0-alpha.3").unwrap().1,
+            "0.6.0-alpha.4"
+        );
+        assert_eq!(
+            next_name(&s, Field::Version, "0.6.0-rc9").unwrap().1,
+            "0.6.0-rc10"
+        );
+        assert_eq!(next_name(&s, Field::Version, "0.6.0").unwrap().1, "0.6.1");
+        assert!(next_name(&s, Field::Version, "weird").is_none());
+        assert!(
+            next_name(&s, Field::File, "TAU DEV 1").is_none(),
+            "no scheme reads the file name"
+        );
+        let skip = Scheme {
+            name: "a".into(),
+            field: Field::Shortname,
+            template: "{any}-{n}".into(),
+        };
+        assert!(
+            next_text(&skip, "x-4").is_none(),
+            "an ignored part cannot be rebuilt"
+        );
+        let nightly = Scheme {
+            name: "n".into(),
+            field: Field::File,
+            template: "{series}-nightly-{n}".into(),
+        };
+        assert_eq!(
+            next_text(&nightly, "Pocket-nightly-0042").unwrap(),
+            "Pocket-nightly-0043"
+        );
     }
 }

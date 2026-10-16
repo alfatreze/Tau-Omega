@@ -17,6 +17,7 @@ pub(crate) fn test_uniq() -> u128 {
 
 pub mod breakdown;
 pub mod build_series;
+pub mod builder;
 pub mod builds;
 pub mod card_role;
 pub mod cardlayout;

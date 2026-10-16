@@ -342,3 +342,13 @@ export type CarryCandidate = { kind: CarryKind; from_id: string; from_name: stri
 export type CarryItem = { rel: string; bytes: number; state: 'new' | 'identical' | 'different' };
 export type CarryPlan = { id: string; source_rel: string; dest_rel: string; items: CarryItem[]; new_files: number; identical: number; different: number; bytes_to_write: number; blocked: string | null };
 export type CarryReport = { copied: number; identical: number; left_different: number; bytes_written: number };
+
+/** The Builder: a raw bitstream plus a template core becomes an installable package. */
+export type TemplateSource = { kind: 'card'; card: string; id: string } | { kind: 'zip'; path: string } | { kind: 'folder'; path: string };
+export type ExtraFile = { src: string; dest: string };
+export type BuildSpec = { rbf: string; template: TemplateSource; shortname: string; version: string; date_release: string; description: string | null; icon_png: string | null; extra: ExtraFile[] };
+export type TemplateInfo = { core_id: string; shortname: string; author: string; version: string; description: string; platforms: string[] };
+export type PlanFile = { rel: string; bytes: number; origin: 'bitstream' | 'template' | 'generated' | 'icon' | 'extra'; sha256: string };
+export type BuildPlan = { core_id: string; files: PlanFile[]; raw_sha256: string; converted_sha256: string; bitstream_bytes: number; lint: LintReport; blocked: string | null };
+export type BuildResult = { zip: string; record: string; zip_bytes: number; zip_sha256: string; plan: BuildPlan };
+export type NextName = { scheme: string; next: string };

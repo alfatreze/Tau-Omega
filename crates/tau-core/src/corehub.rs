@@ -621,6 +621,7 @@ mod tests {
         assert!(core_detail(&card, "../x").is_err() && core_detail(&card, "nobody.Core").is_err());
     }
 
+    #[cfg(feature = "serde")]
     #[test]
     fn a_disabled_core_stays_in_the_tree_tagged_and_can_still_be_read_and_fixed() {
         let c = card("disabled-tree");
