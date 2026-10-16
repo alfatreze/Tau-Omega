@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.0-alpha.16   (NOT a release)
+Release goal : 0.5.0
+Built        : 2026-10-16 07:19 WEST
+Branch       : cores-section
+Commit       : 1d88033   Install several cores together (Marketplace selection, Update all together, more packages in Packages) through one reviewed plan; playlist name limit enforced for playlist-only cores
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 626e6a4b8555e5854da1172faabf5071d24b771d3b9620d12c8149b91c961e6e  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
