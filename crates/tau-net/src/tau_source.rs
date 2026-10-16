@@ -55,29 +55,23 @@ pub fn download_core(
     }
     let releases = release_check::parse_releases(&get(RELEASES_URL, LIST_LIMIT)?)?;
     let docs = manifests(&releases, manifest_cache);
-    let core = logic::catalog_cores(&releases, &docs)
-        .into_iter()
-        .find(|c| c.id.eq_ignore_ascii_case(core_id))
-        .ok_or_else(|| {
-            err(
-                ErrorCode::NotFound,
-                format!("{core_id} is not published on Tau Alpha."),
-            )
-        })?;
-    let url = match version.filter(|v| !v.is_empty()) {
-        Some(v) => core
-            .history
-            .iter()
-            .find(|h| h.version == v)
-            .map(|h| h.download_url.clone())
-            .ok_or_else(|| {
-                err(
-                    ErrorCode::NotFound,
-                    format!("{core_id} has no release {v}."),
-                )
-            })?,
-        None => core.download_url.clone(),
+    let cards = logic::catalog_cores(&releases, &docs);
+    let option = logic::find_option(&cards, core_id).ok_or_else(|| {
+        err(
+            ErrorCode::NotFound,
+            format!("{core_id} is not published on Tau Alpha."),
+        )
+    })?;
+    let release = match version.filter(|v| !v.is_empty()) {
+        Some(v) => option.history.iter().find(|h| h.version == v),
+        None => option.history.first(),
     };
+    let url = release.map(|h| h.download_url.clone()).ok_or_else(|| {
+        err(
+            ErrorCode::NotFound,
+            format!("{core_id} has no such release to download."),
+        )
+    })?;
     let (tag, name) = logic::asset_of_url(&url).ok_or_else(|| {
         err(
             ErrorCode::NotFound,

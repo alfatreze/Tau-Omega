@@ -244,7 +244,10 @@ export type CatalogCore = {
   assets: CatalogAsset[]; history: ReleaseSummary[];
   /** Which marketplace source lists it (`openfpga-library`, `tau-alpha`) and, for sources with channels, `Stable` | `Preview` | `Dev`. */
   source: string; channel: string;
+  /** Installable choices when one card offers several (Tau: Stable / Preview / Dev, standard or Diagnostics). */
+  options?: InstallOption[];
 };
+export type InstallOption = { core_id: string; channel: string; diagnostics: boolean; history: ReleaseSummary[] };
 export type MarketSource = 'Network' | 'NotModified' | 'Cache' | { Offline: string };
 export type CatalogResult = { catalog: { cores: CatalogCore[] }; source: MarketSource; fetched: number; notes?: string[] };
 export type ArtKind = 'Icon' | 'Banner';
