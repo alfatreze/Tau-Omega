@@ -80,6 +80,10 @@
   // Rarely-used tools and settings live in a collapsible sidebar section; it
   // stays open while one of its pages is showing and remembers the user's choice.
   const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'settings'];
+  const devItems = ['builds', 'results', 'check', 'builder'];
+  let devOpen = true;
+  try { devOpen = localStorage.getItem('tau.nav.dev') !== '0'; } catch { /* per-viewer convenience */ }
+  function toggleDev() { devOpen = !devOpen; try { localStorage.setItem('tau.nav.dev', devOpen ? '1' : '0'); } catch { /* ignore */ } }
   let moreOpen = false;
   try { moreOpen = localStorage.getItem('tau.nav.more') === '1'; } catch { /* per-viewer convenience */ }
   function toggleMore() { moreOpen = !moreOpen; try { localStorage.setItem('tau.nav.more', moreOpen ? '1' : '0'); } catch { /* ignore */ } }
@@ -347,8 +351,18 @@
     <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
     <button class:active={page === 'appearance'} on:click={() => page = 'appearance'}>Appearance</button>
     <button class:active={page === 'halcyon'} on:click={() => page = 'halcyon'}>Halcyon EQ</button>
-    {#if $developerTools}<button class:active={page === 'builds'} on:click={() => page = 'builds'}>Builds</button><button class:active={page === 'results'} on:click={() => page = 'results'}>Results</button><button class:active={page === 'check'} on:click={() => page = 'check'}>Check</button><button class:active={page === 'builder'} on:click={() => page = 'builder'}>Builder</button>{/if}
     <button class:active={page === 'marketplace'} on:click={() => page = 'marketplace'}>Marketplace{#if $coreUpdateCount > 0}<span class="nav-count" aria-label={`${$coreUpdateCount} core updates`}>{$coreUpdateCount}</span>{/if}</button>
+    {#if $developerTools}
+      <button class="nav-group" class:has-active={devItems.includes(page)} aria-expanded={devOpen || devItems.includes(page)} aria-controls="dev-tools" on:click={toggleDev}><span>Developer tools</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={devOpen || devItems.includes(page)}><path d="m6 9 6 6 6-6"/></svg></button>
+      {#if devOpen || devItems.includes(page)}
+        <div class="nav-sub" id="dev-tools">
+          <button class:active={page === 'builds'} on:click={() => page = 'builds'}>Builds</button>
+          <button class:active={page === 'results'} on:click={() => page = 'results'}>Results</button>
+          <button class:active={page === 'check'} on:click={() => page = 'check'}>Check</button>
+          <button class:active={page === 'builder'} on:click={() => page = 'builder'}>Builder</button>
+        </div>
+      {/if}
+    {/if}
     <button class="nav-group" class:has-active={moreItems.includes(page)} aria-expanded={moreOpen} aria-controls="more-tools" on:click={toggleMore}><span>Tools &amp; settings</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={moreOpen}><path d="m6 9 6 6 6-6"/></svg></button>
     {#if moreOpen || moreItems.includes(page)}
       <div class="nav-sub" id="more-tools">

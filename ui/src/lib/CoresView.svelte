@@ -116,7 +116,7 @@
       {#if detail}<button class="quiet" aria-expanded={$inspectorOpen} aria-controls="core-details" on:click={() => inspectorOpen.update((v) => !v)} title="Show or hide the details (I)">{$inspectorOpen ? 'Hide details' : 'Show details'}</button>{/if}
       </div>
     </header>
-    {#if isDisabled && detail}<p class="dis-banner" role="status"><strong>Disabled on the Pocket.</strong> The Pocket does not list this core. {files && files.missing.length ? `It still needs ${files.missing.map((m) => m.filename).join(', ')}: add ${files.missing.length === 1 ? 'it' : 'them'} in Files, then switch “Visible on the Pocket” on.` : 'Switch “Visible on the Pocket” on to bring it back.'}</p>{/if}
+    {#if isDisabled && detail}<p class="dis-banner" role="status"><button class="primary dis-on" disabled={stateBusy} on:click={() => setVisible(detail?.id ?? '', true)}>Enable on the Pocket</button><span><strong>Disabled on the Pocket.</strong> The Pocket does not list this core. {files && files.missing.length ? `It still needs ${files.missing.map((m) => m.filename).join(', ')}: add ${files.missing.length === 1 ? 'it' : 'them'} in Files, then switch “Visible on the Pocket” on.` : 'Switch “Visible on the Pocket” on to bring it back.'}</span></p>{/if}
     {#if confirmEnable && files}<p class="dis-warn" role="alert">It still lacks {files.missing.map((m) => m.filename).join(', ')}, so it may not start. Enable it anyway? <button class="quiet" on:click={() => setVisible(detail?.id ?? '', true)}>Enable anyway</button><button class="quiet" on:click={() => (confirmEnable = false)}>Cancel</button></p>{/if}
     {#if stateNote}<p class="cores-note" role="status">{stateNote}</p>{/if}
     {#if error}<div class="empty"><h2>This core could not be read</h2><p>{error}</p><button class="primary" on:click={() => load($coresSelection.core)}>Try again</button></div>
@@ -163,7 +163,7 @@
     {#if banner}<img class="plat-banner" src={banner} alt="" />{/if}
     <ul class="core-list pv-list" aria-label={`Cores for ${node.platform.name}`}>
       {#each node.cores as c (c.id)}
-        <li>
+        <li class:has-en={c.disabled}>
           <button class="pv-open" aria-label={`${c.shortname}, version ${c.version}. Open`} on:click={() => pickCore(node.platform.id, c.id)}>
             <span class="core-icon" aria-hidden="true">{c.shortname.slice(0, 2).toUpperCase()}</span>
             <span class="pv-main"><strong>{c.shortname}</strong><small>{c.id}</small></span>
@@ -171,6 +171,7 @@
             {#if c.disabled}<span class="chip warn">Disabled on the Pocket</span>{/if}
             {#if c.missing}<span class="chip warn">Needs {plural(c.missing, 'file')}</span>{/if}
           </button>
+          {#if c.disabled}{#if c.missing}<button class="quiet pv-en" aria-label={`Open ${c.shortname} to add what it needs, then enable it`} on:click={() => pickCore(node.platform.id, c.id)}>Fix, then enable…</button>{:else}<button class="primary pv-en" disabled={stateBusy} aria-label={`Enable ${c.shortname} on the Pocket`} on:click={() => showCores([c.id])}>Enable</button>{/if}{/if}
         </li>
       {/each}
     </ul>
@@ -179,6 +180,10 @@
     <div class="ov-bar"><label class="ov-search"><span class="sr">Search cores, platforms and manufacturers</span>
       <input type="search" placeholder="Search cores, platforms, manufacturers" bind:value={query} /></label>
       <button class="quiet" on:click={() => openManualAdd()}>Add a core…</button></div>
+    {#if $disabledList.length && !q}
+      <div class="dis-bar" role="status"><span><strong>{plural($disabledList.length, 'core')} {$disabledList.length === 1 ? 'is' : 'are'} disabled on the Pocket.</strong> {$disabledList.length === 1 ? 'It is' : 'They are'} hidden from its menu but still listed here, tagged “disabled”.</span>
+        <span class="dis-bar-btns"><button class="quiet" on:click={() => { coresTab.set('browse'); tick().then(() => document.getElementById('ov-disabled')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }}>Show them</button><button class="primary" disabled={stateBusy} on:click={() => showCores($disabledList.map((d) => d.id))}>Enable all</button></span></div>
+    {/if}
     {#if q}
       {#if hits.length}
         <ul class="core-list pv-list" aria-label="Search results">{#each hits as h (h.core.id)}
@@ -225,7 +230,6 @@
               <button class="quiet" aria-label={`Open ${d.shortname || d.id}`} on:click={() => { const h = findCore($coresTreeStore, d.id); if (h) pickCore(h.node.platform.id, d.id); }}>Open</button><button class="quiet" disabled={stateBusy} aria-label={`Enable ${d.shortname || d.id}`} on:click={() => showCores([d.id])}>Enable</button></li>
           {/each}
         </ul>
-        {#if $disabledList.length > 1}<div class="dis-all"><button class="quiet" disabled={stateBusy} on:click={() => showCores($disabledList.map((d) => d.id))}>Enable all</button></div>{/if}
       </section>
     {/if}
     {#if stateNote}<p class="cores-note" role="status">{stateNote}</p>{/if}
@@ -240,9 +244,12 @@
   .vis{display:inline-flex;align-items:center;gap:9px;padding:7px 12px 7px 9px;font-size:12.5px;color:#dce6e4;background:#1a2325;border:1px solid #2c393a;border-radius:999px}
   .vis:hover{border-color:#3d5254}.vis:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}.vis:disabled{opacity:.55}
   .vis.off{color:#a6b3b2}.vis.off .vis-knob{background:#4b5a5b}.vis.off .vis-knob::after{left:2px}
+  .dis-bar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 16px;padding:12px 16px;border:1px solid #5c5030;background:#241f12;color:#e5d9a8;border-radius:10px;font-size:13px;line-height:1.5}.dis-bar-btns{display:flex;gap:8px}
+  .dis-banner{display:flex;gap:14px;align-items:center}.dis-banner .dis-on{flex:none}
+  .pv-list li.has-en{display:flex;align-items:center;gap:10px;padding-right:14px}.pv-list li.has-en .pv-open{flex:1;min-width:0}.pv-en{flex:none;white-space:nowrap}
   .dis-banner,.dis-warn{margin:0 0 12px;padding:10px 14px;border:1px solid #5c5030;background:#241f12;color:#e5d9a8;border-radius:10px;font-size:12.5px;line-height:1.55}.dis-warn button{margin-left:8px}
   .vis-knob{position:relative;width:28px;height:16px;border-radius:999px;background:#6fa35a;flex:none}.vis-knob::after{content:'';position:absolute;top:2px;left:14px;width:12px;height:12px;border-radius:50%;background:#101617}
-  .dis .dis-lede{font-size:12.5px;color:#95a5a4;margin:0 0 10px}.dis-row{display:flex;align-items:center;gap:13px;padding:11px 16px}.dis-all{margin-top:8px}.dis-row .core-icon{opacity:.6}
+  .dis .dis-lede{font-size:12.5px;color:#95a5a4;margin:0 0 10px}.dis-row{display:flex;align-items:center;gap:13px;padding:11px 16px}.dis-row .core-icon{opacity:.6}
   .dis :global(code){font-size:11.5px}
   /* A core's page is one screen tall: the header and tabs stay put, the content and the details column each scroll on their own. */
   .cores.has-core{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
