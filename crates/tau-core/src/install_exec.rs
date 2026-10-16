@@ -110,10 +110,19 @@ pub fn execute(
             checks: Vec::new(),
         });
     }
+    // The same plan can come back (install, remove the core, install again: the card is as it was, so the plan is the same). The earlier run's
+    // backup and journal are kept, moved aside under a new name, and this run gets a fresh folder.
     if backup_dir.join(JOURNAL).exists() {
-        return Err(refuse(
-            "this plan was already run once and its backup is still there; plan again",
-        ));
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let mut aside = backup_root.join(format!("{}-{stamp}", plan.id));
+        let mut n = 1;
+        while aside.exists() {
+            aside = backup_root.join(format!("{}-{stamp}-{n}", plan.id));
+            n += 1;
+        }
+        fs::rename(&backup_dir, &aside)?;
     }
 
     // 2. Backup, verified, then the journal.

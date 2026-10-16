@@ -80,7 +80,7 @@
     rows = rows; busy = false;
     if (done) dispatch('installed');
     const stopped = rows.find((r) => r.failed);
-    if (stopped) notice = `${done ? `${plural(done, 'core')} installed. ` : ''}Stopped at ${stopped.plan ? nameOf(stopped.plan.update.cores[0]) : stopped.zip}: ${stopped.failed} Nothing was left half-done for that core.`;
+    if (stopped) notice = `${done ? `${plural(done, 'core')} installed. ` : ''}Stopped at ${stopped.plan ? nameOf(stopped.plan.update.cores[0]) : stopped.zip}. Nothing was left half-done for that core.`;
   }
   async function undo() {
     busy = true; notice = '';
