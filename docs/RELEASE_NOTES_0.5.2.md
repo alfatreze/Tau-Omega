@@ -7,6 +7,9 @@
 - A skeleton of cards shows while the list loads (reduced-motion safe, hidden from screen readers).
 - A release whose zip does not match its own checksum file is refused (Tau Alpha's v0.5.0 `alfatreze.TAU` zip currently does not, so it cannot be installed from the Marketplace until that release is fixed).
 
+## macOS
+- The app bundle is now signed ad hoc as a whole, so a browser-downloaded copy opens through System Settings > Privacy & Security > Open Anyway instead of failing as "damaged and can't be opened". It is still not a Developer ID signature; the first launch warns.
+
 ## Project
 - README rewritten: Tau Omega is becoming a manager for the whole device (media, ROMs, saves, cores, settings, integrations), starting with the Pocket; the Pocket Sync integration goal was dropped (D-017).
 - Internal: a flaky install test is fixed; new tests for the parallel scan and the per-folder library memory.
