@@ -1,4 +1,4 @@
-# Tau Omega next release (draft; 0.5.0 is published)
+# Tau Omega v0.5.1
 
 ## Playlists
 - **Add to playlist…** in the Library (for albums on this computer and for albums already on the card): choose a playlist that exists, or name a new one. New albums are copied by the same sync; the playlist is written (tracks appended to the end, none twice) after the copy and the library index is read again, so the Tau player lists it.
@@ -9,6 +9,11 @@
 
 ## Library
 - A short footer with two properly laid out buttons (Add to playlist…, Add N to Analogue Pocket). Albums can be dragged to the Pocket with the pointer.
+- Faster loading: local and network libraries are remembered by folder path (a saved list shows at once while the folder is checked), the scan reads several files at a time, and the folder listing no longer reads track details.
+- The storage bar shows the selected core against other cores and other data. Slimmer scroll bars.
 - Install confirmations: no typed card name by default (an opt-in switch under developer tools). The Cores list refreshes after every install or update. Installing the same core again after an undo no longer stops.
+
+## Fixes
+- Internal: a flaky install test (parallel tests shared scratch folders) is fixed; new tests for the parallel scan and the per-folder library memory.
 
 (The 0.5.0 notes are on its GitHub release.)
