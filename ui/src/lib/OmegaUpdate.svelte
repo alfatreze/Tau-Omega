@@ -3,12 +3,17 @@
   // the Settings page; otherwise it is a bar that appears at start-up only when a newer Tau Omega exists. Nothing is downloaded
   // or installed until the user presses Update; the installer is verified against the app's built-in key first.
   import { onMount } from 'svelte';
-  import { getPrefs, omegaUpdateCheck, omegaUpdateInstall } from './tau-api';
+  import { getPrefs, omegaUpdateCheck, omegaUpdateInstall, setPrefs } from './tau-api';
   import { errorMessage } from './backend';
   import type { OmegaUpdate } from './types';
   export let manual = false;
 
   let found: OmegaUpdate | null = null;
+  let channel: 'auto' | 'stable' | 'dev' = 'auto';
+  async function chooseChannel(value: 'auto' | 'stable' | 'dev') {
+    try { const p = await getPrefs(); await setPrefs({ ...p, omega_channel: value }); channel = value; found = null; await check(true); }
+    catch (error) { notice = errorMessage(error); }
+  }
   let checked = false; let busy = false; let installing = false; let notice = ''; let dismissed = false;
 
   async function check(report: boolean) {
@@ -22,7 +27,7 @@
     try { await omegaUpdateInstall(); } catch (error) { notice = errorMessage(error); installing = false; }
   }
   onMount(async () => {
-    if (manual) return;
+    if (manual) { try { channel = (await getPrefs()).omega_channel ?? 'auto'; } catch { /* the default stays */ } return; }
     try { const prefs = await getPrefs(); if (prefs.update_notice_shown && prefs.check_updates) await check(false); } catch { /* stays quiet */ }
   });
 </script>
@@ -31,16 +36,24 @@
   <section class="ou-card" aria-labelledby="ou-title">
     <h3 id="ou-title">Tau Omega updates</h3>
     <p class="muted">Checks GitHub for a newer Tau Omega. Only the public update file is requested; nothing about you or your card is sent.</p>
+    <label class="ou-channel">Update channel
+      <select aria-label="Update channel" value={channel} on:change={(e) => chooseChannel(e.currentTarget.value as 'auto' | 'stable' | 'dev')}>
+        <option value="auto">Automatic (follows this build)</option>
+        <option value="stable">Stable: published releases only</option>
+        <option value="dev">Dev: the newest test builds, and releases</option>
+      </select>
+    </label>
+    <p class="muted ou-hint">{channel === 'dev' ? 'Dev builds are test builds: they can have rough edges. You also get every stable release.' : channel === 'stable' ? 'Only published releases are offered, even if you are running a test build.' : 'A test build (such as 0.5.1-alpha.3) follows Dev, a release follows Stable.'}</p>
     <div class="ou-row">
       <button class="quiet" disabled={busy || installing} on:click={() => check(true)}>{busy ? 'Checking…' : 'Check now'}</button>
       {#if found}<button class="primary" disabled={installing} on:click={install}>{installing ? 'Installing…' : `Update to ${found.version}`}</button>{/if}
     </div>
-    {#if found}<p>Version {found.version} is available (you have {found.current}). Tau Omega restarts to finish.</p>{#if found.notes}<pre class="ou-notes">{found.notes}</pre>{/if}{/if}
+    {#if found}<p>Version {found.version} is available{found.channel === 'dev' ? ' on the dev channel' : ''} (you have {found.current}). Tau Omega restarts to finish.</p>{#if found.notes}<pre class="ou-notes">{found.notes}</pre>{/if}{/if}
     {#if notice}<p role="status">{notice}</p>{/if}
   </section>
 {:else if found && !dismissed}
   <div class="ou-bar" role="status">
-    <span>Tau Omega {found.version} is available (you have {found.current}). It downloads a signed installer and restarts the app.</span>
+    <span>Tau Omega {found.version} is available{found.channel === 'dev' ? ' on the dev channel' : ''} (you have {found.current}). It downloads a signed installer and restarts the app.</span>
     <span class="ou-actions">
       <button class="primary" disabled={installing} on:click={install}>{installing ? 'Installing…' : 'Update Tau Omega'}</button>
       <button class="quiet" disabled={installing} on:click={() => (dismissed = true)}>Not now</button>
@@ -55,6 +68,7 @@
   .ou-error{flex-basis:100%;color:#ff9b9b}
   .ou-card{display:grid;gap:8px;margin:16px 0;padding:14px 16px;border:1px solid #2c393a;border-radius:10px;background:#161f20}
   .ou-card h3,.ou-card p{margin:0}
+  .ou-channel{display:grid;gap:4px;font-size:12.5px;color:#a6b3b2}.ou-channel select{font:inherit;color:#e8ecec;background:#111617;border:1px solid #2c393a;border-radius:8px;padding:8px 10px;max-width:360px}.ou-hint{font-size:12px}
   .ou-notes{white-space:pre-wrap;margin:0;font-size:12px;max-height:160px;overflow:auto}
   button{padding:8px 12px;font-size:13px;background:#202b2d;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;cursor:pointer}
   button.quiet{background:transparent}button.primary{background:#c1f0ad;color:#142015;font-weight:700;border-color:#c1f0ad}

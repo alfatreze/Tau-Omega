@@ -466,6 +466,8 @@ struct Prefs {
     card_marker: String,
     /// Conversion of files the Pocket cannot play, and ReplayGain, for every sync.
     convert: tau_core::convert::ConvertSettings,
+    /// Which Tau Omega releases the app follows for its own updates: `auto` (the channel of the running build), `stable` or `dev`.
+    omega_channel: String,
     /// Silence skipping: leading and trailing silence the player skips, measured at sync (on by default).
     trim: tau_core::trim::TrimSettings,
     /// Hand edits of skip silence, per media root: track path (relative to it) to edit.
@@ -497,6 +499,7 @@ impl Default for Prefs {
             update_notice_shown: false,
             card_marker: "ask".into(),
             convert: tau_core::convert::ConvertSettings::product(),
+            omega_channel: "auto".into(),
             // Skip silence is on by default: the numbers are only written next to the music; the player skips silence only when its own switch is on.
             trim: tau_core::trim::TrimSettings { enabled: true, ..Default::default() },
             skip_edits: Default::default(),
@@ -701,6 +704,9 @@ fn get_prefs(app: tauri::AppHandle) -> Result<PrefsView, TauError> {
 fn set_prefs(app: tauri::AppHandle, prefs: Prefs) -> Result<PrefsView, TauError> {
     if !matches!(prefs.remove_mode.as_str(), "backup" | "ask" | "none") {
         return Err(TauError { code: ErrorCode::InvalidPathReference, message: "remove_mode must be backup, ask or none".into() });
+    }
+    if !matches!(prefs.omega_channel.as_str(), "auto" | "stable" | "dev") {
+        return Err(TauError { code: ErrorCode::InvalidPathReference, message: "omega_channel must be auto, stable or dev".into() });
     }
     if !matches!(prefs.core_disable.as_str(), "ask" | "auto" | "never") {
         return Err(TauError { code: ErrorCode::InvalidPathReference, message: "core_disable must be ask, auto or never".into() });

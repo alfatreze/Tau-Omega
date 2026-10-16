@@ -5,6 +5,11 @@ Checked 2026-10-10: `npx @tauri-apps/cli@2 build --bundles app,dmg` on macOS pro
 
 **To make a release:** set the version in `Cargo.toml`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (they must agree), commit, tag `vX.Y.Z`, push the tag, wait for the Release workflow, check the draft, publish.
 
+**Channels (Settings > Tau Omega updates).** Tau Omega follows one of two channels for its own updates, like Tau Alpha's Stable and Dev:
+- **Stable**: `releases/latest/download/latest.json`, which GitHub points at the newest *published, non-pre-release* release. A stable release is a version without a pre-release part (`v0.5.1`) and is published by hand from the draft.
+- **Dev**: a dev build is a tag with a pre-release part, `vX.Y.Z-alpha.N`, where X.Y.Z is the NEXT release (so every dev build is newer than the last stable one, and older than the release it leads to). `git tag v0.5.1-alpha.3 && git push origin v0.5.1-alpha.3` makes the Release workflow build a draft pre-release (version taken from the tag, Windows NSIS only); `tools/publish_dev.sh v0.5.1-alpha.3` checks the draft, publishes it as a pre-release and uploads its `latest.json` to the rolling `dev-channel` release, which is the Dev feed. A Dev app reads both feeds and offers the newer, so it also receives every stable release.
+- **Automatic** (the default) follows the build: a pre-release build follows Dev, a release follows Stable. The local `tools/dev-build.sh` builds are separate: unsigned apps filed in `releases/dev-builds/`, never offered as updates. `releases/dev-builds/TARGET` is the version dev builds lead to (0.5.1 after v0.5.0).
+
 **Signing (needs credentials only the owner holds; the workflow switches it on by itself when the secrets exist):**
 - macOS: an Apple Developer ID Application certificate exported as `.p12` and base64 encoded -> secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, plus `APPLE_ID`, `APPLE_PASSWORD` (an app-specific password) and `APPLE_TEAM_ID` for notarisation. Without them the dmg is unsigned and Gatekeeper warns on first open.
 - Windows: not wired. It needs a code-signing certificate (or a signing service such as Azure Trusted Signing or SSL.com eSigner) and a `signCommand`/certificate thumbprint in the Tauri config. Unsigned builds trigger SmartScreen.

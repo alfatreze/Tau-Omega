@@ -132,7 +132,7 @@ let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voy
 });
 let mounted = true;
 let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
-let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', core_disable: (() => { try { return localStorage.getItem('tau.mock.coreDisable') ?? 'never'; } catch { return 'never'; } })(), core_keep: {} as Record<string, string[]>, developer_tools: (() => { try { return localStorage.getItem('tau.mock.devTools') === '1'; } catch { return false; } })(), speeds: {} as Record<string, number>, connections: {} as Record<string, string>, trim: { enabled: true, threshold_db10: -600, lead_margin_ms: 200, tail_margin_ms: 500, min_ms: 2000 }, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
+let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', core_disable: (() => { try { return localStorage.getItem('tau.mock.coreDisable') ?? 'never'; } catch { return 'never'; } })(), core_keep: {} as Record<string, string[]>, developer_tools: (() => { try { return localStorage.getItem('tau.mock.devTools') === '1'; } catch { return false; } })(), speeds: {} as Record<string, number>, connections: {} as Record<string, string>, omega_channel: 'auto', trim: { enabled: true, threshold_db10: -600, lead_margin_ms: 200, tail_margin_ms: 500, min_ms: 2000 }, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
@@ -313,7 +313,7 @@ const handlers: Record<string, (args: any) => unknown> = {
     warnings: mockAssetsOnCard ? ['The file already there also holds METR, which is not carried over: it will be gone after this install (the backup keeps it).'] : [],
   }),
   appearance_install: (a) => { mockAssetsOnCard = true; return { destination: `${a.mediaRoot}/tau-assets.bin`, bytes_written: 144, replaced: false, backup: a.backup ?? null }; },
-  omega_update_check: () => null,
+  omega_update_check: () => (prefs.omega_channel === 'dev' ? { current: '0.5.0', version: '0.5.1-alpha.2', notes: 'Test build', date: null, channel: 'dev' } : null),
   omega_update_install: () => undefined,
   halcyon_open: () => [],
   halcyon_import_apo: (a) => ({ preset: { kind: 'raw', name: a.name as string, preamp: 3000000, stages: [[4194304, 0, 0, 0, 0]] }, preamp_db: -2.9, peak_gain_db: 2.9, filters: 1 }),
