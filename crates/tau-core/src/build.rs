@@ -220,8 +220,6 @@ pub fn build_index(
     let (mut tracks, mut albums_b, mut first_album, mut track_new) =
         (Vec::new(), Vec::new(), BTreeMap::new(), BTreeMap::new());
     let mut details_b: Vec<u8> = Vec::new();
-    let mut skips: Vec<(u32, u32)> = Vec::new();
-    let trim_settings = crate::trim::active();
     let mut album_titles = Vec::new();
     let mut track_titles = Vec::new();
     for (ai, a) in albums.iter().enumerate() {
@@ -261,13 +259,6 @@ pub fn build_index(
                     pool.add(&det.encoder)
                 };
                 details_b.extend(det.pack(offset));
-                let points = e
-                    .tags
-                    .get("_sil")
-                    .and_then(|t| crate::trim::decode_levels(t))
-                    .map(|l| crate::trim::plan_trim_levels(&l, &trim_settings))
-                    .unwrap_or_default();
-                skips.push((points.lead_skip, points.tail_skip));
             }
         }
     }
@@ -348,13 +339,8 @@ pub fn build_index(
     // The optional track details section (header bytes 112..119): only when every track has a record.
     let mut details_entry = (0usize, 0usize);
     if !entries.is_empty() && details_b.len() == entries.len() * details::RECORD {
-        let body = if skips.iter().any(|s| *s != (0, 0)) {
-            details::section_skip(&details_b, &skips)
-        } else {
-            details::section(&details_b)
-        };
-        details_entry = (out.len(), body.len());
-        out.extend(body);
+        details_entry = (out.len(), 16 + details_b.len());
+        out.extend(details::section(&details_b));
         align(&mut out);
     }
     if out.len() > MAX_FILE || pool.buffer.len() > MAX_STRINGS {

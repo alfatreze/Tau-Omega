@@ -22,9 +22,9 @@
     catch (error) { notice = `Could not save: ${errorMessage(error)}`; }
   }
   const DB_CHOICES = [-80, -75, -70, -65, -60, -55, -50, -45, -40];
-  const KEEP_CHOICES = [0, 100, 250, 500, 1000];
-  const MIN_CHOICES = [500, 1000, 2000, 3000, 5000, 10000];
-  const MAX_CHOICES = [1000, 3000, 5000, 10000, 30000, 60000];
+  const LEAD_CHOICES = [0, 100, 200, 500, 1000];
+  const TAIL_CHOICES = [0, 250, 500, 1000, 2000];
+  const MIN_CHOICES = [1000, 2000, 3000, 5000, 10000];
   const secs = (ms: number) => (ms < 1000 ? `${ms} ms` : `${ms / 1000} s`);
   async function chooseLame() {
     const selected = await open({ directory: false });
@@ -81,17 +81,17 @@
     {@const t = prefs.trim}
     <fieldset>
       <legend>Skip silence at the start and end of tracks</legend>
-      <div class="ss-row"><div><b>Skip silence</b><small>Measured when you sync; your files are never changed. The player skips the silence, the track list and clock show the shortened time. Needs a player version that reads it; until then this only records the numbers.</small></div>
+      <div class="ss-row"><div><b>Skip silence</b><small>Measured when you sync and saved as a small <code>tau-skip.bin</code> file in each album folder; your music files are never changed. The player skips the silence when its own Skip silence switch is on (a player version that supports it, MP3 first).</small></div>
         <div><button class="quiet" on:click={() => changeTrim({ enabled: !t.enabled }, t.enabled ? 'Silence will not be measured.' : 'Silence will be measured at the next sync.')}>{t.enabled ? 'Turn off' : 'Turn on'}</button></div></div>
       {#if t.enabled}
         <div class="ss-row"><div><b>Counts as silence below</b><small>-60 dB is quiet enough to be inaudible on headphones in a normal room. Lower catches only digital silence; higher also trims soft room noise and fade tails.</small></div>
           <select aria-label="Silence level" value={t.threshold_db10} on:change={(e) => changeTrim({ threshold_db10: Number(e.currentTarget.value) })}>{#each DB_CHOICES as d}<option value={d * 10}>{d} dB{d === -60 ? ' (default)' : ''}</option>{/each}</select></div>
-        <div class="ss-row"><div><b>Silence left at each end</b><small>So a track still starts and ends naturally.</small></div>
-          <select aria-label="Silence kept" value={t.keep_ms} on:change={(e) => changeTrim({ keep_ms: Number(e.currentTarget.value) })}>{#each KEEP_CHOICES as k}<option value={k}>{secs(k)}{k === 100 ? ' (default)' : ''}</option>{/each}</select></div>
-        <div class="ss-row"><div><b>Only skip at least</b><small>Shorter silences are left alone, so normal gaps between songs stay.</small></div>
-          <select aria-label="Smallest skip" value={t.min_ms} on:change={(e) => changeTrim({ min_ms: Number(e.currentTarget.value) })}>{#each MIN_CHOICES as k}<option value={k}>{secs(k)}{k === 2000 ? ' (default)' : ''}</option>{/each}</select></div>
-        <div class="ss-row"><div><b>Never skip more than</b><small>At either end, so a long quiet intro or a slow fade is never cut away.</small></div>
-          <select aria-label="Largest skip" value={t.max_ms} on:change={(e) => changeTrim({ max_ms: Number(e.currentTarget.value) })}>{#each MAX_CHOICES as k}<option value={k}>{secs(k)}{k === 10000 ? ' (default)' : ''}</option>{/each}</select></div>
+        <div class="ss-row"><div><b>Silence left before the first sound</b><small>A natural attack is not silence, so the track starts a little before it.</small></div>
+          <select aria-label="Silence kept at the start" value={t.lead_margin_ms} on:change={(e) => changeTrim({ lead_margin_ms: Number(e.currentTarget.value) })}>{#each LEAD_CHOICES as k}<option value={k}>{secs(k)}{k === 200 ? ' (default)' : ''}</option>{/each}</select></div>
+        <div class="ss-row"><div><b>Silence left after the last sound</b><small>A natural decay is not silence, so the track ends a little after it.</small></div>
+          <select aria-label="Silence kept at the end" value={t.tail_margin_ms} on:change={(e) => changeTrim({ tail_margin_ms: Number(e.currentTarget.value) })}>{#each TAIL_CHOICES as k}<option value={k}>{secs(k)}{k === 500 ? ' (default)' : ''}</option>{/each}</select></div>
+        <div class="ss-row"><div><b>Only skip silences of at least</b><small>Shorter ones are left alone, so normal gaps stay. Silence in the middle of a track is never skipped.</small></div>
+          <select aria-label="Smallest silence" value={t.min_ms} on:change={(e) => changeTrim({ min_ms: Number(e.currentTarget.value) })}>{#each MIN_CHOICES as k}<option value={k}>{secs(k)}{k === 2000 ? ' (default)' : ''}</option>{/each}</select></div>
       {/if}
     </fieldset>
     <p class="ss-notice" role="status">{notice}</p>
