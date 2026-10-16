@@ -19,8 +19,13 @@ The contract is tau-alpha's `docs/features/SKIP_SILENCE_SPEC.md` (player side bu
 
 Values outside the limits are brought back, never refused.
 
-## Not done yet (spec section 4)
-- The waveform preview with draggable cut marks, per-track "never skip" override and hand-typed values.
+## Review and hand edits (spec section 4, "Preview in Omega")
+Settings > Syncing music > Skip silence > **Review tracks...** opens the list of every track with its lead and tail. Choosing a track decodes it and shows the waveform with the two cut marks: drag them or type seconds, tick **Never skip silence on this track**, or go **Back to detected**. A hand edit is written as typed (refused only if it would leave under 1 s of track, then the detected values stand), kept per card in the app's preferences, applied again by every later sync, and written to that folder's `tau-skip.bin` at once. It needs Skip silence on, and a sync once so the tracks are measured.
+
+## MP3 encoder delay
+Checked against a real LAME-encoded file (`crates/tau-audio/tests/mp3_silence.rs`, skipped when `lame` is not installed): the decoder removes the encoder delay and padding itself (the frame count equals the source), so a lead is counted from the first sample of the music exactly as the spec wants. A file without a LAME tag is not trimmed, as in the player.
+
+## Not done
 - Tracks past 340 in one folder are left out with a warning.
 - FLAC numbers are written but the player ignores them for now (spec section 3, point 5).
-- Measured only on generated files (WAV and FLAC); an MP3 check against the player's own gapless trim is still to do. The decoder used may or may not already remove the MP3 encoder delay, which would shift the lead by about 1,100 pairs.
+- The waveform shows loudness in 400 steps and the cut marks snap to 10 ms by typing only through the number fields.

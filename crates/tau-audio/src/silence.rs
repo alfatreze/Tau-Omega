@@ -102,6 +102,62 @@ pub const LEVELS_DB: [f32; 9] = [
     -80.0, -75.0, -70.0, -65.0, -60.0, -55.0, -50.0, -45.0, -40.0,
 ];
 
+/// Everything the skip-silence preview needs from one decode.
+pub struct Analysis {
+    pub rate: u32,
+    pub frames: u64,
+    /// Edge silence at every level of [`LEVELS_DB`].
+    pub levels: Vec<EdgeSilence>,
+    /// The peak of each 10 ms window (the larger of |L| and |R|), 0.0 to 1.0, for drawing the waveform.
+    pub peaks: Vec<f32>,
+}
+
+/// Decodes `path` once: edge silence at every level, and the peak of every 10 ms window.
+pub fn analyse(path: &Path, progress: &mut dyn FnMut(u64) -> bool) -> Result<Analysis, AudioError> {
+    let mut dec = Decoder::open(path)?;
+    let (ch, rate) = (dec.info.channels, dec.info.rate);
+    let chn = ch.max(1) as usize;
+    let window = u64::from(rate / 100).max(1);
+    let mut scans: Vec<Scanner> = LEVELS_DB
+        .iter()
+        .map(|&d| Scanner::new(ch, rate, d))
+        .collect();
+    let (mut peaks, mut peak, mut in_window, mut frames) = (Vec::new(), 0f32, 0u64, 0u64);
+    let mut buf = Vec::new();
+    while {
+        buf.clear();
+        dec.next(&mut buf)?
+    } {
+        for s in &mut scans {
+            s.feed(&buf);
+        }
+        for frame in buf.chunks_exact(chn) {
+            for x in frame {
+                peak = peak.max(x.abs());
+            }
+            frames += 1;
+            in_window += 1;
+            if in_window == window {
+                peaks.push(peak);
+                peak = 0.0;
+                in_window = 0;
+            }
+        }
+        if !progress(frames) {
+            return Err(AudioError::Process("cancelled".into()));
+        }
+    }
+    if in_window > 0 {
+        peaks.push(peak);
+    }
+    Ok(Analysis {
+        rate,
+        frames,
+        levels: scans.iter_mut().map(|s| s.finish(rate)).collect(),
+        peaks,
+    })
+}
+
 /// Decodes `path` once and measures its edge silence at every level of [`LEVELS_DB`] (same order).
 pub fn measure_levels(
     path: &Path,
@@ -227,6 +283,38 @@ mod tests {
         loud.feed(&all);
         assert_eq!(quiet.finish(1000).lead, 0);
         assert_eq!(loud.finish(1000).lead, 100);
+    }
+
+    #[test]
+    fn the_analysis_of_a_file_has_the_levels_and_a_peak_per_window() {
+        let rate = 8000u32;
+        let mut pcm: Vec<i16> = vec![0; 800];
+        pcm.extend(std::iter::repeat_n(16_000i16, 1600));
+        let data: Vec<u8> = pcm.iter().flat_map(|s| s.to_le_bytes()).collect();
+        let mut wav = Vec::new();
+        wav.extend(b"RIFF");
+        wav.extend((36 + data.len() as u32).to_le_bytes());
+        wav.extend(b"WAVEfmt ");
+        wav.extend(16u32.to_le_bytes());
+        wav.extend(1u16.to_le_bytes());
+        wav.extend(1u16.to_le_bytes());
+        wav.extend(rate.to_le_bytes());
+        wav.extend((rate * 2).to_le_bytes());
+        wav.extend(2u16.to_le_bytes());
+        wav.extend(16u16.to_le_bytes());
+        wav.extend(b"data");
+        wav.extend((data.len() as u32).to_le_bytes());
+        wav.extend(data);
+        let p = std::env::temp_dir().join(format!("tau-analyse-{}.wav", std::process::id()));
+        std::fs::write(&p, wav).unwrap();
+        let a = analyse(&p, &mut |_| true).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert_eq!(
+            (a.rate, a.frames, a.levels.len(), a.peaks.len()),
+            (8000, 2400, 9, 30)
+        );
+        assert_eq!(a.levels[4].lead, 800);
+        assert!(a.peaks[..10].iter().all(|&p| p == 0.0) && a.peaks[10..].iter().all(|&p| p > 0.4));
     }
 
     #[test]

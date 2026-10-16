@@ -4,7 +4,10 @@
   import { onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
   import { checkLame, errorMessage, getPrefs, installLame, lameStatus, setPrefs } from './tau-api';
+  import SkipSilenceSheet from './SkipSilenceSheet.svelte';
   import type { ConvertSettings, LameStatus, PrefsView, TrimSettings } from './types';
+  export let card = ''; export let mediaRoot = '';
+  let reviewing = false;
 
   let prefs: PrefsView | null = null; let lame: LameStatus | null = null; let notice = ''; let busy = false;
   onMount(async () => {
@@ -92,8 +95,11 @@
           <select aria-label="Silence kept at the end" value={t.tail_margin_ms} on:change={(e) => changeTrim({ tail_margin_ms: Number(e.currentTarget.value) })}>{#each TAIL_CHOICES as k}<option value={k}>{secs(k)}{k === 500 ? ' (default)' : ''}</option>{/each}</select></div>
         <div class="ss-row"><div><b>Only skip silences of at least</b><small>Shorter ones are left alone, so normal gaps stay. Silence in the middle of a track is never skipped.</small></div>
           <select aria-label="Smallest silence" value={t.min_ms} on:change={(e) => changeTrim({ min_ms: Number(e.currentTarget.value) })}>{#each MIN_CHOICES as k}<option value={k}>{secs(k)}{k === 2000 ? ' (default)' : ''}</option>{/each}</select></div>
+        <div class="ss-row"><div><b>Review tracks</b><small>See what is skipped on each track, adjust it by hand, or mark a track as never skipped.{mediaRoot ? '' : ' Open a card with a music player core first.'}</small></div>
+          <div><button class="quiet" disabled={!mediaRoot} on:click={() => (reviewing = true)}>Review tracks…</button></div></div>
       {/if}
     </fieldset>
+    {#if reviewing}<SkipSilenceSheet {card} {mediaRoot} close={() => (reviewing = false)} />{/if}
     <p class="ss-notice" role="status">{notice}</p>
   {:else}<p>{notice || 'Loading…'}</p>{/if}
 </section>

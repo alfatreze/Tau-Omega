@@ -55,6 +55,9 @@ export const ledgerForget = (mediaRoot: string) => invoke<boolean>('ledger_forge
 export const ejectCard = (path: string) => invoke<EjectResult>('eject_card', { path });
 export const readbackStatus = () => invoke<ReadbackStatus>('readback_status');
 export const getPrefs = () => invoke<PrefsView>('get_prefs');
+export const skipTracks = (mediaRoot: string) => invoke<import('./types').SkipTrack[]>('skip_tracks', { mediaRoot });
+export const skipDetail = (mediaRoot: string, rel: string) => invoke<import('./types').SkipDetail>('skip_detail', { mediaRoot, rel });
+export const skipSetEdit = (card: string, mediaRoot: string, rel: string, edit: import('./types').SkipEdit | null) => invoke<void>('skip_set_edit', { card, mediaRoot, rel, edit });
 export const persistNames = () => invoke<Record<string, string>>('persist_names');
 export const updateCheck = (card: string | null) => invoke<UpdateCheck | null>('update_check', { card });
 export const updateDownload = (tag: string, names: string[]) => invoke<Downloaded[]>('update_download', { tag, names });

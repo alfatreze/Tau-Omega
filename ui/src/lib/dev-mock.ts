@@ -99,6 +99,11 @@ const addPlanFor = (a: Record<string, unknown>) => {
   return { id: `mockadd-${a.destination}-${a.replace}-${sources.length}`, core_id: a.coreId, platform: a.platform, destination: a.destination, folder_rel: `Assets/gba/${a.destination === 'CoreOnly' ? a.coreId : 'common'}`, replace: a.replace, items, new_files: fresh, identical: n((s) => s === 'Identical'), different: n((s) => s === 'Different'), refused: n((s) => typeof s === 'object'), bytes_to_write: (fresh + n((s) => s === 'Different' && !!a.replace)) * 8 * MB, warnings: exts.length ? [`No file slot of this core reads ${exts.map((e) => '.' + e).join(', ')}; the core may ignore ${exts.length === 1 ? 'it' : 'them'}.`] : [], blocked: fresh + (a.replace ? n((s) => s === 'Different') : 0) === 0 ? 'Nothing to add: everything is already on the card.' : null };
 };
 
+const mockSkip: { rel: string; auto: [number, number]; edit: { never: boolean; lead: number | null; tail: number | null } | null }[] = [
+  { rel: 'Live At The Hall/01 Intro.mp3', auto: [441000 - 8820, 0], edit: null },
+  { rel: 'Live At The Hall/02 Hidden Track.mp3', auto: [0, 2646000 - 22050], edit: null },
+  { rel: 'Live At The Hall/03 Plain.mp3', auto: [0, 0], edit: null },
+];
 const cores = [
   { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platforms: ['tau'], media_platform: 'tau', platform_category: 'Media Players', library_capable: true, audio_formats: [], index_status: 'ok', tracks: 7180 },
   { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platforms: ['tau2'], media_platform: 'tau2', platform_category: 'Media Players', library_capable: true, audio_formats: [], index_status: 'missing', tracks: null },
@@ -460,6 +465,9 @@ const handlers: Record<string, (args: any) => unknown> = {
   update_check: () => null,
   update_download: () => [],
   persist_names: () => ({ 16: 'Halcyon EQ preset' }),
+  skip_tracks: () => mockSkip.map((t) => ({ rel: t.rel, dir: t.rel.split('/').slice(0, -1).join('/'), file: t.rel.split('/').pop(), secs: 200, rate: 44100, skip: t.edit?.never ? { lead_skip: 0, tail_skip: 0 } : { lead_skip: t.edit?.lead ?? t.auto[0], tail_skip: t.edit?.tail ?? t.auto[1] }, edit: t.edit })),
+  skip_detail: (a) => { const t = mockSkip.find((x) => x.rel === a.rel)!; const frames = 200 * 44100; return { rate: 44100, frames, envelope: Array.from({ length: 400 }, (_, i) => (i < 40 || i > 360 ? 0 : 120 + ((i * 37) % 100))), auto: { lead_skip: t.auto[0], tail_skip: t.auto[1] }, skip: t.edit?.never ? { lead_skip: 0, tail_skip: 0 } : { lead_skip: t.edit?.lead ?? t.auto[0], tail_skip: t.edit?.tail ?? t.auto[1] }, edit: t.edit }; },
+  skip_set_edit: (a) => { const t = mockSkip.find((x) => x.rel === a.rel)!; t.edit = a.edit ?? null; },
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
   set_prefs: (a) => { prefs = { ...a.prefs }; return { ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }; },
   plan_sync: () => ({ id: 'mock-plan-1', new_files: 42, updates: 5, unchanged: 7133, bytes_to_write: 412_000_000, art_sidecars: 3, art_sidecar_previews: [], warnings: [] }),
