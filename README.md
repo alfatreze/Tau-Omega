@@ -59,8 +59,10 @@ macOS, Windows and Linux. Free and open source (MIT OR Apache-2.0). Releases: <h
 - **Extensible and developer friendly:** a portable engine with no UI in it (`tau-core`), a plain CLI and JSON surface, documented byte
   formats, and clear extension points. Extension APIs are not frozen yet; the reorganisation is where they take shape.
 
-This replaces the earlier goal of being adopted by Pocket Sync as a library (decisions D-009 and D-010 in `docs/DECISIONS.md` are
-superseded; the licence boundary in D-010 still holds: our code may flow into AGPL projects, theirs is never copied back).
+This replaces the earlier goal of being adopted by Pocket Sync as a library. That was dropped because the two projects started to overlap
+heavily, Pocket Sync was not as flexible as these goals need, and we do not want to push AI-written code into another project or
+try to share compact features without the know-how to do it well. Decisions D-009 and D-017 in `docs/DECISIONS.md` record it; D-010's
+licence boundary still holds (our code may flow into AGPL projects, theirs is never copied back).
 The next ordered list of work is `ROADMAP.md`.
 
 ## For developers
