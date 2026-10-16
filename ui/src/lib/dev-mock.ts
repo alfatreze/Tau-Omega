@@ -26,7 +26,7 @@ const mc = (id: string, name: string, owner: string, repo: string, category: str
   ...extra,
 });
 const tauOpt = (core_id: string, channel: string, diagnostics: boolean, versions: [string, string][]) => ({ core_id, channel, diagnostics, history: versions.map(([version, release_date]) => ({ version, release_date, download_url: '' })) });
-const tauCard = () => mc('alfatreze.TAU', 'Tau', 'alfatreze', 'Tau-Alpha', 'Music player', 'Tau', 0, '0.5.1', '2026-10-16', false, { source: 'tau-alpha', channel: '', platform_id: 'tau', sponsor: { links: [] }, assets: [], firmware_required: '', dock_supported: null, link_port: null, sleep_supported: null, history: [], options: [
+const tauCard = () => mc('alfatreze.TAU', 'Tau', 'alfatreze', 'Tau-Alpha', 'Media Players', 'alfatreze', 2026, '0.5.1', '2026-10-16', false, { source: 'tau-alpha', channel: '', platform_id: 'tau', sponsor: { links: [] }, assets: [], firmware_required: '', dock_supported: null, link_port: null, sleep_supported: null, history: [], options: [
   tauOpt('alfatreze.TAU', 'Stable', false, [['0.5.1', '2026-10-16'], ['0.5.0', '2026-09-27']]), tauOpt('alfatreze.TAU Diagnostics', 'Stable', true, [['0.5.1', '2026-10-16']]),
   tauOpt('alfatreze.TAU Preview', 'Preview', false, [['0.6.0-preview.1', '2026-10-09']]), tauOpt('alfatreze.TAU Preview Diagnostics', 'Preview', true, [['0.6.0-preview.1', '2026-10-09']]),
   tauOpt('alfatreze.TAU DEV', 'Dev', false, []),

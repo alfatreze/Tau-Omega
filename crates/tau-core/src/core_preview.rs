@@ -25,6 +25,9 @@ pub struct PreviewPlatform {
     /// The Library's grouping (`taxonomy::resolve`): category and manufacturer.
     pub category: String,
     pub manufacturer: String,
+    /// The platform file's own year (0 when it names none).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub year: u32,
     /// The package ships this platform's own file.
     pub in_package: bool,
 }
@@ -160,6 +163,12 @@ pub fn preview(zip_path: &Path, vetted: &Vetted) -> Result<CorePreview, TauError
                 },
                 category,
                 manufacturer,
+                year: own
+                    .as_ref()
+                    .and_then(|j| j.pointer("/platform/year"))
+                    .and_then(Value::as_u64)
+                    .and_then(|y| u32::try_from(y).ok())
+                    .unwrap_or(0),
                 in_package: own.is_some(),
             }
         })
