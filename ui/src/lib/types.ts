@@ -1,5 +1,7 @@
 export type Warning = { code: string; message: string };
-export type Core = { id: string; author: string; shortname: string; version: string; platform: string; platforms: string[]; media_platform: string; platform_category: string | null; library_capable: boolean; audio_formats: string[]; index_status: string; tracks: number | null };
+export type Core = { id: string; author: string; shortname: string; version: string; platform: string; platforms: string[]; media_platform: string; platform_category: string | null; library_capable: boolean; audio_formats: string[]; playlist: PlaylistSupport | null; index_status: string; tracks: number | null };
+/** A core that plays music only from a playlist file: read from the core's own data slots (and the track limit its author documents). */
+export type PlaylistSupport = { file: string; fixed_name: boolean; max_tracks: number | null; max_bytes: number | null; name_limit: number | null; list_file: string | null; formats: string[] };
 export type ArtSidecarPreview = { folder: string; cover_source: string };
 export type Plan = { id: string; new_files: number; updates: number; unchanged: number; bytes_to_write: number; art_sidecars: number; art_sidecar_previews: ArtSidecarPreview[]; warnings: Warning[] };
 export type Setting = { id: number; kind: string; value: unknown };
@@ -100,9 +102,9 @@ export type LibraryListing = { limits: IndexLimits; albums: AlbumInfo[]; tracks:
 /** Mirrors `tau_core::tagedit::{FieldEdits, EditRequest}`. `null` leaves a field alone; `''` clears it. */
 export type FieldEdits = { title: string | null; artist: string | null; album: string | null; album_artist: string | null; year: string | null };
 export type EditRequest = { album_id: string; track: string | null; fields: FieldEdits; cover: string | null };
-export type ChangeRequest = { library_root: string | null; add_albums: string[]; remove_albums: string[]; edits: EditRequest[]; options: { mirror: boolean; embed_covers: boolean; art_sidecar_pal256: boolean } };
+export type ChangeRequest = { library_root: string | null; add_albums: string[]; remove_albums: string[]; edits: EditRequest[]; options: { mirror: boolean; embed_covers: boolean; art_sidecar_pal256: boolean }; playlist?: { file: string; max_tracks: number | null; max_bytes: number | null; core_name: string } | null };
 export type ChangePlanView = { id: string; new_files: number; updated_files: number; unchanged_files: number; bytes_to_write: number; removed_files: number; bytes_to_remove: number; edited_files: number; playlists_updated: number; warnings: Warning[]; converted_files: number; replaygain_files: number; skipped: { file: string; reason: string }[] };
-export type ChangeReport = { phase: string; plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string };
+export type ChangeReport = { phase: string; plan_id: string; copied: number; unchanged: number; bytes_written: number; edited: number; reapplied: number; deleted: number; playlists_updated: number; backup_dir: string | null; index_path: string; playlist_file?: string | null; playlist_tracks?: number };
 export type ConnectionKind = 'direct_usb' | 'card_reader' | 'unknown';
 export type ConnectionInfo = { kind: ConnectionKind; detail: string };
 /** What the app tells the engine about a core, so the card breakdown does not re-read every index. */

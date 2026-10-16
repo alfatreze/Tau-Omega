@@ -102,7 +102,7 @@ const addPlanFor = (a: Record<string, unknown>) => {
 const cores = [
   { id: 'tau.omega', author: 'tau', shortname: 'omega', version: '0.3.0', platform: 'tau', platforms: ['tau'], media_platform: 'tau', platform_category: 'Media Players', library_capable: true, audio_formats: [], index_status: 'ok', tracks: 7180 },
   { id: 'tau.player2', author: 'tau', shortname: 'player2', version: '0.2.1', platform: 'tau2', platforms: ['tau2'], media_platform: 'tau2', platform_category: 'Media Players', library_capable: true, audio_formats: [], index_status: 'missing', tracks: null },
-  { id: 'harpmudd.Mp3Player', author: 'harpmudd', shortname: 'Mp3Player', version: '1.7.0', platform: 'mp3player', platforms: ['mp3player'], media_platform: 'mp3player', platform_category: 'Others', library_capable: false, audio_formats: ['mp3', 'flac'], index_status: 'n/a', tracks: null },
+  { id: 'harpmudd.Mp3Player', author: 'harpmudd', shortname: 'Mp3Player', version: '1.7.0', platform: 'mp3player', platforms: ['mp3player'], media_platform: 'mp3player', platform_category: 'Others', library_capable: false, audio_formats: ['mp3', 'flac'], playlist: { file: 'playlist.m3u', fixed_name: true, max_tracks: 256, max_bytes: 12288, name_limit: 12, list_file: 'playlists.m3u', formats: ['mp3', 'flac'] }, index_status: 'n/a', tracks: null },
   { id: 'agg23.SNES', author: 'agg23', shortname: 'SNES', version: '1.4.0', platform: 'snes', platforms: ['snes'], media_platform: 'snes', platform_category: 'Console', library_capable: false, audio_formats: [], index_status: 'n/a', tracks: null },
 ];
 
@@ -176,6 +176,7 @@ const plan = (request: any) => {
   const rmList = (request.remove_albums as string[]).map((id) => cardAlbums.find((a) => a.id === id)!).filter(Boolean);
   const after = trackCount(cardAlbums) + trackCount(addList.filter((a) => !cardAlbums.some((c) => c.id === a.id))) - trackCount(rmList);
   if (after > maxTracks) throw { code: 14, message: `This would put ${after} tracks on the Pocket, but its library holds at most ${maxTracks}. Remove some albums or add fewer.` };
+  const cap = request.playlist?.max_tracks; if (cap && after > cap) throw { code: 14, message: `This would put ${after} tracks on the Pocket, but ${request.playlist.core_name} plays at most ${cap} from its playlist. Remove ${after - cap} ${after - cap === 1 ? 'track' : 'tracks'} or add fewer.` };
   const adds = (request.add_albums as string[]).map((id) => sourceAlbums.find((a) => a.id === id)!).filter(Boolean);
   const removes = (request.remove_albums as string[]).map((id) => cardAlbums.find((a) => a.id === id)!).filter(Boolean);
   const files = (list: Album[]) => list.reduce((n, a) => n + a.tracks, 0);
