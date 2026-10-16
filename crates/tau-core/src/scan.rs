@@ -223,15 +223,6 @@ pub fn scan_dir_with_progress(
             is_flac,
             print,
         } = m;
-        tick(
-            progress,
-            Progress {
-                stage: Stage::Scanning,
-                done,
-                total,
-                path: Some(rel.clone()),
-            },
-        )?;
         // A cached record from before details existed has no `_det` tag: read the file again.
         let cached = match (cache.as_mut(), print.as_ref()) {
             (Some(session), Some(print)) => session.tags(&rel, print),
@@ -241,6 +232,19 @@ pub fn scan_dir_with_progress(
             hit.tags.contains_key("_det")
                 && (!silence_on || hit.tags.contains_key("_sil") || hit.tags.contains_key("_silx"))
         });
+        tick(
+            progress,
+            Progress {
+                stage: if silence_on && cached.is_none() {
+                    Stage::Silence
+                } else {
+                    Stage::Scanning
+                },
+                done,
+                total,
+                path: Some(rel.clone()),
+            },
+        )?;
         let (tags, secs, fmt) = if let Some(hit) = cached {
             output.reused += 1;
             (hit.tags, hit.secs, hit.fmt)

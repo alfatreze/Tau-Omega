@@ -1,3 +1,6 @@
+// Tauri hands each command its arguments one by one (state, window, ids), so some commands are long by design.
+#![allow(clippy::too_many_arguments)]
+
 mod cacheflush;
 mod device;
 mod updates;
@@ -183,11 +186,11 @@ fn set_card_marker(app: tauri::AppHandle, setting: String, path: Option<String>)
     let dir = config_dir(&app)?;
     std::fs::create_dir_all(&dir)?;
     std::fs::write(dir.join(PREFS_FILE), serde_json::to_vec_pretty(&prefs).map_err(|e| TauError { code: ErrorCode::Json, message: e.to_string() })?)?;
-    if setting == "on" {
-        if let Some(path) = &path {
-            let _write = card_write_guard()?;
-            tau_core::marker::ensure(Path::new(path))?;
-        }
+    if setting == "on"
+        && let Some(path) = &path
+    {
+        let _write = card_write_guard()?;
+        tau_core::marker::ensure(Path::new(path))?;
     }
     card_marker_status(app, path.unwrap_or_default())
 }
@@ -236,6 +239,7 @@ impl ProgressObserver for JobObserver<'_> {
                     tau_core::Stage::Editing => "editing",
                     tau_core::Stage::Analysing => "analysing",
                     tau_core::Stage::Converting => "converting",
+                    tau_core::Stage::Silence => "silence",
                 },
                 done: progress.done,
                 total: progress.total,

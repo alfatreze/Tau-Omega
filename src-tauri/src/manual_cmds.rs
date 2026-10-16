@@ -116,6 +116,7 @@ pub struct ReleaseChoice {
 
 #[derive(Serialize)]
 #[serde(tag = "status")]
+#[allow(clippy::large_enum_variant)] // built once per inspection and serialised straight away
 pub enum ManualInspect {
     /// The core was read; `zip_path` goes to the reviewed install plan.
     #[serde(rename = "ready")]
@@ -154,6 +155,7 @@ fn choice(r: &GhRelease) -> ReleaseChoice {
 
 type Downloaded = (String, String, String, tau_net::marketplace::CoreDownloaded, String);
 
+#[allow(clippy::large_enum_variant)]
 enum Step {
     Done(Downloaded),
     Choose(ManualInspect),
