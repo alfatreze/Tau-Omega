@@ -409,7 +409,31 @@
     say(`${plural(staged.length, 'album')} will go into ${file.replace(/\.m3u$/i, '')} when you sync.`);
     focusTray();
   }
-  function onDragStart(e: DragEvent, a: AlbumInfo) { const ids = picked.has(a.id) ? [...picked] : [a.id]; e.dataTransfer?.setData('text/tau-albums', JSON.stringify(ids)); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'; }
+  // Albums are dragged with the pointer, not the browser's drag and drop: the app window handles file drops itself (for the Cores > Files tab),
+  // and that takes over the browser's own drag and drop on some systems. A small move starts the drag; letting go over the Pocket adds the albums.
+  let dragGhost: { n: number; x: number; y: number } | null = null; let dragMoved = false;
+  const overPocket = (x: number, y: number) => !!document.elementFromPoint(x, y)?.closest('[data-pane="pocket"]');
+  function albumPointerDown(e: PointerEvent, a: AlbumInfo) {
+    if (e.button !== 0 || busy) return;
+    const st = stateOf(a, queuedIds, cardByDest);
+    if (st === 'on' || st === 'queued') return;
+    if ((e.target as HTMLElement).closest('input,button,a,label')) return;
+    const ids = picked.has(a.id) ? [...picked] : [a.id];
+    const sx = e.clientX, sy = e.clientY; let moving = false;
+    const move = (ev: PointerEvent) => {
+      if (!moving && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+      moving = true; dragMoved = true; ev.preventDefault();
+      dragGhost = { n: ids.length, x: ev.clientX, y: ev.clientY };
+      dropActive = overPocket(ev.clientX, ev.clientY);
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      if (moving && ev.type === 'pointerup' && overPocket(ev.clientX, ev.clientY)) addAlbums(ids);
+      dragGhost = null; dropActive = false;
+      setTimeout(() => (dragMoved = false), 0);
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+  }
   function onDrop(e: DragEvent) { e.preventDefault(); dropActive = false; const raw = e.dataTransfer?.getData('text/tau-albums'); if (raw) { try { addAlbums(JSON.parse(raw)); } catch { /* not ours */ } } }
 
   function requestRemove() { if (busy || !pocketPicked.size) return; if (prefs && !prefs.remove_explained) dialog = 'first-remove'; else stageRemoval(); }
@@ -751,7 +775,7 @@
             {@const onPk = cardByDest.get(a.dest_id)}
             {@const art = thumbs[`s:${a.id}`]}
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions (row click is a mouse convenience; keyboard users select with the row's checkbox) -->
-            <div class="wb-row" class:sel={picked.has(a.id)} class:dim={st === 'on'} role="listitem" aria-posinset={index + 1} aria-setsize={count} draggable={!busy && st !== 'on' && st !== 'queued'} on:dragstart={(e) => onDragStart(e, a)} on:click={(e) => onRow(e, () => pickSrc(a, e))}>
+            <div class="wb-row" class:sel={picked.has(a.id)} class:dim={st === 'on'} role="listitem" aria-posinset={index + 1} aria-setsize={count} on:pointerdown={(e) => albumPointerDown(e, a)} on:click={(e) => { if (dragMoved) return; onRow(e, () => pickSrc(a, e)); }}>
               <input type="checkbox" aria-label={`Select ${a.title}`} disabled={busy || st === 'on' || st === 'queued'} checked={picked.has(a.id)} on:click|stopPropagation={(e) => pickSrc(a, e)} />
               <div class="wb-art" aria-hidden="true">{#if art}<img src={art} alt="" />{:else}♪{/if}</div>
               <div class="wb-meta"><strong>{a.title}</strong><small>{a.artist || 'Unknown artist'} · {plural(a.tracks, 'track')} · {size(a.bytes)}{#if st === 'changed' && onPk}{' · '}Pocket has {plural(onPk.tracks, 'track')}{/if}</small></div>
@@ -761,9 +785,11 @@
           {#if !sourceAlbums.length}<div class="wb-empty"><b>{source.albums.length ? 'No albums match' : 'No music found'}</b><p>{source.albums.length ? 'Try a different search or filter.' : 'This folder has no MP3 or FLAC files.'}</p></div>{/if}
         </div>
         <div class="wb-pane-foot">
-          <span class="wb-fit-line" aria-live="polite">{#if picked.size}{picked.size} selected · {size(pickedBytes)}{#if afterPick !== null}<span class="wb-fit" class:bad={!pickFits}>{' '}{#if pickFits}· Fits, {size(afterPick)} free afterwards{:else if pickTooMany}· Too many tracks for the Pocket's library{:else}· Won't fit: {size(pickOver)} too big. You could remove something else in the same sync.{/if}</span>{/if}{:else}{plural(source.albums.length, 'album')} · click albums to select them, or drag them across →{/if}</span>
-          <button class="quiet" disabled={busy || !picked.size} on:click={() => openPlaylistPicker('source')} title="Copy the albums if they are not on the card yet, and put them in a playlist you choose">Add to playlist…</button>
-          <button class="primary" disabled={busy || !picked.size} on:click={addPicked}>Add {picked.size || ''} to Analogue Pocket →</button>
+          <span class="wb-foot-info" aria-live="polite" title="Click albums to select them, or drag them onto the Pocket">{#if picked.size}{picked.size} selected · {size(pickedBytes)}{#if afterPick !== null}<span class="wb-fit" class:bad={!pickFits}>{' '}{#if pickFits}· Fits, {size(afterPick)} free afterwards{:else if pickTooMany}· Too many tracks for the Pocket's library{:else}· Won't fit: {size(pickOver)} too big{/if}</span>{/if}{:else}{plural(source.albums.length, 'album')}{/if}</span>
+          <span class="wb-foot-btns">
+            <button class="wb-btn wb-btn-2" disabled={busy || !picked.size} on:click={() => openPlaylistPicker('source')} title="Copy the albums if they are not on the card yet, and put them in a playlist you choose">Add to playlist…</button>
+            <button class="wb-btn wb-btn-1" disabled={busy || !picked.size} on:click={addPicked}>Add {picked.size || ''} to Analogue Pocket</button>
+          </span>
         </div>
       {/if}
     </section>
@@ -957,6 +983,7 @@
   fits={!!space && !overCapacity && !overLimit} {canStart} {startReason} onClose={() => (detailsOpen = false)} onRemove={unstage} onClear={clearAll}
   onStart={() => { detailsOpen = false; start(); }} />
 
+{#if dragGhost}<div class="wb-ghost" style="left:{dragGhost.x + 14}px;top:{dragGhost.y + 14}px" aria-hidden="true">{dragGhost.n} {dragGhost.n === 1 ? 'album' : 'albums'}</div>{/if}
 {#if pickerFor}<PlaylistPicker albums={pickerFor === 'source' ? picked.size : pocketPicked.size} playlists={playlistChoices} defaultFile={playlist?.file ?? ''} maxTracks={playlist?.max_tracks ?? null} maxFileChars={playlist && !playlist.list_file ? (playlist.name_limit ?? null) : null} close={() => (pickerFor = null)} chosen={choosePlaylist} />{/if}
 {#if skipOptions}<SkipOptionsSheet card={cardPath} {mediaRoot} close={() => (skipOptions = false)} />{/if}
 {#if skipAdjust}<SkipSilenceSheet card={cardPath} {mediaRoot} close={() => (skipAdjust = false)} />{/if}
@@ -994,7 +1021,7 @@
   .wb-list{display:flex;flex-direction:column;overflow:auto;flex:1;min-height:0}
   .wb-row{height:56px;box-sizing:border-box;margin-bottom:2px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:1px solid transparent;cursor:default}
   .wb-row:hover{background:#1c2729}.wb-row.sel{background:#1d2c22;border-color:#2f4a37}.wb-row.dim .wb-art{opacity:.45}.wb-row.dim .wb-meta strong{color:#a6b3b2}
-  .wb-row[draggable=true]{cursor:grab}
+  .wb-row{cursor:grab}
   .wb-row.removing .wb-art{opacity:.45}.wb-row.removing .wb-meta strong{text-decoration:line-through;color:#a6b3b2}
   .wb-row.incoming{background:#182619;border:1px dashed #3a5a41}
   .wb-plus{width:16px;text-align:center;color:#c1f0ad;font-weight:700}
@@ -1004,7 +1031,15 @@
   .wb-meta small{font-size:12px;color:#8c9c9b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .wb-badge{font-size:11px;font-weight:650;padding:3px 8px;border-radius:99px;background:#273032;color:#b7c3c2;flex-shrink:0}
   .wb-badge.new{background:#1f3550;color:#a9d0f5}.wb-badge.changed{background:#3d3220;color:#f0d59a}.wb-badge.queued{background:#234029;color:#c5f7ad}.wb-badge.removing{background:#3a2420;color:#f0c7ba}
-  .wb-pane-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#8c9c9b;margin-top:auto;padding-top:6px}
+  .wb-pane-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12px;color:#8c9c9b;margin-top:auto;padding-top:8px}
+  .wb-foot-info{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4}
+  .wb-foot-btns{display:flex;gap:8px;flex:0 0 auto}
+  .wb-btn{white-space:nowrap;font:inherit;font-size:13px;font-weight:650;padding:9px 14px;border-radius:9px;border:1px solid transparent;cursor:pointer;line-height:1.2}
+  .wb-btn-1{background:#c1f0ad;color:#142015}.wb-btn-1:hover:not(:disabled){background:#d6f7c6}
+  .wb-btn-2{background:transparent;color:#c1f0ad;border-color:#3b5a58}.wb-btn-2:hover:not(:disabled){background:#1d2c22}
+  .wb-btn:disabled{opacity:.4;cursor:not-allowed}
+  .wb-row{user-select:none}
+  .wb-ghost{position:fixed;z-index:3000;pointer-events:none;padding:6px 12px;border-radius:99px;background:#c1f0ad;color:#142015;font-size:12px;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.45)}
   .wb-empty{text-align:center;padding:40px 10px;color:#8c9c9b}.wb-empty b{color:#e8ecec}
   .wb-slownote{font-size:12px;color:#f0d59a}.wb-slownote.bad{color:#ff9d8a;font-weight:650}
   .wb-toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#243033;border:1px solid #3b4a4b;padding:10px 16px;border-radius:10px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:80}
