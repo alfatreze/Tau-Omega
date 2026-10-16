@@ -1,6 +1,8 @@
 name: Release
 # Builds the installers for a tag (v*) or on demand, and attaches them to a DRAFT GitHub release with SHA256SUMS.
 # Nothing is published until you publish the draft by hand.
+# A tag with a pre-release part (v0.5.1-alpha.1) is a DEV build: its version comes from the tag, Windows gets the NSIS installer only (an MSI
+# cannot carry a word in its version), and the draft is a pre-release. tools/publish_dev.sh publishes it and updates the dev channel's feed.
 #
 # Signing is optional and switches on by itself when the secrets exist (Settings > Secrets and variables > Actions):
 #   macOS    APPLE_CERTIFICATE (base64 of the Developer ID Application .p12), APPLE_CERTIFICATE_PASSWORD,
@@ -56,7 +58,13 @@ jobs:
         run: |
           CFG='{"build":{"beforeBuildCommand":""}}'
           [ "$HAVE_UPDATER_KEY" = "true" ] && CFG='{"build":{"beforeBuildCommand":""},"bundle":{"createUpdaterArtifacts":true}}'
-          npx --yes @tauri-apps/cli@2 build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config "$CFG"
+          BUNDLES="${{ matrix.bundles }}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+            CFG=$(python3 -c "import json,sys;c=json.loads(sys.argv[1]);c['version']=sys.argv[2];print(json.dumps(c))" "$CFG" "$VER")
+            [[ "$VER" == *-* ]] && BUNDLES="${BUNDLES//,msi/}"
+          fi
+          npx --yes @tauri-apps/cli@2 build --target ${{ matrix.target }} --bundles "$BUNDLES" --config "$CFG"
         working-directory: src-tauri
       - name: Build installers (unsigned)
         if: runner.os != 'macOS' || env.HAVE_APPLE != 'true'
@@ -64,7 +72,13 @@ jobs:
         run: |
           CFG='{"build":{"beforeBuildCommand":""}}'
           [ "$HAVE_UPDATER_KEY" = "true" ] && CFG='{"build":{"beforeBuildCommand":""},"bundle":{"createUpdaterArtifacts":true}}'
-          npx --yes @tauri-apps/cli@2 build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config "$CFG"
+          BUNDLES="${{ matrix.bundles }}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+            CFG=$(python3 -c "import json,sys;c=json.loads(sys.argv[1]);c['version']=sys.argv[2];print(json.dumps(c))" "$CFG" "$VER")
+            [[ "$VER" == *-* ]] && BUNDLES="${BUNDLES//,msi/}"
+          fi
+          npx --yes @tauri-apps/cli@2 build --target ${{ matrix.target }} --bundles "$BUNDLES" --config "$CFG"
         working-directory: src-tauri
       - name: Collect installers
         shell: bash
@@ -99,4 +113,5 @@ jobs:
         run: |
           if ls dist/*.sig >/dev/null 2>&1; then python3 tools/make_latest_json.py dist "${{ github.ref_name }}" "${{ github.repository }}" >/dev/null; else echo "no updater signatures: latest.json not made, no in-app update is published"; fi
           cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
-          gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft --title "Tau Omega ${{ github.ref_name }}" --generate-notes *
+          PRE=""; case "${{ github.ref_name }}" in *-*) PRE="--prerelease";; esac
+          gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft $PRE --title "Tau Omega ${{ github.ref_name }}" --generate-notes *
