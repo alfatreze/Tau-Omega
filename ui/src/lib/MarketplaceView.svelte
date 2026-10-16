@@ -126,15 +126,30 @@
       {#each sources as src}<button class="chip toggle" aria-pressed={filters.source === src} on:click={() => (filters.source = filters.source === src ? '' : src)}>{sourceLabel(src)}</button>{/each}
     </div>
   {/if}
+  {#if result}
   <div class="mk-tags" role="group" aria-label="Category">
     <button class="chip toggle" aria-pressed={!filters.category} on:click={() => (filters.category = '')}>All <span class="mk-count">{counts.all}</span></button>
     {#each counts.byCategory as [name, n]}<button class="chip toggle" aria-pressed={filters.category === name} on:click={() => toggleCategory(name)}>{name} <span class="mk-count">{n}</span></button>{/each}
   </div>
+  {/if}
   <p class="mk-note" role="status" aria-live="polite">{#if error && result}<span class="err">{error}</span>{:else if error}{:else if loading && !result}Loading the list…{:else}{announce}{#if note}{' · '}{note}{/if}{#each result?.notes ?? [] as n}{' · '}{n}{/each}{/if}</p>
 
   {#if picked.size}<div class="mk-bar" role="region" aria-label="Selected cores"><span>{picked.size} {picked.size === 1 ? 'core' : 'cores'} selected</span><span><button class="quiet" on:click={() => (picked = new Set())}>Clear</button> <button class="primary" on:click={() => (multi = true)}>Install {picked.size} together…</button></span></div>{/if}
   {#if error && !result}
     <div class="empty"><h2>The list could not be loaded</h2><p>{error}</p><button class="primary" on:click={() => load(true)}>Try again</button></div>
+  {:else if loading && !result}
+    <!-- Skeleton cards: the same grid and card proportions as the real list, so nothing jumps when it arrives. Hidden from
+         screen readers; the "Loading the list…" status above is what they hear. -->
+    <ul class="mk-grid" aria-hidden="true" data-testid="mk-skeleton">
+      {#each Array(9) as _}
+        <li class="mk-card mk-skel">
+          <span class="mk-art sk"></span>
+          <span class="mk-body"><span class="sk sk-title"></span><span class="sk sk-sub"></span>
+            <span class="mk-author"><span class="sk sk-avatar"></span><span class="sk sk-name"></span></span></span>
+          <div class="mk-foot"><span class="sk sk-chip"></span><span class="sk sk-ver"></span></div>
+        </li>
+      {/each}
+    </ul>
   {:else if result && !shown.length}
     <div class="empty"><h2>No cores match</h2><p>{filters.query ? `Nothing matches “${filters.query}”` : 'Nothing matches these filters'}{filters.category ? ` in ${filters.category}` : ''}{filters.installedOnly ? ' on this card' : ''}.</p>
       <button class="quiet" on:click={() => (filters = { ...filters, query: '', category: '', installedOnly: false, source: '' })}>Clear filters</button></div>
@@ -224,6 +239,15 @@
   </div>
 {/if}
 <style>
+  .sk{display:block;background:#222e30;border-radius:6px;position:relative;overflow:hidden}
+  .sk::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(193,240,173,.07),transparent);animation:sk-sweep 1.4s ease-in-out infinite}
+  .mk-art.sk{border-radius:0;background:#1d2829}
+  .sk-title{height:14px;width:62%}.sk-sub{height:11px;width:40%;margin-top:6px}
+  .sk-avatar{flex:none;width:28px;height:28px;border-radius:7px}.sk-name{height:11px;width:34%}
+  .sk-chip{height:22px;width:74px;border-radius:999px}.sk-ver{height:12px;width:52px;margin-left:auto}
+  .mk-skel{pointer-events:none}
+  @keyframes sk-sweep{to{transform:translateX(100%)}}
+  @media (prefers-reduced-motion:reduce){.sk::after{animation:none;display:none}}
   .mk-pick{font-size:12px;color:#a6b3b2;display:inline-flex;gap:5px;align-items:center;margin-right:auto}
   .mk-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:5;background:#16292a;border:1px solid #3b5a58;border-radius:10px;padding:8px 14px;margin:0 0 10px;font-size:13px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

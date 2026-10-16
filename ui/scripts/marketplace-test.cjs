@@ -134,6 +134,15 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await sheet().innerText(), /never published/); assert.equal(await sheet().getByRole('button', { name: /Install a local dev build/ }).count(), 1); ok('the Dev core explains it is local and has no download button');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 
+  // Loading: skeleton cards while the list is on its way, hidden from screen readers, replaced by the real cards.
+  await p.goto(url); await p.evaluate(() => { localStorage.clear(); window.__mkt = 'slow'; });
+  await nav('Marketplace').click(); await p.waitForTimeout(250);
+  assert.equal(await p.locator('[data-testid=mk-skeleton] .mk-skel').count(), 9); ok('a skeleton of cards shows while the list loads');
+  assert.equal(await p.locator('[data-testid=mk-skeleton]').getAttribute('aria-hidden'), 'true');
+  assert.match(await p.locator('.mk-note').innerText(), /Loading the list/); ok('the skeleton is hidden from screen readers and the status says what is happening');
+  await p.waitForTimeout(1800);
+  assert.equal(await p.locator('[data-testid=mk-skeleton]').count(), 0); assert.ok(await rows().count() > 0); ok('the skeleton is replaced by the real cards');
+
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   await b.close();
   console.log(`\n${passed} checks passed`);
