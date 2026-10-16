@@ -91,9 +91,12 @@ fn package_meta(
             continue;
         };
         let saved = cache.join(format!("meta-{tag}.json"));
-        if let Some(meta) = std::fs::read(&saved)
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
+        // A saved copy counts only with its picture beside it (a copy from before pictures were kept is read again).
+        let has_art = cache.join(format!("meta-{tag}.icon.png")).exists();
+        if has_art
+            && let Some(meta) = std::fs::read(&saved)
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok())
         {
             return Some(meta);
         }
@@ -236,12 +239,51 @@ pub fn download_core(
 
 #[cfg(test)]
 mod tests {
+    use tau_core::release_check;
+    fn card_with(url: &str) -> tau_core::catalog::CatalogCore {
+        let mut card = tau_core::catalog::CatalogCore::default();
+        card.options.push(tau_core::catalog::InstallOption {
+            core_id: "alfatreze.TAU Preview".into(),
+            channel: "Preview".into(),
+            diagnostics: false,
+            history: vec![tau_core::catalog::ReleaseSummary {
+                version: "0.6.0-preview.1".into(),
+                release_date: "2026-10-09".into(),
+                download_url: url.into(),
+            }],
+        });
+        card
+    }
+
+    #[test]
+    fn a_saved_copy_without_its_picture_is_not_trusted_and_one_with_it_is() {
+        let dir = std::env::temp_dir().join(format!("tau-source-saved-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let url = format!(
+            "{}v0.6.0-preview.1/alfatreze.TAU_Preview_0.6.0-preview.1_2026-10-09.zip",
+            release_check::DOWNLOAD_PREFIX
+        );
+        let card = card_with(&url);
+        let meta = br#"{"category":"Media Players","manufacturer":"alfatreze","year":2026,"firmware_required":"1.1","dock_supported":true,"link_port":false,"sleep_supported":false}"#;
+        std::fs::write(dir.join("meta-v0.6.0-preview.1.json"), meta).unwrap();
+        // Offline and no picture beside it: an old copy is not used (it would never gain its picture).
+        assert!(super::package_meta(&card, &dir, &dir, true).is_none());
+        std::fs::write(dir.join("meta-v0.6.0-preview.1.icon.png"), b"\x89PNG").unwrap();
+        let got =
+            super::package_meta(&card, &dir, &dir, true).expect("saved copy with its picture");
+        assert_eq!((got.category.as_str(), got.year), ("Media Players", 2026));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     /// Hits the real GitHub release list (and downloads the newest Tau package once): `cargo test -p tau-net -- --ignored real_tau`.
     #[test]
     #[ignore]
     fn real_tau_source_lists_one_card_with_the_package_metadata() {
         let dir = std::env::temp_dir().join(format!("tau-source-real-{}", std::process::id()));
-        let (cards, _) = super::cores(&dir.join("c"), &dir.join("m")).unwrap();
+        // TAU_SRC_CACHE=<the app's tau-source folder> reproduces what the app does with its own saved state.
+        let c = std::env::var_os("TAU_SRC_CACHE")
+            .map_or_else(|| dir.join("c"), std::path::PathBuf::from);
+        let (cards, _) = super::cores(&c, &dir.join("m")).unwrap();
         assert_eq!(cards.len(), 1);
         let card = &cards[0];
         eprintln!(
@@ -263,9 +305,9 @@ mod tests {
             );
         }
         assert_eq!(card.category, "Media Players");
-        let icon = super::art(&dir.join("c"), false).expect("the package icon is kept");
+        let icon = super::art(&c, false).expect("the package icon is kept");
         assert!(icon.starts_with(b"\x89PNG"));
-        assert!(super::art(&dir.join("c"), true).is_some_and(|b| b.starts_with(b"\x89PNG")));
+        assert!(super::art(&c, true).is_some_and(|b| b.starts_with(b"\x89PNG")));
         let avatar = crate::marketplace::fetch_avatar(
             &crate::marketplace::Http,
             &dir.join("a"),
