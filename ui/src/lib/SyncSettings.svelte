@@ -4,10 +4,10 @@
   import { onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
   import { checkLame, errorMessage, getPrefs, installLame, lameStatus, setPrefs } from './tau-api';
-  import SkipSilenceSheet from './SkipSilenceSheet.svelte';
-  import type { ConvertSettings, LameStatus, PrefsView, TrimSettings } from './types';
+  import SkipOptionsSheet from './SkipOptionsSheet.svelte';
+  import type { ConvertSettings, LameStatus, PrefsView } from './types';
   export let card = ''; export let mediaRoot = '';
-  let reviewing = false;
+  let advanced = false;
 
   let prefs: PrefsView | null = null; let lame: LameStatus | null = null; let notice = ''; let busy = false;
   onMount(async () => {
@@ -19,16 +19,6 @@
     try { prefs = await setPrefs({ ...prefs, convert: { ...prefs.convert, ...part } }); lame = await lameStatus(); notice = message; }
     catch (error) { notice = `Could not save: ${errorMessage(error)}`; }
   }
-  async function changeTrim(part: Partial<TrimSettings>, message = 'Saved.') {
-    if (!prefs) return;
-    try { prefs = await setPrefs({ ...prefs, trim: { ...prefs.trim, ...part } }); notice = message; }
-    catch (error) { notice = `Could not save: ${errorMessage(error)}`; }
-  }
-  const DB_CHOICES = [-80, -75, -70, -65, -60, -55, -50, -45, -40];
-  const LEAD_CHOICES = [0, 100, 200, 500, 1000];
-  const TAIL_CHOICES = [0, 250, 500, 1000, 2000];
-  const MIN_CHOICES = [1000, 2000, 3000, 5000, 10000];
-  const secs = (ms: number) => (ms < 1000 ? `${ms} ms` : `${ms / 1000} s`);
   async function chooseLame() {
     const selected = await open({ directory: false });
     if (!selected || Array.isArray(selected)) return;
@@ -81,25 +71,12 @@
       <label class="radio"><input type="radio" name="rg" checked={c.replaygain === 'rebuild'} on:change={() => change({ replaygain: 'rebuild' })} /><span><b>Always measure again and replace the tags</b><small>Every album gets fresh values in the copies.</small></span></label>
       <label class="radio"><input type="radio" name="rg" checked={c.replaygain === 'off'} on:change={() => change({ replaygain: 'off' })} /><span><b>Do not touch ReplayGain</b><small>Tags are copied as they are.</small></span></label>
     </fieldset>
-    {@const t = prefs.trim}
     <fieldset>
-      <legend>Skip silence at the start and end of tracks</legend>
-      <div class="ss-row"><div><b>Skip silence</b><small>Measured when you sync and saved as a small <code>tau-skip.bin</code> file in each album folder; your music files are never changed. The player skips the silence when its own Skip silence switch is on (a player version that supports it, MP3 first).</small></div>
-        <div><button class="quiet" on:click={() => changeTrim({ enabled: !t.enabled }, t.enabled ? 'Silence will not be measured.' : 'Silence will be measured at the next sync.')}>{t.enabled ? 'Turn off' : 'Turn on'}</button></div></div>
-      {#if t.enabled}
-        <div class="ss-row"><div><b>Counts as silence below</b><small>-60 dB is quiet enough to be inaudible on headphones in a normal room. Lower catches only digital silence; higher also trims soft room noise and fade tails.</small></div>
-          <select aria-label="Silence level" value={t.threshold_db10} on:change={(e) => changeTrim({ threshold_db10: Number(e.currentTarget.value) })}>{#each DB_CHOICES as d}<option value={d * 10}>{d} dB{d === -60 ? ' (default)' : ''}</option>{/each}</select></div>
-        <div class="ss-row"><div><b>Silence left before the first sound</b><small>A natural attack is not silence, so the track starts a little before it.</small></div>
-          <select aria-label="Silence kept at the start" value={t.lead_margin_ms} on:change={(e) => changeTrim({ lead_margin_ms: Number(e.currentTarget.value) })}>{#each LEAD_CHOICES as k}<option value={k}>{secs(k)}{k === 200 ? ' (default)' : ''}</option>{/each}</select></div>
-        <div class="ss-row"><div><b>Silence left after the last sound</b><small>A natural decay is not silence, so the track ends a little after it.</small></div>
-          <select aria-label="Silence kept at the end" value={t.tail_margin_ms} on:change={(e) => changeTrim({ tail_margin_ms: Number(e.currentTarget.value) })}>{#each TAIL_CHOICES as k}<option value={k}>{secs(k)}{k === 500 ? ' (default)' : ''}</option>{/each}</select></div>
-        <div class="ss-row"><div><b>Only skip silences of at least</b><small>Shorter ones are left alone, so normal gaps stay. Silence in the middle of a track is never skipped.</small></div>
-          <select aria-label="Smallest silence" value={t.min_ms} on:change={(e) => changeTrim({ min_ms: Number(e.currentTarget.value) })}>{#each MIN_CHOICES as k}<option value={k}>{secs(k)}{k === 2000 ? ' (default)' : ''}</option>{/each}</select></div>
-        <div class="ss-row"><div><b>Review tracks</b><small>See what is skipped on each track, adjust it by hand, or mark a track as never skipped.{mediaRoot ? '' : ' Open a card with a music player core first.'}</small></div>
-          <div><button class="quiet" disabled={!mediaRoot} on:click={() => (reviewing = true)}>Review tracks…</button></div></div>
-      {/if}
+      <legend>Advanced</legend>
+      <div class="ss-row"><div><b>Skip silence</b><small>Leave out long silence at the start and end of tracks, and adjust tracks already on the card. Also in the Library page under Advanced.</small></div>
+        <div><button class="quiet" on:click={() => (advanced = true)}>Skip silence…</button></div></div>
     </fieldset>
-    {#if reviewing}<SkipSilenceSheet {card} {mediaRoot} close={() => (reviewing = false)} />{/if}
+    {#if advanced}<SkipOptionsSheet {card} {mediaRoot} close={() => (advanced = false)} />{/if}
     <p class="ss-notice" role="status">{notice}</p>
   {:else}<p>{notice || 'Loading…'}</p>{/if}
 </section>

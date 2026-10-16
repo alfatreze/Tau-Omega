@@ -192,7 +192,7 @@ pub(super) fn execute_with_mirror_inner(
             });
         }
     }
-    let scan = scan_dir_with_progress(&plan.destination, true, progress)?;
+    let scan = scan_dir_measuring(&plan.destination, true, progress)?;
     let mut warnings = plan.warnings.clone();
     warnings.extend(scan.warnings);
     let index = build_index(
@@ -215,6 +215,8 @@ pub(super) fn execute_with_mirror_inner(
         ));
     }
     swap_in_index(&temp, &index_path)?;
+    // Skip silence: the tables for the tracks just scanned (only while the setting is on).
+    crate::trim::write_after_scan(&plan.destination, &scan.entries, &mut warnings);
     Ok(SyncReport {
         plan_id: plan.id.clone(),
         copied,

@@ -3,7 +3,7 @@
 
 use crate::{
     ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, WarningCode, ascii_name,
-    build_index, convert, cover, image, ledger, parse, scan_dir_with_progress, tick, verify,
+    build_index, convert, cover, image, ledger, parse, scan_dir_measuring, tick, verify,
 };
 use sha2::{Digest, Sha256};
 use std::{

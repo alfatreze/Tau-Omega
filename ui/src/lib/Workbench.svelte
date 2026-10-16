@@ -90,6 +90,9 @@
   let toast = '';
   let toastTimer: ReturnType<typeof setTimeout>;
   let spinning = false;
+  import SkipOptionsSheet from './SkipOptionsSheet.svelte';
+  import SkipSilenceSheet from './SkipSilenceSheet.svelte';
+  let advMenu = false; let skipOptions = false; let skipAdjust = false;
   let connMenu = false;
 
   let dialog: null | 'review' | 'first-remove' | 'edit' = null;
@@ -631,6 +634,15 @@
               </div>
             {/if}
           </span>
+          <span class="wb-connwrap">
+            <button class="wb-conn" aria-haspopup="menu" aria-expanded={advMenu} title="Options for advanced users" on:click={() => (advMenu = !advMenu)}>Advanced ▾</button>
+            {#if advMenu}
+              <div class="wb-menu" role="menu">
+                <button role="menuitem" on:click={() => { advMenu = false; skipOptions = true; }} title="Leave out long silence at the start and end of tracks when you sync">Skip silence options…</button>
+                <button role="menuitem" disabled={!mediaRoot} on:click={() => { advMenu = false; skipAdjust = true; }} title="See and change what is skipped on the tracks already on the card">Adjust tracks on the card…</button>
+              </div>
+            {/if}
+          </span>
           {#if connected !== false}<button class="wb-eject quiet" disabled={busy || ejecting} title="Unmount the card so it is safe to unplug" on:click={eject}>{ejecting ? 'Ejecting…' : 'Eject safely'}</button>{/if}
         {/if}
       </div>
@@ -896,6 +908,8 @@
   fits={!!space && !overCapacity && !overLimit} {canStart} {startReason} onClose={() => (detailsOpen = false)} onRemove={unstage} onClear={clearAll}
   onStart={() => { detailsOpen = false; start(); }} />
 
+{#if skipOptions}<SkipOptionsSheet card={cardPath} {mediaRoot} close={() => (skipOptions = false)} />{/if}
+{#if skipAdjust}<SkipSilenceSheet card={cardPath} {mediaRoot} close={() => (skipAdjust = false)} />{/if}
 <style>
   .wb{padding:24px 40px 20px;display:flex;flex-direction:column;gap:14px;height:100vh;position:relative}
   .wb-top{display:flex;justify-content:space-between;align-items:flex-start;margin:0;padding:0;flex-shrink:0}

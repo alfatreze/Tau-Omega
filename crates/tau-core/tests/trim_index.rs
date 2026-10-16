@@ -3,7 +3,10 @@
 use std::{fs, path::Path};
 use tau_audio::flac_out;
 use tau_audio::pipeline::{Pipeline, Target};
-use tau_core::scan_dir;
+use tau_core::{scan_dir, scan_dir_measuring};
+
+/// The trim settings are process-wide, so the tests of this file take turns.
+static TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
 use tau_core::trim::{self, TrimSettings};
 
 fn wav(path: &Path, rate: u32, lead: usize, tone: usize, tail: usize) {
@@ -42,6 +45,7 @@ fn skip_file(dir: &Path) -> Option<Vec<u8>> {
 
 #[test]
 fn a_skip_table_is_written_next_to_the_tracks_from_the_measured_silence() {
+    let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
     let dir = std::env::temp_dir().join(format!("tau-trim-index-{}", std::process::id()));
     let album = dir.join("Album");
     fs::create_dir_all(&album).unwrap();
@@ -56,7 +60,7 @@ fn a_skip_table_is_written_next_to_the_tracks_from_the_measured_silence() {
     );
     flac(&album, "02 Plain.flac", 8_000, 400, 24_000, 400);
     let build = || {
-        let scan = scan_dir(&dir, false).unwrap();
+        let scan = scan_dir_measuring(&dir, false, &mut None).unwrap();
         let t = trim::active();
         if t.enabled {
             trim::write_skip_files(&dir, &scan.entries, &t).unwrap();
@@ -209,4 +213,59 @@ fn a_skip_table_is_written_next_to_the_tracks_from_the_measured_silence() {
     );
     trim::set_active(TrimSettings::default());
     fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn a_sync_writes_the_tables_and_a_plain_read_of_a_library_measures_nothing() {
+    let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
+    let base = std::env::temp_dir().join(format!("tau-trim-sync-{}", std::process::id()));
+    let (source, common) = (base.join("src"), base.join("Assets/tau/common"));
+    fs::create_dir_all(source.join("Album")).unwrap();
+    fs::create_dir_all(&common).unwrap();
+    flac(
+        &source.join("Album"),
+        "01 Long Silences.flac",
+        8_000,
+        80_000,
+        24_000,
+        48_000,
+    );
+    let run = |enabled: bool| {
+        trim::set_active(TrimSettings {
+            enabled,
+            ..Default::default()
+        });
+        let plan = tau_core::sync::plan(
+            std::slice::from_ref(&source),
+            &common,
+            "/Assets/tau/common/",
+            tau_core::sync::PlanOptions::default(),
+            &mut None,
+        )
+        .unwrap();
+        tau_core::sync::execute(&plan, &plan.id, &mut None).unwrap();
+    };
+    // off: the sync writes no table
+    run(false);
+    assert!(common.join("Album/tau-skip.bin").is_file() == false);
+    // a plain read of the library, with the setting on, decodes nothing: no measurement is attached to any track
+    trim::set_active(TrimSettings {
+        enabled: true,
+        ..Default::default()
+    });
+    let plain = scan_dir(&common, true).unwrap();
+    assert!(
+        plain.entries.iter().all(|e| !e.tags.contains_key("_sil")),
+        "a plain read must not measure silence"
+    );
+    // on: the next sync measures and writes the table next to the track
+    fs::remove_file(common.join("Album/01 Long Silences.flac")).unwrap();
+    run(true);
+    let t = fs::read(common.join("Album/tau-skip.bin")).expect("the sync wrote a table");
+    assert_eq!(
+        (&t[..4], u16::from_le_bytes([t[4], t[5]])),
+        (&b"TSK1"[..], 1)
+    );
+    trim::set_active(TrimSettings::default());
+    fs::remove_dir_all(base).ok();
 }

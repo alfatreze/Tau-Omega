@@ -165,6 +165,25 @@ pub fn scan_dir_with_progress(
     playlists: bool,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<Scan, TauError> {
+    scan_dir_options(common, playlists, false, progress)
+}
+
+/// A scan that also measures the silence at the start and end of each track not measured before, when Skip silence is on. Only the
+/// scans that write the skip tables ask for it: a plain read of a library must never pay for a decode of every track.
+pub fn scan_dir_measuring(
+    common: &Path,
+    playlists: bool,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<Scan, TauError> {
+    scan_dir_options(common, playlists, crate::trim::active().enabled, progress)
+}
+
+fn scan_dir_options(
+    common: &Path,
+    playlists: bool,
+    silence_on: bool,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<Scan, TauError> {
     let mut files = Vec::new();
     collect_files(common, common, &mut files)?;
     files.sort();
@@ -179,7 +198,6 @@ pub fn scan_dir_with_progress(
         is_flac: bool,
         print: Option<ledger::Fingerprint>,
     }
-    let silence_on = crate::trim::active().enabled;
     let mut media = Vec::new();
     for (done, path) in files.into_iter().enumerate() {
         let extension = path

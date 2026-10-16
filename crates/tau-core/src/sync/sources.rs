@@ -48,7 +48,7 @@ pub(crate) fn rebuild_index(
     warnings: &mut Vec<Warning>,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<(), TauError> {
-    let scan = scan_dir_with_progress(media_root, true, progress)?;
+    let scan = scan_dir_measuring(media_root, true, progress)?;
     warnings.extend(scan.warnings);
     let index = build_index(&scan.entries, &scan.playlists, root_prefix, warnings)?;
     parse(&index)?;
@@ -63,20 +63,8 @@ pub(crate) fn rebuild_index(
     }
     parse(&reparse)?;
     swap_in_index(&temp, &media_root.join("tau-library.tdb"))?;
-    // Skip silence: one `tau-skip.bin` per album folder, from the measurements the scan just made (only while the
-    // setting is on; with it off, existing files are left alone).
-    let trim = crate::trim::active();
-    if trim.enabled {
-        let (_, cut) = crate::trim::write_skip_files(media_root, &scan.entries, &trim)?;
-        if cut > 0 {
-            warnings.push(Warning::new(
-                WarningCode::PlaylistTruncated,
-                format!(
-                    "{cut} tracks are past the 340 a skip-silence file holds; they play whole."
-                ),
-            ));
-        }
-    }
+    // Skip silence: one `tau-skip.bin` per album folder (only while the setting is on).
+    crate::trim::write_after_scan(media_root, &scan.entries, warnings);
     Ok(())
 }
 pub(super) fn collect_files(
