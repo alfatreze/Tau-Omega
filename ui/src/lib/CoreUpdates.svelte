@@ -3,6 +3,7 @@
   // published). Checking is automatic only when the app's update check is on (Settings); installing never is: each update is its own reviewed
   // plan, one at a time.
   import CoreInstall from './CoreInstall.svelte';
+  import MultiInstall from './MultiInstall.svelte';
   import { openManualAdd } from './manualAddStore';
   import { sourceNote } from './marketplace';
   import { checkUpdates, updatesAutomatic, updatesBusy, updatesError, updatesResult } from './updatesStore';
@@ -10,6 +11,7 @@
   export let card = '';
 
   /** The core whose plan is open, and the ids still waiting when "Update all" is running. */
+  let together = false;
   let openId = ''; let queue: string[] = []; let queueTotal = 0; let finishedNote = '';
   $: result = $updatesResult; $: busy = $updatesBusy; $: error = $updatesError; $: automatic = $updatesAutomatic;
   $: updatable = (result?.rows ?? []).filter((r) => r.status === 'UpdateAvailable');
@@ -33,8 +35,10 @@
   }
   function skip() { if (queue.length) { openId = queue[0]; queue = queue.slice(1); } else { openId = ''; queueTotal = 0; } }
 </script>
+{#if together}<MultiInstall {card} cores={queueable.map((r) => ({ id: r.id, name: r.id }))} close={() => (together = false)} installed={() => void check(false)} />{/if}
 <section aria-label="Core updates" class="cu">
     <div class="cu-actions">
+      {#if queueable.length > 1 && !queueTotal}<button class="quiet" on:click={() => (together = true)}>Update all {queueable.length} together</button>{/if}
       {#if queueable.length > 1 && !queueTotal}<button class="quiet" on:click={updateAll}>Review all {queueable.length} updates, one at a time</button>{/if}
       <button class="quiet" disabled={busy || !card} on:click={() => check(true)}>{busy ? 'Checking…' : result ? 'Check again' : 'Check for updates'}</button>
     </div>

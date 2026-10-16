@@ -459,7 +459,7 @@
   // ---- sync ------------------------------------------------------------------
   function buildRequest(): ChangeRequest {
     const editRequests: EditRequest[] = edits.map((p) => ({ album_id: p.id, track: p.track, fields: p.fields, cover: p.cover }));
-    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR }, playlist: playlist ? { file: playlist.file, max_tracks: playlist.max_tracks, max_bytes: playlist.max_bytes, core_name: coreLabel || 'The core' } : null };
+    return { library_root: sourcePath || null, add_albums: adds.map((p) => p.id), remove_albums: removes.map((p) => p.id), edits: editRequests, options: { mirror: false, embed_covers: EMBED_COVERS, art_sidecar_pal256: ART_SIDECAR }, playlist: playlist ? { file: playlist.file, max_tracks: playlist.max_tracks, max_bytes: playlist.max_bytes, name_limit: playlist.name_limit, core_name: coreLabel || 'The core' } : null };
   }
   let preparing = false; let planJob = ''; let planPhase = '';
   async function start() {

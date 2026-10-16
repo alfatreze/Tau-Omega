@@ -1,5 +1,6 @@
 <script lang="ts">
   import UpdatePlanView from './UpdatePlanView.svelte';
+  import { open as pickMany } from '@tauri-apps/plugin-dialog';
   import type { Core, PackageManifest, PackagePlan, PackageReport, RemovePlan, RemoveReport } from './types';
   export let zipPath = ''; export let cardPath = '';
   export let chooseZip: () => void; export let chooseCard: () => void;
@@ -11,6 +12,15 @@
   export let removeKeepMedia = true; export let removeCoreId = ''; export let reviewRemove: () => void; export let removePlan: RemovePlan | null = null; export let removePlanNotice = '';
   export let confirmRemove: () => void; export let removeReport: RemoveReport | null = null; export let removeConfirmNotice = '';
 
+  /** More packages to install in the same reviewed step as the one above. */
+  let more: string[] = [];
+  async function addMore() {
+    const r = await pickMany({ multiple: true, title: 'Choose more core zips', filters: [{ name: 'Core zip', extensions: ['zip'] }] });
+    const list = r == null ? [] : Array.isArray(r) ? r : [r];
+    more = [...new Set([...more, ...list.filter((p) => p !== zipPath)])];
+  }
+  $: zipsAll = more.length ? [zipPath, ...more] : [];
+  const name = (p: string) => p.split('/').pop() ?? p;
   const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
   const STATE_LABEL: Record<string, string> = { only_left: 'New', different: 'Update', identical: 'Unchanged', only_right: 'Card only' };
 </script>
@@ -25,6 +35,8 @@
       <label for="package-card">Staging card folder</label>
       <div class="picker-row"><input id="package-card" bind:value={cardPath} placeholder="/Volumes/My Pocket"/><button class="picker" on:click={chooseCard}>Choose</button></div>
       <button class="primary" disabled={!zipPath.trim()} on:click={inspect}>Inspect package</button>
+      <button class="quiet" on:click={addMore}>Add more packages…</button>
+      {#if more.length}<ul class="more-zips" aria-label="More packages to install together">{#each more as z}<li>{name(z)} <button class="quiet" aria-label={`Remove ${name(z)}`} on:click={() => (more = more.filter((x) => x !== z))}>Remove</button></li>{/each}</ul>{/if}
       <p class="notice" role="status">{inspectNotice}</p>
     </div>
   </section>
@@ -40,7 +52,7 @@
     </section>
   {/if}
 
-  {#if manifest}<UpdatePlanView {zipPath} {cardPath} />{/if}
+  {#if manifest}<UpdatePlanView {zipPath} zips={zipsAll} {cardPath} />{/if}
 
   {#if plan}
     <section class="comparison-counts package-counts">
@@ -122,6 +134,7 @@
   {/if}
 </section>
 <style>
+  .more-zips{list-style:none;margin:8px 0 0;padding:0;font-size:12.5px;color:#a6b3b2}.more-zips li{display:flex;gap:10px;align-items:center;padding:3px 0}
   .package-counts { max-width: 540px; }
   .difference-section { max-width: 720px; }
   .difference-list { padding: 0; margin: 0; border: 1px solid #344244; border-radius: 9px; overflow: auto; max-height: 380px; }
