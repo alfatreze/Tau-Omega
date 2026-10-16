@@ -6,7 +6,7 @@
   import { checkStorageCapacity, listScreenshots } from './tau-api';
   import { plural, size } from './coresFormat';
   import type { VolumeSpace } from './types';
-  import { developerTools, roleOf, refreshRole, markTestCard, cardLabel } from './devStore';
+  import { developerTools, confirmRealCard, roleOf, refreshRole, markTestCard, cardLabel } from './devStore';
   import { errorMessage } from './backend';
   import type { Core } from './types';
   $: if ($developerTools && path) void refreshRole(path);
@@ -73,7 +73,7 @@
         {/if}
         {#if $developerTools}
           <h3 class="sum-h">Card role</h3>
-          <div class="role-row"><p><strong>{$roleOf.role === 'test' ? 'Test card' : 'Real card'}</strong> <small>{$roleOf.role === 'test' ? 'Dev installs go through the usual reviewed plan.' : 'Installing onto it asks you to type its name first.'}</small></p>
+          <div class="role-row"><p><strong>{$roleOf.role === 'test' ? 'Test card' : 'Real card'}</strong> <small>{$roleOf.role === 'test' ? 'Dev installs go through the usual reviewed plan.' : ($confirmRealCard ? 'Installing onto it asks you to type its name first.' : 'Installs go through the usual reviewed plan.')}</small></p>
             <button class="quiet" role="switch" aria-checked={$roleOf.role === 'test'} aria-label="This is a test card" disabled={roleBusy} on:click={() => toggleRole($roleOf.role !== 'test')}>{$roleOf.role === 'test' ? 'Make this a Real card' : 'This is a test card'}</button></div>
           <p class="sum-note">Saved as a small hidden file, <code>.omega-role</code>, at the card’s root, so the role follows the card. A card without it is always treated as Real.{roleNote ? ' ' + roleNote : ''}</p>
         {/if}

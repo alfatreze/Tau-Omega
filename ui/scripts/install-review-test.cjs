@@ -11,7 +11,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const errors = [];
   p.on('pageerror', (e) => errors.push(e.message));
   p.on('console', (m) => m.text().startsWith('[dev-mock] unmocked') && errors.push(m.text()));
-  const start = async (dev) => { await p.goto(url); await p.evaluate((d) => { localStorage.clear(); if (d) localStorage.setItem('tau.mock.devTools', '1'); }, dev); await p.goto(url); await p.waitForTimeout(1200); };
+  const start = async (dev) => { await p.goto(url); await p.evaluate((d) => { localStorage.clear(); if (d) { localStorage.setItem('tau.mock.devTools', '1'); localStorage.setItem('tau.confirmRealCard', '1'); } }, dev); await p.goto(url); await p.waitForTimeout(1200); };
   const ma = () => p.locator('.ma');
   const openManual = async () => { await p.locator('nav button', { hasText: 'Marketplace' }).first().click(); await p.waitForTimeout(500); await p.getByRole('button', { name: /Add a core manually/ }).click(); await p.waitForTimeout(300); };
   const read = async (addr) => { await ma().getByRole('textbox').fill(addr); await p.waitForTimeout(450); await ma().getByRole('button', { name: /Read this core/ }).click(); await p.waitForTimeout(500); };

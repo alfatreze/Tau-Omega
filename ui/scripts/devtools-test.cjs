@@ -45,12 +45,24 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await grp.click(); await p.waitForTimeout(200);
   assert.equal(await p.locator('#dev-tools').count(), 1); ok('and opens again');
 
-  // ---- on: a Real card by default
+  // ---- on: a Real card by default, and installing does not ask for its name
   await cardPage();
-  assert.match(await p.locator('.card-sum').innerText(), /Card role\s*Real card[\s\S]*type its name first[\s\S]*\.omega-role/i); ok('the Card page shows the role: Real by default, and says what that means');
+  assert.match(await p.locator('.card-sum').innerText(), /Card role\s*Real card[\s\S]*usual reviewed plan[\s\S]*\.omega-role/i); ok('the Card page shows the role: Real by default');
+  await installFlow();
+  assert.equal(await p.getByLabel('Type the card name to confirm').count(), 0); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), false); ok('installing onto a Real card asks for no name by default');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+
+  // ---- the name can be asked for, from Settings
+  if (!(await p.getByRole('button', { name: 'Settings', exact: true }).isVisible())) await p.getByRole('button', { name: /Tools & settings/ }).click();
+  await p.getByRole('button', { name: 'Settings', exact: true }).click(); await p.waitForTimeout(500);
+  const askRow = p.locator('.ls-row', { hasText: 'Ask for the card’s name before installing' });
+  assert.equal(await askRow.getByRole('switch').getAttribute('aria-checked'), 'false'); ok('Settings has "Ask for the card’s name before installing", off by default');
+  await askRow.getByRole('switch').click(); await p.waitForTimeout(200);
+  await cardPage();
+  assert.match(await p.locator('.card-sum').innerText(), /Real card[\s\S]*type its name first/i); ok('turned on, the Card page says installing onto a Real card asks for its name');
   await installFlow();
   const name = p.getByLabel('Type the card name to confirm');
-  assert.equal(await name.count(), 1); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), true); ok('installing onto a Real card asks for its name and blocks the button');
+  assert.equal(await name.count(), 1); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), true); ok('installing onto a Real card then asks for its name and blocks the button');
   await name.fill('Wrong'); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), true); ok('a wrong name keeps it blocked');
   await name.fill('pocket'); assert.equal(await p.getByRole('button', { name: 'Install', exact: true }).isDisabled(), false); ok('the right name (any case) unblocks it');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);

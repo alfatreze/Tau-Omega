@@ -10,7 +10,7 @@
   import { plural, size } from './coresFormat';
   import UpdatePlanView from './UpdatePlanView.svelte';
   import CarryMedia from './CarryMedia.svelte';
-  import { roleOf, refreshRole, cardLabel } from './devStore';
+  import { roleOf, refreshRole, cardLabel, confirmRealCard } from './devStore';
   import type { BuildList, BuildRow, BuildScheme, BuildsConfig, RemovePlan, SchemeField, SchemeTry } from './types';
   export let card = '';
 
@@ -99,7 +99,7 @@
     <button class="quiet" on:click={chooseFolder}>Choose…</button><button class="primary" disabled={!dirInput.trim() || busy} on:click={useFolder}>Use this folder</button>
     {#if list}<button class="quiet" disabled={busy} on:click={rescan}>Rescan</button>{/if}
   </div>
-  <p class="b-card" role="status">{card ? `Open card: ${cardLabel(card)} · ${isTest ? 'Test card' : 'Real card'}${isTest ? '' : ': installing will ask you to type its name'}` : 'Open a card to compare and install.'}</p>
+  <p class="b-card" role="status">{card ? `Open card: ${cardLabel(card)} · ${isTest ? 'Test card' : 'Real card'}${isTest || !$confirmRealCard ? '' : ': installing will ask you to type its name'}` : 'Open a card to compare and install.'}</p>
   {#if error}<p class="b-err" role="alert">{error}</p>{/if}
   {#if installError}<p class="b-err" role="alert">{installError}</p>{/if}
   {#if removeDone}<p class="b-ok" role="status">{removeDone}</p>{/if}
