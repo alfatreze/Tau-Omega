@@ -165,7 +165,16 @@ pub fn scan_dir_with_progress(
     playlists: bool,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<Scan, TauError> {
-    scan_dir_options(common, playlists, false, progress)
+    scan_dir_options(
+        common,
+        playlists,
+        ScanKind {
+            convertible: false,
+            details: true,
+            silence: false,
+        },
+        progress,
+    )
 }
 
 /// A scan that also measures the silence at the start and end of each track not measured before, when Skip silence is on. Only the
@@ -175,37 +184,143 @@ pub fn scan_dir_measuring(
     playlists: bool,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<Scan, TauError> {
-    scan_dir_options(common, playlists, crate::trim::active().enabled, progress)
+    scan_dir_options(
+        common,
+        playlists,
+        ScanKind {
+            convertible: false,
+            details: true,
+            silence: crate::trim::active().enabled,
+        },
+        progress,
+    )
+}
+
+/// A scan for listing a library: titles, artists, albums and lengths only. It skips the technical details the card's index needs, so a
+/// first read of a big library, or of one on a network share, opens each file once and reads as little of it as it can.
+pub fn scan_dir_listing(
+    common: &Path,
+    playlists: bool,
+    convertible: bool,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+) -> Result<Scan, TauError> {
+    scan_dir_options(
+        common,
+        playlists,
+        ScanKind {
+            convertible,
+            details: false,
+            silence: false,
+        },
+        progress,
+    )
+}
+
+/// What one scan does beyond reading the tags.
+#[derive(Clone, Copy)]
+struct ScanKind {
+    /// Also list the audio files the Pocket cannot play but can be converted (a source library only).
+    convertible: bool,
+    /// Read the technical details of each track (the index needs them; a plain listing does not).
+    details: bool,
+    /// Measure the silence at the start and end of each track not measured before.
+    silence: bool,
+}
+
+/// How many files are read at once. A network share is waiting on the network, not on the processor, so more
+/// readers than cores still pay off; measuring silence is processor work and gains from every core.
+fn scan_threads() -> usize {
+    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+    (cores * 2).clamp(4, 16)
+}
+
+/// Runs `f` over `items` on several threads and returns the results in the order of the items.
+fn par_map<T: Sync, R: Send>(items: &[T], threads: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, R)>();
+    let mut out: Vec<Option<R>> = (0..items.len()).map(|_| None).collect();
+    std::thread::scope(|scope| {
+        for _ in 0..threads.min(items.len()).max(1) {
+            let (tx, next, f) = (tx.clone(), &next, &f);
+            scope.spawn(move || {
+                loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if i >= items.len() || tx.send((i, f(&items[i]))).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+        for (i, r) in rx {
+            out[i] = Some(r);
+        }
+    });
+    out.into_iter().flatten().collect()
+}
+
+type TagRead = Result<(BTreeMap<String, String>, u16, u8), String>;
+
+/// Reads one track from the file: tags, duration and format, plus the details and the silence when asked.
+fn read_track(path: &Path, convert: bool, kind: ScanKind) -> TagRead {
+    if convert {
+        return crate::workbench::read_convertible(path);
+    }
+    let mut result = read_tags(path).map_err(|e| e.to_string())?;
+    // The track's technical details travel in the tag map (hex, plus the encoder text) so the ledger cache keeps
+    // them with the rest.
+    if kind.details
+        && let Ok(det) = crate::details::extract(path)
+    {
+        result.0.insert("_det".into(), det.to_hex());
+        result.0.insert("_denc".into(), det.encoder);
+    }
+    // Leading and trailing silence at every level, only while trimming is switched on. A file that cannot be
+    // measured is marked so it is not tried again on every scan.
+    if kind.silence {
+        let measured = tau_audio::silence::measure_levels(path, &mut |_| true)
+            .ok()
+            .and_then(|l| crate::trim::encode_levels(&l));
+        match measured {
+            Some(text) => result.0.insert("_sil".into(), text),
+            None => result.0.insert("_silx".into(), "1".into()),
+        };
+    }
+    Ok(result)
 }
 
 fn scan_dir_options(
     common: &Path,
     playlists: bool,
-    silence_on: bool,
+    kind: ScanKind,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<Scan, TauError> {
     let mut files = Vec::new();
     collect_files(common, common, &mut files)?;
     files.sort();
-    let total = files.len() as u64;
     let mut output = Scan::default();
-    // First pass: which files are media, and what each looks like (one `stat` each). The ledger needs the
-    // whole set before it can say whether this card's modified times mean anything.
+    // First pass: which files are media (no file access), then what each looks like (one `stat` each, several at a
+    // time: on a network share these are round trips). The ledger needs the whole set before it can say whether
+    // this card's modified times mean anything.
     struct Media {
-        done: u64,
         path: PathBuf,
         rel: String,
         is_flac: bool,
+        /// A file the Pocket cannot play but this tool can convert: read through the decoder, listed with format 0.
+        convert: bool,
         print: Option<ledger::Fingerprint>,
     }
-    let mut media = Vec::new();
-    for (done, path) in files.into_iter().enumerate() {
+    let mut media: Vec<Media> = Vec::new();
+    for path in files {
         let extension = path
             .extension()
             .and_then(|x| x.to_str())
             .unwrap_or_default()
             .to_ascii_lowercase();
-        if !matches!(extension.as_str(), "mp3" | "flac")
+        let convert = kind.convertible
+            && !matches!(extension.as_str(), "mp3" | "flac")
+            && crate::convert::convertible_extension(&path);
+        if !(matches!(extension.as_str(), "mp3" | "flac") || convert)
             || path
                 .file_name()
                 .is_some_and(|n| n.to_string_lossy().starts_with("._"))
@@ -217,78 +332,132 @@ fn scan_dir_options(
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
-        let print = fs::metadata(&path)
-            .ok()
-            .and_then(|m| ledger::fingerprint(&m));
         media.push(Media {
-            done: done as u64,
             path,
             rel,
             is_flac: extension == "flac",
-            print,
+            convert,
+            print: None,
         });
+    }
+    let total = media.len() as u64;
+    let threads = scan_threads();
+    let prints = par_map(&media, threads, |m| {
+        fs::metadata(&m.path)
+            .ok()
+            .and_then(|md| ledger::fingerprint(&md))
+    });
+    for (m, p) in media.iter_mut().zip(prints) {
+        m.print = p;
     }
     let mut cache = ledger::Session::open(common);
     if let Some(session) = cache.as_mut() {
         let prints: Vec<_> = media.iter().filter_map(|m| m.print).collect();
         session.assess(&prints);
     }
-    for m in media {
-        let Media {
-            done,
-            path,
-            rel,
-            is_flac,
-            print,
-        } = m;
-        // A cached record from before details existed has no `_det` tag: read the file again.
-        let cached = match (cache.as_mut(), print.as_ref()) {
-            (Some(session), Some(print)) => session.tags(&rel, print),
+    // What the ledger already knows. A record from before details existed has no `_det` tag, and one from before
+    // silence was measured has no `_sil`: those are read again, only when this scan needs them.
+    let cached: Vec<Option<ledger::TagRecord>> = media
+        .iter()
+        .map(|m| match (cache.as_mut(), m.print.as_ref()) {
+            (Some(session), Some(print)) => session.tags(&m.rel, print),
             _ => None,
-        }
-        .filter(|hit| {
-            hit.tags.contains_key("_det")
-                && (!silence_on || hit.tags.contains_key("_sil") || hit.tags.contains_key("_silx"))
+        })
+        .map(|hit| {
+            hit.filter(|h| {
+                (!kind.details || h.tags.contains_key("_det"))
+                    && (!kind.silence
+                        || h.tags.contains_key("_sil")
+                        || h.tags.contains_key("_silx"))
+            })
+        })
+        .collect();
+    let misses: Vec<usize> = (0..media.len()).filter(|&i| cached[i].is_none()).collect();
+    // Read what is not known, several files at a time. Results come back to this thread as they finish, so the
+    // progress observer (which is not shared between threads) is only ever called here, and a cancel stops the workers.
+    let mut read: Vec<Option<TagRead>> = (0..media.len()).map(|_| None).collect();
+    if !misses.is_empty() {
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let (tx, rx) = std::sync::mpsc::channel::<(usize, TagRead)>();
+        let mut stopped: Option<TauError> = None;
+        let mut done = total - misses.len() as u64;
+        std::thread::scope(|scope| {
+            for _ in 0..threads.min(misses.len()).max(1) {
+                let (tx, next, cancel, media, misses) =
+                    (tx.clone(), &next, &cancel, &media, &misses);
+                scope.spawn(move || {
+                    loop {
+                        let n = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if n >= misses.len() || cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                            break;
+                        }
+                        let i = misses[n];
+                        if tx
+                            .send((i, read_track(&media[i].path, media[i].convert, kind)))
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                });
+            }
+            drop(tx);
+            for (i, result) in rx {
+                read[i] = Some(result);
+                done += 1;
+                if stopped.is_none()
+                    && let Err(e) = tick(
+                        progress,
+                        Progress {
+                            stage: if kind.silence {
+                                Stage::Silence
+                            } else {
+                                Stage::Scanning
+                            },
+                            done,
+                            total,
+                            path: Some(media[i].rel.clone()),
+                        },
+                    )
+                {
+                    stopped = Some(e);
+                    cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
         });
+        if let Some(e) = stopped {
+            return Err(e);
+        }
+    } else {
         tick(
             progress,
             Progress {
-                stage: if silence_on && cached.is_none() {
-                    Stage::Silence
-                } else {
-                    Stage::Scanning
-                },
-                done,
+                stage: Stage::Scanning,
+                done: total,
                 total,
-                path: Some(rel.clone()),
+                path: None,
             },
         )?;
-        let (tags, secs, fmt) = if let Some(hit) = cached {
+    }
+    // Put it together in file order. The cover-file flag of the details describes the folder as it is now, not as
+    // it was when the tags were cached, so it is looked at once per folder.
+    let mut sidecar: BTreeMap<PathBuf, bool> = BTreeMap::new();
+    for (i, m) in media.into_iter().enumerate() {
+        let Media {
+            path,
+            rel,
+            is_flac,
+            convert,
+            print,
+        } = m;
+        let (tags, secs, fmt) = if let Some(hit) = cached[i].clone() {
             output.reused += 1;
             (hit.tags, hit.secs, hit.fmt)
         } else {
             output.read += 1;
-            match read_tags(&path).map(|mut result| {
-                // The track's technical details travel in the tag map (hex, plus the encoder text) so the
-                // ledger cache keeps them with the rest.
-                if let Ok(det) = crate::details::extract(&path) {
-                    result.0.insert("_det".into(), det.to_hex());
-                    result.0.insert("_denc".into(), det.encoder);
-                }
-                // Leading and trailing silence at every level, only while trimming is switched on. A file
-                // that cannot be measured is marked so it is not tried again on every scan.
-                if silence_on {
-                    let measured = tau_audio::silence::measure_levels(&path, &mut |_| true)
-                        .ok()
-                        .and_then(|l| crate::trim::encode_levels(&l));
-                    match measured {
-                        Some(text) => result.0.insert("_sil".into(), text),
-                        None => result.0.insert("_silx".into(), "1".into()),
-                    };
-                }
-                result
-            }) {
-                Ok(result) => {
+            match read[i].take() {
+                Some(Ok(result)) => {
                     if let (Some(session), Some(print)) = (cache.as_mut(), print) {
                         session.put_tags(
                             &rel,
@@ -302,24 +471,39 @@ fn scan_dir_options(
                     }
                     result
                 }
-                Err(e) => {
+                other => {
+                    let why = match other {
+                        Some(Err(e)) => e,
+                        _ => "not read".into(),
+                    };
                     output.warnings.push(Warning::new(
                         WarningCode::TagsUnreadable,
-                        format!("{rel}: tags unreadable ({e})"),
+                        format!("{rel}: tags unreadable ({why})"),
                     ));
-                    (BTreeMap::new(), 0, if is_flac { 2 } else { 1 })
+                    (
+                        BTreeMap::new(),
+                        0,
+                        if convert {
+                            0
+                        } else if is_flac {
+                            2
+                        } else {
+                            1
+                        },
+                    )
                 }
             }
         };
         let mut tags = tags;
-        // The cover-file flag describes the folder as it is now, not as it was when the tags were cached.
         if let Some(mut det) = tags
             .get("_det")
             .and_then(|hex| crate::details::Details::from_hex(hex, ""))
         {
-            let has = path
-                .parent()
-                .is_some_and(|p| p.join(crate::details::SIDECAR).is_file());
+            let has = path.parent().is_some_and(|p| {
+                *sidecar
+                    .entry(p.to_path_buf())
+                    .or_insert_with(|| p.join(crate::details::SIDECAR).is_file())
+            });
             det.flags = (det.flags & !crate::details::F_SIDECAR)
                 | if has { crate::details::F_SIDECAR } else { 0 };
             tags.insert("_det".into(), det.to_hex());
@@ -347,11 +531,18 @@ fn scan_dir_options(
 }
 
 pub(super) fn collect_files(root: &Path, at: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
-    for child in fs::read_dir(at)? {
-        let child = child?.path();
-        if child.is_dir() {
+    for entry in fs::read_dir(at)? {
+        let entry = entry?;
+        let child = entry.path();
+        // The directory listing already says what each entry is, so nothing is asked of the file system again
+        // (on a network share that is a round trip per entry). Only a link needs following.
+        let (is_dir, is_file) = match entry.file_type() {
+            Ok(t) if !t.is_symlink() => (t.is_dir(), t.is_file()),
+            _ => (child.is_dir(), child.is_file()),
+        };
+        if is_dir {
             collect_files(root, &child, out)?;
-        } else if child.is_file()
+        } else if is_file
             && !child
                 .strip_prefix(root)
                 .unwrap_or(&child)

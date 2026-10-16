@@ -248,7 +248,15 @@ const handlers: Record<string, (args: any) => unknown> = {
   // A 1x1 grey PNG, so cover previews have something to show.
   read_image_data_url: () => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   list_journals: () => [],
-  list_library: (a) => listing(String(a.path).startsWith(LIBRARY) ? sourceAlbums : cardAlbums),
+  list_library: async (a) => {
+    const isSource = String(a.path).startsWith(LIBRARY);
+    const delay = isSource ? Number((() => { try { return localStorage.getItem('tau.mock.listDelay'); } catch { return 0; } })() ?? 0) : 0;
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    const result = listing(isSource ? sourceAlbums : cardAlbums);
+    if (isSource && a.includeConvertible !== undefined) { try { localStorage.setItem('tau.mock.saved', JSON.stringify({ listing: result, saved_at: Math.floor(Date.now() / 1000) })); } catch { /* none */ } }
+    return result;
+  },
+  list_library_saved: () => { try { const s = localStorage.getItem('tau.mock.saved'); return s ? JSON.parse(s) : null; } catch { return null; } },
   scan_media: () => ({ playlists: [{ name: 'Favourites', file: 'Favourites.m3u8', tracks: ['Music/a.mp3'] }], warnings: [] }),
   find_problems: () => [{ kind: 'missing_tag', files: ['Music/x.mp3'], message: 'No artist tag' }],
   check_storage_capacity: (a) => {

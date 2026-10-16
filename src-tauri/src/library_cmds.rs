@@ -8,7 +8,44 @@ use super::*;
 pub fn list_library(app: tauri::AppHandle, path: String, include_convertible: Option<bool>, job_id: String, window: Window, jobs: State<JobRegistry>) -> Result<tau_core::workbench::LibraryListing, TauError> {
     // A source library also lists the files that can be converted for the Pocket (if conversion is on).
     let convertible = include_convertible.unwrap_or(false) && runtime_convert(&app)?.enabled;
-    with_job(&window, &jobs, job_id, |progress| tau_core::workbench::list_library_with(Path::new(&path), convertible, progress))
+    let listing = with_job(&window, &jobs, job_id, |progress| tau_core::workbench::list_library_with(Path::new(&path), convertible, progress))?;
+    // A source library's list is kept, so the page can show it at once the next time while the folder is checked for changes.
+    if include_convertible.is_some() {
+        let _ = save_listing(&app, &path, &listing);
+    }
+    Ok(listing)
+}
+
+/// The last list read from a library folder and when (seconds since 1970), kept in the app's cache folder. Never on a card.
+#[derive(Serialize, Deserialize)]
+pub struct SavedListing {
+    listing: tau_core::workbench::LibraryListing,
+    saved_at: u64,
+}
+
+fn listing_file(app: &tauri::AppHandle, path: &str) -> Result<std::path::PathBuf, TauError> {
+    let dir = app.path().app_cache_dir().map_err(|error| TauError { code: ErrorCode::Io, message: error.to_string() })?.join("listings");
+    Ok(dir.join(format!("{}.json", tau_core::ledger_host::library_key(Path::new(path)))))
+}
+
+fn save_listing(app: &tauri::AppHandle, path: &str, listing: &tau_core::workbench::LibraryListing) -> Result<(), TauError> {
+    let file = listing_file(app, path)?;
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let saved_at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let bytes = serde_json::to_vec(&SavedListing { listing: listing.clone(), saved_at }).map_err(|e| TauError { code: ErrorCode::Json, message: e.to_string() })?;
+    let part = file.with_extension("part");
+    std::fs::write(&part, bytes)?;
+    std::fs::rename(&part, &file)?;
+    Ok(())
+}
+
+/// The saved list of a library folder, if there is one (read-only; a damaged or missing file is simply "none").
+#[tauri::command(async)]
+pub fn list_library_saved(app: tauri::AppHandle, path: String) -> Result<Option<SavedListing>, TauError> {
+    let Ok(bytes) = std::fs::read(listing_file(&app, &path)?) else { return Ok(None) };
+    Ok(serde_json::from_slice(&bytes).ok())
 }
 
 /// What a reviewed change set will do, in counts (the full per-file plan

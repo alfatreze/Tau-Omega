@@ -183,11 +183,20 @@ fn volume_key(root: &Path) -> Option<String> {
 /// The engine's locator: the ledger file for the card holding this media root, or `None` for "no ledger".
 fn locate(root: &Path) -> Option<PathBuf> {
     let dir = CACHE_DIR.get()?;
-    Some(dir.join(format!(
-        "{}-{}.tauledger",
-        volume_key(root)?,
-        media_root_tail(root)?
-    )))
+    if let Some(tail) = media_root_tail(root) {
+        return Some(dir.join(format!("{}-{}.tauledger", volume_key(root)?, tail)));
+    }
+    // A music folder (on this computer or a network share) is remembered by where it is: what was read from each file
+    // is reused for as long as the file's size and modified time are the same.
+    Some(dir.join(format!("lib-{}.tauledger", library_key(root))))
+}
+
+/// A short stable name for a library folder: a hash of its full path.
+pub fn library_key(root: &Path) -> String {
+    use sha2::{Digest, Sha256};
+    let full = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let digest = Sha256::digest(full.to_string_lossy().as_bytes());
+    digest[..12].iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[cfg(test)]

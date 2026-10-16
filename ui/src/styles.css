@@ -123,3 +123,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
 /* A core's page fills the window: banners above it keep their height, the page takes the rest and scrolls inside. */
 .content:has(> .cores.has-core){height:100vh;display:flex;flex-direction:column;overflow:hidden}
 @media(max-width:1100px){.content:has(> .cores.has-core){height:auto;overflow:visible;display:block}}
+
+/* Scroll bars: the primary green, half as wide as the system ones. */
+*::-webkit-scrollbar{width:5px;height:5px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:#c1f0ad;border-radius:99px}
+*::-webkit-scrollbar-thumb:hover{background:#d6f7c6}
+*::-webkit-scrollbar-corner{background:transparent}

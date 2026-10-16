@@ -43,6 +43,7 @@ export const readImageDataUrl = (path: string) => invoke<string>('read_image_dat
 export const readCoreIcon = (card: string, coreId: string) => invoke<string | null>('read_core_icon', { card, coreId });
 export const readPlatformImage = (card: string, platform: string) => invoke<string | null>('read_platform_image', { card, platform });
 export { cancelJob, newJobId, onProgress, errorMessage, explainError } from './backend';
+export const listLibrarySaved = (path: string) => invoke<{ listing: LibraryListing; saved_at: number } | null>('list_library_saved', { path });
 export const listLibrary = (path: string, jobId: string, includeConvertible = false) => invoke<LibraryListing>('list_library', { path, jobId, includeConvertible });
 export const planChanges = (request: ChangeRequest, destination: string, jobId?: string) => invoke<ChangePlanView>('plan_changes', { request, destination, jobId });
 export const executeChanges = (request: ChangeRequest, destination: string, confirmation: string, backup: string | null, context: HistoryContext | null, jobId: string) => invoke<ChangeResult>('execute_changes', { request, destination, confirmation, backup, context, jobId });

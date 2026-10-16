@@ -7,7 +7,7 @@
   // card and core so switching cards switches the list.
   import { onDestroy, onMount, tick } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { cancelJob, cardBreakdown, ledgerForget, checkStorageCapacity, detectConnection, ejectCard, readbackStatus, explainError, executeChanges, getPrefs, listHistory, listLibrary, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
+  import { cancelJob, cardBreakdown, ledgerForget, checkStorageCapacity, detectConnection, ejectCard, readbackStatus, explainError, executeChanges, getPrefs, listHistory, listLibrary, listLibrarySaved, newJobId, onProgress, planChanges, albumThumbnails, imageThumbnail, setPrefs } from './tau-api';
   import { modal } from './a11y';
   import VirtualList from './VirtualList.svelte';
   import CapacityBar from './CapacityBar.svelte';
@@ -64,6 +64,8 @@
   let source: LibraryListing | null = null;
   let sourcePath = '';
   let sourceBusy = false, sourceError = '', sourceProgress = '';
+  /** The saved list is on screen while the folder is checked for changes (stale-while-revalidate). */
+  let sourceSaved = '', sourceChecking = false, sourceFor = '';
   let card: LibraryListing | null = null;
   let cardBusy = false, cardError = '', cardProgress = '';
   let space: CapacityCheck | null = null;
@@ -169,10 +171,16 @@
   }
   async function scanSource() {
     if (!sourcePath) return;
-    sourceBusy = true; sourceError = ''; sourceJob = newJobId(); sourceProgress = '';
-    try { source = await listLibrary(sourcePath, sourceJob, true); }
-    catch (error) { source = null; sourceError = explainError(error); }
-    finally { sourceBusy = false; }
+    sourceError = ''; sourceJob = newJobId(); sourceProgress = ''; sourceSaved = '';
+    let shown = false;
+    if (!source || sourceFor !== sourcePath) {
+      // The last list of this folder, if the app kept one, is shown at once; the folder is checked for changes behind it.
+      try { const saved = await listLibrarySaved(sourcePath); if (saved) { source = saved.listing; sourceSaved = new Date(saved.saved_at * 1000).toLocaleString(); shown = true; } } catch { /* no saved list */ }
+    } else shown = true;
+    sourceFor = sourcePath; sourceBusy = !shown; sourceChecking = true;
+    try { source = await listLibrary(sourcePath, sourceJob, true); sourceSaved = ''; }
+    catch (error) { if (shown && source) sourceError = `Could not check for changes: ${explainError(error)}`; else { source = null; sourceError = explainError(error); } }
+    finally { sourceBusy = false; sourceChecking = false; }
   }
   async function chooseSource() {
     const selected = await open({ directory: true });
@@ -670,7 +678,7 @@
       <span>Omega keeps <code>{playlist.file}</code> in step with the tracks on the card ({playlist.formats.map((f) => f.toUpperCase()).join(' and ')}){playlist.max_tracks ? `, and stops a sync that would go over its limit of ${playlist.max_tracks.toLocaleString()} tracks` : ''}. The core itself drops anything past its limits{playlist.max_bytes ? ` (a ${Math.round(playlist.max_bytes / 1024)} KB playlist file too, about 48 characters a track)` : ''}.{playlist.name_limit && playlist.list_file ? ` Playlist names over ${playlist.name_limit} characters are only remembered if listed in ${playlist.list_file}.` : ''} The core does not use the library index.</span></div>
   {/if}
   <CapacityBar bind:this={capBar} hasSpace={!!space} busy={cardBusy} {total} {used} {addBytes} {removeBytes} {freeNow} freeAfter={free} {margin} {overCapacity}
-    {breakdown} measuring={breakdownBusy} {activePlatform}
+    {breakdown} measuring={breakdownBusy} {activePlatform} {coreLabel}
     limitText={limits ? `${tracksAfter.toLocaleString()} of ${limits.max_tracks.toLocaleString()} tracks (${playlist?.max_tracks ? 'playlist limit' : 'Pocket limit'})` : ''}
     limitTitle={limits ? (playlist?.max_tracks ? `${coreLabel || 'This core'} plays at most ${limits.max_tracks.toLocaleString()} tracks from its playlist` : `The Pocket's library can hold at most ${limits.max_tracks.toLocaleString()} tracks and ${limits.max_albums.toLocaleString()} albums`) : ''}
     {overLimit} {nearLimit} sync={syncView} onCancel={cancelSync} onDetails={() => (detailsOpen = true)} {canStart} {startReason} pendingSummary={pendingSummary} onStart={start}
@@ -683,9 +691,11 @@
         <div class="wb-empty wb-cta"><b>Choose your music folder</b><p>Pick a folder on this computer to see its albums. Your files are never changed.</p><button class="primary" on:click={chooseSource}>Choose folder…</button></div>
       {:else if sourceBusy}
         <div class="wb-empty" role="status"><b>Reading your library…</b><p>{sourceProgress}</p></div>
-      {:else if sourceError}
+      {:else if sourceError && !source}
         <div class="wb-empty" role="alert"><b>Couldn't read this folder</b><p>{sourceError}</p><button class="quiet" on:click={scanSource}>Try again</button></div>
       {:else if source}
+        {#if sourceChecking}<p class="wb-note" role="status">{sourceSaved ? `Showing the saved list from ${sourceSaved}. ` : ''}Checking for changes… {sourceProgress}</p>
+        {:else if sourceError}<p class="wb-note bad" role="alert">{sourceError} <button class="wb-link" on:click={scanSource}>Try again</button></p>{/if}
         <div class="wb-tools">
           <input class="wb-search" bind:value={sourceSearch} placeholder="Search albums or artists" aria-label="Search this computer" />
           <select class="wb-sort" aria-label="Sort albums" bind:value={sort}>
@@ -911,6 +921,7 @@
 {#if skipOptions}<SkipOptionsSheet card={cardPath} {mediaRoot} close={() => (skipOptions = false)} />{/if}
 {#if skipAdjust}<SkipSilenceSheet card={cardPath} {mediaRoot} close={() => (skipAdjust = false)} />{/if}
 <style>
+  .wb-note{font-size:12px;color:#95a5a4;margin:0 0 8px}.wb-note.bad{color:#ff9b9b}
   .wb{padding:24px 40px 20px;display:flex;flex-direction:column;gap:14px;height:100vh;position:relative}
   .wb-top{display:flex;justify-content:space-between;align-items:flex-start;margin:0;padding:0;flex-shrink:0}
   .wb-top h1{margin:0 0 4px;font-size:26px}.wb-ctx .eyebrow{margin:0 0 2px}

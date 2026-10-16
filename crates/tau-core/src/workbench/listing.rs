@@ -103,58 +103,31 @@ pub fn list_library(
     list_library_with(root, false, progress)
 }
 
-/// Audio files the Pocket cannot play but this tool can convert (WAV, AIFF, M4A, Ogg, ...), as listing
-/// entries with their tags read from the file. Only used for a source library.
-fn convertible_entries(root: &Path) -> Vec<crate::Entry> {
-    let mut files = Vec::new();
-    let _ = crate::scan::collect_files(root, root, &mut files);
-    files.sort();
-    let mut out = Vec::new();
-    for path in files {
-        if !crate::convert::convertible_extension(&path) {
-            continue;
+/// Reads the tags and length of an audio file the Pocket cannot play but this tool can convert (WAV, AIFF, M4A, Ogg, ...). Only a source library
+/// lists these; the scan reads them with the others (several at a time, and kept in the ledger).
+pub(crate) fn read_convertible(path: &Path) -> Result<(BTreeMap<String, String>, u16, u8), String> {
+    let mut decoder = tau_audio::decode::Decoder::open(path).map_err(|e| e.to_string())?;
+    let meta = decoder.meta();
+    let info = decoder.info.clone();
+    let mut tags = BTreeMap::new();
+    for (key, value) in [
+        ("TIT2", meta.title),
+        ("TPE1", meta.artist),
+        ("TALB", meta.album),
+        ("TPE2", meta.album_artist),
+        ("TDRC", meta.year),
+        ("TRCK", meta.track.map(|n| n.to_string())),
+        ("TPOS", meta.disc.map(|n| n.to_string())),
+    ] {
+        if let Some(v) = value.filter(|v| !v.is_empty()) {
+            tags.insert(key.to_string(), v);
         }
-        let Ok(rel) = path.strip_prefix(root) else {
-            continue;
-        };
-        let rel = rel.to_string_lossy().replace('\\', "/");
-        let Ok(mut decoder) = tau_audio::decode::Decoder::open(&path) else {
-            continue;
-        };
-        let meta = decoder.meta();
-        let info = decoder.info.clone();
-        let mut tags = BTreeMap::new();
-        for (key, value) in [
-            ("TIT2", meta.title),
-            ("TPE1", meta.artist),
-            ("TALB", meta.album),
-            ("TPE2", meta.album_artist),
-            ("TDRC", meta.year),
-            ("TRCK", meta.track.map(|n| n.to_string())),
-            ("TPOS", meta.disc.map(|n| n.to_string())),
-        ] {
-            if let Some(v) = value.filter(|v| !v.is_empty()) {
-                tags.insert(key.to_string(), v);
-            }
-        }
-        let (dir, file) = rel
-            .rsplit_once('/')
-            .map(|(a, b)| (a.to_string(), b.to_string()))
-            .unwrap_or((String::new(), rel.clone()));
-        let secs = info
-            .frames
-            .map(|f| (f / info.rate.max(1) as u64).min(65_535) as u16)
-            .unwrap_or(0);
-        out.push(crate::Entry {
-            rel,
-            dir,
-            file,
-            tags,
-            secs,
-            fmt: 0,
-        });
     }
-    out
+    let secs = info
+        .frames
+        .map(|f| (f / info.rate.max(1) as u64).min(65_535) as u16)
+        .unwrap_or(0);
+    Ok((tags, secs, 0))
 }
 
 /// [`list_library`], optionally also listing files that can be converted for the Pocket.
@@ -169,10 +142,7 @@ pub fn list_library_with(
             format!("not a folder: {}", root.display()),
         ));
     }
-    let mut scan = scan_dir_with_progress(root, true, progress)?;
-    if include_convertible {
-        scan.entries.extend(convertible_entries(root));
-    }
+    let scan = crate::scan_dir_listing(root, true, include_convertible, progress)?;
     let mut by_dir: BTreeMap<String, Vec<&crate::Entry>> = BTreeMap::new();
     for entry in &scan.entries {
         by_dir.entry(entry.dir.clone()).or_default().push(entry);

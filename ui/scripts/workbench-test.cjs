@@ -57,7 +57,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const cap = () => p.getByRole('group', { name: 'Storage on the Pocket' });
   assert.match(await text(cap()), /Adding about 782 MB/); ok('the bar names what is being added');
   assert.match(await text(cap()), /free, \d+\.\d GB after sync/); ok('the bar shows free space now and after sync');
-  assert.match(await text(cap()), /omega \d/); assert.match(await text(cap()), /player2 250 MB/); assert.match(await text(cap()), /Other data/); ok('the bar splits the card by core and other data');
+  assert.match(await text(cap()), /omega \d/); assert.match(await text(cap()), /Other cores’ media 250 MB/); assert.doesNotMatch(await text(cap()), /player2/); assert.match(await text(cap()), /Other data/); ok('the bar splits the card into the selected core, other cores’ media and other data (not one segment per core)');
   assert.match(await cap().getByRole('img').getAttribute('aria-label'), /will be added.*free after sync/); ok('the bar has a full text alternative');
   // details panel
   const detailsBtn = cap().getByRole('button', { name: 'Details', exact: true });
