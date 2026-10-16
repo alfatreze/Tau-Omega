@@ -1,0 +1,11 @@
+Tau Omega test build 0.5.0-alpha.18   (NOT a release)
+Release goal : 0.5.0
+Built        : 2026-10-16 08:31 WEST
+Branch       : cores-section
+Commit       : 4c56b6b   Skip silence: advanced sync option (Library > Advanced menu, Settings > Advanced), adjust tracks already on the card; measuring only in the scans that write the tables (a plain library read no longer decodes every track), and a sync now writes the tables
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 51beae22cce32f6d372549a0483bc3139dbda7aca40a136218cdf857c7a27526  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
