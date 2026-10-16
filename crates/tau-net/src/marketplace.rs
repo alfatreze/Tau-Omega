@@ -565,6 +565,37 @@ fn check_png(b: &[u8], kind: ArtKind) -> Result<(), String> {
         .ok_or_else(|| format!("unexpected picture size {w}x{h}"))
 }
 
+/// A GitHub account's profile picture (`https://github.com/<owner>.png`, which GitHub redirects to its own image host), as PNG or
+/// JPEG bytes, cached for a week. Only a plain login is accepted (letters, digits, hyphens). `Ok(None)` when there is none.
+pub fn fetch_avatar(
+    t: &dyn Transport,
+    cache: &Path,
+    owner: &str,
+    now: u64,
+) -> Result<Option<Vec<u8>>, TauError> {
+    if owner.is_empty()
+        || owner.len() > 39
+        || !owner.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return Ok(None);
+    }
+    let dir = root(cache).join("art");
+    let file = dir.join(format!("avatar-{}.img", owner.to_ascii_lowercase()));
+    let url = format!("https://github.com/{owner}.png?size=72");
+    let image = |b: &[u8]| {
+        if b.starts_with(b"\x89PNG\r\n\x1a\n") || b.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            Ok(())
+        } else {
+            Err("not a PNG or JPEG".to_string())
+        }
+    };
+    match fetch_cached(t, &file, &url, ART_LIMIT, ART_TTL, now, false, &image) {
+        Ok(f) => Ok(Some(f.body)),
+        Err(e) if e.code == ErrorCode::NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 /// The core's icon or its platform's banner (PNG bytes), cached for a week and revalidated with the ETag. `Ok(None)` when
 /// the library has no picture for it (a 404 is remembered for the same week so it is not asked again).
 pub fn fetch_art(
@@ -890,6 +921,34 @@ mod tests {
                 .code,
             ErrorCode::InvalidPathReference
         );
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_github_avatar_is_fetched_once_checked_for_an_image_and_only_for_a_plain_login() {
+        let (dir, f) = (scratch(), Fake::default());
+        // Not a login: nothing is asked.
+        for bad in ["", "../x", "a/b", "name with space", &"a".repeat(40)] {
+            assert!(fetch_avatar(&f, &dir, bad, 1).unwrap().is_none(), "{bad:?}");
+        }
+        assert!(f.asked.borrow().is_empty());
+        let jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3];
+        f.push(ok(200, &jpeg, None));
+        assert_eq!(
+            fetch_avatar(&f, &dir, "alfatreze", 10).unwrap().unwrap(),
+            jpeg
+        );
+        assert_eq!(
+            f.asked.borrow()[0].0,
+            "https://github.com/alfatreze.png?size=72"
+        );
+        // inside the week it comes from the cache
+        assert!(fetch_avatar(&f, &dir, "alfatreze", 20).unwrap().is_some());
+        assert_eq!(f.asked.borrow().len(), 1);
+        // something that is not an image is refused
+        let g = Fake::default();
+        g.push(ok(200, b"<html>", None));
+        assert!(fetch_avatar(&g, &scratch(), "someone", 1).is_err());
         fs::remove_dir_all(dir).ok();
     }
 

@@ -47,6 +47,20 @@ pub fn marketplace_catalog(app: tauri::AppHandle, force: bool) -> Result<Catalog
 pub fn marketplace_art(app: tauri::AppHandle, core_id: String, kind: ArtKind) -> Result<Option<String>, TauError> {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     let dir = cache(&app)?;
+    if tau_core::tau_source::is_source_core(&core_id) {
+        // The Tau Alpha source: the picture the package itself ships, else the publisher's GitHub profile picture (icon only).
+        let banner = matches!(kind, ArtKind::Banner);
+        let bytes = match tau_net::tau_source::art(&dir.join("tau-source"), banner) {
+            Some(png) => Some((png, "image/png")),
+            None if !banner => marketplace::fetch_avatar(&Http, &dir, tau_core::tau_source::OWNER, now())?.map(|b| {
+                let mime = if b.starts_with(&[0xFF, 0xD8]) { "image/jpeg" } else { "image/png" };
+                (b, mime)
+            }),
+            None => None,
+        };
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        return Ok(bytes.map(|(b, mime)| format!("data:{mime};base64,{}", STANDARD.encode(b))));
+    }
     let catalog = marketplace::fetch_catalog(&Http, &dir, now(), false)?.catalog;
     let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
     Ok(marketplace::fetch_art(&Http, &dir, core, kind, now(), false)?.map(|png| format!("data:image/png;base64,{}", STANDARD.encode(png))))
