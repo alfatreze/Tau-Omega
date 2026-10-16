@@ -109,6 +109,70 @@ fn decode_monochrome_bitmap(
     Ok(png_bytes)
 }
 
+/// Encodes a PNG as an `icon.bin`: the 36x36 brightness image the Pocket draws in its core list. The PNG must be exactly 36x36 (the format has no scaling);
+/// brightness is the pixel's luminance times its opacity, so a white emblem on a transparent background is "on" where it is drawn. The inverse of
+/// [`decode_icon_bin`].
+pub fn encode_icon_bin(png_bytes: &[u8]) -> Result<Vec<u8>, TauError> {
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(png_bytes));
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
+    let mut reader = decoder
+        .read_info()
+        .map_err(|e| TauError::e(ErrorCode::Io, format!("icon PNG: {e}")))?;
+    let size = reader
+        .output_buffer_size()
+        .ok_or_else(|| TauError::e(ErrorCode::Io, "icon PNG: too large"))?;
+    let mut buf = vec![0u8; size];
+    let info = reader
+        .next_frame(&mut buf)
+        .map_err(|e| TauError::e(ErrorCode::Io, format!("icon PNG: {e}")))?;
+    if (info.width as usize, info.height as usize) != (ICON_SIZE, ICON_SIZE) {
+        return Err(TauError::e(
+            ErrorCode::Io,
+            format!(
+                "The icon must be exactly {ICON_SIZE}x{ICON_SIZE} pixels; this one is {}x{}.",
+                info.width, info.height
+            ),
+        ));
+    }
+    let channels = match info.color_type {
+        png::ColorType::Grayscale => 1,
+        png::ColorType::GrayscaleAlpha => 2,
+        png::ColorType::Rgb => 3,
+        png::ColorType::Rgba => 4,
+        png::ColorType::Indexed => {
+            return Err(TauError::e(
+                ErrorCode::Io,
+                "icon PNG: an indexed PNG was not expanded",
+            ));
+        }
+    };
+    let bright = |x: usize, y: usize| -> u8 {
+        let p = &buf[(y * ICON_SIZE + x) * channels..][..channels];
+        let (lum, alpha) = match channels {
+            1 => (u32::from(p[0]), 255),
+            2 => (u32::from(p[0]), u32::from(p[1])),
+            3 => (
+                (u32::from(p[0]) * 299 + u32::from(p[1]) * 587 + u32::from(p[2]) * 114) / 1000,
+                255,
+            ),
+            _ => (
+                (u32::from(p[0]) * 299 + u32::from(p[1]) * 587 + u32::from(p[2]) * 114) / 1000,
+                u32::from(p[3]),
+            ),
+        };
+        ((lum * alpha + 127) / 255) as u8
+    };
+    // upright[row][col] was read from stored[width-1-col][row]; write it back the same way
+    let mut out = vec![0u8; ICON_BYTES];
+    for row in 0..ICON_SIZE {
+        for col in 0..ICON_SIZE {
+            let stored_row = ICON_SIZE - 1 - col;
+            out[(stored_row * ICON_SIZE + row) * 2] = bright(col, row);
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,5 +242,44 @@ mod tests {
     fn rejects_a_wrong_sized_banner_buffer_instead_of_misreading_it() {
         let error = decode_platform_image(&[0u8; 100]).unwrap_err();
         assert_eq!(error.code(), ErrorCode::Io);
+    }
+
+    #[test]
+    fn an_icon_png_survives_encode_then_decode_and_a_wrong_size_is_refused() {
+        let mut px = Vec::new();
+        for i in 0..ICON_SIZE * ICON_SIZE {
+            px.push(255);
+            px.push(((i * 7) % 256) as u8);
+        }
+        let mut png_bytes = Vec::new();
+        {
+            let mut e = png::Encoder::new(&mut png_bytes, ICON_SIZE as u32, ICON_SIZE as u32);
+            e.set_color(png::ColorType::GrayscaleAlpha);
+            e.set_depth(png::BitDepth::Eight);
+            e.write_header().unwrap().write_image_data(&px).unwrap();
+        }
+        let bin = encode_icon_bin(&png_bytes).unwrap();
+        assert_eq!(bin.len(), ICON_BYTES);
+        assert_eq!(
+            encode_icon_bin(&decode_icon_bin(&bin).unwrap()).unwrap(),
+            bin,
+            "encode is the inverse of decode"
+        );
+        let mut small = Vec::new();
+        {
+            let mut e = png::Encoder::new(&mut small, 8, 8);
+            e.set_color(png::ColorType::Grayscale);
+            e.set_depth(png::BitDepth::Eight);
+            e.write_header()
+                .unwrap()
+                .write_image_data(&[0u8; 64])
+                .unwrap();
+        }
+        assert!(
+            encode_icon_bin(&small)
+                .unwrap_err()
+                .message
+                .contains("36x36")
+        );
     }
 }
