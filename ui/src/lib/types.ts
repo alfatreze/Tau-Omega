@@ -126,7 +126,7 @@ export type SkipDetail = { rate: number; frames: number; envelope: number[]; aut
 export type ConvertSettings = { enabled: boolean; mode: 'auto' | 'manual'; max_rate: number; flac_bits: number; reduce_playable: boolean; mp3: Mp3Quality; lame_path: string | null; lame_dir: string | null; analysis_cache: string | null; replaygain: 'off' | 'add_missing' | 'rebuild' };
 export type LameInstallOption = { method: string; label: string; command: string; runnable: boolean };
 export type LameStatus = { path: string | null; version: string | null; options: LameInstallOption[] };
-export type Prefs = { omega_channel: 'auto' | 'stable' | 'preview' | 'dev'; convert: ConvertSettings; trim: TrimSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; developer_tools: boolean; speeds: Record<string, number>; connections: Record<string, string> };
+export type Prefs = { omega_channel: 'auto' | 'stable' | 'preview' | 'dev'; convert: ConvertSettings; trim: TrimSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; marketplace_default_source?: string; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; developer_tools: boolean; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */
@@ -246,7 +246,10 @@ export type CatalogCore = {
   source: string; channel: string;
   /** Installable choices when one card offers several (Tau: Stable / Preview / Dev, standard or Diagnostics). */
   options?: InstallOption[];
+  /** Every marketplace that distributes it (one card per core id, one listing per source). */
+  listings?: Listing[];
 };
+export type Listing = { source: string; version: string; release_date: string; download_url: string };
 export type InstallOption = { core_id: string; channel: string; diagnostics: boolean; history: ReleaseSummary[] };
 export type MarketSource = 'Network' | 'NotModified' | 'Cache' | { Offline: string };
 export type CatalogResult = { catalog: { cores: CatalogCore[] }; source: MarketSource; fetched: number; notes?: string[] };

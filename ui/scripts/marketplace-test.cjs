@@ -126,9 +126,12 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.match(await sources.innerText(), /All sources[\s\S]*openFPGA Library[\s\S]*Tau Alpha/); ok('the sources are offered as filters when more than one lists cores');
   await sources.getByRole('button', { name: 'Tau Alpha' }).click(); await p.waitForTimeout(250);
   assert.equal(await rows().count(), 1); ok('Tau Alpha lists one Tau card, not one per channel');
+  await sources.getByRole('button', { name: 'openFPGA Library' }).click(); await p.waitForTimeout(250);
+  assert.equal(await rows().filter({ hasText: 'Tau' }).count() >= 1, true); ok('the same card is also under the other marketplace, counted once');
+  await sources.getByRole('button', { name: 'Tau Alpha' }).click(); await p.waitForTimeout(250);
   const gridText = await p.locator('.mk-grid').innerText(); for (const c of ['Stable', 'Preview', 'Dev']) assert.ok(gridText.includes(c), c); ok('the card shows the channels it offers');
   await rows().first().click(); await p.waitForTimeout(300);
-  assert.match(await sheet().innerText(), /Listed by[\s\S]*Tau Alpha/); ok('the details say which source it comes from');
+  assert.match(await sheet().innerText(), /Distributed by[\s\S]*openFPGA Library · 0\.6\.1[\s\S]*Tau Alpha · 0\.5\.1/); ok('a core listed by two marketplaces shows both as tags');
   const sel = (name) => sheet().locator('label', { hasText: name }).locator('select');
   assert.deepEqual(await sel('Channel').locator('option').allInnerTexts(), ['Stable', 'Preview', 'Dev']); ok('a Channel dropdown offers Stable, Preview and Dev');
   assert.match((await sel('Version').locator('option').allInnerTexts()).join('|'), /0\.5\.1.*newest.*0\.5\.0/); ok('the Version dropdown lists the releases of that channel, newest first');
@@ -139,6 +142,9 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await sel('Channel').selectOption('Dev'); await p.waitForTimeout(150);
   assert.match(await sheet().innerText(), /never published/); assert.equal(await sheet().getByRole('button', { name: /Install a local dev build/ }).count(), 1); ok('Dev explains it is local and offers the local install');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  const dflt = p.getByRole('combobox', { name: 'Marketplace to check for updates' });
+  assert.equal(await dflt.inputValue(), 'openfpga-library'); await dflt.selectOption('tau-alpha'); await p.waitForTimeout(500);
+  assert.equal(await dflt.inputValue(), 'tau-alpha'); ok('the default marketplace for updates can be chosen and is remembered');
 
   // Loading: skeleton cards while the list is on its way, hidden from screen readers, replaced by the real cards.
   await p.goto(url); await p.evaluate(() => { localStorage.clear(); window.__mkt = 'slow'; });

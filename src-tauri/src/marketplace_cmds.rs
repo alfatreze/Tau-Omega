@@ -23,22 +23,30 @@ fn cache(app: &tauri::AppHandle) -> Result<std::path::PathBuf, TauError> {
     app.path().app_cache_dir().map_err(|e| TauError { code: ErrorCode::Io, message: e.to_string() })
 }
 
-/// The whole catalog (about 330 cores; the page filters and sorts it locally). Cached; `force` is the Refresh button.
-#[tauri::command(async)]
-pub fn marketplace_catalog(app: tauri::AppHandle, force: bool) -> Result<CatalogResult, TauError> {
-    let dir = cache(&app)?;
+/// The openFPGA Library plus the other sources, one card per core id (see `catalog::merge_sources`; the user's default marketplace
+/// wins unless another lists a strictly newer version). A source that cannot be reached leaves a note, never an empty page.
+fn full_catalog(app: &tauri::AppHandle, force: bool) -> Result<CatalogResult, TauError> {
+    let dir = cache(app)?;
     let mut result = marketplace::fetch_catalog(&Http, &dir, now(), force)?;
-    // Other sources are added to the Library's list; one that cannot be reached leaves a note, never an empty page.
-    match tau_net::tau_source::cores(&dir.join("tau-source"), &crate::manifest_cache(&app)?) {
-        Ok((cores, offline)) => {
-            result.catalog.cores.extend(cores);
+    let mut cores = std::mem::take(&mut result.catalog.cores);
+    match tau_net::tau_source::cores(&dir.join("tau-source"), &crate::manifest_cache(app)?) {
+        Ok((tau, offline)) => {
+            cores.extend(tau);
             if offline {
                 result.notes.push("Tau Alpha: showing its saved list (offline).".into());
             }
         }
         Err(e) => result.notes.push(format!("Tau Alpha could not be listed: {}", e.message)),
     }
+    let default = crate::read_prefs(app).map(|p| p.marketplace_default_source).unwrap_or_default();
+    result.catalog.cores = tau_core::catalog::merge_sources(cores, if default.is_empty() { tau_core::catalog::LIBRARY_SOURCE } else { &default });
     Ok(result)
+}
+
+/// The whole catalog (about 330 cores; the page filters and sorts it locally). Cached; `force` is the Refresh button.
+#[tauri::command(async)]
+pub fn marketplace_catalog(app: tauri::AppHandle, force: bool) -> Result<CatalogResult, TauError> {
+    full_catalog(&app, force)
 }
 
 /// The icon (36x36) or the platform banner (521x165) of one catalog core as a PNG data URL, or `None` when the library has no
@@ -76,7 +84,7 @@ pub struct CoreUpdates {
 /// Each core on the card against the catalog. Reads the card, never writes it.
 #[tauri::command(async)]
 pub fn marketplace_core_updates(app: tauri::AppHandle, card: String, force: bool) -> Result<CoreUpdates, TauError> {
-    let cat = marketplace::fetch_catalog(&Http, &cache(&app)?, now(), force)?;
+    let cat = full_catalog(&app, force)?;
     let inspected = tau_core::inspect_card(Path::new(&card))?;
     let mut rows = core_update::check(&inspected.cores, &cat.catalog);
     // Cores added manually from a GitHub repository that the Library does not list: their repository's newest release (one request each, at most
