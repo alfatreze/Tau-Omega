@@ -8,14 +8,16 @@ export type Filters = { query: string; category: string; installedOnly: boolean;
 export const SOURCE_LABELS: Record<string, string> = { 'openfpga-library': 'openFPGA Library', 'tau-alpha': 'Tau Alpha' };
 export const sourceLabel = (id: string): string => SOURCE_LABELS[id] ?? id;
 /** The sources that have at least one core in the list. */
-export const sourcesOf = (cores: CatalogCore[]): string[] => Object.keys(SOURCE_LABELS).filter((s) => cores.some((c) => c.source === s)).concat([...new Set(cores.map((c) => c.source))].filter((s) => s && !(s in SOURCE_LABELS)));
+/** The sources a core is listed by (every listing, else its own source). */
+export const listedBy = (c: CatalogCore): string[] => (c.listings?.length ? [...new Set(c.listings.map((l) => l.source))] : [c.source]);
+export const sourcesOf = (cores: CatalogCore[]): string[] => Object.keys(SOURCE_LABELS).filter((s) => cores.some((c) => listedBy(c).includes(s))).concat([...new Set(cores.flatMap(listedBy))].filter((s) => s && !(s in SOURCE_LABELS)));
 
 /** Every word of the query must appear in the id, name, author, manufacturer or category (same rule as the engine's `Catalog::search`). */
 export function matches(core: CatalogCore, f: Filters): boolean {
   const hay = `${core.id} ${core.name} ${core.author} ${core.manufacturer} ${core.category} ${core.channel}`.toLowerCase();
   return f.query.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w))
     && (!f.category || core.category.toLowerCase() === f.category.toLowerCase())
-    && (!f.source || core.source === f.source);
+    && (!f.source || listedBy(core).includes(f.source));
 }
 
 export function filterCores(cores: CatalogCore[], f: Filters, installed: Set<string>): CatalogCore[] {

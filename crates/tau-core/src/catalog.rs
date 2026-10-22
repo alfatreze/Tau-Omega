@@ -98,6 +98,20 @@ pub struct CatalogCore {
     /// Dev, each standard or Diagnostics); empty for an ordinary core.
     #[cfg_attr(feature = "serde", serde(default))]
     pub options: Vec<InstallOption>,
+    /// Every marketplace that distributes this core, with what it lists (filled by [`merge_sources`]: one entry per source, so a
+    /// core offered by two sources is one card with two listings).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub listings: Vec<Listing>,
+}
+
+/// What one marketplace lists for a core.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Listing {
+    pub source: String,
+    pub version: String,
+    pub release_date: String,
+    pub download_url: String,
 }
 
 /// One installable choice of a core that offers several (see [`CatalogCore::options`]).
@@ -327,6 +341,7 @@ pub fn parse(cores_json: &[u8], platforms_json: &[u8]) -> Result<Catalog, TauErr
             source: LIBRARY_SOURCE.to_string(),
             channel: String::new(),
             options: Vec::new(),
+            listings: Vec::new(),
             history,
         });
     }
@@ -666,5 +681,215 @@ mod tests {
         ] {
             assert!(!is_safe_core_id(bad), "{bad:?}");
         }
+    }
+}
+
+/// Whether a category says nothing useful (the Library's fallback bucket or nothing).
+fn vague(category: &str) -> bool {
+    category.is_empty()
+        || category.eq_ignore_ascii_case("others")
+        || category.eq_ignore_ascii_case("other")
+}
+
+/// One card per core id from the lists of several marketplaces. Every core gets a [`Listing`] per source that distributes it.
+/// The card shows the `default_source`'s listing unless another source announces a strictly NEWER version (compared with
+/// `core_version`; versions that cannot be ordered never override), so the default is the tie-breaker and a newer release
+/// anywhere wins. Details one source lacks are filled from the others, the version history is the union (the shown listing's
+/// first), and the install choices (`options`) are kept from whichever source has them. Order follows first appearance.
+pub fn merge_sources(cores: Vec<CatalogCore>, default_source: &str) -> Vec<CatalogCore> {
+    use crate::core_version::{Verdict, compare};
+    let mut order: Vec<String> = Vec::new();
+    let mut groups: std::collections::HashMap<String, Vec<CatalogCore>> =
+        std::collections::HashMap::new();
+    for core in cores {
+        let key = core.id.to_ascii_lowercase();
+        if !groups.contains_key(&key) {
+            order.push(key.clone());
+        }
+        groups.entry(key).or_default().push(core);
+    }
+    order
+        .into_iter()
+        .filter_map(|key| groups.remove(&key))
+        .map(|members| {
+            let listings: Vec<Listing> = members
+                .iter()
+                .map(|m| Listing {
+                    source: m.source.clone(),
+                    version: m.version.clone(),
+                    release_date: m.release_date.clone(),
+                    download_url: m.download_url.clone(),
+                })
+                .collect();
+            // The default source's listing, else the first; any strictly newer one takes over.
+            let mut best = members
+                .iter()
+                .position(|m| m.source == default_source)
+                .unwrap_or(0);
+            for (i, m) in members.iter().enumerate() {
+                if i != best
+                    && !m.version.is_empty()
+                    && (members[best].version.is_empty()
+                        || compare(&members[best].version, &m.version) == Verdict::Newer)
+                {
+                    best = i;
+                }
+            }
+            let mut card = members[best].clone();
+            for (i, m) in members.iter().enumerate() {
+                if i == best {
+                    continue;
+                }
+                for r in &m.history {
+                    if !card.history.iter().any(|h| h.version == r.version) {
+                        card.history.push(r.clone());
+                    }
+                }
+                if card.options.is_empty() {
+                    card.options = m.options.clone();
+                }
+                if vague(&card.category) && !vague(&m.category) {
+                    card.category = m.category.clone();
+                }
+                if card.manufacturer.is_empty() {
+                    card.manufacturer = m.manufacturer.clone();
+                }
+                if card.year == 0 {
+                    card.year = m.year;
+                }
+                if card.firmware_required.is_empty() {
+                    card.firmware_required = m.firmware_required.clone();
+                }
+                card.dock_supported = card.dock_supported.or(m.dock_supported);
+                card.link_port = card.link_port.or(m.link_port);
+                card.sleep_supported = card.sleep_supported.or(m.sleep_supported);
+                if card.sponsor.links.is_empty() {
+                    card.sponsor = m.sponsor.clone();
+                }
+                if card.assets.is_empty() {
+                    card.assets = m.assets.clone();
+                }
+            }
+            card.listings = listings;
+            card
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::*;
+
+    fn core(id: &str, source: &str, version: &str) -> CatalogCore {
+        CatalogCore {
+            id: id.into(),
+            source: source.into(),
+            version: version.into(),
+            release_date: "2026-10-01".into(),
+            download_url: format!("https://x/{source}/{version}.zip"),
+            history: vec![ReleaseSummary {
+                version: version.into(),
+                release_date: "2026-10-01".into(),
+                download_url: format!("https://x/{source}/{version}.zip"),
+            }],
+            ..CatalogCore::default()
+        }
+    }
+
+    #[test]
+    fn a_core_listed_by_two_sources_is_one_card_with_two_listings() {
+        let merged = merge_sources(
+            vec![
+                core("a.One", "lib", "1.0"),
+                core("alfatreze.TAU", "lib", "0.6.1"),
+                core("alfatreze.tau", "tau", "0.6.1"),
+            ],
+            "lib",
+        );
+        assert_eq!(merged.len(), 2);
+        let tau = merged.iter().find(|c| c.id == "alfatreze.TAU").unwrap();
+        assert_eq!(
+            tau.listings
+                .iter()
+                .map(|l| l.source.as_str())
+                .collect::<Vec<_>>(),
+            ["lib", "tau"]
+        );
+        assert_eq!(
+            merged
+                .iter()
+                .find(|c| c.id == "a.One")
+                .unwrap()
+                .listings
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn the_default_source_wins_ties_and_a_strictly_newer_listing_overrides_it() {
+        let tie = merge_sources(
+            vec![core("x.Y", "lib", "1.0"), core("x.Y", "tau", "1.0")],
+            "tau",
+        );
+        assert_eq!(
+            (tie[0].source.as_str(), tie[0].version.as_str()),
+            ("tau", "1.0")
+        );
+        let newer = merge_sources(
+            vec![core("x.Y", "lib", "1.0"), core("x.Y", "tau", "1.1")],
+            "lib",
+        );
+        assert_eq!(
+            (newer[0].source.as_str(), newer[0].version.as_str()),
+            ("tau", "1.1")
+        );
+        assert!(newer[0].download_url.contains("/tau/1.1"));
+        // An older listing never overrides the default.
+        let older = merge_sources(
+            vec![core("x.Y", "lib", "1.2"), core("x.Y", "tau", "1.1")],
+            "lib",
+        );
+        assert_eq!(older[0].source, "lib");
+        // Versions that cannot be ordered never override.
+        let odd = merge_sources(
+            vec![core("x.Y", "lib", "c68f02e"), core("x.Y", "tau", "9a1b2c3")],
+            "lib",
+        );
+        assert_eq!(odd[0].source, "lib");
+    }
+
+    #[test]
+    fn history_is_the_union_options_and_details_are_filled_from_the_other_source() {
+        let mut tau = core("alfatreze.TAU", "tau", "0.5.0");
+        tau.category = "Media Players".into();
+        tau.year = 2026;
+        tau.options = vec![InstallOption {
+            core_id: "alfatreze.TAU".into(),
+            channel: "Stable".into(),
+            ..InstallOption::default()
+        }];
+        tau.history.push(ReleaseSummary {
+            version: "0.3.0".into(),
+            ..ReleaseSummary::default()
+        });
+        let mut lib = core("alfatreze.TAU", "lib", "0.6.1");
+        lib.category = "Others".into();
+        let merged = merge_sources(vec![lib, tau], "lib");
+        let c = &merged[0];
+        assert_eq!(c.source, "lib");
+        assert_eq!(
+            c.category, "Media Players",
+            "a vague category is replaced by a real one"
+        );
+        assert_eq!(c.year, 2026);
+        assert_eq!(c.options.len(), 1);
+        assert_eq!(
+            c.history
+                .iter()
+                .map(|h| h.version.as_str())
+                .collect::<Vec<_>>(),
+            ["0.6.1", "0.5.0", "0.3.0"]
+        );
     }
 }

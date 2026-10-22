@@ -483,6 +483,9 @@ struct Prefs {
     build_schemes: Vec<tau_core::build_series::Scheme>,
     /// Per card (volume name): when the last install was, as `YYYY-MM-DDTHH:MM:SS` local time (the Results page compares screenshots with it).
     last_install: std::collections::BTreeMap<String, String>,
+    /// The marketplace whose listing is shown (and checked for updates) when a core is distributed by several; a strictly newer
+    /// version in another marketplace overrides it (`tau_core::catalog::merge_sources`).
+    marketplace_default_source: String,
 }
 impl Default for Prefs {
     fn default() -> Self {
@@ -509,6 +512,7 @@ impl Default for Prefs {
             builds_dir: None,
             build_schemes: Vec::new(),
             last_install: Default::default(),
+            marketplace_default_source: tau_core::catalog::LIBRARY_SOURCE.into(),
         }
     }
 }

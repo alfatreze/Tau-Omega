@@ -7,8 +7,8 @@
   import MultiInstall from './MultiInstall.svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
-  import { marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates } from './tau-api';
-  import { categoryCounts, filterCores, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
+  import { getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, setPrefs } from './tau-api';
+  import { categoryCounts, filterCores, listedBy, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
   import type { CatalogCore, CatalogResult, CoreStatus } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
@@ -56,7 +56,14 @@
     if (!path) { statuses = new Map(); return; }
     try { const rows = (await marketplaceCoreUpdates(path, false)).rows; statuses = statusMap(rows); coreUpdateCount.set(rows.filter((r) => r.status === 'UpdateAvailable').length); } catch { statuses = new Map(); }
   }
-  onMount(() => { void load(false); });
+  /** Which marketplace is shown (and checked for updates) when a core has several; a strictly newer listing elsewhere still wins. */
+  let defaultSource = 'openfpga-library';
+  async function setDefaultSource(value: string) {
+    defaultSource = value;
+    try { const p = await getPrefs(); await setPrefs({ ...p, marketplace_default_source: value }); } catch { /* the choice stays for this session */ }
+    await load(false); void loadStatuses(card);
+  }
+  onMount(() => { void load(false); getPrefs().then((p) => { defaultSource = p.marketplace_default_source || 'openfpga-library'; }, () => {}); });
 
   function wantArt(kind: 'Icon' | 'Banner', id: string) {
     const key = `${kind}:${id}`;
@@ -125,6 +132,8 @@
     <label><span class="sr">Sort</span>
       <select bind:value={filters.sort}><option value="newest">Newest release</option><option value="name">Name</option></select>
     </label>
+    {#if sources.length > 1}<label class="mk-default"><span class="sr">Marketplace to check for updates</span><span aria-hidden="true">Updates from</span>
+      <select value={defaultSource} on:change={(e) => setDefaultSource(e.currentTarget.value)} title="The marketplace used when a core is listed by several. A newer version in another one is still offered.">{#each sources as src}<option value={src}>{sourceLabel(src)}</option>{/each}</select></label>{/if}
     <button class="chip toggle" aria-pressed={filters.installedOnly} disabled={!card} title={card ? '' : 'Open a card to filter by what it has'} on:click={() => (filters.installedOnly = !filters.installedOnly)}>On this card</button>
   </div>
   {#if sources.length > 1}
@@ -202,7 +211,7 @@
 
     <dl class="mk-facts">
       <div><dt>Newest version</dt><dd>{selected.version || 'none published'}{selected.release_date ? ` · ${selected.release_date}` : ''}</dd></div>
-      <div><dt>Listed by</dt><dd>{sourceLabel(selected.source)}{selected.channel ? ` · ${selected.channel} channel` : ''}</dd></div>
+      <div><dt>{listedBy(selected).length > 1 ? 'Distributed by' : 'Listed by'}</dt><dd class="mk-listed">{#if selected.listings?.length}{#each selected.listings as l}<span class="chip">{sourceLabel(l.source)}{l.version ? ` · ${l.version}` : ''}</span>{/each}{:else}<span class="chip">{sourceLabel(selected.source)}</span>{/if}</dd></div>
       <div><dt>Source</dt><dd><code>{repoUrl(selected)}</code> <button class="quiet" on:click={copyRepo}>{copied ? 'Copied' : 'Copy link'}</button></dd></div>
       {#if statusOf(selected) && chip(selected)}<div><dt>On your card</dt><dd>{statusOf(selected)?.installed_version} · {chip(selected)}</dd></div>{/if}
     </dl>
@@ -270,6 +279,8 @@
   @keyframes sk-sweep{to{transform:translateX(100%)}}
   @media (prefers-reduced-motion:reduce){.sk::after{animation:none;display:none}}
   .mk-opts{display:grid;gap:10px;margin:6px 0 12px}.mk-opts label{display:grid;gap:4px;font-size:12px;color:#95a5a4}.mk-opts select{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:10px 12px}
+  .mk-default{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:#95a5a4}.mk-default select{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:10px 12px}
+  .mk-listed{display:flex;flex-wrap:wrap;gap:6px}
   .mk-pick{font-size:12px;color:#a6b3b2;display:inline-flex;gap:5px;align-items:center;margin-right:auto}
   .mk-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:5;background:#16292a;border:1px solid #3b5a58;border-radius:10px;padding:8px 14px;margin:0 0 10px;font-size:13px}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
