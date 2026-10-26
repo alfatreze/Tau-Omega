@@ -1,0 +1,8 @@
+{"meters": [
+ {"key": "alpha", "default_preset": 1, "presets": [
+   {"name": "CLASSIC", "values": {"bands": 16, "release_ms": 220, "peak": 1, "easing": 2}},
+   {"name": "FAST 8", "values": {"bands": 8, "release_ms": 2000, "peak": 0, "easing": 0}},
+   {"name": "SLOW_SPRING-3", "values": {"bands": 4, "release_ms": 20, "peak": 1, "easing": 3}}]},
+ {"key": "beta", "default_preset": 0, "presets": [
+   {"name": "LOUD", "values": {"gain": 255}}]}
+]}
