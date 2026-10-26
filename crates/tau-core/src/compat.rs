@@ -112,6 +112,12 @@ pub struct CompatDoc {
     /// Empty for schema 1 and for files written before the registry existed.
     pub persist_registry: BTreeMap<u64, PersistMeaning>,
     pub min_omega: String,
+    /// `requires_omega.persist_layout`: the persisted-settings layout version this release writes (word 0 bits 30..27); absent = unknown.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub persist_layout: Option<u64>,
+    /// `requires_omega.packs_abi`: the meter pack ABI major version inside `tau-packs.bin`; absent = unknown.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub packs_abi: Option<u64>,
     pub notes: String,
     /// The commit the release was built from, and whether the tree had uncommitted changes.
     #[cfg_attr(feature = "serde", serde(default))]
@@ -282,6 +288,8 @@ pub fn parse_compat(bytes: &[u8]) -> Result<CompatDoc, TauError> {
             .unwrap_or_default(),
         persist_registry,
         min_omega: s(req, "min_omega")?,
+        persist_layout: req.get("persist_layout").and_then(Value::as_u64),
+        packs_abi: req.get("packs_abi").and_then(Value::as_u64),
         notes: v
             .get("notes")
             .and_then(Value::as_str)
@@ -342,6 +350,38 @@ fn tag_key(tag: &str) -> Option<TagKey> {
 /// Unparseable tags sort first.
 pub fn compare_tags(a: &str, b: &str) -> Ordering {
     tag_key(a).cmp(&tag_key(b))
+}
+
+/// What this Tau Omega understands of the capability keys in `requires_omega` (Tau Alpha's interop message 001, Q-002): it reads
+/// persisted-settings layout 1 and leaves a meter pack file of ABI 1 alone. A release that needs more is refused, not guessed.
+pub const OMEGA_PERSIST_LAYOUT: u64 = 1;
+pub const OMEGA_PACKS_ABI: u64 = 1;
+
+/// Why this Tau Omega must not install `doc`'s release: `min_omega` newer than `omega_version`, or a capability key higher than
+/// what it supports. A missing key is unknown and never blocks. Empty when nothing stands in the way.
+pub fn requirements_unmet(doc: &CompatDoc, omega_version: &str) -> Vec<String> {
+    use crate::core_version::{Verdict, compare};
+    let mut out = Vec::new();
+    if !doc.min_omega.trim().is_empty() && compare(omega_version, &doc.min_omega) == Verdict::Newer
+    {
+        out.push(format!(
+            "{} needs Tau Omega {} or newer; this is {omega_version}. Update Tau Omega first.",
+            doc.release, doc.min_omega
+        ));
+    }
+    if let Some(n) = doc.persist_layout.filter(|n| *n > OMEGA_PERSIST_LAYOUT) {
+        out.push(format!(
+            "{} writes persisted settings in layout {n}; this Tau Omega reads layout {OMEGA_PERSIST_LAYOUT}. Update Tau Omega first.",
+            doc.release
+        ));
+    }
+    if let Some(n) = doc.packs_abi.filter(|n| *n > OMEGA_PACKS_ABI) {
+        out.push(format!(
+            "{} carries meter packs of ABI {n}; this Tau Omega knows ABI {OMEGA_PACKS_ABI}. Update Tau Omega first.",
+            doc.release
+        ));
+    }
+    out
 }
 
 /// Persisted ids a card on `card_release` must treat as changed when this release is installed (the union rule).
@@ -568,6 +608,13 @@ pub fn check_card(doc: &CompatDoc, card_root: &Path, core_id: &str) -> Vec<Findi
         let f = card_root.join(&e.path);
         match e.role {
             Role::Owned | Role::Shared => match sha256_file(&f) {
+                // An optional owned DATA-SLOT file (`required: false`, a slot: tau-cold.bin, tau-loading.bin, tau-packs.bin) is a
+                // warning (interop Q-001): the core falls back without it. Deliberately narrower than Tau's reference, which
+                // downgrades every `required: false` owned file: the rehearsal manifest marks core.json, data.json and
+                // bitstream.rbf_r `required: false` too (no data slot), and a core without those does not load.
+                None if !e.required && e.role == Role::Owned && e.slot.is_some() => out.push(warn(
+                    format!("{} is missing; the core falls back without it.", e.path),
+                )),
                 None => out.push(err(format!("{} is missing.", e.path))),
                 Some(h) if Some(&h) != e.sha256.as_ref() => out.push(if e.role == Role::Owned {
                     err(format!("{} differs from {}.", e.path, doc.release))
@@ -884,5 +931,97 @@ mod tests {
                 vec![doc.release.clone()]
             );
         }
+    }
+
+    fn doc_with_requirements(
+        min_omega: &str,
+        layout: Option<u64>,
+        packs: Option<u64>,
+    ) -> CompatDoc {
+        let mut d = release(&card("req"));
+        d.min_omega = min_omega.into();
+        d.persist_layout = layout;
+        d.packs_abi = packs;
+        d
+    }
+
+    #[test]
+    fn requirements_compare_min_omega_and_the_capability_keys() {
+        let ok = |d: &CompatDoc| requirements_unmet(d, "0.6.0");
+        assert!(
+            ok(&doc_with_requirements("0.6.0", Some(1), Some(1))).is_empty(),
+            "equal is fine"
+        );
+        assert!(
+            ok(&doc_with_requirements("0.3.0", None, None)).is_empty(),
+            "missing keys are unknown, never a block"
+        );
+        let newer = requirements_unmet(&doc_with_requirements("0.6.0", None, None), "0.5.2");
+        assert!(
+            newer.len() == 1 && newer[0].contains("needs Tau Omega 0.6.0 or newer"),
+            "{newer:?}"
+        );
+        let layout = ok(&doc_with_requirements("0.3.0", Some(2), None));
+        assert!(
+            layout.len() == 1
+                && layout[0].contains("layout 2")
+                && layout[0].contains("reads layout 1"),
+            "{layout:?}"
+        );
+        let packs = ok(&doc_with_requirements("0.3.0", None, Some(2)));
+        assert!(packs.len() == 1 && packs[0].contains("ABI 2"), "{packs:?}");
+        assert_eq!(
+            ok(&doc_with_requirements("0.7.0", Some(3), Some(3))).len(),
+            3,
+            "every reason is listed"
+        );
+    }
+
+    #[test]
+    fn a_missing_optional_owned_file_is_a_warning_and_a_missing_required_one_an_error() {
+        let c = card("optional");
+        let mut doc = release(&c);
+        let rom = "Assets/tau/alfatreze.TAU/tau.rom";
+        // An owned file the release marks `required: false` (tau-packs.bin and friends).
+        let cold = doc.packages[0]
+            .layout
+            .iter()
+            .position(|e| e.role == Role::Owned && e.path != rom)
+            .unwrap();
+        doc.packages[0].layout[cold].slot = Some(9); // a data-slot file, like tau-packs.bin
+        doc.packages[0].layout[cold].required = false;
+        let path = doc.packages[0].layout[cold].path.clone();
+        fs::remove_file(c.join(&path)).unwrap();
+        let r = check_card(&doc, &c, "alfatreze.TAU");
+        assert!(
+            r.iter()
+                .any(|f| !f.error && f.message.contains(&path) && f.message.contains("falls back")),
+            "{r:?}"
+        );
+        assert!(!r.iter().any(|f| f.error && f.message.contains(&path)));
+        // A core file without a data slot (core.json, bitstream.rbf_r) stays an error even when the manifest says `required: false`.
+        let plain = doc.packages[0]
+            .layout
+            .iter()
+            .position(|e| e.role == Role::Owned && e.slot.is_none() && e.path != rom);
+        if let Some(i) = plain {
+            doc.packages[0].layout[i].required = false;
+            let pp = doc.packages[0].layout[i].path.clone();
+            fs::remove_file(c.join(&pp)).ok();
+            assert!(
+                check_card(&doc, &c, "alfatreze.TAU")
+                    .iter()
+                    .any(|f| f.error && f.message.contains(&pp)),
+                "{pp}"
+            );
+        }
+        // The same file marked required is an error again.
+        doc.packages[0].layout[cold].required = true;
+        assert!(
+            check_card(&doc, &c, "alfatreze.TAU")
+                .iter()
+                .any(|f| f.error && f.message.contains(&path))
+        );
+        let _ = fs::remove_dir_all(c);
     }
 }
