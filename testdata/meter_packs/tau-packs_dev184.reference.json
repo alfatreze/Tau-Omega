@@ -1,0 +1,44 @@
+[
+ {
+  "meter": 0,
+  "abi": 256,
+  "size": 2276,
+  "entry": 0
+ },
+ {
+  "meter": 1,
+  "abi": 256,
+  "size": 1728,
+  "entry": 0
+ },
+ {
+  "meter": 2,
+  "abi": 256,
+  "size": 8132,
+  "entry": 0
+ },
+ {
+  "meter": 3,
+  "abi": 256,
+  "size": 18600,
+  "entry": 0
+ },
+ {
+  "meter": 4,
+  "abi": 256,
+  "size": 2768,
+  "entry": 0
+ },
+ {
+  "meter": 5,
+  "abi": 258,
+  "size": 7368,
+  "entry": 0
+ },
+ {
+  "meter": 6,
+  "abi": 257,
+  "size": 5332,
+  "entry": 0
+ }
+]
