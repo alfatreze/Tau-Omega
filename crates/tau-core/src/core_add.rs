@@ -258,6 +258,20 @@ pub fn plan_add(
             continue;
         }
         let dest_rel = format!("{folder_rel}/{rel}");
+        // A Tau core's own build files (firmware, cold image, loading screen, meter packs) are not added or replaced by hand.
+        if folder_rel.rsplit('/').next() == Some(core_id)
+            && !rel.contains('/')
+            && crate::core_update::is_build_bound_file(core_id, &rel)
+        {
+            refuse(
+                &mut items,
+                src,
+                format!(
+                    "{rel} is part of {core_id}'s build; it is installed with the core, not added by hand."
+                ),
+            );
+            continue;
+        }
         // names that differ only by case collide on the card
         if !seen.insert(dest_rel.to_ascii_lowercase()) {
             refuse(
