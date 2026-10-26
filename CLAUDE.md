@@ -12,7 +12,7 @@ Read `ROADMAP.md` (the one ordered list), then the top "LATEST" block of `docs/S
 
 ## Rules
 - **Push only when told "push".** Commit locally, then ask.
-- **Card writes:** only on `CARDWRITE` (never `Pock`), only after a shown plan and a clear yes; dry run first. Never modify a source music file. Full list: `SAFETY_RULES.md`.
+- **Card writes:** the test card is **`Pock`** (the owner's Pocket card; `CARDWRITE` is no longer used, 2026-10-26), only after a shown plan and a clear yes; dry run first, backups outside the card, and take a snapshot of the card first because it holds the owner's real cores and music. Never modify a source music file. Full list: `SAFETY_RULES.md`.
 - **Ask before** a new dependency or any download.
 - The latest build to test goes in `releases/` before it is announced.
 - Releases: follow `docs/RELEASING.md` (version in four places, tag `vX.Y.Z`, CI makes a **draft**; publish by hand after checking assets against `SHA256SUMS.txt` and `latest.json`). Installer signing is parked (owner, 2026-10-14).
