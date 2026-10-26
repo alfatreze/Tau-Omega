@@ -1,0 +1,10 @@
+{"registry_version": 1, "meters": [
+ {"key": "alpha", "id": 3, "schema": 1, "list_position": 2, "params": [
+   {"key": "bands", "type": "u8", "min": 4, "max": 16, "default": 16},
+   {"key": "release_ms", "type": "u16", "min": 20, "max": 2000, "default": 220},
+   {"key": "peak", "type": "bool", "min": 0, "max": 1, "default": 1},
+   {"key": "easing", "type": "enum", "min": 0, "max": 3, "values": ["INSTANT", "LINEAR", "EXP", "SPRING"], "default": 2}]},
+ {"key": "beta", "id": 9, "schema": 2, "list_position": 0, "params": [
+   {"key": "gain", "type": "u8", "min": 0, "max": 255, "default": 128}]},
+ {"key": "gamma", "id": 12, "schema": 1, "list_position": 5, "params": []}
+]}
