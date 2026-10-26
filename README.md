@@ -47,7 +47,7 @@ macOS, Windows and Linux. Free and open source (MIT OR Apache-2.0). Releases: <h
 
 **Safety, by design**
 - Every card write is **plan → review → confirm → verify**, with backups kept outside the card, a journal, rollback, a write lock and
-  a safe eject. See `SAFETY_RULES.md`. Tests that write to a real card are ignored by default and refuse any volume not named `Pock`.
+  a safe eject. See `SAFETY_RULES.md`. Tests that write to a real card are ignored by default and refuse any volume not named `Pock` or `CARDWRITE`.
 
 **Command line:** the `tau` CLI does everything the app does, with `--json` output (`tau --help`).
 
