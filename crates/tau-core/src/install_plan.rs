@@ -302,10 +302,37 @@ fn superseded(card_root: &Path, update: &UpdateReport, docs: &[CompatDoc]) -> Ve
             replaced.extend(package.replaces.iter().map(String::as_str));
         }
     }
+    // A manifest that does not say what it replaces (or no manifest at all) falls back to the known supersessions.
+    for core in &update.cores {
+        let listed = core
+            .package_release
+            .as_deref()
+            .and_then(|tag| docs.iter().find(|d| d.release == tag))
+            .is_some_and(|doc| {
+                doc.packages
+                    .iter()
+                    .any(|p| p.core_id == core.package.core_id && !p.replaces.is_empty())
+            });
+        if !listed {
+            replaced.extend(crate::core_update::builtin_replaces(
+                &core.package.core_id,
+                &core.package.version,
+            ));
+        }
+    }
+    // A core on the card that is NEWER than the package being installed is not obsolete (a Preview ahead of the Stable).
+    let installing = update.cores.first().map(|c| c.package.version.clone());
+    let newer_than_package = |id: &str| {
+        matches!(
+            (crate::update::installed_identity(card_root, id), &installing),
+            (Some(inst), Some(pkg)) if crate::core_version::compare(&inst.version, pkg) == crate::core_version::Verdict::Older
+        )
+    };
     let mut out: Vec<String> = read
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|id| !ours.contains(&id.as_str()))
+        .filter(|id| !newer_than_package(id))
         .filter(|id| {
             replaced.contains(&id.as_str())
                 || id.strip_prefix("alfatreze.TAU DEV ").is_some()

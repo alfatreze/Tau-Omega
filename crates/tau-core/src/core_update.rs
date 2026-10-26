@@ -43,6 +43,26 @@ pub fn is_tau_core(id: &str) -> bool {
     l == "alfatreze.tau" || l.starts_with("alfatreze.tau ") || l.starts_with("alfatreze.tau_")
 }
 
+/// The Tau cores a release supersedes, for manifests that do not say (the v0.6.0 and v0.6.1 manifests carry `replaces: []`, and the changelog
+/// only says "remove them"): from v0.6.0 Stable `alfatreze.TAU` replaces the Diagnostics cores and the Preview cores; from v0.6.0-preview.2 the
+/// Preview core replaces only its own Diagnostics core, never the Stable one. A manifest that lists `replaces` always wins over this.
+pub fn builtin_replaces(core_id: &str, version: &str) -> &'static [&'static str] {
+    use crate::core_version::{Verdict, compare};
+    let at_least = |floor: &str| matches!(compare(floor, version), Verdict::Same | Verdict::Newer);
+    if core_id.eq_ignore_ascii_case("alfatreze.TAU") && at_least("0.6.0") {
+        &[
+            "alfatreze.TAU_DIAGNOSTIC",
+            "alfatreze.TAU Diagnostics",
+            "alfatreze.TAU Preview",
+            "alfatreze.TAU Preview Diagnostics",
+        ]
+    } else if core_id.eq_ignore_ascii_case("alfatreze.TAU Preview") && at_least("0.6.0-preview.2") {
+        &["alfatreze.TAU Preview Diagnostics"]
+    } else {
+        &[]
+    }
+}
+
 /// The files a Tau core's own build ships in `Assets/<platform>/<core id>/`: the firmware, its cold image, the loading screen and the
 /// meter packs (`tau-packs.bin`, data slot 9, core-specific and optional). They belong to the release that was installed: Omega never
 /// deletes, replaces or merges them by itself (Tau Alpha's rule for `tau-packs.bin`), and the file tools refuse them.
