@@ -1,0 +1,11 @@
+Tau Omega test build 0.6.0-dev.1   (NOT a release)
+Release goal : 0.6.0
+Built        : 2026-10-26 19:23 WET
+Branch       : main
+Commit       : 32558e6   Meter Lab: pin Tau Alpha's lab drop (D-007/D-019), show the real lab in a sandboxed frame when its page is installed, pin script, browser test; interop message 004 (R-014: the drop lacks the built page)
+Working tree : UNCOMMITTED CHANGES in the working tree
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 779e75740d64d84a63bc472c4763b38864f68c5fb3331ef57bc7bb285819e1c1  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
