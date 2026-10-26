@@ -1,5 +1,7 @@
 # Firmware sync check — tau-alpha
 
+> **Newer review: `docs/TAU_ALPHA_SYNC_PLAN_2026-10-26.md`** (against Tau Alpha v0.6.1 and its unreleased `main` of 2026-10-23: gap analysis and implementation plan). The sections below are the older record.
+
 Tau Omega writes files that Tau's firmware reads, so its assumptions go stale whenever tau-alpha
 ships. This is the standing record of when they were last checked and what is still open. **Re-run it
 after every tau-alpha release**, and when the blit engine lands.
