@@ -12,9 +12,11 @@ fn real_card_halcyon_install() {
     let card = std::env::var("TAU_REAL_H_CARD").expect("TAU_REAL_H_CARD");
     let backup = std::env::var("TAU_REAL_H_BACKUP").expect("TAU_REAL_H_BACKUP");
     let card = Path::new(&card);
-    assert_eq!(
-        card.file_name().and_then(|n| n.to_str()),
-        Some("Pock" | "CARDWRITE"),
+    assert!(
+        matches!(
+            card.file_name().and_then(|n| n.to_str()),
+            Some("Pock" | "CARDWRITE")
+        ),
         "refusing: only a volume called Pock or CARDWRITE or CARDWRITE"
     );
     let media = card.join("Assets/tau/common");
@@ -66,9 +68,11 @@ fn real_card_halcyon_sync() {
     let src = std::env::var("TAU_REAL_H_SYNC_SRC").expect("TAU_REAL_H_SYNC_SRC");
     let journal = std::env::var("TAU_REAL_H_JOURNAL").expect("TAU_REAL_H_JOURNAL");
     let card = Path::new(&card);
-    assert_eq!(
-        card.file_name().and_then(|n| n.to_str()),
-        Some("Pock" | "CARDWRITE"),
+    assert!(
+        matches!(
+            card.file_name().and_then(|n| n.to_str()),
+            Some("Pock" | "CARDWRITE")
+        ),
         "refusing: only a volume called Pock or CARDWRITE or CARDWRITE"
     );
     assert!(

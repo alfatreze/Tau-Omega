@@ -84,9 +84,11 @@ fn real_card_e_run() {
         return;
     };
     let card = PathBuf::from(card);
-    assert_eq!(
-        card.file_name().and_then(|n| n.to_str()),
-        Some("Pock" | "CARDWRITE"),
+    assert!(
+        matches!(
+            card.file_name().and_then(|n| n.to_str()),
+            Some("Pock" | "CARDWRITE")
+        ),
         "refusing: this test only runs on a volume called Pock or CARDWRITE"
     );
     let before = snapshot(&card);
