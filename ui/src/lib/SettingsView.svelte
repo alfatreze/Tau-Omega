@@ -1,9 +1,11 @@
 <script lang="ts">
   import OmegaUpdate from './OmegaUpdate.svelte';
-  import type { CheckSummary, ScreenshotEntry, Setting, TaudReport } from './types';
+  import type { CheckSummary, LayoutView, ScreenshotEntry, Setting, TaudReport } from './types';
   export let settingsPath = '';
   export let settings: Setting[] = [];
+  export let layoutView: LayoutView | null = null;
   export let checkSummary: CheckSummary | null = null;
+  const groups = (v: LayoutView) => [...new Set(v.values.map((x) => x.group))];
   export let notice = '';
   export let choose: () => void;
   export let read: () => void;
@@ -35,7 +37,7 @@
 <section class="settings-view page" aria-labelledby="settings-title">
   <header><div><p class="eyebrow">PREFERENCES</p><h1 id="settings-title">Settings</h1><p class="lede">Tau Omega keeps your library work local and reviewable.</p></div></header>
   <slot />
-  <section class="settings-card"><div><h2>Inspect persisted settings</h2><p>Choose a core’s <code>interact_persist.json</code> to read its saved values. This never writes to the card.</p><div class="picker-row"><input bind:value={settingsPath} placeholder="/Volumes/Pocket/Settings/.../interact_persist.json"/><button class="picker" on:click={choose}>Choose</button><button class="primary" on:click={read}>Read</button></div><p class="notice" role="status">{notice}</p>{#if settings.length}<div class="settings-values">{#each settings as setting}<div><span>{label(setting.id)}</span><code>{setting.kind}</code><strong>{value(setting)}</strong></div>{/each}</div>{/if}</div></section>
+  <section class="settings-card"><div><h2>Inspect persisted settings</h2><p>Choose a core’s <code>interact_persist.json</code> to read its saved values. This never writes to the card.</p><div class="picker-row"><input bind:value={settingsPath} placeholder="/Volumes/Pocket/Settings/.../interact_persist.json"/><button class="picker" on:click={choose}>Choose</button><button class="primary" on:click={read}>Read</button></div><p class="notice" role="status">{notice}</p>{#if layoutView}<div class="layout-view" data-testid="layout-view"><h3>{layoutView.layout === 'new' ? 'Saved settings (new layout)' : 'Saved settings (legacy layout)'}</h3>{#if layoutView.layout === 'legacy'}<p class="notice">This file is in the legacy layout (v0.6.x). The player converts it by itself at its first boot of the new version ({layoutView.migrated_words.length} words are written); Tau Omega never converts or copies it.</p>{/if}{#each groups(layoutView) as g}<div class="settings-values"><h4>{g}</h4>{#each layoutView.values.filter((x) => x.group === g) as v}<div><span>{v.label}</span><strong>{v.text}</strong></div>{/each}</div>{/each}</div>{/if}{#if settings.length}<div class="settings-values">{#each settings as setting}<div><span>{label(setting.id)}</span><code>{setting.kind}</code><strong>{value(setting)}</strong></div>{/each}</div>{/if}</div></section>
   {#if checkSummary}
     <section class="settings-card"><div style="width:100%">
       <h2>Diagnostic Check summary</h2>

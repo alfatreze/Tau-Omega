@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { open, save } from '@tauri-apps/plugin-dialog';
-  import type { ConnectionKind, BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport, HistoryEntry } from './lib/types';
+  import type { ConnectionKind, BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport, HistoryEntry, LayoutView } from './lib/types';
   import { invoke } from './lib/backend';
-  import { checkStorageCapacity, persistNames, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, readPlatformImage, readQrReport, recordRecentCard, scanMedia, listHistory, pruneHistory } from './lib/tau-api';
+  import { checkStorageCapacity, persistNames, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, describePersistedLayout, readPlatformImage, readQrReport, recordRecentCard, scanMedia, listHistory, pruneHistory } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import HistoryView from './lib/HistoryView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
@@ -171,7 +171,8 @@
     if (chosen) playlistOutput = chosen;
   }
   let checkSummary: CheckSummary | null = null;
-  async function loadSettings() { checkSummary = null; try { settings = await readPersistedSettings(settingsPath); settingsNotice = `${settings.length} persisted values loaded. Nothing was changed.`; try { checkSummary = await readCheckSummary(settingsPath); } catch { /* summary is informational; settings still load without it */ } } catch (error) { settings = []; settingsNotice = `Could not read settings: ${errorMessage(error)}`; } }
+  async function loadSettings() { checkSummary = null; layoutView = null; try { settings = await readPersistedSettings(settingsPath); try { layoutView = await describePersistedLayout(settingsPath); } catch { /* the plain list below still shows */ } settingsNotice = `${settings.length} persisted values loaded. Nothing was changed.`; try { checkSummary = await readCheckSummary(settingsPath); } catch { /* summary is informational; settings still load without it */ } } catch (error) { settings = []; settingsNotice = `Could not read settings: ${errorMessage(error)}`; } }
+  let layoutView: LayoutView | null = null;
   let qrPath = ''; let qrReport: TaudReport | null = null; let qrNotFound = false; let qrNotice = '';
   async function decodeQrScreenshot() { qrReport = null; qrNotFound = false; qrNotice = ''; try { const result = await readQrReport(qrPath); if (result) { qrReport = result; qrNotice = `Decoded: ${result.profile} · ${result.verdict}.`; } else { qrNotFound = true; qrNotice = 'No report code (pixel grid or QR) found in this image.'; } } catch (error) { qrNotice = `Could not decode this screenshot: ${errorMessage(error)}`; } }
   let screenshotCardPath = ''; let screenshots: ScreenshotEntry[] = []; let screenshotsNotice = '';
@@ -423,7 +424,7 @@
   {:else if page === 'appearance'}
     <AppearanceView {mediaRoot} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'settings'}
-    <SettingsView bind:settingsPath {settings} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings card={path} openHistory={() => openHistory()} /><SyncSettings card={path} {mediaRoot} /></SettingsView>
+    <SettingsView bind:settingsPath {settings} {layoutView} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings card={path} openHistory={() => openHistory()} /><SyncSettings card={path} {mediaRoot} /></SettingsView>
   {/if}
   </div>
 </main>

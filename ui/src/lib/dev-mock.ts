@@ -250,6 +250,7 @@ const handlers: Record<string, (args: any) => unknown> = {
   get_manual_players: () => [],
   inspect_card: () => cores,
   read_persisted_settings: () => [],
+  describe_persisted_layout: () => ({ layout: 'new', migrated_words: [], values: [{ group: 'Audio', label: 'Volume', value: 73, text: '73 of 100' }, { group: 'Audio', label: 'ReplayGain', value: 1, text: 'track' }, { group: 'Appearance', label: 'Colour index', value: 7, text: '7' }, { group: 'Appearance', label: 'Mode', value: 0, text: 'Dark' }, { group: 'Meters', label: 'Selected meter', value: 6, text: '6' }] }),
   read_check_summary: () => null,
   read_qr_report: () => null,
   list_screenshots: () => [],

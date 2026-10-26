@@ -104,6 +104,19 @@ pub fn plan(
             format!("No known release says {to_core} replaces {from_core}."),
             &mut allowed,
         ),
+        (Some(from_release), Some(doc))
+            if compat::compare_tags(&doc.release, from_release) == std::cmp::Ordering::Less =>
+        {
+            // Settings are never carried to an OLDER release: a newer layout read by older firmware shows defaults and the
+            // first save rewrites the old layout (Tau Alpha's rule). `persist_changed_since` only looks forward, so say it here.
+            refuse(
+                format!(
+                    "{} is older than the {from_release} build on the card; settings are never carried to an older release.",
+                    doc.release
+                ),
+                &mut allowed,
+            );
+        }
         (Some(from_release), Some(doc)) => match compat::persist_changed_since(doc, from_release) {
             None => refuse(
                 format!(
@@ -342,6 +355,34 @@ mod tests {
         rollback(&c, &report).unwrap();
         assert!(!c.join(format!("Settings/{NEW}")).exists());
         assert!(c.join(&p.source).is_file());
+        fs::remove_dir_all(c).unwrap();
+    }
+
+    #[test]
+    fn settings_are_never_carried_to_an_older_release() {
+        let c = card("older");
+        let hash = sha(b"old core");
+        // The build on the card is v0.7.0 (new layout); the only replacement on offer is v0.6.0.
+        let docs = vec![
+            doc(
+                "v0.7.0",
+                OLD,
+                &[],
+                Some((&format!("Cores/{OLD}/core.json"), &hash)),
+                "{}",
+            ),
+            doc("v0.6.0", NEW, &[OLD], None, "{}"),
+        ];
+        let p = plan(&c, OLD, NEW, &docs).unwrap();
+        assert!(!p.allowed);
+        assert!(
+            p.reasons
+                .iter()
+                .any(|r| r.contains("never carried to an older release")),
+            "{:?}",
+            p.reasons
+        );
+        assert!(execute(&p, &p.id).is_err());
         fs::remove_dir_all(c).unwrap();
     }
 

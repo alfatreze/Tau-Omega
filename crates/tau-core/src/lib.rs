@@ -62,6 +62,7 @@ pub mod manual_source;
 pub mod marker;
 pub mod menu_symptoms;
 pub mod package;
+pub mod persist_layout;
 pub mod playlist;
 pub mod problems;
 pub mod refresh;

@@ -371,3 +371,7 @@ export type PlanFile = { rel: string; bytes: number; origin: 'bitstream' | 'temp
 export type BuildPlan = { core_id: string; files: PlanFile[]; raw_sha256: string; converted_sha256: string; bitstream_bytes: number; lint: LintReport; blocked: string | null };
 export type BuildResult = { zip: string; record: string; zip_bytes: number; zip_sha256: string; plan: BuildPlan };
 export type NextName = { scheme: string; next: string };
+
+/** Mirrors `tau_core::persist_layout::LayoutView`: a Tau core's persisted settings decoded by their layout. */
+export type LayoutValue = { group: string; label: string; value: number; text: string };
+export type LayoutView = { layout: 'legacy' | 'new'; values: LayoutValue[]; migrated_words: [number, number][] };
