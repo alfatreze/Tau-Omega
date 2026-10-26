@@ -14,8 +14,8 @@ fn real_card_halcyon_install() {
     let card = Path::new(&card);
     assert_eq!(
         card.file_name().and_then(|n| n.to_str()),
-        Some("Pock"),
-        "refusing: only a volume called Pock"
+        Some("Pock" | "CARDWRITE"),
+        "refusing: only a volume called Pock or CARDWRITE or CARDWRITE"
     );
     let media = card.join("Assets/tau/common");
     let apo = "Preamp: -4.0 dB\nFilter 1: ON LSC Fc 105 Hz Gain 4.0 dB Q 0.70\nFilter 2: ON PK Fc 3000 Hz Gain -3.0 dB Q 1.50\nFilter 3: ON HSC Fc 9000 Hz Gain 2.0 dB Q 0.70\n";
@@ -68,8 +68,8 @@ fn real_card_halcyon_sync() {
     let card = Path::new(&card);
     assert_eq!(
         card.file_name().and_then(|n| n.to_str()),
-        Some("Pock"),
-        "refusing: only a volume called Pock"
+        Some("Pock" | "CARDWRITE"),
+        "refusing: only a volume called Pock or CARDWRITE or CARDWRITE"
     );
     assert!(
         !Path::new(&journal).starts_with(card),

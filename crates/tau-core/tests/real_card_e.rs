@@ -1,7 +1,7 @@
 //! Real-card proof for the removal that keeps your data and for settings migration (adaptation step E).
-//! Gated and `#[ignore]`d: nothing runs unless `TAU_REAL_E_CARD` names a folder called `Pock`.
+//! Gated and `#[ignore]`d: nothing runs unless `TAU_REAL_E_CARD` names a folder called `Pock` or `CARDWRITE`.
 //!
-//! - `TAU_REAL_E_CARD`  the card root, which must be `.../Pock`
+//! - `TAU_REAL_E_CARD`  the card root, which must be `.../Pock` or `.../CARDWRITE`
 //! - `TAU_REAL_E_MODE`  one of
 //!   `snapshot`      write `hash  path` lines for the card (needs `TAU_REAL_E_SNAPSHOT=<file>`), read only
 //!   `remove-plan`   plan removing `alfatreze.TAU` with and without keep-media; proves the card did not change
@@ -86,8 +86,8 @@ fn real_card_e_run() {
     let card = PathBuf::from(card);
     assert_eq!(
         card.file_name().and_then(|n| n.to_str()),
-        Some("Pock"),
-        "refusing: this test only runs on a volume called Pock"
+        Some("Pock" | "CARDWRITE"),
+        "refusing: this test only runs on a volume called Pock or CARDWRITE"
     );
     let before = snapshot(&card);
     match mode.as_str() {

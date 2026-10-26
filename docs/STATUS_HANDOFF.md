@@ -1,7 +1,7 @@
 # Tau Omega — status handoff
 
-## NOTE 2026-10-26: the test card is `Pock` now
-Older blocks below say `CARDWRITE`; that card is no longer used. Real-card tests and the rule in `CLAUDE.md` now name `Pock` (the owner's own Pocket card: snapshot first, plan and a clear yes before any write, backups outside the card).
+## NOTE 2026-10-26: two test cards, `Pock` and `CARDWRITE`
+`Pock` is the owner's main Pocket card again (snapshot first, it holds real cores and music); `CARDWRITE` stays as the scratch card for memory-write and occasional tests and for using several cards in tandem. Real-card tests and the rule in `CLAUDE.md` accept exactly these two names; every write still needs a shown plan, a clear yes and backups outside the card.
 
 ## LATEST (2026-10-16, end of session): v0.5.0 PUBLISHED; branch `cores-section` carries 0.5.1 work (17 commits NOT pushed; `main` is behind it by 7 and a fast-forward would do)
 **State.** v0.5.0 is published (https://github.com/alfatreze/Tau-Omega/releases/tag/v0.5.0, all installers, updater files, notes). `main` = `origin/main` at `b4d2793` plus one local docs commit (`f9d0978`, release history). `cores-section` (worktree `../tau-omega-cores`) holds everything after: playlists, update channels, Library footer and dragging, dev builds 0.5.1-dev.N. Last dev build: `releases/dev-builds/0.5.1-dev.2` (filed and open). Nothing has been pushed since `cores-section` alpha.20.
