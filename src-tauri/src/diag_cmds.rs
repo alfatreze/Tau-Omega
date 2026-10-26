@@ -144,3 +144,44 @@ pub fn read_platform_image(card: String, platform: String) -> Result<Option<Stri
         STANDARD.encode(png_bytes)
     )))
 }
+
+/// A Tau core's persisted settings decoded by their layout (legacy or the new area words), or `None` for any other core: the words
+/// of another core mean something else. The core is the folder after `Settings` in the path (`Settings/<core id>/Interact/_core/...`).
+/// Reads only; Omega never converts a file (the player migrates a legacy one itself) and never copies words between layouts.
+#[tauri::command(async)]
+pub fn describe_persisted_layout(path: String) -> Result<Option<tau_core::persist_layout::LayoutView>, TauError> {
+    let components: Vec<String> = std::path::Path::new(&path).components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+    let core = components.iter().position(|c| c == "Settings").and_then(|i| components.get(i + 1));
+    if !core.is_some_and(|c| tau_core::core_update::is_tau_core(c)) {
+        return Ok(None);
+    }
+    let settings = tau_core::diag::read_persisted_settings(path)?;
+    Ok(Some(tau_core::persist_layout::describe(&settings)))
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    fn put(core: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("tau-layout-{}-{}", std::process::id(), core.replace(' ', "_")));
+        let d = dir.join("Settings").join(core).join("Interact/_core");
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("interact_persist.json");
+        std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/persist_layout/dev181_interact_persist.json"), &f).unwrap();
+        f.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn only_a_tau_cores_settings_are_decoded_by_the_tau_layout() {
+        let tau = describe_persisted_layout(put("alfatreze.TAU DEV 181")).unwrap().expect("a Tau core is decoded");
+        assert_eq!(tau.layout, tau_core::persist_layout::Layout::Legacy);
+        assert!(tau.values.iter().any(|v| v.label == "Volume" && v.value == 73));
+        // Another core's words mean something else: nothing is decoded and nothing is guessed.
+        assert!(describe_persisted_layout(put("agg23.NES")).unwrap().is_none());
+        // A file outside any Settings/<core> folder is not a core's settings either.
+        let loose = std::env::temp_dir().join("loose_interact_persist.json");
+        std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/persist_layout/dev181_interact_persist.json"), &loose).unwrap();
+        assert!(describe_persisted_layout(loose.to_string_lossy().into_owned()).unwrap().is_none());
+    }
+}
