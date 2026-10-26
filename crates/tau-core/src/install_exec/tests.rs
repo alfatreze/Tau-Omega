@@ -489,7 +489,7 @@ fn real_snapshot(root: &Path) -> Vec<(String, String)> {
 }
 
 /// The real-card run (roadmap 1a). Gated; **read-only unless `TAU_REAL_INSTALL_MODE` is `install` or `rollback`**.
-/// - `TAU_REAL_INSTALL_CARD`   the card root (e.g. `/Volumes/CARDWRITE`)
+/// - `TAU_REAL_INSTALL_CARD`   the card root (e.g. `/Volumes/Pock`)
 /// - `TAU_REAL_INSTALL_ZIP`    a release zip
 /// - `TAU_REAL_INSTALL_BACKUP` a backup folder **outside the card**
 /// - `TAU_REAL_INSTALL_MODE`   `plan` (prints the plan, proves nothing was written), `install` (executes it and

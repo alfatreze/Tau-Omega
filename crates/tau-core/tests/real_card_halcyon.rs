@@ -1,5 +1,5 @@
 //! Real-card proof of the Halcyon `PRST` install. Gated and `#[ignore]`d: nothing runs unless `TAU_REAL_H_CARD` names a folder
-//! called `CARDWRITE`. Writes two test presets (a control preset and an APO-style raw preset) to `Assets/tau/common/tau-assets.bin`
+//! called `Pock`. Writes two test presets (a control preset and an APO-style raw preset) to `Assets/tau/common/tau-assets.bin`
 //! through the reviewed install path (verified backup outside the card, read-back), then prints the file's hash for the log.
 //! `TAU_REAL_H_BACKUP` is a backup folder outside the card. Run with `--ignored --nocapture`, then boot the Pocket.
 use std::path::Path;
@@ -14,8 +14,8 @@ fn real_card_halcyon_install() {
     let card = Path::new(&card);
     assert_eq!(
         card.file_name().and_then(|n| n.to_str()),
-        Some("CARDWRITE"),
-        "refusing: only a volume called CARDWRITE"
+        Some("Pock"),
+        "refusing: only a volume called Pock"
     );
     let media = card.join("Assets/tau/common");
     let apo = "Preamp: -4.0 dB\nFilter 1: ON LSC Fc 105 Hz Gain 4.0 dB Q 0.70\nFilter 2: ON PK Fc 3000 Hz Gain -3.0 dB Q 1.50\nFilter 3: ON HSC Fc 9000 Hz Gain 2.0 dB Q 0.70\n";
@@ -58,7 +58,7 @@ fn real_card_halcyon_install() {
 }
 
 /// Syncs a folder on the card into `Assets/tau/common` and builds `tau-library.tdb` there (the app's sync path, journalled outside
-/// the card). `TAU_REAL_H_SYNC_SRC` is the source folder; `TAU_REAL_H_JOURNAL` a file path outside the card. Same CARDWRITE guard.
+/// the card). `TAU_REAL_H_SYNC_SRC` is the source folder; `TAU_REAL_H_JOURNAL` a file path outside the card. Same Pock guard.
 #[test]
 #[ignore]
 fn real_card_halcyon_sync() {
@@ -68,8 +68,8 @@ fn real_card_halcyon_sync() {
     let card = Path::new(&card);
     assert_eq!(
         card.file_name().and_then(|n| n.to_str()),
-        Some("CARDWRITE"),
-        "refusing: only a volume called CARDWRITE"
+        Some("Pock"),
+        "refusing: only a volume called Pock"
     );
     assert!(
         !Path::new(&journal).starts_with(card),
