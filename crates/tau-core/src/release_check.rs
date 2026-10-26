@@ -760,6 +760,8 @@ mod tests {
             persist_ids_changed: vec![],
             persist_registry: Default::default(),
             min_omega: "0.3.0".into(),
+            persist_layout: None,
+            packs_abi: None,
             notes: String::new(),
             source_commit: None,
             source_dirty: false,

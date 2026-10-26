@@ -111,6 +111,20 @@ pub fn plan(
         }
     }
 
+    // The release's own requirements (`min_omega` and the capability keys): refused with the reason, never guessed.
+    for core in &update.cores {
+        if let Some(doc) = core
+            .package_release
+            .as_deref()
+            .and_then(|tag| docs.iter().find(|d| d.release == tag))
+            && let Some(why) = crate::compat::requirements_unmet(doc, env!("CARGO_PKG_VERSION"))
+                .into_iter()
+                .next()
+        {
+            refused.get_or_insert(why);
+        }
+    }
+
     let nothing_to_do = update
         .cores
         .iter()

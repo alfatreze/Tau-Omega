@@ -84,6 +84,50 @@ fn a_real_release_installs_checks_and_is_offered_to_the_right_channel() {
             "  platform {} media_platform {} platforms {:?}",
             installed.platform, installed.media_platform, installed.platforms
         );
+        // An optional owned DATA-SLOT file (tau-packs.bin, data slot 9, `required: false`) that goes missing is a warning, not an error
+        // (interop Q-001); the same file marked required would be an error.
+        let optional: Vec<_> = package
+            .layout
+            .iter()
+            .filter(|e| {
+                e.role == compat::Role::Owned && !e.required && e.slot.is_some() && !e.pattern
+            })
+            .collect();
+        for e in &optional {
+            let path = card.join(&e.path);
+            let saved = fs::read(&path).unwrap();
+            fs::remove_file(&path).unwrap();
+            let findings = compat::check_card(&doc, &card, &package.core_id);
+            assert!(
+                findings.iter().all(|f| !f.error),
+                "{}: {:?}",
+                e.path,
+                findings
+            );
+            assert!(
+                findings.iter().any(|f| f.message.contains(&e.path)),
+                "{} should be reported as a warning",
+                e.path
+            );
+            println!("  optional {} missing: warning only", e.path);
+            fs::write(&path, saved).unwrap();
+        }
+        // Removal: the core's own files go, the music and library stay (keep-media), nothing outside it is touched.
+        let inspected = tau_core::inspect_card(&card).unwrap();
+        let plan =
+            tau_core::remove::plan_remove_with(&inspected, &package.core_id, true, docs).unwrap();
+        let removed = tau_core::remove::execute_remove(&plan, &plan.id).unwrap();
+        println!(
+            "  removed {} files; tau-packs.bin gone with its core: {}",
+            removed.removed_files,
+            !card
+                .join(format!(
+                    "Assets/{}/{}/tau-packs.bin",
+                    installed.media_platform, package.core_id
+                ))
+                .exists()
+        );
+        assert!(!card.join("Cores").join(&package.core_id).exists());
         let _ = fs::remove_dir_all(&card);
         let _ = fs::remove_dir_all(&backups);
     }
@@ -130,14 +174,21 @@ fn a_real_release_installs_checks_and_is_offered_to_the_right_channel() {
         check.zips.len(),
         check.others
     );
-    assert_eq!(check.newer, Some(false));
-    assert!(check.zips.is_empty() && check.others.len() == 1);
+    if doc.prerelease {
+        assert_eq!(check.newer, Some(false));
+        assert!(check.zips.is_empty() && check.others.len() == 1);
+    } else {
+        // A Stable release is offered to a Stable user.
+        assert_eq!(check.newer, Some(true));
+        assert_eq!(check.zips.len(), 1);
+    }
 
     // 3. Persisted-setting names from this release's registry.
     let names = release_check::persist_names(docs);
     println!("persist names: {names:?}");
-    assert_eq!(
-        names.get(&16).map(String::as_str),
-        Some("Halcyon EQ preset")
-    );
+    // The registry names every id it describes (the names changed with the v0.7.0 layout: ids 10.. are "(internal) ...").
+    assert!(!names.is_empty() || doc.persist_registry.is_empty());
+    for id in doc.persist_registry.keys() {
+        assert!(names.contains_key(id), "id {id} has no name");
+    }
 }
