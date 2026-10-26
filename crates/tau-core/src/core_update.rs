@@ -43,6 +43,21 @@ pub fn is_tau_core(id: &str) -> bool {
     l == "alfatreze.tau" || l.starts_with("alfatreze.tau ") || l.starts_with("alfatreze.tau_")
 }
 
+/// The files a Tau core's own build ships in `Assets/<platform>/<core id>/`: the firmware, its cold image, the loading screen and the
+/// meter packs (`tau-packs.bin`, data slot 9, core-specific and optional). They belong to the release that was installed: Omega never
+/// deletes, replaces or merges them by itself (Tau Alpha's rule for `tau-packs.bin`), and the file tools refuse them.
+pub fn is_build_bound_file(core_id: &str, name: &str) -> bool {
+    is_tau_core(core_id)
+        && [
+            "tau.rom",
+            "tau-cold.bin",
+            "tau-loading.bin",
+            "tau-packs.bin",
+        ]
+        .iter()
+        .any(|f| f.eq_ignore_ascii_case(name))
+}
+
 pub fn check(installed: &[Core], catalog: &Catalog) -> Vec<CoreStatus> {
     installed
         .iter()

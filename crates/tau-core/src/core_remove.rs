@@ -126,6 +126,16 @@ pub fn plan_remove_files(
             ));
         }
         let name = rel.rsplit('/').next().unwrap_or(rel);
+        if folder.role == FolderRole::AssetsCore
+            && crate::core_update::is_build_bound_file(core_id, name)
+        {
+            return Err(TauError::e(
+                ErrorCode::InstallRefused,
+                format!(
+                    "{name} is part of {core_id}'s build. Remove or reinstall the core to change it; it is not removed on its own."
+                ),
+            ));
+        }
         let shared_with = if folder.role == FolderRole::AssetsShared {
             others
                 .iter()
