@@ -11,6 +11,7 @@
   // live preview, capture-from-device), built ahead of the data being real.
   import { SYNTHETIC_METERS, defaultValues, paramVisible, type MeterSchema } from './meters/schema';
   import MeterPreview from './meters/MeterPreview.svelte';
+  import RealMeterLab from './RealMeterLab.svelte';
 
   let selected: MeterSchema = SYNTHETIC_METERS[0];
   // One independent value set per meter, so switching meters doesn't lose
@@ -49,8 +50,9 @@
   const costLabel = (costClass: number) => (['Baseline', 'Modest', 'Higher'][costClass] ?? `Class ${costClass}`);
 </script>
 <section class="page" aria-labelledby="meters-title">
-  <header><div><p class="eyebrow">METER LAB</p><h1 id="meters-title">Meter Lab</h1><p class="lede">Scaffold only: every meter and parameter below is a placeholder, not tau-alpha's real registry. Nothing here writes to a card yet.</p></div></header>
+  <header><div><p class="eyebrow">METER LAB</p><h1 id="meters-title">Meter Lab</h1><p class="lede">The top section is Tau Alpha's own meter lab (pinned, real meters). The editor below it is still a placeholder with synthetic meters. Nothing here writes to a card yet.</p></div></header>
 
+  <RealMeterLab />
   <section class="settings-card meters-placeholder-notice">
     <p><strong>Not real yet.</strong> tau-alpha's own meter-module work (<code>docs/METER_MODULE_SPEC.md</code>) is still mid-build; this screen proves out the editor/preset/preview structure against a synthetic schema so the real one drops in later without a rewrite.</p>
   </section>

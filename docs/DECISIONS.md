@@ -143,3 +143,6 @@ The project no longer aims to be adopted by Pocket Sync as a crate (this superse
 ## D-018 — the interop mailbox with Tau Alpha (2026-10-26)
 Messages with Tau Alpha travel as numbered files in one outbox per project (`docs/interop/to-alpha/` here, `to-omega/` and the ledger in Tau Alpha's repository), answered by id, with fixtures referenced by path and SHA-256 instead of pasted or copied. Real captures stay in `testdata/` with a provenance README; Tau's `rehearsal-*` packages are read in place. Details: `docs/interop/README.md`. The two held decisions about the Waterfall wasm twin and a pinned lab drop (D-007 in the ledger) are still open and need the owner.
 
+## D-019 — pinned Tau Alpha meter lab drops are an approved exception to "never share literal files" (2026-10-26, owner)
+Approved on Tau Alpha's request (interop D-007): a verbatim, never-edited copy of a drop made by Tau Alpha's `tools/make_lab_drop.py` (with its `MANIFEST.json` and `SHA256SUMS.txt`, the Tau Alpha commit recorded) lives in `vendor/tau-lab/`, including the committed WebAssembly module of the SOUND MAP twin. Drops are added only with `tools/pin-tau-lab.sh`, which verifies them and refuses to overwrite. The Meter Lab shows the lab's built page in a sandboxed frame. Nothing else from Tau Alpha is copied; real captures in `testdata/` keep their own provenance READMEs.
+
