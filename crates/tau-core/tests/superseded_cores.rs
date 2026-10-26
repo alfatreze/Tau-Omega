@@ -114,3 +114,24 @@ fn another_cores_install_offers_nothing_tau_related() {
     let (d, card) = (scratch("zips"), card_with_old_tau_cores());
     assert!(candidates(&zip(&d, "agg23.NES", "1.1.0"), &card).is_empty());
 }
+
+#[test]
+fn from_v0_7_0_the_diagnostics_core_is_optional_and_never_offered_for_removal_by_a_fallback() {
+    let (d, card) = (scratch("zips"), card_with_old_tau_cores());
+    for v in ["0.7.0", "0.7.0-preview.1", "0.7.1"] {
+        let got = candidates(&zip(&d, "alfatreze.TAU", v), &card);
+        assert!(
+            !got.contains(&"alfatreze.TAU Diagnostics".to_string()),
+            "{v}: {got:?}"
+        );
+        assert!(
+            !got.contains(&"alfatreze.TAU Preview Diagnostics".to_string()),
+            "{v}: {got:?}"
+        );
+    }
+    // The last release before v0.7.0 still uses the fallback.
+    assert!(
+        candidates(&zip(&d, "alfatreze.TAU", "0.6.9"), &card)
+            .contains(&"alfatreze.TAU Diagnostics".to_string())
+    );
+}

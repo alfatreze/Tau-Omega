@@ -44,11 +44,16 @@ pub fn is_tau_core(id: &str) -> bool {
 }
 
 /// The Tau cores a release supersedes, for manifests that do not say (the v0.6.0 and v0.6.1 manifests carry `replaces: []`, and the changelog
-/// only says "remove them"): from v0.6.0 Stable `alfatreze.TAU` replaces the Diagnostics cores and the Preview cores; from v0.6.0-preview.2 the
+/// only says "remove them"): from v0.6.0 to before v0.7.0 Stable `alfatreze.TAU` replaces the Diagnostics cores and the Preview cores (v0.7.0 ships the Diagnostics core again, optional: no fallback from there); from v0.6.0-preview.2 the
 /// Preview core replaces only its own Diagnostics core, never the Stable one. A manifest that lists `replaces` always wins over this.
 pub fn builtin_replaces(core_id: &str, version: &str) -> &'static [&'static str] {
     use crate::core_version::{Verdict, compare};
     let at_least = |floor: &str| matches!(compare(floor, version), Verdict::Same | Verdict::Newer);
+    // From v0.7.0 the Diagnostics core is an optional second core that ships beside the normal one (Tau Alpha interop 004, F-014), so a
+    // normal core no longer supersedes it: manifests of v0.7.0 and later are the only authority (`0.7.0-0` sorts before every 0.7.0 pre-release).
+    if compare(version, "0.7.0-0") != Verdict::Newer {
+        return &[];
+    }
     if core_id.eq_ignore_ascii_case("alfatreze.TAU") && at_least("0.6.0") {
         &[
             "alfatreze.TAU_DIAGNOSTIC",
