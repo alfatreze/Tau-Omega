@@ -7,3 +7,6 @@ Adopted 2026-10-26 (proposed by Tau Alpha, `docs/interop/README.md` in their rep
 - The owner's job is one sentence per session: "read `docs/interop/` of the other project and answer the open ids".
 
 This does not replace `docs/FIRMWARE_SYNC.md` (what Omega assumes of Tau's files) or `docs/TAU_ALPHA_SYNC_PLAN_2026-10-26.md` (the gap analysis and plan); messages here point at them.
+
+**`OPEN.md`** is Omega's own list of what it still needs from Tau Alpha (with the message ids), updated whenever a message is sent or answered; read it first.
+
