@@ -85,3 +85,5 @@ convention, a library index or a poster format. This is the first question for T
 3. Whether Tau V will publish its vectors with SHA-256 so Omega can pin them (as Tau Alpha did for the lab drop).
 4. Encoder presets: what Tau V wants Omega's defaults to be (QP 30, 96 kbit/s, 800 wide, level auto).
 5. Whether subtitle track import (SRT, ASS) belongs in the host encoder (`tools/tst_ref`) as it does today.
+
+Crate requirements for the encoder/decoder library: `docs/TAU_VIDEO_CRATE_REQUIREMENTS.md`.
