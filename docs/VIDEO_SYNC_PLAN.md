@@ -87,3 +87,5 @@ convention, a library index or a poster format. This is the first question for T
 5. Whether subtitle track import (SRT, ASS) belongs in the host encoder (`tools/tst_ref`) as it does today.
 
 Crate requirements for the encoder/decoder library: `docs/TAU_VIDEO_CRATE_REQUIREMENTS.md`.
+
+Omega and the standalone Tau Encoder/CLI are two front ends to one encoder (D-021): the CLI JSON contract is shared and must stay stable.
