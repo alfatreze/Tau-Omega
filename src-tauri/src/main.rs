@@ -404,7 +404,12 @@ fn card_breakdown(card: String, cores: Vec<tau_core::breakdown::CoreRef>, job_id
 #[tauri::command(async)]
 fn eject_card(path: String) -> Result<device::EjectResult, TauError> {
     let _write = card_write_guard()?;
-    Ok(device::eject(Path::new(&path)))
+    let tidied = tau_core::card_tidy::tidy_card(Path::new(&path));
+    let mut result = device::eject(Path::new(&path));
+    if result.ok && tidied.total() > 0 {
+        result.message.push_str(&format!(" Removed {} macOS leftover file(s) from the card first.", tidied.total()));
+    }
+    Ok(result)
 }
 
 /// Whether read-backs after a write are checked against the device itself (true
