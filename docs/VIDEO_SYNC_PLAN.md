@@ -46,8 +46,7 @@ Levels (from `encode_film.py`): L1 400x240, L2 800x464, L3 800x720. Size: about 
 Everything that writes the card keeps plan, review, confirm, verify, backups outside the card, journal (D-004, D-006, `SAFETY_RULES.md`). Test
 cards: `Pock` (snapshot first) and `CARDWRITE`. Never modify a source file.
 
-**Open: where the player reads films from.** Tau V's README still says `.tnv`; the TNV3 docs I read define the file but I did not find a card folder
-convention, a library index or a poster format. This is the first question for Tau V (section 6).
+**Card layout (owner, 2026-11-05):** for now the `.mp3` sits **next to** the `.tnv3` (same folder, same base name); soon a single `.tnv3` with audio inside replaces the pair. Omega therefore handles both: the header's `audio` flag (container section 2) says which. A video-only `.tnv3` is planned, copied and verified together with its matching `.mp3` (best effort, never atomic; a lone `.tnv3` or `.mp3` is a Library problem); a `.tnv3` with audio is a single file and any leftover `.mp3` with the same name is flagged, not deleted. Still open for Tau V: the folder the player browses, and any poster or index format.
 
 ## 3. Decisions the owner needs to make
 
