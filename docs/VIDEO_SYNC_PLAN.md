@@ -59,6 +59,17 @@ cards: `Pock` (snapshot first) and `CARDWRITE`. Never modify a source file.
 | V-C | **Does Tau Omega license/vendor Tau V's code?** | Port from the specs and test against the vectors (our own code), versus copying the C | Port from the specs; no literal copy (D-010 spirit, and the two repos never share files). Tau V is MIT, so a verbatim copy with provenance is possible if you want it faster: your call. |
 | V-D | **Plan before Tau V `main`?** | ROADMAP says a feature is planned only once on the sibling's `main` | Approved by this request; recorded as D-020 with the gate "no card writes of `.tnv3` until Tau V has a player release that opens it". |
 
+## 3b. Feature flag: Omega releases never depend on Video (owner, 2026-11-05)
+
+The whole section ships **dark** until the owner turns it on, so any Omega release can go out regardless of Tau V's state.
+
+| Layer | Mechanism | Default |
+|---|---|---|
+| Compile time | Cargo feature `video` on `src-tauri` (and `crates/tau-cli`) enabling the Video commands, the sidecar adapter and any `tau-video` dependency. Off means the code and the dependency are not built or shipped. | **off** in release builds (`docs/RELEASING.md`/CI release job), **on** in `tools/dev-build.sh` and `cargo tauri dev` |
+| Runtime | When compiled in, a Settings switch `video_section` (a Prefs field next to `developer_tools`) shows or hides the Video page and drag-in. The UI asks the host for `features()` and renders nothing for Video if it is absent or off, so no empty page or dead nav entry in a release. | off |
+
+Rules: (1) `tau-core` stays free of the flag; only host code and the new `tau-video` adapter are gated, and engine pieces that are generally useful (the TNV3 header reader) may stay unconditional but unused. (2) CI gets a second job that builds and tests with `--features video` so the section cannot rot while it is off; the main job stays as today. (3) No release note, README line or Marketplace metadata mentions Video until the flag is on by default. (4) Prefs written while the flag was on (source folders, destination core) are kept and ignored when it is off, so toggling loses nothing. (5) Turning it on by default is a release decision with its own checklist: the sidecar passed a real encode on every shipped OS, and a Pocket plays a file this Omega wrote (D-020 gate).
+
 ## 4. Milestones (each ends in a commit with tests; no card write before M4)
 
 | M | Deliverable | Verified by |
