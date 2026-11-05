@@ -20,6 +20,7 @@ pub mod build_series;
 pub mod builder;
 pub mod builds;
 pub mod card_role;
+pub mod card_tidy;
 pub mod cardlayout;
 pub mod carry;
 pub mod catalog;
