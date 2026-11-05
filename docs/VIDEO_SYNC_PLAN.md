@@ -46,7 +46,9 @@ Levels (from `encode_film.py`): L1 400x240, L2 800x464, L3 800x720. Size: about 
 Everything that writes the card keeps plan, review, confirm, verify, backups outside the card, journal (D-004, D-006, `SAFETY_RULES.md`). Test
 cards: `Pock` (snapshot first) and `CARDWRITE`. Never modify a source file.
 
-**Card layout (owner, 2026-11-05):** for now the `.mp3` sits **next to** the `.tnv3` (same folder, same base name); soon a single `.tnv3` with audio inside replaces the pair. Omega therefore handles both: the header's `audio` flag (container section 2) says which. A video-only `.tnv3` is planned, copied and verified together with its matching `.mp3` (best effort, never atomic; a lone `.tnv3` or `.mp3` is a Library problem); a `.tnv3` with audio is a single file and any leftover `.mp3` with the same name is flagged, not deleted. Still open for Tau V: the folder the player browses, and any poster or index format.
+**Card layout (owner, 2026-11-05):** for now the `.mp3` sits **next to** the `.tnv3` (same folder, same base name); soon a single `.tnv3` with audio inside replaces the pair. Omega therefore handles both: the header's `audio` flag (container section 2) says which. A video-only `.tnv3` is planned, copied and verified together with its matching `.mp3` (best effort, never atomic; a lone `.tnv3` or `.mp3` is a Library problem); a `.tnv3` with audio is a single file and any leftover `.mp3` with the same name is flagged, not deleted. The player browses like the music player (the user picks where things live), so there is no fixed card folder to wait for; Omega uses a destination folder setting on the card, chosen the way the music one is. Still open for Tau V: any poster or index format.
+
+**Sources (owner, 2026-11-05):** like music, the user selects **one or more source folders** to scan (added and removed freely, each scanned and remembered separately), and can also **drag a single file from outside onto the card** (or onto the Video view), which goes through the same plan, encode, copy and verify path for that one file.
 
 ## 3. Decisions the owner needs to make
 
