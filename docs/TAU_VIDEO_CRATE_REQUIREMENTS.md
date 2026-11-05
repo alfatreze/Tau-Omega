@@ -5,6 +5,39 @@ Context and reasoning: `docs/VIDEO_SYNC_PLAN.md`, decision D-020. The formats th
 in Tau V (`docs/TNV3_CONTAINER_V0.md`, `TVC_BITSTREAM_V0.md`, `TAC_BITSTREAM_V0.md`, `TST_SUBTITLES_V0.md`). Where this document and a Tau V spec
 disagree, the Tau V spec wins and this document is wrong. "MUST", "SHOULD", "MAY" are used in the usual sense.
 
+## 0. Revision 2026-11-05: the encoder is the C encoder behind a CLI (supersedes parts of sections 2, 3, 4.1 and 5)
+
+Owner: the pure-Rust encoder was diverging from the C encoder, so work moved to **a wrapper around the C encoder plus a CLI**. Facts found in the
+project that holds it (`../Tau codecs`: crates `tau-video`, `tau-video-cli`, app `tau-encoder`; read-only for Omega):
+the Rust crate has the TNV3 header/index inspector, a TVC decoder (to Y4M), a TNV3 video-track decoder and a Rust orchestrator, but the
+production encode is **external processes** (`tvc_enc`, `tnv3`, FFmpeg/FFprobe, still Python in `encode_film.py` for the default path); output today is a
+**video-only `.tnv3` plus a matching `.mp3` sidecar**; the Pocket frame freeze is unresolved; Windows and Linux builds are not runtime-tested; a plan
+to move to a native C library with a narrow FFI exists (`docs/CROSS_PLATFORM_CLI_MIGRATION_PLAN.md`).
+
+What this changes for Omega:
+
+| Was | Now |
+|---|---|
+| C1-C4: no C, no processes, one binary | Applies to the **in-process** parts only (checker, decoder, player). The **encoder is a sidecar process** that Omega spawns from the host (`src-tauri`/CLI adapter), never from `tau-core` (D-001 holds: the engine stays process-free). |
+| E3 segment API in Rust | The **CLI** owns segmenting, the work folder and resume; Omega only starts, watches, cancels and restarts it (see 0.1). |
+| T2 "C is a cross-check" | The C encoder **is** the reference; the Rust decoder is checked against `tvc_dec` and the vectors. |
+| Output: one `.tnv3` with audio | Today `.tnv3` (video only) + `.mp3`. Omega must write and verify **both** files as one unit (best effort, never "atomic"); the card convention is still the open Tau V question. |
+
+### 0.1 What Omega needs from the CLI (this is now the encoder deliverable)
+
+1. **No Python, no shell**: one self-contained executable per OS (macOS arm64/x64, Windows x64, Linux x64) that finds `tvc_enc`/`tnv3` next to itself; FFmpeg/FFprobe located by a documented search order and an explicit `--ffmpeg`/`--ffprobe` path, never downloaded.
+2. **Machine interface**: `tau-video encode --json-events` writes one JSON object per line on stdout (`plan`, `progress{frames,total,segment,bytes,elapsed}`, `warning`, `done{files,sizes,sha256,level,reencoded}`, `error{code,message}`); logs go to stderr; exit codes 0 ok, 1 findings, 2 usage, 3 I/O, 4 cancelled. Stable and versioned (`"schema":1`).
+3. **Cancel and resume**: a clean stop on SIGINT/Ctrl-Break or when stdin closes; the work folder (`--work DIR`) keeps finished segments and a manifest; rerunning with the same `--work` and settings resumes and yields the **same final bytes**. No partial or half-written output in the destination; no-overwrite default stays.
+4. **`probe`** (`--json`): ffprobe summary, chosen level, resolution and fps after scaling, estimated size and estimated encode seconds (short measured sample), **without** encoding.
+5. **`check FILE --json`** and **`info FILE --json`** covering every container rule (this part is pure Rust and can be linked in-process by Omega instead).
+6. **Settings**: the profiles of the migration plan (Pocket compatibility, Host preview, Custom) resolved into one reported effective config before work starts, with ids/versions.
+7. **Determinism and versions**: `tau-video --version --json` gives the CLI, C tool and format draft versions; Omega refuses a mismatched set.
+8. **Platform truth**: Omega will not offer the Video section on a platform until the CLI has passed a real encode there; until then it is shown as unavailable with the reason.
+9. **Licensing for redistribution**: FFmpeg LGPL build notice if bundled (Tau Encoder already bundles one on macOS); the notice travels with Omega's installers.
+
+Sections 2 to 7 below still describe the in-process library (reader, checker, decoder, player) and remain the requirements for it; read E1-E9 as
+requirements of the **CLI output** rather than of a Rust encoder API.
+
 ## 1. Purpose and consumers
 
 One pure-Rust crate that turns decoded source frames and audio into a valid `.tnv3`, checks and inspects a `.tnv3`, and decodes a `.tnv3` back to
