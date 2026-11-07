@@ -53,6 +53,9 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
     assert.match(await p.locator('[data-testid=rml-budget-text]').innerText(), /^(Under|Over) by [\d.]+ \(\d+ %\)$/); assert.match(await bud.getAttribute('aria-label'), /Processing budget over the last second: worst frame \d+ drawing commands, 100 allowed/); ok('the budget bar says how far under or over the allowance the meter is (Winamp Bars: 100 allowed)');
     assert.equal(await bud.getAttribute('data-kind'), 'under'); const fillW = await bud.locator('.bb-fill').evaluate((e) => e.getBoundingClientRect().width), trackW = await bud.locator('.bb-track').evaluate((e) => e.getBoundingClientRect().width);
     assert.ok(fillW > 0 && fillW < trackW * 0.5); assert.equal(await bud.locator('.bb-over').evaluate((e) => e.getBoundingClientRect().width), 0); ok('under budget the bar fills part of the allowance and there is no red stretch');
+    // The budget is pushed every other frame (about 19 times a second), not once in a while.
+    await p.evaluate(() => { window.__budgetMsgs = 0; window.addEventListener('message', (e) => { if (e.data && e.data.type === 'omega-lab-budget') window.__budgetMsgs++; }); });
+    await p.waitForTimeout(2000); const msgs = await p.evaluate(() => window.__budgetMsgs); assert.ok(msgs >= 20 && msgs <= 60, `budget messages in 2 s: ${msgs}`); ok(`the budget is sent every other frame (${msgs} updates in 2 s, about ${Math.round(msgs / 2)} a second)`);
     // It reacts within about a second to a change of setting, the allowance tick never moves, and the last meter's numbers are never shown against the next meter's allowance.
     const worstNow = async () => Number((await bud.getAttribute('aria-label')).match(/worst frame (\d+)/)?.[1] ?? NaN);
     await p.locator('[data-testid=mp-tab-settings]').click(); const bands = p.locator('#mp-bands'); const maxBands = await bands.getAttribute('max'), minBands = await bands.getAttribute('min');
