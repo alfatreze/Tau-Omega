@@ -128,6 +128,10 @@ pub struct RefreshPlan {
     pub refused: Option<String>,
     /// The library already matches the music: nothing would change.
     pub nothing_to_do: bool,
+    /// The index on the card lists the same music in another order than a fresh build would (for example one built
+    /// before the play order used NFC names): a refresh rebuilds it and the name sidecar.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub index_stale: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -583,6 +587,7 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
 
     // Would the index build? (Dry run in memory.)
     let mut refused = None;
+    let mut index_stale = false;
     let would_index = keep.len();
     if would_index > MAX_TRACKS {
         findings.push(Finding {
@@ -615,17 +620,20 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
                 e
             })
             .collect();
-        if let Err(error) = build_index(&entries, &[], &prefix, &mut Vec::new()) {
-            if matches!(error.code(), ErrorCode::IndexCapExceeded) {
-                findings.push(Finding {
+        match build_index(&entries, &[], &prefix, &mut Vec::new()) {
+            Ok(fresh) => index_stale = stored_order_differs(media_root, &fresh),
+            Err(error) => {
+                if matches!(error.code(), ErrorCode::IndexCapExceeded) {
+                    findings.push(Finding {
                     rel: String::new(),
                     reason: Reason::OverCapacity,
                     message: format!("The library is larger than the Pocket's index can list ({MAX_TRACKS} tracks, {MAX_ALBUMS} albums, {MAX_ARTISTS} artists)."),
                     fix: None,
                     skipped: true,
                 });
+                }
+                refused = Some(error.message);
             }
-            refused = Some(error.message);
         }
     }
 
@@ -638,6 +646,7 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
         && before.root_matches
         && before.missing_files == 0
         && before.tracks == Some(would_index as u16)
+        && !index_stale
         && !findings
             .iter()
             .any(|f| f.skipped && f.reason == Reason::OverCapacity);
@@ -665,8 +674,26 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
         stubs_to_remove: stubs,
         refused,
         nothing_to_do,
+        index_stale,
     };
     Ok(Analysis { plan, playlists })
+}
+
+/// True when the index on the card exists, parses, and lists its tracks in a different order than `fresh`.
+fn stored_order_differs(media_root: &Path, fresh: &[u8]) -> bool {
+    fn paths(bytes: &[u8]) -> Option<Vec<String>> {
+        let ix = parse(bytes).ok()?;
+        (0..ix.counts.tracks)
+            .map(|i| crate::index_read::track_path(&ix, i).ok())
+            .collect()
+    }
+    let Ok(stored) = fs::read(media_root.join(INDEX)) else {
+        return false;
+    };
+    match (paths(&stored), paths(fresh)) {
+        (Some(a), Some(b)) => a != b,
+        _ => false,
+    }
 }
 
 /// Plans a refresh of the library in `media_root` (`Assets/<platform>/common`). Read-only.
@@ -1018,6 +1045,38 @@ pub fn rollback_refresh(media_root: &Path, backup_dir: &Path) -> Result<(), TauE
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn a_stored_index_in_another_track_order_is_stale() {
+        let dir = std::env::temp_dir().join(format!(
+            "tau-stale-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let build = |tracks, albums| {
+            build_index(
+                &crate::index_read::synth(tracks, albums, 1),
+                &[],
+                "/",
+                &mut Vec::new(),
+            )
+            .unwrap()
+        };
+        let stored = build(6, 2);
+        fs::write(dir.join(INDEX), &stored).unwrap();
+        assert!(!stored_order_differs(&dir, &stored));
+        assert!(stored_order_differs(&dir, &build(6, 3)));
+        // No index, or one that does not parse, is not "stale": the plan has other ways to say so.
+        fs::write(dir.join(INDEX), b"not an index").unwrap();
+        assert!(!stored_order_differs(&dir, &stored));
+        fs::remove_file(dir.join(INDEX)).unwrap();
+        assert!(!stored_order_differs(&dir, &stored));
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     fn card(name: &str) -> (PathBuf, PathBuf) {
         let root = std::env::temp_dir().join(format!(
