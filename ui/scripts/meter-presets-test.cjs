@@ -1,0 +1,81 @@
+// Meter presets (tau-presets/<meter id>/ files): list, edit, factory marks, reorder, hide, delete with a never-reused id, parameter
+// form, plan review and save, against the dev mock (which serves the real registry fixture and keeps a stateful "card").
+// Usage: (npm run dev &) && NODE_PATH=$(npm root -g) node scripts/meter-presets-test.cjs
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const url = process.env.URL || 'http://localhost:5173';
+let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
+(async () => {
+  const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+  const p = await b.newPage({ viewport: { width: 1400, height: 1100 } });
+  const errors = []; p.on('pageerror', (e) => errors.push(e.message)); p.on('console', (m) => m.text().includes('unmocked') && errors.push(m.text()));
+  await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.goto(url); await p.waitForTimeout(1000);
+  await p.locator('nav button', { hasText: 'Meter Lab' }).first().click(); await p.waitForTimeout(1200);
+  const t = (id) => p.locator(`[data-testid=${id}]`);
+  const items = () => p.locator('[data-testid=mp-list] li:not(.mp-default):not(.mp-empty)');
+  const names = async () => (await items().locator('.mp-name').allInnerTexts());
+
+  assert.equal(await t('mp-no-registry').count(), 0); assert.equal(await t('mp-no-card').count(), 0);
+  assert.equal(await p.locator('.mp-meters button').count(), 7); ok('the meters of the registry are listed (the ones with parameters)');
+  assert.deepEqual(await names(), ['FLUID', 'CLASSIC', 'BOUNCY', 'SLOW FADE', 'SNAPPY']); ok('Winamp Bars lists its five presets from the card, after the built-in DEFAULT');
+  assert.equal(await p.locator('[data-testid=mp-list] .mp-default').count(), 1); ok('DEFAULT is shown as built in, not as a file');
+  assert.equal(await items().locator('.mp-tag', { hasText: /^factory$/ }).count(), 5); ok('every preset equal to the factory one is marked factory');
+  assert.match(await t('mp-save').innerText(), /Nothing to save/); assert.ok(await t('mp-save').isDisabled()); ok('nothing is saved until something changes');
+
+  // rename (upper-cased), the factory mark becomes "edited"
+  await t('mp-name').fill('quiet room'); assert.equal(await t('mp-name').inputValue(), 'QUIET ROOM'); ok('names are upper-cased as typed');
+  assert.match(await items().first().innerText(), /QUIET ROOM[\s\S]*factory, edited[\s\S]*id 0/); ok('an edited factory preset says so and keeps its id');
+  assert.match(await p.locator('.mp-meters button.on').innerText(), /edited/); ok('the meter shows that it has unsaved edits');
+  assert.ok(await t('mp-save').isEnabled()); ok('saving becomes possible');
+  await t('mp-name').fill('CAFÉ'); assert.equal(await t('mp-name').getAttribute('aria-invalid'), 'true'); assert.match(await p.locator('.mp-edit [role=alert]').innerText(), /no accents/); ok('a name the files cannot hold is explained as you type');
+  await t('mp-name').fill('QUIET ROOM');
+
+  // hide, reorder, duplicate (first free id), delete with a confirm and an id that is retired
+  await t('mp-hide').click(); assert.equal(await items().first().locator('.mp-tag.hide').count(), 1); ok('Hide marks the preset hidden (kept in the list, not shown on the Pocket)');
+  await p.getByRole('button', { name: 'Move down' }).click(); assert.deepEqual((await names()).slice(0, 2), ['CLASSIC', 'QUIET ROOM']); ok('Down moves the preset in the list order');
+  await p.getByRole('button', { name: 'Duplicate' }).click(); assert.deepEqual((await names()).length, 6); assert.match(await items().last().innerText(), /QUIET ROOM COPY[\s\S]*yours[\s\S]*id 5/); ok('a duplicate is a new preset of yours with the first free id');
+  await t('mp-delete').click(); assert.equal(await items().count(), 6); await t('mp-delete-yes').click(); assert.equal(await items().count(), 5); ok('Delete asks first, then removes');
+  await p.getByRole('button', { name: 'New preset' }).click(); assert.match(await items().last().innerText(), /MY PRESET[\s\S]*id 5/); ok('a new preset takes the first free id');
+
+  // parameters: change one, it is remembered as set; Default clears it
+  const first = p.locator('.mp-param').first(); const unset = first.locator('.mp-unset');
+  assert.ok(await unset.isDisabled()); await first.locator('input[type=range]').fill('12'); await p.waitForTimeout(100);
+  assert.ok(await unset.isEnabled()); assert.equal(await first.locator('output').innerText(), '12'); ok('changing a value marks it as set on this preset');
+  await unset.click(); assert.ok(await unset.isDisabled()); ok('Default puts the parameter back to the meter’s own default');
+
+  // review and save
+  await t('mp-save').click(); await p.waitForTimeout(300);
+  const review = t('mp-review'); assert.equal(await review.count(), 1);
+  assert.match(await review.innerText(), /WINAMP BARS[\s\S]*new[\s\S]*changed[\s\S]*Backup[\s\S]*saved to/); ok('the review lists new, changed and unchanged files and the backup');
+  await review.getByRole('button', { name: 'Cancel' }).click(); assert.equal(await t('mp-review').count(), 0); assert.ok(await t('mp-save').isEnabled()); ok('cancelling writes nothing and keeps the edits');
+  await t('mp-save').click(); await p.waitForTimeout(300); await t('mp-confirm').click(); await p.waitForTimeout(500);
+  assert.match(await t('mp-notice').innerText(), /Saved to .*files? written.*read back and checked/); ok('saving reports what was written');
+  assert.match(await t('mp-save').innerText(), /Nothing to save/); ok('after saving nothing is pending');
+  assert.deepEqual((await names()).slice(0, 2), ['CLASSIC', 'QUIET ROOM']); ok('the card now holds the edited order and names');
+
+  // an id that was on the card, deleted and saved is retired: the next new preset gets a different id
+  assert.equal(await items().count(), 6); await items().last().locator('.mp-pick').click();
+  await t('mp-delete').click(); await t('mp-delete-yes').click(); assert.equal(await items().count(), 5);
+  await t('mp-save').click(); await p.waitForTimeout(300); assert.match(await t('mp-review').innerText(), /1 removed/); ok('the review says what is removed');
+  await t('mp-confirm').click(); await p.waitForTimeout(500);
+  await p.getByRole('button', { name: 'New preset' }).click();
+  assert.match(await items().last().innerText(), /id 6/); ok('an id that was deleted and saved is never given to another preset');
+
+  // undo and factory actions
+  await p.getByRole('button', { name: 'Undo edits' }).click(); assert.equal(await items().count(), 5); ok('Undo edits returns to what the card holds');
+  await p.getByRole('button', { name: 'Reset to factory' }).click(); assert.deepEqual(await names(), ['FLUID', 'CLASSIC', 'BOUNCY', 'SLOW FADE', 'SNAPPY']); ok('Reset to factory restores the factory list (not written until saved)');
+  await p.getByRole('button', { name: 'Undo edits' }).click();
+
+  // a meter with a conditional parameter set (Layered Wave): `when` hides and shows parameters
+  await t('mp-meter-layered_wave').click(); assert.equal(await items().count(), 16); ok('Layered Wave lists its 16 factory presets');
+  await items().first().locator('.mp-pick').click();
+  const labels = () => p.locator('.mp-param label').allInnerTexts();
+  const before = await labels();
+  await p.locator('.mp-param select').first().selectOption({ index: 1 }); await p.waitForTimeout(150);
+  const after = await labels();
+  assert.notDeepEqual(after, before); assert.ok(after.some((l) => !before.includes(l)) && before.some((l) => !after.includes(l))); ok('a parameter that depends on another appears or disappears with it');
+  assert.ok(await p.locator('fieldset legend', { hasText: /experimental/i }).count() >= 1); ok('experimental parameters are grouped apart');
+  await p.screenshot({ path: process.env.SHOT || '/tmp/meter-presets.png' });
+  assert.deepEqual(errors, []); ok('no page errors');
+  await b.close(); console.log(`\n${passed} checks passed`);
+})().catch((e) => { console.error('\nFAILED:', e.message); process.exit(1); });

@@ -243,6 +243,28 @@ async function runChanges(request: any, jobId: string) {
   return { ...done, journal: entry.path };
 }
 
+
+// ---- Meter presets (tau-presets/<meter id>/): a stateful stand-in with the real registry fixture's factory sets on the "card" ----
+type MockPreset = { id: number; name: string; hidden: boolean; values: Record<string, number> };
+const mpCard: Record<number, MockPreset[]> = {}; const mpRetired: Record<number, number[]> = {};
+const mpFactory = (m: any): MockPreset[] => (m.presets ?? []).map((p: any, i: number) => ({ id: i, name: String(p.name).toUpperCase().slice(0, 15), hidden: false,
+  values: Object.fromEntries(Object.entries(p.values ?? {}).filter(([k]) => m.params.some((q: any) => q.key === k)).map(([k, v]) => [k, Number(v)])) }));
+const mpFiles = (presets: MockPreset[]): Map<string, string> => new Map<string, string>([['index.tpi', JSON.stringify(presets.map((p) => [p.id, p.name, p.hidden]))],
+  ...presets.map((p): [string, string] => [`p${p.id}.tpr`, JSON.stringify([p.name, Object.entries(p.values).sort()])])]);
+const mpMeters = (json: string) => (JSON.parse(json).meters as any[]).filter((m) => m.params?.length);
+const mpPlan = (a: any) => {
+  const writes: any[] = []; const removals: [number, string][] = []; const backup: [number, string][] = []; let unchanged = 0;
+  for (const set of a.sets as { meter_id: number; presets: MockPreset[] }[]) {
+    const want = mpFiles(set.presets); const have = mpFiles(mpCard[set.meter_id] ?? []);
+    for (const [name, body] of want) {
+      const state = !have.has(name) ? 'New' : have.get(name) === body ? 'Unchanged' : 'Changed';
+      if (state === 'Unchanged') unchanged++; if (state === 'Changed') backup.push([set.meter_id, name]);
+      writes.push({ meter_id: set.meter_id, name, state, bytes: body.length });
+    }
+    for (const name of have.keys()) if (!want.has(name)) { removals.push([set.meter_id, name]); backup.push([set.meter_id, name]); }
+  }
+  return { id: `mock-presets-${JSON.stringify([writes, removals])}`, media_root: a.mediaRoot, meters: (a.sets as any[]).map((x) => x.meter_id), writes, removals, backup, unchanged, interrupted: false, warnings: [] };
+};
 const handlers: Record<string, (args: any) => unknown> = {
   get_reports_dir: () => '~/Library/Application Support/Tau Omega/reports',
   get_recent_cards: () => [CARD],
@@ -325,6 +347,20 @@ const handlers: Record<string, (args: any) => unknown> = {
   // the mock runs as a dev build (0.5.1-dev.1): Stable and Preview offer a switch, Dev and Automatic offer nothing
   omega_update_check: () => { if (prefs.omega_channel === 'stable') return { current: '0.5.1-dev.1', version: '0.5.0', notes: 'Release', date: null, channel: 'stable', switch: true }; if (prefs.omega_channel === 'preview') return { current: '0.5.1-dev.1', version: '0.5.1-preview.1', notes: 'Preview build', date: null, channel: 'preview', switch: true }; throw { code: 7, message: 'Development builds are updated by hand. Choose Preview or Stable above to follow releases.' }; },
   omega_update_install: () => undefined,
+  meter_presets_read: (a) => mpMeters(a.registryJson).map((m) => {
+    if (!(m.id in mpCard) && m.id >= 12 && m.id <= 18) mpCard[m.id] = mpFactory(m);
+    return { meter_id: m.id, key: m.key, name: m.name ?? m.key, factory: { meter_id: m.id, presets: mpFactory(m) },
+      on_card: m.id in mpCard ? { meter_id: m.id, presets: JSON.parse(JSON.stringify(mpCard[m.id])) } : null, problem: null, retired: mpRetired[m.id] ?? [] };
+  }),
+  meter_presets_plan: (a) => mpPlan(a),
+  meter_presets_install: (a) => {
+    const plan = mpPlan(a); if (plan.id !== a.confirmation) throw { code: 39, message: 'the presets on the card or the new presets changed since the plan was reviewed' };
+    for (const set of a.sets as { meter_id: number; presets: MockPreset[] }[]) {
+      for (const [m, name] of plan.removals) if (m === set.meter_id) { const id = Number(name.slice(1, -4)); if (!Number.isNaN(id)) (mpRetired[m] ??= []).push(id); }
+      mpCard[set.meter_id] = JSON.parse(JSON.stringify(set.presets));
+    }
+    return { written: plan.writes.filter((w: any) => w.state !== 'Unchanged').length, removed: plan.removals.length, backup: plan.backup.length ? `${a.backup}/${plan.id.slice(0, 8)}/tau-presets` : null };
+  },
   halcyon_open: () => [],
   halcyon_import_apo: (a) => ({ preset: { kind: 'raw', name: a.name as string, preamp: 3000000, stages: [[4194304, 0, 0, 0, 0]] }, preamp_db: -2.9, peak_gain_db: 2.9, filters: 1 }),
   halcyon_curve: () => Array.from({ length: 200 }, (_, i) => [20 * 1000 ** (i / 199), 0]),

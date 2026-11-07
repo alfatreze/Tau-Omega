@@ -375,3 +375,17 @@ export type NextName = { scheme: string; next: string };
 /** Mirrors `tau_core::persist_layout::LayoutView`: a Tau core's persisted settings decoded by their layout. */
 export type LayoutValue = { group: string; label: string; value: number; text: string };
 export type LayoutView = { layout: 'legacy' | 'new'; values: LayoutValue[]; migrated_words: [number, number][] };
+
+// ---- Meter presets as files on the card (tau_core::preset_files / preset_install) ----
+export type SetPreset = { id: number; name: string; hidden: boolean; values: Record<string, number> };
+export type PresetSet = { meter_id: number; presets: SetPreset[] };
+export type MeterPresetsView = {
+  meter_id: number; key: string; name: string;
+  factory: PresetSet; on_card: PresetSet | null; problem: string | null; retired: number[];
+};
+export type PresetWrite = { meter_id: number; name: string; state: 'New' | 'Changed' | 'Unchanged'; bytes: number };
+export type PresetInstallPlan = {
+  id: string; media_root: string; meters: number[]; writes: PresetWrite[]; removals: [number, string][];
+  backup: [number, string][]; unchanged: number; interrupted: boolean; warnings: string[];
+};
+export type PresetInstallReport = { written: number; removed: number; backup: string | null };

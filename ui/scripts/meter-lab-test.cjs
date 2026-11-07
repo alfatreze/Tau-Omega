@@ -20,7 +20,7 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   } else {
     assert.equal(await p.locator('[data-testid=rml-missing]').count(), 1); assert.equal(await p.locator('iframe').count(), 0); ok('without the lab page it says so and shows no frame');
   }
-  assert.ok(await p.locator('.meter-list').count() >= 1); ok('the placeholder editor is still there');
+  assert.equal(await p.locator('[data-testid=meter-presets]').count(), 1); ok('the preset editor is on the page');
   assert.deepEqual(errors, []); ok('no page errors');
   await b.close(); console.log(`\n${passed} checks passed`);
 })().catch((e) => { console.error('\nFAILED:', e.message); process.exit(1); });

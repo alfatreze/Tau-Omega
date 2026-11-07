@@ -21,7 +21,7 @@
     <p class="rml-note">The real meters, themes and registry from Tau Alpha's own preview stack (the same drawing code as the Pocket; estimates, not measured). Pinned and never edited here.</p>
     <iframe title="Tau Alpha meter lab" src={LAB} sandbox="allow-scripts" loading="lazy"></iframe>
   {:else}
-    <p class="rml-note" data-testid="rml-missing">The pinned lab page is not installed in this build yet. It comes from a Tau Alpha lab drop that includes the built <code>meter_lab.html</code> (see <code>vendor/tau-lab/README.md</code>); until then the editor below uses placeholder meters.</p>
+    <p class="rml-note" data-testid="rml-missing">The pinned lab page is not installed in this build yet. It comes from a Tau Alpha lab drop that includes the built <code>meter_lab.html</code> (see <code>vendor/tau-lab/README.md</code>); until then the lab preview is not available; the preset editor below does not need it.</p>
   {/if}
 </section>
 <style>
