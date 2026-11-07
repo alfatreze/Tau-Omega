@@ -7,6 +7,7 @@ Approved exception to "never share literal files" (Tau Alpha interop **D-007**, 
 
 | Folder | Tau Alpha commit | State |
 |---|---|---|
+| `pre-0.7.0-d6d43725/` | `d6d43725f6da4a5835a054049718029f8b584da4` | pinned 2026-11-07 (verifies against its SHA256SUMS.txt; **all eight WebAssembly modules**, the built `meter_lab.html`, `lab-data.json`, module provenance in `MANIFEST.json`; installed for the page and the preset editor's registry) |
 | `pre-0.7.0-b163ebb2/` | `b163ebb2d2e7710e6151b0aba90f2c29e3682737` | pinned 2026-10-26 (29 files verify; a `pre-*` drop to build against; the final drop comes with v0.7.0) |
 
 **What is wired and what is missing.** The Meter Lab page (`ui/src/lib/RealMeterLab.svelte`) shows the lab as ONE page, `ui/public/tau-lab/meter_lab.html`, in a sandboxed frame; when that file is absent it says so. The drop carries the lab's scripts but **not the data the page embeds** (`tools/meters_schema.json`, the themes and the accent palette are read from the Tau Alpha tree by `preview/build.py`), so the page cannot be built from the drop alone: Omega asked Tau Alpha to add the built `meter_lab.html` (with its SHA-256 in `MANIFEST.json`) to the drop (interop message `to-alpha/004`). A scratch build of that page, made outside the repository, was shown working in Omega's Meter Lab (five meters including the SOUND MAP WebAssembly twin) so the wiring is proven; it is not committed because it does not come from a drop.

@@ -520,6 +520,37 @@ fn format_problem(bytes: &[u8], fmt: &Format) -> Option<String> {
                 _ => None,
             }
         }
+        "tau-names" => {
+            // The firmware's own check (NAME_SIDECAR_SPEC 5): magic, version, header CRC.
+            // Binding to a particular index is not an error here: the firmware just ignores a stale file.
+            if bytes.len() < 48 || &bytes[..4] != b"TNMS" {
+                return Some("not a Tau name sidecar".into());
+            }
+            let v = u64::from(u16::from_le_bytes([bytes[4], bytes[5]]));
+            if v > fmt.version {
+                return Some(format!(
+                    "sidecar version {v}; this release reads up to {}",
+                    fmt.version
+                ));
+            }
+            let crc = u32::from_le_bytes(bytes[32..36].try_into().unwrap());
+            (crc32fast::hash(&bytes[..32]) != crc).then(|| "the sidecar header is damaged".into())
+        }
+        "tau-names-manifest" => {
+            let Ok(v) = serde_json::from_slice::<Value>(bytes) else {
+                return Some("not valid JSON".into());
+            };
+            if v["format"] != "tau-names" {
+                return Some("not a name sidecar manifest".into());
+            }
+            let version = v["version"].as_u64().unwrap_or(0);
+            (version > fmt.version).then(|| {
+                format!(
+                    "manifest version {version}; this release reads up to {}",
+                    fmt.version
+                )
+            })
+        }
         "TIM1" => (bytes.get(..4) != Some(b"TIM1")).then(|| "not a TIM1 cover image".into()),
         "interact_persist" => serde_json::from_slice::<Value>(bytes)
             .err()
@@ -711,6 +742,51 @@ pub fn check_card(doc: &CompatDoc, card_root: &Path, core_id: &str) -> Vec<Findi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_name_sidecar_formats_are_checked_like_the_firmware_does() {
+        let bin_fmt = Format {
+            name: "tau-names".into(),
+            version: 1,
+            root: None,
+            sections: vec![],
+            max_bytes: None,
+            preserve_unknown_sections: false,
+        };
+        let man_fmt = Format {
+            name: "tau-names-manifest".into(),
+            ..bin_fmt.clone()
+        };
+        // A real sidecar made by the writer passes; damage to magic, version or header does not.
+        let side = crate::name_sidecar::NameSide {
+            tracks: vec![crate::name_sidecar::TrackSide {
+                rel: "A/01.mp3".into(),
+                file: "01.mp3".into(),
+                title: Some("Песня".into()),
+                idx_title: "Pesnia".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let s =
+            crate::name_sidecar::build_sidecar(1, &side, &Default::default(), (1, 0, 0)).unwrap();
+        let bin = s.binary.unwrap();
+        assert_eq!(format_problem(&bin, &bin_fmt), None);
+        let mut bad = bin.clone();
+        bad[0] = b'X';
+        assert!(format_problem(&bad, &bin_fmt).is_some());
+        let mut bad = bin.clone();
+        bad[4] = 9;
+        assert!(format_problem(&bad, &bin_fmt).unwrap().contains("version"));
+        let mut bad = bin.clone();
+        bad[12] ^= 1;
+        assert!(format_problem(&bad, &bin_fmt).unwrap().contains("damaged"));
+        let manifest = crate::name_sidecar::manifest_bytes(&s.manifest);
+        assert_eq!(format_problem(&manifest, &man_fmt), None);
+        assert!(format_problem(b"{\"format\":\"other\"}", &man_fmt).is_some());
+        assert!(format_problem(b"{\"format\":\"tau-names\",\"version\":2}", &man_fmt).is_some());
+        assert!(format_problem(b"nope", &man_fmt).is_some());
+    }
 
     fn sha(b: &[u8]) -> String {
         Sha256::digest(b)
