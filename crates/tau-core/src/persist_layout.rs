@@ -45,7 +45,8 @@ pub const ID_TO_WORD: [(u64, usize); 18] = [
 /// Ids that are not in [`ID_TO_WORD`]: 33 is the fourth word of tuning slot B (word 21).
 const ID_33_WORD: usize = 21;
 
-fn word_of(id: u64) -> Option<usize> {
+/// The register-file word a persist id lives in (ids this layout does not know give `None`).
+pub fn word_of(id: u64) -> Option<usize> {
     if id == 33 {
         return Some(ID_33_WORD);
     }
@@ -84,10 +85,21 @@ const fn f(
     }
 }
 
-const MPRE_NAMES: [&str; 20] = [
-    "MPRE0", "MPRE1", "MPRE2", "MPRE3", "MPRE4", "MPRE5", "MPRE6", "MPRE7", "MPRE8", "MPRE9",
-    "MPRE10", "MPRE11", "MPRE12", "MPRE13", "MPRE14", "MPRE15", "MPRE16", "MPRE17", "MPRE18",
-    "MPRE19",
+const MPRE_NAMES: [&str; 7] = [
+    "MPRE0", "MPRE1", "MPRE2", "MPRE3", "MPRE4", "MPRE5", "MPRE6",
+];
+const MPID_NAMES: [&str; 7] = [
+    "MPID0", "MPID1", "MPID2", "MPID3", "MPID4", "MPID5", "MPID6",
+];
+/// Where the preset FILE id of meter slot m lives (7 bits each, B-968): the bits of words 6 and 15 no other field uses.
+const MPID_SLOTS: [(usize, u32); 7] = [
+    (6, 4),
+    (6, 11),
+    (6, 18),
+    (15, 0),
+    (15, 7),
+    (15, 14),
+    (15, 21),
 ];
 
 /// The new layout's fields in the firmware's order.
@@ -106,15 +118,13 @@ pub fn fields() -> Vec<Field> {
         f("TUNE_NEW", 0, 26, 1, 0, 1, 0),
     ];
     for (m, name) in MPRE_NAMES.iter().enumerate() {
-        // The selected preset of meter m, 4 bits: word 5 (meters 0..5), word 6 (6..12), word 15 (13..19).
-        let (w, s) = if m < 6 {
-            (5, 6 + 4 * m as u32)
-        } else if m < 13 {
-            (6, 4 * (m as u32 - 6))
-        } else {
-            (15, 4 * (m as u32 - 13))
-        };
+        // The selected preset POSITION of meter slot m, 4 bits: word 5 (slots 0..5), word 6 (slot 6).
+        let (w, s) = if m < 6 { (5, 6 + 4 * m as u32) } else { (6, 0) };
         t.push(f(name, w, s, 4, 0, 15, 0));
+    }
+    for (name, (w, s)) in MPID_NAMES.iter().zip(MPID_SLOTS) {
+        // The selected preset FILE of the slot: 0 none, else id + 1 (ids 0..126).
+        t.push(f(name, w, s, 7, 0, 127, 0));
     }
     for (k, w) in [8usize, 9, 10, 11, 16, 17, 18, 21].into_iter().enumerate() {
         t.push(f(
@@ -284,7 +294,10 @@ pub struct LayoutView {
     pub migrated_words: Vec<(usize, u32)>,
 }
 
-fn describe_value(name: &'static str, v: u32) -> Option<DecodedValue> {
+/// Looks a preset's name up: (meter slot, preset file id) -> the name in that meter's `index.tpi`, when the host can tell.
+pub type PresetNames<'a> = &'a dyn Fn(usize, u8) -> Option<String>;
+
+fn describe_value(name: &'static str, v: u32, names: PresetNames) -> Option<DecodedValue> {
     let (group, label, text): (&'static str, String, String) = match name {
         "VOLUME" => ("Audio", "Volume".into(), format!("{v} of 100")),
         "REPEAT" => ("Audio", "Repeat".into(), v.to_string()),
@@ -321,7 +334,24 @@ fn describe_value(name: &'static str, v: u32) -> Option<DecodedValue> {
             if v == 0 {
                 return None;
             }
-            ("Meters", format!("Meter {} preset", &n[4..]), v.to_string())
+            // The position in a pack's own list (what a meter without preset files uses).
+            (
+                "Meters",
+                format!("Meter slot {} preset position", &n[4..]),
+                v.to_string(),
+            )
+        }
+        n if n.starts_with("MPID") => {
+            // 0 = none, else the preset FILE's id + 1 (B-968).
+            if v == 0 {
+                return None;
+            }
+            let (slot, id) = (n[4..].parse::<usize>().unwrap_or(0), (v - 1) as u8);
+            let text = match names(slot, id) {
+                Some(name) => format!("{name} (id {id})"),
+                None => format!("preset id {id}"),
+            };
+            ("Meters", format!("Meter slot {slot} preset"), text)
         }
         // The tuning words and the "tuning saved last" bit are opaque records, not settings to read.
         _ => return None,
@@ -336,6 +366,11 @@ fn describe_value(name: &'static str, v: u32) -> Option<DecodedValue> {
 
 /// Decodes a settings file by its own layout. Nothing is guessed: the layout version in word 0 decides.
 pub fn describe(settings: &[PersistedSetting]) -> LayoutView {
+    describe_with_names(settings, &|_, _| None)
+}
+
+/// As [`describe`], showing the chosen preset of each meter by its name when `names` can look it up.
+pub fn describe_with_names(settings: &[PersistedSetting], names: PresetNames) -> LayoutView {
     let w = words_from_settings(settings);
     let lay = layout(&w);
     let raw = if lay == Layout::Legacy {
@@ -345,7 +380,7 @@ pub fn describe(settings: &[PersistedSetting]) -> LayoutView {
     };
     let values = raw
         .into_iter()
-        .filter_map(|(n, v)| describe_value(n, v))
+        .filter_map(|(n, v)| describe_value(n, v, names))
         .collect();
     let migrated_words = if lay == Layout::Legacy {
         migrate(&w)

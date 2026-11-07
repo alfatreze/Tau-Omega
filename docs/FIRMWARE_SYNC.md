@@ -133,3 +133,34 @@ Verified against a real `.timg` file copied from a real album on tau-alpha's own
 discipline as the two bugs above, applied before either the encoder or decoder was trusted. No bug
 found this time (the format is new enough here that there was no prior, wrong assumption to catch),
 but recorded per this file's own convention of logging what was checked and against what.
+
+## Meter presets as files, persist layout v2 — checked 2026-11-07 (Tau Alpha `main` `4c610d63`)
+
+Evidence labels: **host-tested** = Omega's code compared with Tau Alpha's reference output or real artefacts on this computer; **on a Pocket** = ran on
+hardware. **Nothing in this section has been run on a Pocket by Omega.** Tau Alpha's own status line (`METER_PRESETS_EXTERNAL.md`) still says "nothing has
+run on a Pocket yet" for the preset files.
+
+| What | Checked against | Result | Label |
+|---|---|---|---|
+| Preset file formats (`index.tpi`, `p<id>.tpr`), key hash, CRC, limits | `fw2/cores/mpreset_core.h` (firmware reader), `tools/player2/mpreset.py` (reference writer), `fw2/art/mpreset_host.c` (path: `<root>/tau-presets/<meter id>/index.tpi` or `p<id>.tpr`) | `tau_core::preset_files`: reader refuses what `mp_index_check`/`mp_preset_check` refuse; writer refuses what the reference refuses (+ more, below) | host-tested |
+| The 51 real files on the owner's `Pock` (`Assets/tau/common/tau-presets/12..18`, copied 2026-11-07) | Omega's reader, then Omega's writer | every file parses; Omega's writer regenerates **all 51 byte for byte** from the parsed set (`tests/preset_files.rs`); the card's files equal `mpreset.py factory` output on this commit | host-tested |
+| Factory import | `meters/<key>/presets.json` of the seven meters with parameters | `factory_set` rebuilds the card's files byte for byte (ids = positions, names upper-cased and cut to 15, only the meter's keys) | host-tested |
+| Registry ranges and defaults | `tools/meters_schema.json`, `meter_desc.param_rows` | enum `0..len-1`, bool `0..1`, colours (`custom_*`, `color_green/yellow/red`) the whole 16-bit range, others `min..max`; default else `min` | host-tested |
+| Persist layout v2 (B-968): 7 preset positions (`MPRE0..6`), 7 preset-file ids (`MPID0..6`, 7 bits, `id + 1`, words 6 and 15) | `tools/persist_layout.py`, `golden_vectors.json` re-pinned (was 2026-10-26, now `4c610d63`) | field table equals the reference; all 37 + 32 golden vectors pass; a real DEV 213 file (`dev213_interact_persist.json`) decodes (it has no preset chosen, so it does **not** exercise `MPID`) | host-tested; the `MPID` read is **not** checked on a real capture |
+| Name of the chosen preset | `describe_with_names` with a resolver; test with a synthetic word (id 4 in slot 3) | shown as `AURORA (id 4)`, else `preset id 4` | host-tested (the slot -> meter lookup is not wired, see below) |
+| Update must not overwrite the owner's presets | Tau Alpha **B-982** (newer than the brief's B-946..B-981): the release zip now carries the factory set at `Assets/tau/common/tau-presets/`, role `shared`, `required: false`, "seeded when missing" | Omega's install plan treats a meter folder that already has an `index.tpi` as the owner's: none of its files is written (reported as a caution), a meter with no `index.tpi` is seeded whole (`package::kept_for_user`; tests install a zip over an edited folder and over a missing one) | host-tested |
+| Scan, problem finder, eject sweep | the real tree plus the 58 `._*` stubs the card had beside the files | nothing under `tau-presets/` is a track, a problem or removed; the eject sweep removes the stubs and keeps every preset file | host-tested |
+
+### Differences and surprises found (to tell Tau Alpha)
+1. `mpreset_core.h`'s header comment says the folder is `<meter key>`; the code, the Python and the card use the **manifest id** (a number). The brief and Omega follow the code.
+2. `METER_PRESETS_EXTERNAL.md` §6.1 still says "200 presets per meter" and an 8-bit id; the code and header say **127** and ids **0..126** (7 bits, B-968). Omega follows the code.
+3. The card's `tau-presets/` had **58 `._*` AppleDouble stubs** (macOS wrote them beside the files the installer copied). Omega's eject sweep now clears them; Tau's `install_factory_presets.py` could do the same.
+4. Preset names in the factory set include `[` and `]` (`SILK [EX]`), so they are **not** limited to the `METR` set `A-Z 0-9 space _ -`. Omega allows printable ASCII, 1 to 15 characters (stricter than the reference, which only requires ASCII), and the UI should default to upper case like the factory set (not verified: whether the Pocket font has lower case).
+5. `tau_compat.py` says the presets are `shared`, but `shared` in the manifest is a warning-only check in Omega (`compat::check_card`), which is what is wanted; the *install* rule above is Omega's own and is not in Tau's manifest. Worth confirming with Tau that "seeded when missing" means what Omega does (whole meter folder), or per file.
+6. The persisted slot index (`MPRE`/`MPID` 0..6) is the meter's **table slot** (`p2.slot`: built-in Winamp Bars = 0, then the pack-only meters by slot), not the manifest id. Omega can derive slot -> manifest id from the pack descriptors on the card (`meter_packs`) plus the built-in meter; that lookup is not wired yet, so the Settings screen shows `preset id N` without a name.
+
+### Not done yet from the brief (nothing hidden)
+Sections 1(a), 1(e), 1(g) and the card write executor with backup/rollback and the UI (per-meter preset list, create/edit/rename/reorder/hide/delete, factory marks, lab preview); the
+slot -> meter name lookup in the Settings screen; section 3's schema-driven forms and `tau_packs_info` v3 reading (Omega's `meter_packs` reads descriptors only to find slots and ids: v3
+parsing not verified); section 4 (WebAssembly twins: waits for the versioned lab drop with its SHA-256, which Tau Alpha says it hands over at release time); section 5 (release number, below);
+the end-to-end test on a real Pocket (needs the owner's go: a card write on `Pock` after a shown plan).
