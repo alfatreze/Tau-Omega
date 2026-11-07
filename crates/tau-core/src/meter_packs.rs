@@ -89,6 +89,32 @@ pub fn check_pack(blob: &[u8]) -> Result<PackInfo, TauError> {
     })
 }
 
+/// The meter's manifest id (the registry's `id`, which names its `tau-presets/<id>/` folder) read from the descriptor a pack carries:
+/// the image ends with `u32 total length, u32 'DSC1'` and the descriptor (`'MDSC'`, version, length, ...) starts that many bytes before the end,
+/// with the manifest id at byte 32 and the table slot at 34. `None` when the pack has no readable descriptor.
+pub fn manifest_id(blob: &[u8]) -> Option<u16> {
+    let image = blob.get(HEADER_LEN..)?;
+    let end = image.len().checked_sub(8)?;
+    let total = u32at(image, end) as usize;
+    if &image[end + 4..] != b"DSC1" || total < 36 || total > image.len() {
+        return None;
+    }
+    let desc = &image[image.len() - total..];
+    (&desc[..4] == b"MDSC").then(|| u16at(desc, 32))
+}
+
+/// The table slot to manifest id of every pack in a bundle (the saved `MPRE`/`MPID` fields are indexed by table slot, the preset
+/// folders by manifest id). Packs without a readable descriptor are left out.
+pub fn slot_ids(bundle: &[u8]) -> Result<std::collections::BTreeMap<u16, u16>, TauError> {
+    let mut out = std::collections::BTreeMap::new();
+    for blob in split_bundle(bundle)? {
+        if let (Ok(info), Some(id)) = (check_pack(&blob), manifest_id(&blob)) {
+            out.insert(info.meter_id, id);
+        }
+    }
+    Ok(out)
+}
+
 /// Reads a bundle, verifying the file as the firmware does: magic and version, each pack, packs back to back in increasing slot order with no
 /// repeated id, and no bytes after the last pack. Returns each pack's facts.
 pub fn parse_bundle(d: &[u8]) -> Result<Vec<PackInfo>, TauError> {

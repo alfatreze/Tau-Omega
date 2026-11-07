@@ -141,3 +141,27 @@ fn everything_the_firmware_would_refuse_is_refused() {
     );
     assert!(parse_bundle(&d[..d.len() - 5]).is_err());
 }
+
+#[test]
+fn the_real_bundles_descriptors_give_each_slots_manifest_id() {
+    let d = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/meter_packs/tau-packs_dev184.bin"
+    ))
+    .unwrap();
+    let ids = tau_core::meter_packs::slot_ids(&d).unwrap();
+    // Checked by hand against the descriptors of the DEV 184 bundle: slot -> manifest id (12 winamp_bars ... 18 sound_map).
+    assert_eq!(
+        ids.into_iter().collect::<Vec<_>>(),
+        [
+            (0, 12),
+            (1, 13),
+            (2, 14),
+            (3, 16),
+            (4, 15),
+            (5, 17),
+            (6, 18)
+        ]
+    );
+    assert!(tau_core::meter_packs::manifest_id(b"short").is_none());
+}
