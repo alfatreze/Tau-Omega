@@ -14,7 +14,7 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await p.locator('nav button', { hasText: 'Meter Lab' }).first().click(); await p.waitForTimeout(1500);
   assert.match(await p.locator('h1').first().innerText(), /Meter Lab/); ok('the Meter Lab opens');
   if (installed) {
-    const fr = p.frameLocator('iframe[title="Tau Alpha meter lab"]'); await p.waitForTimeout(2500);
+    const fr = p.frameLocator('iframe[aria-label^="Meter preview"]'); await p.waitForTimeout(2500);
     assert.match(await fr.locator('h1').textContent(), /Tau meter lab/); ok('the pinned lab page is shown');
     const st = p.locator('[data-testid=rml-status]');
     await p.waitForFunction(() => /meters? ready/.test(document.querySelector('[data-testid=rml-status]')?.textContent || ''), null, { timeout: 15000 });
@@ -40,10 +40,45 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
     const meters = await fr.locator('#meter option').allTextContents(); assert.ok(meters.includes('SOUND MAP')); ok('it offers the real meters, including the SOUND MAP wasm twin');
     // One meter selection: the lab's own Meter list and its parameter list are hidden; the editor's list drives the preview.
     assert.equal(await fr.locator('#meter').isVisible(), false); assert.equal(await fr.locator('#controls').isVisible(), false); ok('the lab\'s own Meter dropdown and parameter list are not shown');
-    assert.equal(await fr.locator('#theme').isVisible(), false);
-    await p.locator('[data-testid=rml-options]').click(); await p.waitForTimeout(2500);
-    assert.equal(await fr.locator('#theme').isVisible(), true); assert.equal(await fr.locator('#meter').isVisible(), false); ok('Preview options shows the lab\'s theme and source options, still without a meter dropdown');
-    await p.locator('[data-testid=rml-options]').click(); await p.waitForTimeout(1500);
+    assert.equal(await fr.locator('#theme').isVisible(), false); ok('the lab\'s own theme, source and size options are not shown either');
+    // The meter view never scrolls: the frame is exactly as tall as the meter (the lab reports its size), and Layered Wave's extra strip fits.
+    const frameBox = async () => (await p.locator('iframe[aria-label^="Meter preview"]').boundingBox());
+    const h1 = (await frameBox()).height; assert.ok(h1 >= 120 && h1 <= 130, `Winamp Bars frame ${h1}`); assert.equal((await frameBox()).width, 368); assert.equal(await p.locator('iframe[aria-label^="Meter preview"]').getAttribute('scrolling'), 'no');
+    await p.locator('[data-testid=mp-meter-layered_wave]').click(); await p.waitForTimeout(1200);
+    const h2 = (await frameBox()).height; assert.ok(h2 > h1 + 40, `Layered Wave frame ${h2} vs ${h1}`);
+    assert.equal(await fr.locator('html').evaluate((e) => e.scrollHeight <= e.clientHeight + 1), true); ok('the frame grows to fit Layered Wave\'s strip, and the preview never needs to scroll');
+    // The processing budget bar: the worst frame against what the meter's cost class allows, over or under, right under the preview.
+    await p.locator('[data-testid=mp-meter-winamp_bars]').click(); await p.waitForTimeout(2500);
+    const bud = p.locator('[data-testid=rml-budget]'); await bud.waitFor({ timeout: 8000 });
+    assert.match(await p.locator('[data-testid=rml-budget-text]').innerText(), /^(Under|Over) by [\d.]+ \(\d+ %\)$/); assert.match(await bud.getAttribute('aria-label'), /Processing budget: worst frame \d+ drawing commands, 100 allowed/); ok('the budget bar says how far under or over the allowance the meter is (Winamp Bars: 100 allowed)');
+    assert.equal(await bud.getAttribute('data-kind'), 'under'); const fillW = await bud.locator('.bb-fill').evaluate((e) => e.getBoundingClientRect().width), trackW = await bud.locator('.bb-track').evaluate((e) => e.getBoundingClientRect().width);
+    assert.ok(fillW > 0 && fillW < trackW * 0.5); assert.equal(await bud.locator('.bb-over').count(), 0); ok('under budget the bar fills part of the allowance and there is no red stretch');
+    assert.ok((await p.locator('[data-testid=rml-budget]').boundingBox()).y > (await p.locator('iframe[aria-label^="Meter preview"]').boundingBox()).y); ok('the bar sits under the preview, outside the Details panel, so it is always visible');
+    // The small view shows exactly the meter's band (368 x 122, never scaled); the toggle above the preview switches to the full-screen figure (400 x 323).
+    await p.locator('[data-testid=mp-meter-winamp_bars]').click(); await p.waitForTimeout(800);
+    assert.equal(await p.locator('[data-testid=rml-view-small]').getAttribute('aria-pressed'), 'true'); ok('the preview starts in the small view, with a Small view / Full screen toggle right above it');
+    await p.locator('[data-testid=rml-view-full]').click(); await p.waitForTimeout(1500);
+    const fb = await frameBox(); assert.ok(fb.height >= 320 && fb.height <= 330 && fb.width === 400, `full screen ${fb.width}x${fb.height}`);
+    assert.equal(await fr.locator('#fullfig').isChecked(), true); ok('Full screen shows the 400 x 323 figure and sets the lab\'s own full-screen figure');
+    await p.locator('[data-testid=rml-view-small]').click(); await p.waitForTimeout(1500);
+    const fs2 = await frameBox(); assert.ok(fs2.height <= 130 && fs2.width === 368, `small ${fs2.width}x${fs2.height}`); assert.equal(await fr.locator('#fullfig').isChecked(), false); ok('Small view goes back to the meter\'s own band');
+    await p.locator('[data-testid=mp-meter-layered_wave]').click(); await p.waitForTimeout(1000);
+    // The preview options are native controls in the Common tab and drive the lab.
+    await p.locator('[data-testid=mp-tab-common]').click();
+    await p.waitForFunction(() => document.querySelectorAll('[data-testid=mp-common] select').length >= 3, null, { timeout: 8000 });
+    assert.equal(await p.locator('[data-testid=mp-opt-theme]').count(), 1); assert.equal(await p.locator('[data-testid=mp-opt-barready]').count(), 0); ok('the Common tab shows the preview options that apply to the shown meter, in plain words');
+    await p.locator('[data-testid=mp-opt-mode]').selectOption('1'); await p.waitForTimeout(500);
+    assert.equal(await fr.locator('#mode').inputValue(), '1'); ok('choosing Light in the Common tab changes the lab\'s own control');
+    await p.locator('[data-testid=mp-opt-mode]').selectOption('0');
+    // Details are in their own expandable panel.
+    const det = p.locator('[data-testid=rml-details]'); await det.locator('summary').click();
+    await p.waitForFunction(() => document.querySelectorAll('[data-testid=rml-details] tr').length > 0 || (document.querySelector('[data-testid=rml-details] .rml-cost')?.textContent || '').length > 30, null, { timeout: 8000 });
+    ok('the details (commands, processor time, cost) open in their own panel');
+    // The panel must stay inside its column: it used to stretch the column and cover the preset list.
+    const left = await p.locator('.mp-left').boundingBox(), right = await p.locator('.mp-right').boundingBox(), dbox = await det.boundingBox();
+    assert.ok(dbox.x + dbox.width <= left.x + left.width + 1, `details ${dbox.x + dbox.width} wider than its column ${left.x + left.width}`); assert.ok(left.x + left.width <= right.x, 'the left column overlaps the controls');
+    assert.ok(left.width <= 420, `left column ${left.width}`); ok('opening the details does not widen the column or cover the controls');
+    await det.locator('summary').click();
     await p.locator('[data-testid=mp-meter-chladni]').click();
     await p.waitForFunction(() => /Showing .*chladni/.test(document.querySelector('[data-testid=rml-status]')?.textContent || ''), null, { timeout: 8000 });
     ok('choosing a meter in the editor\'s list is what changes the preview');

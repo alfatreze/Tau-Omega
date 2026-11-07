@@ -13,5 +13,5 @@
 </section>
 <style>
   /* A workspace (meter list, preview, controls side by side), so it may use more of the window than a text page. */
-  .page{max-width:1480px}
+  .page{max-width:1480px;padding-right:clamp(64px,7vw,96px)}   /* keeps the content clear of the floating help button */
 </style>
