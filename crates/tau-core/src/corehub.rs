@@ -380,11 +380,17 @@ pub(crate) mod testcard {
 
     pub fn card(name: &str) -> PathBuf {
         static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        // Unique per test and per run (a process id alone is reused between test binaries on Windows), and never
+        // reused: a folder left by an earlier process is removed before this one is built.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
         let root = std::env::temp_dir().join(format!(
-            "tau-cores-{name}-{}-{}",
+            "tau-cores-{name}-{}-{}-{nanos}",
             std::process::id(),
             N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         ));
+        let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("Cores")).unwrap();
         fs::create_dir_all(root.join("Assets")).unwrap();
         // GBA: shared ROM folder, a required BIOS slot, a save slot
