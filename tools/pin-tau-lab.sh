@@ -16,6 +16,7 @@ echo "pinned $dest (Tau Alpha commit $commit): add a row to vendor/tau-lab/READM
 if [ -f "$dest/meter_lab.html" ]; then
   mkdir -p ui/public/tau-lab && cp "$dest/meter_lab.html" ui/public/tau-lab/meter_lab.html
   [ -f "$dest/lab-data.json" ] && cp "$dest/lab-data.json" ui/public/tau-lab/lab-data.json && echo "installed ui/public/tau-lab/lab-data.json (the preset editor's registry)"
+  cp "$dest/MANIFEST.json" ui/public/tau-lab/MANIFEST.json && echo "installed ui/public/tau-lab/MANIFEST.json (the module hashes the app checks the lab against)"
   echo "installed ui/public/tau-lab/meter_lab.html (sha256 $(shasum -a 256 "$dest/meter_lab.html" | cut -c1-16))"
 else
   echo "this drop has no meter_lab.html: the Meter Lab keeps saying the page is not installed" >&2
