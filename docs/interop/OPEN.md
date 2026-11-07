@@ -18,7 +18,6 @@ Tau Alpha keeps `LEDGER.md` in their repository; this is Omega's own list of **w
 | **Q-026** | Does "seeded when missing" (B-982) mean per meter folder (Omega's rule) or per file? | confirming the install rule for `tau-presets/` | 007 | not answered yet |
 | **Q-027** | Slot -> meter lookup for `MPRE`/`MPID` (built-in slot 0 + pack descriptors) is the intended way? | naming the chosen preset in the Settings screen | 007 | not answered yet |
 | **Q-031** | How does the lab page accept a meter and a preset's values from the host (postMessage, URL hash)? | the live preview of a preset in the editor | 007 | not answered yet |
-| **F-032** | Firmware does not apply the index's `hidden` flag (`idx_name_at` ignores `e[1]`); is it planned, which release? | hiding presets (Omega saves the flag and says it is not applied) | 007 | not answered yet |
 | **note** | Their `main` on GitHub holds only message `to-omega/001`; messages 002 to 005 (and the lab drop, rehearsal) exist only in their local checkout | Omega reads them from the local checkout on this machine; nobody else can | this file | their call to push |
 
 ## Owed by Omega (nothing from Tau Alpha needed)

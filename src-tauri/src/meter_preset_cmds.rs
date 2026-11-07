@@ -10,11 +10,12 @@ use std::{
 };
 use tau_core::{
     meter_presets::{MeterRegistry, RegMeter},
-    preset_files::{self, PresetSet},
+    preset_files::{self, PresetSet, SetPreset},
     preset_install::{self, Folder, PresetInstallPlan, PresetInstallReport},
 };
 
 const RETIRED_FILE: &str = "meter_preset_ids.json";
+const STASH_FILE: &str = "meter_preset_hidden.json";
 
 fn bad(message: impl Into<String>) -> TauError {
     TauError {
@@ -46,6 +47,33 @@ fn write_retired(app: &tauri::AppHandle, map: &BTreeMap<String, BTreeSet<u8>>) {
     }
 }
 
+/// Hidden presets, per card then per meter. **Hidden is Omega's own state** (decision D-022): the Pocket has no hidden presets, so a hidden
+/// preset is removed from the card and kept here with its id reserved; showing it again puts the same preset back under the same id.
+type Stash = BTreeMap<String, BTreeMap<String, Vec<SetPreset>>>;
+
+fn stash_path(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
+    Ok(data_dir(app)?.join(STASH_FILE))
+}
+fn read_stash(app: &tauri::AppHandle) -> Stash {
+    stash_path(app)
+        .ok()
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+fn write_stash(app: &tauri::AppHandle, stash: &Stash) -> Result<(), TauError> {
+    let path = stash_path(app)?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(path, serde_json::to_vec_pretty(stash).map_err(|e| bad(e.to_string()))?)?;
+    Ok(())
+}
+/// The key a card's hidden presets are kept under: the card's volume identity, else the media root's own path.
+fn card_key(media_root: &str) -> String {
+    tau_core::ledger_host::card_key(Path::new(media_root)).unwrap_or_else(|| format!("path-{}", tau_core::ledger_host::library_key(Path::new(media_root))))
+}
+
 fn registry(json: &str) -> Result<MeterRegistry, TauError> {
     MeterRegistry::from_json(json.as_bytes())
 }
@@ -61,7 +89,7 @@ fn desired(reg: &MeterRegistry, sets: &[PresetSet]) -> Result<BTreeMap<u16, Fold
     let mut out = BTreeMap::new();
     for set in sets {
         let specs = preset_files::param_specs(meter_of(reg, set.meter_id)?)?;
-        if out.insert(set.meter_id, set.folder(&specs)?).is_some() {
+        if out.insert(set.meter_id, set.card_folder(&specs)?).is_some() {
             return Err(bad(format!("meter {} appears twice", set.meter_id)));
         }
     }
@@ -76,8 +104,11 @@ pub struct MeterPresetsView {
     pub name: String,
     /// The registry's factory presets, ids are the positions (what `install_factory_presets.py` and the release write).
     pub factory: PresetSet,
-    /// What the card holds for this meter; `None` when there is no folder (or it cannot be read: see `problem`).
+    /// What the card holds for this meter; `None` when there is no folder (or it cannot be read: see `problem`). Never hidden: the Pocket
+    /// has no such state.
     pub on_card: Option<PresetSet>,
+    /// The presets the owner hid on this card: kept in Omega only, not on the card, ids reserved (`hidden` is true on each).
+    pub hidden: Vec<SetPreset>,
     /// A folder on the card that Omega could not read, in plain words. The Pocket ignores it; saving replaces it (after a backup).
     pub problem: Option<String>,
     /// Ids that must not be given to another preset.
@@ -93,6 +124,8 @@ pub fn meter_presets_read(
 ) -> Result<Vec<MeterPresetsView>, TauError> {
     let reg = registry(&registry_json)?;
     let retired = read_retired(&app);
+    let stash = read_stash(&app);
+    let key = card_key(&media_root);
     let root = Path::new(&media_root);
     let mut out = Vec::new();
     for m in reg.meters.iter().filter(|m| !m.params.is_empty()) {
@@ -102,7 +135,7 @@ pub fn meter_presets_read(
         let (on_card, problem) = if files.is_empty() {
             (None, None)
         } else {
-            match PresetSet::from_files(id, &files, &specs) {
+            match PresetSet::from_card_files(id, &files, &specs) {
                 Ok(set) => (Some(set), None),
                 Err(e) => (None, Some(e.message)),
             }
@@ -112,6 +145,11 @@ pub fn meter_presets_read(
             key: m.key.clone(),
             name: m.name.clone(),
             factory: preset_files::factory_from_registry(m)?,
+            hidden: stash
+                .get(&key)
+                .and_then(|m| m.get(&id.to_string()))
+                .map(|v| v.iter().cloned().map(|p| SetPreset { hidden: true, ..p }).collect())
+                .unwrap_or_default(),
             on_card,
             problem,
             retired: retired
@@ -156,17 +194,27 @@ pub fn meter_presets_install(
         &confirmation,
         backup.as_deref().map(Path::new),
     )?;
-    // The ids of the presets this write removed are never given out again.
+    // Hidden presets are kept in Omega only; their ids stay reserved. The ids of presets that were *deleted* (their file removed and not
+    // kept hidden) are never given out again.
+    let mut stash = read_stash(&app);
+    let card = stash.entry(card_key(&media_root)).or_default();
     let mut retired = read_retired(&app);
-    for (meter, name) in &plan.removals {
-        if let Some(id) = name
-            .strip_prefix('p')
-            .and_then(|n| n.strip_suffix(".tpr"))
-            .and_then(|n| n.parse::<u8>().ok())
-        {
-            retired.entry(meter.to_string()).or_default().insert(id);
+    for set in &sets {
+        let hidden = set.hidden_ones();
+        for (meter, name) in plan.removals.iter().filter(|(m, _)| *m == set.meter_id) {
+            if let Some(id) = preset_files::id_from_file_name(name)
+                && !hidden.iter().any(|p| p.id == id)
+            {
+                retired.entry(meter.to_string()).or_default().insert(id);
+            }
+        }
+        if hidden.is_empty() {
+            card.remove(&set.meter_id.to_string());
+        } else {
+            card.insert(set.meter_id.to_string(), hidden);
         }
     }
     write_retired(&app, &retired);
+    write_stash(&app, &stash)?;
     Ok(report)
 }

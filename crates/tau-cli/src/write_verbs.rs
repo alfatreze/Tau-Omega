@@ -340,7 +340,7 @@ fn desired(
                 CliError::Usage(format!("the registry has no meter {}", set.meter_id))
             })?;
         let specs = tau_core::preset_files::param_specs(meter)?;
-        out.insert(set.meter_id, set.folder(&specs)?);
+        out.insert(set.meter_id, set.card_folder(&specs)?);
     }
     Ok(out)
 }
@@ -366,7 +366,7 @@ pub fn meter_presets_show(a: &[String], j: bool) -> Result<(), CliError> {
         let (on_card, problem) = if files.is_empty() {
             (None, None)
         } else {
-            match tau_core::preset_files::PresetSet::from_files(id, &files, &specs) {
+            match tau_core::preset_files::PresetSet::from_card_files(id, &files, &specs) {
                 Ok(s) => (Some(s), None),
                 Err(e) => (None, Some(e.message)),
             }

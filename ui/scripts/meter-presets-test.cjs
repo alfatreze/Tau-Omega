@@ -31,8 +31,8 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await t('mp-name').fill('QUIET ROOM');
 
   // hide, reorder, duplicate (first free id), delete with a confirm and an id that is retired
-  await t('mp-hide').click(); assert.equal(await items().first().locator('.mp-tag.hide').count(), 1); ok('Hide marks the preset hidden in the file');
-  assert.match(await t('mp-hidden-note').innerText(), /still lists this preset[\s\S]*once a release applies/); ok('the page says honestly that the current firmware still lists a hidden preset');
+  await t('mp-hide').click(); assert.equal(await items().first().locator('.mp-tag.hide').count(), 1); ok('Hide marks the preset hidden');
+  assert.match(await t('mp-hidden-note').innerText(), /stays in Omega and is not put on the Pocket[\s\S]*same id/); ok('the page says a hidden preset stays in Omega and is not on the Pocket');
   await p.getByRole('button', { name: 'Move down' }).click(); assert.deepEqual((await names()).slice(0, 2), ['CLASSIC', 'QUIET ROOM']); ok('Down moves the preset in the list order');
   await p.getByRole('button', { name: 'Duplicate' }).click(); assert.deepEqual((await names()).length, 6); assert.match(await items().last().innerText(), /QUIET ROOM COPY[\s\S]*yours[\s\S]*id 5/); ok('a duplicate is a new preset of yours with the first free id');
   await t('mp-delete').click(); assert.equal(await items().count(), 6); await t('mp-delete-yes').click(); assert.equal(await items().count(), 5); ok('Delete asks first, then removes');
@@ -47,20 +47,26 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   // review and save
   await t('mp-save').click(); await p.waitForTimeout(300);
   const review = t('mp-review'); assert.equal(await review.count(), 1);
-  assert.match(await review.innerText(), /WINAMP BARS[\s\S]*new[\s\S]*changed[\s\S]*Backup[\s\S]*saved to/); ok('the review lists new, changed and unchanged files and the backup');
+  assert.match(await review.innerText(), /WINAMP BARS[\s\S]*new[\s\S]*changed[\s\S]*removed[\s\S]*Hidden[\s\S]*1 hidden preset kept in Omega only[\s\S]*Backup[\s\S]*saved to/); ok('the review lists new, changed and removed files, the hidden preset kept in Omega only, and the backup');
   await review.getByRole('button', { name: 'Cancel' }).click(); assert.equal(await t('mp-review').count(), 0); assert.ok(await t('mp-save').isEnabled()); ok('cancelling writes nothing and keeps the edits');
   await t('mp-save').click(); await p.waitForTimeout(300); await t('mp-confirm').click(); await p.waitForTimeout(500);
   assert.match(await t('mp-notice').innerText(), /Saved to .*files? written.*read back and checked/); ok('saving reports what was written');
   assert.match(await t('mp-save').innerText(), /Nothing to save/); ok('after saving nothing is pending');
-  assert.deepEqual((await names()).slice(0, 2), ['CLASSIC', 'QUIET ROOM']); ok('the card now holds the edited order and names');
+  assert.deepEqual(await names(), ['CLASSIC', 'BOUNCY', 'SLOW FADE', 'SNAPPY', 'MY PRESET', 'QUIET ROOM']); ok('the card holds the visible presets; the hidden one is kept by Omega and listed after them');
+  assert.equal(await items().last().locator('.mp-tag.hide').count(), 1); ok('after saving, the hidden preset is still marked hidden (it is not on the Pocket)');
 
   // an id that was on the card, deleted and saved is retired: the next new preset gets a different id
-  assert.equal(await items().count(), 6); await items().last().locator('.mp-pick').click();
+  assert.equal(await items().count(), 6); await items().filter({ hasText: 'MY PRESET' }).locator('.mp-pick').click();
   await t('mp-delete').click(); await t('mp-delete-yes').click(); assert.equal(await items().count(), 5);
   await t('mp-save').click(); await p.waitForTimeout(300); assert.match(await t('mp-review').innerText(), /1 removed/); ok('the review says what is removed');
   await t('mp-confirm').click(); await p.waitForTimeout(500);
   await p.getByRole('button', { name: 'New preset' }).click();
   assert.match(await items().last().innerText(), /id 6/); ok('an id that was deleted and saved is never given to another preset');
+
+  // showing a hidden preset again puts it back (same id) in the pending list
+  await items().filter({ hasText: 'QUIET ROOM' }).locator('.mp-pick').click(); await t('mp-hide').click();
+  assert.equal(await items().filter({ hasText: 'QUIET ROOM' }).locator('.mp-tag.hide').count(), 0); assert.match(await items().filter({ hasText: 'QUIET ROOM' }).innerText(), /id 0/); ok('Show brings a hidden preset back with its own id');
+  await t('mp-save').click(); await p.waitForTimeout(300); assert.match(await t('mp-review').innerText(), /new/); assert.doesNotMatch(await t('mp-review').innerText(), /Hidden/); await t('mp-review').getByRole('button', { name: 'Cancel' }).click(); ok('showing it again would write its file and nothing is hidden any more');
 
   // undo and factory actions
   await p.getByRole('button', { name: 'Undo edits' }).click(); assert.equal(await items().count(), 5); ok('Undo edits returns to what the card holds');

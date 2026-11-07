@@ -13,9 +13,6 @@
   export let cardLabel = '';
 
   const MAX_PRESETS = 127, MAX_ID = 126, NAME_MAX = 15;
-  // Whether the Pocket's firmware skips presets marked hidden. TAU DEV 213 reads only each entry's id and name (owner saw a hidden
-  // preset listed on 2026-11-07); change this when Tau Alpha says a release applies the flag.
-  const FIRMWARE_APPLIES_HIDDEN = false;
 
   let registry: Registry | null = null;
   let loading = true;
@@ -45,7 +42,12 @@
       if (!mediaRoot) { views = []; return; }
       views = await meterPresetsRead(registry.json, mediaRoot);
       work = {}; baseline = {};
-      for (const v of views) { work[v.meter_id] = clone(v.on_card?.presets ?? []); baseline[v.meter_id] = JSON.stringify(work[v.meter_id]); }
+      for (const v of views) {
+        // What is on the card, then what the owner hid (kept in Omega only; one whose id the card now uses for another preset is left out).
+        const onCard = clone(v.on_card?.presets ?? []);
+        work[v.meter_id] = [...onCard, ...clone(v.hidden).filter((h) => !onCard.some((p) => p.id === h.id))];
+        baseline[v.meter_id] = JSON.stringify(work[v.meter_id]);
+      }
       if (!registry.meters.some((m) => m.id === selMeter) && registry.meters[0]) selMeter = registry.meters[0].id;
       selId = work[selMeter]?.[0]?.id ?? null;
     } catch (error) { problem = errorMessage(error); } finally { loading = false; }
@@ -172,6 +174,7 @@
   const closeReview = () => { if (!installing) { reviewing = false; plan = null; installError = ''; } };
   const meterName = (id: number) => registry?.meters.find((m) => m.id === id)?.name ?? `meter ${id}`;
   const changedCount = (id: number, state: string) => plan?.writes.filter((w) => w.meter_id === id && w.state === state).length ?? 0;
+  const hiddenCount = (ids: number[]) => ids.reduce((n, id) => n + (work[id] ?? []).filter((p) => p.hidden).length, 0);
   const removedCount = (id: number) => plan?.removals.filter(([m]) => m === id).length ?? 0;
 </script>
 
@@ -224,7 +227,7 @@
               <button class="mp-pick" on:click={() => { selId = p.id; confirmDelete = false; }} aria-current={p.id === selId}>
                 <span class="mp-name">{p.name || '(no name)'}</span>
                 {#if isFactory(p)}<span class="mp-tag">factory</span>{:else if isEditedFactory(p)}<span class="mp-tag edit">factory, edited</span>{:else}<span class="mp-tag mine">yours</span>{/if}
-                {#if p.hidden}<span class="mp-tag hide">hidden</span>{/if}
+                {#if p.hidden}<span class="mp-tag hide">hidden · not on the Pocket</span>{/if}
                 <small>id {p.id}</small>
               </button>
             </li>
@@ -242,7 +245,7 @@
               <div class="mp-actions">
                 <button on:click={() => move(-1)} disabled={list[0]?.id === preset.id} aria-label="Move up">Up</button>
                 <button on:click={() => move(1)} disabled={list[list.length - 1]?.id === preset.id} aria-label="Move down">Down</button>
-                <button on:click={toggleHidden} data-testid="mp-hide">{preset.hidden ? 'Show' : 'Hide'}</button>
+                <button on:click={toggleHidden} data-testid="mp-hide" title={preset.hidden ? 'Put it back on the Pocket' : 'Take it off the Pocket but keep it in Omega'}>{preset.hidden ? 'Show' : 'Hide'}</button>
                 <button on:click={() => add(preset)}>Duplicate</button>
                 {#if confirmDelete}
                   <button class="danger" on:click={remove} data-testid="mp-delete-yes">Delete {preset.name}</button>
@@ -253,7 +256,7 @@
               </div>
             </div>
             {#if nameProblem(preset.name)}<p class="mp-bad" role="alert">{nameProblem(preset.name)}</p>{/if}
-            {#if preset.hidden && !FIRMWARE_APPLIES_HIDDEN}<p class="mp-warn" role="note" data-testid="mp-hidden-note">Hidden is saved in the file, but the current Tau firmware (DEV 213) still lists this preset on the Pocket. It will be skipped once a release applies the setting.</p>{/if}
+            {#if preset.hidden}<p class="mp-hint" role="note" data-testid="mp-hidden-note">Hidden: this preset stays in Omega and is not put on the Pocket (the Pocket has no hidden presets). Show it again to put it back with the same id.</p>{/if}
             <p class="mp-hint">Id {preset.id}: the Pocket remembers the chosen preset by this number, so it is never given to a different preset, even after a delete.</p>
 
             {#each groups as g (g.name)}
@@ -293,6 +296,7 @@
       {#each plan.meters as id}
         <div><dt>{meterName(id)}</dt><dd>{changedCount(id, 'New')} new, {changedCount(id, 'Changed')} changed, {changedCount(id, 'Unchanged')} unchanged{removedCount(id) ? `, ${removedCount(id)} removed` : ''}</dd></div>
       {/each}
+      {#if hiddenCount(plan.meters) > 0}<div><dt>Hidden</dt><dd>{hiddenCount(plan.meters)} hidden preset{hiddenCount(plan.meters) === 1 ? '' : 's'} kept in Omega only, not on the Pocket</dd></div>{/if}
       <div><dt>Backup</dt><dd>{plan.backup.length ? `${plan.backup.length} file${plan.backup.length === 1 ? '' : 's'} saved to ${backupDir || '(choose a backup folder in Settings)'} first` : 'nothing existing is changed, so no backup is needed'}</dd></div>
       <div><dt>Where</dt><dd>{plan.media_root}/tau-presets</dd></div>
     </dl>

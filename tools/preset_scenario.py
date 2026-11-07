@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The preset set for the real-card test (docs/REAL_CARD_PRESETS_TEST.md), made from what a card holds: Winamp Bars (meter id 12) with
-one preset renamed (id 1), one hidden (id 4), one deleted (id 3) and one custom added (id 5, values changed from the defaults).
+one preset renamed (id 1), one deleted (id 3) and one custom added (id 5, values changed from the defaults). (The first real-card run also set
+the index's hidden bit on id 4; hidden is Omega-only now (D-022), so this script no longer does.)
 
   tau meter-presets-show <media-root> --registry <registry> --json > card.json
   python3 tools/preset_scenario.py card.json > sets.json            (prints a JSON list of PresetSet for `meter-presets-plan --sets`)
@@ -36,8 +37,6 @@ for p in presets:
         continue
     if p["id"] == 1:            # renamed
         p["name"] = "CLASSIC 2"
-    if p["id"] == 4:            # hidden
-        p["hidden"] = True
     out.append(p)
 # a custom preset of its own: a copy of FLUID's values with the bands changed (to a legal value that differs from FLUID's)
 custom = json.loads(json.dumps(by[0]))

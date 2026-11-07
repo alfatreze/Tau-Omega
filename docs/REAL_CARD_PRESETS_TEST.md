@@ -1,6 +1,6 @@
 # Real-card test: meter presets on the Pocket (plan for the owner's yes, 2026-11-07)
 
-**Status: planned, not run.** Nothing below has been written to a card. Every card write waits for the owner's yes after this plan was read.
+**Status (2026-11-07): steps 1 to 5 run** (snapshot, plan, write, Pocket check, read-back of the persisted id; results in `docs/FIRMWARE_SYNC.md`). Steps 6 and 7 are next. Every card write waits for the owner's yes.
 Evidence labels: what the owner sees on the Pocket is **run on a Pocket**; what Omega decodes from the card afterwards is **host-read from a Pocket's file**.
 
 ## The card and the core (read-only facts, checked 2026-11-07)
@@ -17,7 +17,7 @@ Only inside `Assets/tau/common/tau-presets/12/`. The rehearsal on a scratch copy
 | id 0 FLUID, id 2 BOUNCY | unchanged |
 | id 1 CLASSIC | renamed **CLASSIC 2** |
 | id 3 SLOW FADE | **deleted** (its file removed; the id is never reused) |
-| id 4 SNAPPY | **hidden** |
+| id 4 SNAPPY | *(first run: the index's hidden bit was set; the Pocket ignored it, so SNAPPY stayed listed. Hidden is now Omega-only, D-022: the app removes a hidden preset from the card and keeps it)* |
 | id 5 TEST ONE | **new custom** (FLUID's values with `bands` = 8) |
 
 ## Steps
@@ -26,7 +26,7 @@ Each step that touches the card is a dry run (plan) first, then the write with t
 1. **Snapshot (read-only copy to the Mac, outside the card).** `Assets/tau/common/tau-presets/` (the whole folder) and `Settings/alfatreze.TAU DEV 213/Interact/_core/interact_persist.json` to `~/Downloads/DEV PROJECTS/Tau Alpha/work/omega-card-backups/<timestamp>-presets/`, with a SHA-256 list. Nothing is written to the card.
 2. **Plan.** `tau meter-presets-show` and `tau meter-presets-plan` with `tools/preset_scenario.py`'s set. Expected: meters `[12]`, 3 writes, removals `[p3.tpr]`, 3 files backed up. If the plan differs from this, stop and show it.
 3. **Write** (owner's yes): `tau meter-presets-install ... --confirm <plan id> --backup-dir <outside the card> --yes`. The engine takes the backup first and checks it reads back, writes each file next to its place, reads it back, swaps it in (presets first, index last), re-reads the folder and puts everything back if any step fails. Then `tau meter-presets-show` must list `FLUID, CLASSIC 2, BOUNCY, (hidden) SNAPPY, TEST ONE`; eject with `diskutil eject /Volumes/Pock`.
-4. **On the Pocket (owner).** Start TAU DEV 213, Configure, Meter WINAMP BARS: the PRESET row should offer **DEFAULT, FLUID, CLASSIC 2, BOUNCY, TEST ONE** in that order (SNAPPY hidden, SLOW FADE gone). Choose **TEST ONE**, switch the Pocket off and on, start the core again: the PRESET row should still say TEST ONE (remembered by id 5).
+4. **On the Pocket (owner).** Start TAU DEV 213, Configure, Meter WINAMP BARS: the PRESET row should offer **DEFAULT, FLUID, CLASSIC 2, BOUNCY, TEST ONE** in that order (SLOW FADE gone; SNAPPY was still listed on the first run because the hidden bit is ignored). Choose **TEST ONE**, switch the Pocket off and on, start the core again: the PRESET row should still say TEST ONE (remembered by id 5).
 5. **Back on the Mac.** With the card mounted, read-only: Omega decodes `interact_persist.json` and should show "Meter slot 0 preset: TEST ONE (id 5)".
 6. **A chosen preset disappears.** Plan and write the set minus id 5 (`tools/preset_scenario.py ... --without 5`), eject, boot: the meter should run on **DEFAULT** and the remembered choice be cleared (a re-read of the persist file shows no preset for slot 0).
 7. **Put it back.** Write `tools/preset_scenario.py ... --undo` (the set exactly as step 1 found it), or copy the snapshot back if the owner prefers; compare against the snapshot's SHA-256 list: `tau-presets/` must be byte-identical to the factory files again. Eject.
