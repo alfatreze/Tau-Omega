@@ -57,10 +57,13 @@ export type BudgetView = {
   kind: 'under' | 'over' | 'at'; text: string;
 };
 
+/** The bar's scale is fixed by the allowance alone (it ends at 1.25 times the allowance), so the tick never moves and a change in the
+ *  worst frame only moves the fill. A worst frame beyond the end of the bar is drawn to the end; the sentence still gives the exact figure. */
+export const BAR_SCALE = 1.25;
+
 export function budgetView(b: Budget): BudgetView {
-  // The bar is always wide enough to hold both the allowance and the worst frame, with a little room to the right.
-  const domain = Math.max(b.allowed, b.worst) * 1.12 || 1;
-  const at = (v: number) => Math.min(100, (v / domain) * 100);
+  const domain = b.allowed * BAR_SCALE || 1;
+  const at = (v: number) => Math.max(0, Math.min(100, (v / domain) * 100));
   const diff = Math.abs(b.allowed - b.worst);
   const pct = b.allowed ? Math.round((diff / b.allowed) * 100) : 0;
   const kind = b.worst > b.allowed ? 'over' : b.worst === b.allowed ? 'at' : 'under';
@@ -72,4 +75,3 @@ export function budgetView(b: Budget): BudgetView {
   };
 }
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
-
