@@ -966,7 +966,7 @@ dependencies = [
 
 [[package]]
 name = "tau-audio"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "ebur128",
  "flacenc",
@@ -976,7 +976,7 @@ dependencies = [
 
 [[package]]
 name = "tau-cli"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "tau-core"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "base64",
  "crc32fast",
@@ -1007,7 +1007,7 @@ dependencies = [
 
 [[package]]
 name = "tau-net"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "tau-testkit"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "serde_json",
 ]
