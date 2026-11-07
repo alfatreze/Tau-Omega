@@ -454,6 +454,16 @@ impl PresetSet {
         Ok(Self { meter_id, presets })
     }
 
+    /// The folder of this set as the card holds it: `index.tpi` and `p<id>.tpr`, by file name.
+    pub fn folder(&self, specs: &[ParamSpec]) -> Result<BTreeMap<String, Vec<u8>>, TauError> {
+        let prefix = format!("{}/", self.meter_id);
+        Ok(self
+            .to_files(specs)?
+            .into_iter()
+            .map(|(k, v)| (k.strip_prefix(&prefix).unwrap_or(&k).to_string(), v))
+            .collect())
+    }
+
     /// The smallest id not used by a preset of this set and not in `retired` (ids never come back for a different preset: the
     /// device remembers `id + 1`, and a saved tuning is anchored to it).
     pub fn next_free_id(&self, retired: &BTreeSet<u8>) -> Option<u8> {
