@@ -13,6 +13,9 @@
   export let cardLabel = '';
 
   const MAX_PRESETS = 127, MAX_ID = 126, NAME_MAX = 15;
+  // Whether the Pocket's firmware skips presets marked hidden. TAU DEV 213 reads only each entry's id and name (owner saw a hidden
+  // preset listed on 2026-11-07); change this when Tau Alpha says a release applies the flag.
+  const FIRMWARE_APPLIES_HIDDEN = false;
 
   let registry: Registry | null = null;
   let loading = true;
@@ -250,6 +253,7 @@
               </div>
             </div>
             {#if nameProblem(preset.name)}<p class="mp-bad" role="alert">{nameProblem(preset.name)}</p>{/if}
+            {#if preset.hidden && !FIRMWARE_APPLIES_HIDDEN}<p class="mp-warn" role="note" data-testid="mp-hidden-note">Hidden is saved in the file, but the current Tau firmware (DEV 213) still lists this preset on the Pocket. It will be skipped once a release applies the setting.</p>{/if}
             <p class="mp-hint">Id {preset.id}: the Pocket remembers the chosen preset by this number, so it is never given to a different preset, even after a delete.</p>
 
             {#each groups as g (g.name)}
