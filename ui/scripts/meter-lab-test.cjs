@@ -16,6 +16,12 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   if (installed) {
     const fr = p.frameLocator('iframe[title="Tau Alpha meter lab"]'); await p.waitForTimeout(2500);
     assert.match(await fr.locator('h1').innerText(), /Tau meter lab/); ok('the pinned lab page is shown');
+    const st = p.locator('[data-testid=rml-status]');
+    await p.waitForFunction(() => /meter modules? built/.test(document.querySelector('[data-testid=rml-status]')?.textContent || ''), null, { timeout: 15000 });
+    assert.match(await st.innerText(), /\d+ meter modules? built/); ok('the lab reports its modules (tau-lab-ready) to the app');
+    await p.waitForFunction(() => /Showing .+ \(module [0-9a-f]{12}/.test(document.querySelector('[data-testid=rml-status]')?.textContent || ''), null, { timeout: 8000 });
+    ok('the lab is driven by the editor: it shows the edited meter with its module hash (tau-lab-set, tau-lab-applied)');
+    assert.equal(await p.locator('[data-testid=rml-clamped], [data-testid=rml-ignored]').count(), 0); ok('a valid preset is applied with nothing ignored or clamped');
     const meters = await fr.locator('#meter option').allInnerTexts(); assert.ok(meters.includes('SOUND MAP')); ok('it offers the real meters, including the SOUND MAP wasm twin');
   } else {
     assert.equal(await p.locator('[data-testid=rml-missing]').count(), 1); assert.equal(await p.locator('iframe').count(), 0); ok('without the lab page it says so and shows no frame');
