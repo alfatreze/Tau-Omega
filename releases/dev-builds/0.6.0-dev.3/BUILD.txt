@@ -1,0 +1,11 @@
+Tau Omega test build 0.6.0-dev.3   (NOT a release)
+Release goal : 0.6.0
+Built        : 2026-11-07 23:40 WET
+Branch       : main
+Commit       : 48332b0   Budget bar: updated every other frame (about 19 a second) instead of four times a second; update rate is tested
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : 6ee354a25ec697af0f2c3ec3f39e020f20e1189b3e45616895eec1603964d275  (of Contents/MacOS/tau-omega)
+
+What is in it: (fill in a line or two when sharing this build)
