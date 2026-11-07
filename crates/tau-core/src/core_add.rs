@@ -543,11 +543,15 @@ mod tests {
 
     fn src(name: &str, data: &[u8]) -> PathBuf {
         static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
         let d = std::env::temp_dir().join(format!(
-            "tau-add-src-{}-{}",
+            "tau-add-src-{}-{}-{nanos}",
             std::process::id(),
             N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         ));
+        let _ = fs::remove_dir_all(&d);
         let p = d.join(name);
         write(&p, data);
         p
