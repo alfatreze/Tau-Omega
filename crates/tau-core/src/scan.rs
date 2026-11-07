@@ -154,8 +154,13 @@ pub(super) fn sort_key(input: &str) -> (u8, Vec<Token>) {
         .unwrap_or(0);
     (class, tokens(&t))
 }
+/// Play order key of a file name. The name is taken in NFC first, as the reference does: macOS lists accented
+/// names on an exFAT card decomposed, but the index stores them precomposed (code page 437) and a checker
+/// sorts them that way, so `ö` (one letter) must not sort as `o` plus a mark.
 pub(super) fn natural(input: &str) -> Vec<Token> {
-    tokens(input)
+    use unicode_normalization::UnicodeNormalization;
+    let nfc: String = input.nfc().collect();
+    tokens(&nfc)
 }
 
 /// Scans a destination media root. Source paths remain read-only; this operation only reads tags.
@@ -737,5 +742,21 @@ mod parallel_tests {
         assert_eq!(out, items);
         let none: Vec<u8> = Vec::new();
         assert!(par_map(&none, 8, |&n| n).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod natural_tests {
+    use super::natural;
+
+    /// macOS lists names on an exFAT card decomposed (`o` + U+0308); the play order must be the one of the precomposed
+    /// names (`ö` U+00F6 sorts after `s`), which is what the index stores and what Tau Alpha's checker expects.
+    #[test]
+    fn play_order_does_not_depend_on_the_unicode_form_of_the_file_name() {
+        let composed = "\u{f6}\u{fc} Stra\u{df}e.mp3";
+        let decomposed = "o\u{308}u\u{308} Stra\u{df}e.mp3";
+        assert_eq!(natural(composed), natural(decomposed));
+        assert!(natural("S\u{e6}m.mp3") < natural(decomposed));
+        assert!(natural("S\u{e6}m.mp3") < natural(composed));
     }
 }
