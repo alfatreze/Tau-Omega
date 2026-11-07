@@ -35,7 +35,7 @@
   .bb-track{position:relative;height:12px;border-radius:6px;background:#0f1516;overflow:visible}
   .bb-track i{position:absolute;top:0;bottom:0;display:block;font-style:normal}
   /* Everything that moves uses the same short glide, so the fill, the red stretch and the marks stay together as they change. */
-  .bb-fill,.bb-over,.bb-mean,.bb-zone,.bb-allowed{transition:width .18s linear,left .18s linear}
+  .bb-fill,.bb-over,.bb-mean,.bb-zone,.bb-allowed{transition:width .07s linear,left .07s linear}
   .bb[data-kind=wait]{opacity:.7}
   .bb-zone{left:0;border-radius:6px 0 0 6px;background:#1d2a2b}
   .bb-fill{left:0;border-radius:6px 0 0 6px;background:#5f9e6c}

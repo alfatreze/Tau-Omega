@@ -59,9 +59,10 @@ function info(){var table=[];var t=document.querySelector('#costtable table');
 function post(m){parent.postMessage(m,'*');}
 /* The lab passes its live list of per-frame costs to TauCost.summarize on every frame; keep a reference (read only) and report the last second of it, so the budget bar reacts quickly. */
 var perFrame=null,costClass=null;
-if(window.TauCost&&TauCost.summarize){var sum=TauCost.summarize;TauCost.summarize=function(list,cls){perFrame=list;costClass=cls;return sum.apply(this,arguments);};}
+var tick=0;
+if(window.TauCost&&TauCost.summarize){var sum=TauCost.summarize;TauCost.summarize=function(list,cls){perFrame=list;costClass=cls;var r=sum.apply(this,arguments);if((++tick&1)===0){var b=budget();if(b)post({type:'omega-lab-budget',budget:b});}return r;};}
 function budget(){if(!perFrame||perFrame.length<3||!window.TauCost)return null;var n=Math.min(38,perFrame.length),a=perFrame.slice(-n),mx=Math.max.apply(null,a),me=a.reduce(function(x,y){return x+y;},0)/n,c=costClass==null?2:costClass,al=TauCost.BUDGET[c];return{mean:Math.round(me*10)/10,worst:mx,allowed:al,costClass:String(c),over:mx>al};}
-setInterval(function(){var b=budget();if(b)post({type:'omega-lab-budget',budget:b});},250);
+
 function size(){var s=document.querySelector('.stage');if(!s)return;var w=document.getElementById('cv').getBoundingClientRect().width;var sw=document.getElementById('splitwrap');if(sw&&!sw.hidden)w=Math.max(w,400);post({type:'omega-lab-size',height:Math.ceil(s.getBoundingClientRect().height),width:Math.ceil(w)});}
 window.addEventListener('message',function(e){var d=e.data||{};
  if(d.type==='omega-lab-get-options')post({type:'omega-lab-options',options:describe()});
@@ -123,7 +124,7 @@ var st=document.querySelector('.stage');if(st&&window.ResizeObserver)new ResizeO
       manifest = r.ok ? parseManifest(await r.json()) : null;
     } catch { manifest = null; }
   });
-  // The budget comes from the bridge (about four times a second, from the last second of frames). The Details panel asks the lab for its
+  // The budget comes from the bridge (every other frame, about 19 times a second, from the last second of frames). The Details panel asks the lab for its
   // detail text while it is open.
   let budget: Budget | null = null;
   $: ready = $labStatus.ready;
