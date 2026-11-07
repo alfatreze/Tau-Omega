@@ -156,6 +156,12 @@ fn mount_point(path: &Path) -> PathBuf {
     top.to_path_buf()
 }
 
+/// A stable name for the card holding `root` (its volume UUID and size), `None` where the OS cannot say. Things Omega remembers about a
+/// card (its ledger, the presets the owner hid) are kept under it.
+pub fn card_key(root: &Path) -> Option<String> {
+    volume_key(root)
+}
+
 fn volume_key(root: &Path) -> Option<String> {
     let mount = mount_point(root);
     let id = (mount.clone(), device_id(&mount));

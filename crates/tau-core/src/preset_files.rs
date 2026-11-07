@@ -395,6 +395,15 @@ pub fn factory_from_registry(meter: &RegMeter) -> Result<PresetSet, TauError> {
     })
 }
 
+/// The preset id of a file name (`p12.tpr` is 12), or `None` for any other name.
+pub fn id_from_file_name(name: &str) -> Option<u8> {
+    name.strip_prefix('p')
+        .and_then(|n| n.strip_suffix(".tpr"))
+        .filter(|n| !n.is_empty() && n.len() <= 3 && n.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|n| n.parse::<u8>().ok())
+        .filter(|id| *id <= MAX_ID)
+}
+
 /// File name of a preset (`p12.tpr`).
 pub fn preset_file_name(id: u8) -> String {
     format!("p{id}.tpr")
@@ -479,6 +488,48 @@ impl PresetSet {
             });
         }
         Ok(Self { meter_id, presets })
+    }
+
+    /// What goes on the card. **Hidden is Omega's own state**: the Pocket has no hidden presets (its firmware does not read the flag), so a
+    /// hidden preset is left out of the card's files, the flag is never written, and the preset stays in Omega's library with its id
+    /// reserved until it is shown again.
+    pub fn on_card(&self) -> PresetSet {
+        PresetSet {
+            meter_id: self.meter_id,
+            presets: self
+                .presets
+                .iter()
+                .filter(|p| !p.hidden)
+                .map(|p| SetPreset {
+                    hidden: false,
+                    ..p.clone()
+                })
+                .collect(),
+        }
+    }
+
+    /// The presets Omega keeps for itself (hidden), in list order.
+    pub fn hidden_ones(&self) -> Vec<SetPreset> {
+        self.presets.iter().filter(|p| p.hidden).cloned().collect()
+    }
+
+    /// The folder to put on the card: [`on_card`](Self::on_card) as files, by file name.
+    pub fn card_folder(&self, specs: &[ParamSpec]) -> Result<BTreeMap<String, Vec<u8>>, TauError> {
+        self.on_card().folder(specs)
+    }
+
+    /// Reads a meter's folder from a card. The index's hidden bit means nothing to the Pocket, so a preset read from a card is never
+    /// "hidden" (that state lives in Omega only).
+    pub fn from_card_files(
+        meter_id: u16,
+        files: &BTreeMap<String, Vec<u8>>,
+        specs: &[ParamSpec],
+    ) -> Result<Self, TauError> {
+        let mut set = Self::from_files(meter_id, files, specs)?;
+        for p in &mut set.presets {
+            p.hidden = false;
+        }
+        Ok(set)
     }
 
     /// The folder of this set as the card holds it: `index.tpi` and `p<id>.tpr`, by file name.
@@ -680,6 +731,60 @@ mod tests {
                 .message
                 .contains("missing")
         );
+    }
+
+    #[test]
+    fn hidden_is_omegas_own_state_and_never_reaches_the_card() {
+        let specs = param_specs(&meter()).unwrap();
+        let s = set(); // id 0 "MINE [EX]" is hidden, id 4 "AURORA" is not
+        assert_eq!(
+            s.hidden_ones().iter().map(|p| p.id).collect::<Vec<_>>(),
+            [0]
+        );
+        let on = s.on_card();
+        assert_eq!(on.presets.iter().map(|p| p.id).collect::<Vec<_>>(), [4]);
+        assert!(on.presets.iter().all(|p| !p.hidden));
+        let folder = s.card_folder(&specs).unwrap();
+        assert_eq!(
+            folder.keys().cloned().collect::<Vec<_>>(),
+            ["index.tpi", "p4.tpr"],
+            "no file for the hidden preset"
+        );
+        // The flag byte of every entry is 0.
+        let (_, entries) = parse_index(&folder["index.tpi"]).unwrap();
+        assert!(entries.iter().all(|e| !e.hidden));
+        // A card whose index has the bit set (an older write) reads as visible.
+        let faithful = s.folder(&specs).unwrap();
+        assert!(
+            PresetSet::from_files(16, &faithful, &specs)
+                .unwrap()
+                .presets
+                .iter()
+                .any(|p| p.hidden)
+        );
+        assert!(
+            PresetSet::from_card_files(16, &faithful, &specs)
+                .unwrap()
+                .presets
+                .iter()
+                .all(|p| !p.hidden)
+        );
+    }
+
+    #[test]
+    fn a_file_name_gives_its_preset_id() {
+        assert_eq!(id_from_file_name("p5.tpr"), Some(5));
+        assert_eq!(id_from_file_name("p126.tpr"), Some(126));
+        for no in [
+            "p127.tpr",
+            "p.tpr",
+            "index.tpi",
+            "p5.tpr.old",
+            "x5.tpr",
+            "p1234.tpr",
+        ] {
+            assert_eq!(id_from_file_name(no), None, "{no}");
+        }
     }
 
     #[test]

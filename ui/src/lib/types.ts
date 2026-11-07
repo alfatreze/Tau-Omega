@@ -381,7 +381,7 @@ export type SetPreset = { id: number; name: string; hidden: boolean; values: Rec
 export type PresetSet = { meter_id: number; presets: SetPreset[] };
 export type MeterPresetsView = {
   meter_id: number; key: string; name: string;
-  factory: PresetSet; on_card: PresetSet | null; problem: string | null; retired: number[];
+  factory: PresetSet; on_card: PresetSet | null; hidden: SetPreset[]; problem: string | null; retired: number[];
 };
 export type PresetWrite = { meter_id: number; name: string; state: 'New' | 'Changed' | 'Unchanged'; bytes: number };
 export type PresetInstallPlan = {

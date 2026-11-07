@@ -246,7 +246,7 @@ async function runChanges(request: any, jobId: string) {
 
 // ---- Meter presets (tau-presets/<meter id>/): a stateful stand-in with the real registry fixture's factory sets on the "card" ----
 type MockPreset = { id: number; name: string; hidden: boolean; values: Record<string, number> };
-const mpCard: Record<number, MockPreset[]> = {}; const mpRetired: Record<number, number[]> = {};
+const mpCard: Record<number, MockPreset[]> = {}; const mpRetired: Record<number, number[]> = {}; const mpStash: Record<number, MockPreset[]> = {};
 const mpFactory = (m: any): MockPreset[] => (m.presets ?? []).map((p: any, i: number) => ({ id: i, name: String(p.name).toUpperCase().slice(0, 15), hidden: false,
   values: Object.fromEntries(Object.entries(p.values ?? {}).filter(([k]) => m.params.some((q: any) => q.key === k)).map(([k, v]) => [k, Number(v)])) }));
 const mpFiles = (presets: MockPreset[]): Map<string, string> => new Map<string, string>([['index.tpi', JSON.stringify(presets.map((p) => [p.id, p.name, p.hidden]))],
@@ -255,7 +255,7 @@ const mpMeters = (json: string) => (JSON.parse(json).meters as any[]).filter((m)
 const mpPlan = (a: any) => {
   const writes: any[] = []; const removals: [number, string][] = []; const backup: [number, string][] = []; let unchanged = 0;
   for (const set of a.sets as { meter_id: number; presets: MockPreset[] }[]) {
-    const want = mpFiles(set.presets); const have = mpFiles(mpCard[set.meter_id] ?? []);
+    const want = mpFiles(set.presets.filter((p) => !p.hidden)); const have = mpFiles(mpCard[set.meter_id] ?? []);
     for (const [name, body] of want) {
       const state = !have.has(name) ? 'New' : have.get(name) === body ? 'Unchanged' : 'Changed';
       if (state === 'Unchanged') unchanged++; if (state === 'Changed') backup.push([set.meter_id, name]);
@@ -350,14 +350,16 @@ const handlers: Record<string, (args: any) => unknown> = {
   meter_presets_read: (a) => mpMeters(a.registryJson).map((m) => {
     if (!(m.id in mpCard) && m.id >= 12 && m.id <= 18) mpCard[m.id] = mpFactory(m);
     return { meter_id: m.id, key: m.key, name: m.name ?? m.key, factory: { meter_id: m.id, presets: mpFactory(m) },
-      on_card: m.id in mpCard ? { meter_id: m.id, presets: JSON.parse(JSON.stringify(mpCard[m.id])) } : null, problem: null, retired: mpRetired[m.id] ?? [] };
+      on_card: m.id in mpCard ? { meter_id: m.id, presets: JSON.parse(JSON.stringify(mpCard[m.id])) } : null, hidden: JSON.parse(JSON.stringify(mpStash[m.id] ?? [])), problem: null, retired: mpRetired[m.id] ?? [] };
   }),
   meter_presets_plan: (a) => mpPlan(a),
   meter_presets_install: (a) => {
     const plan = mpPlan(a); if (plan.id !== a.confirmation) throw { code: 39, message: 'the presets on the card or the new presets changed since the plan was reviewed' };
     for (const set of a.sets as { meter_id: number; presets: MockPreset[] }[]) {
-      for (const [m, name] of plan.removals) if (m === set.meter_id) { const id = Number(name.slice(1, -4)); if (!Number.isNaN(id)) (mpRetired[m] ??= []).push(id); }
-      mpCard[set.meter_id] = JSON.parse(JSON.stringify(set.presets));
+      const hidden = set.presets.filter((p) => p.hidden);
+      for (const [m, name] of plan.removals) if (m === set.meter_id) { const id = Number(name.slice(1, -4)); if (!Number.isNaN(id) && !hidden.some((p) => p.id === id)) (mpRetired[m] ??= []).push(id); }
+      mpCard[set.meter_id] = JSON.parse(JSON.stringify(set.presets.filter((p) => !p.hidden)));
+      mpStash[set.meter_id] = JSON.parse(JSON.stringify(hidden));
     }
     return { written: plan.writes.filter((w: any) => w.state !== 'Unchanged').length, removed: plan.removals.length, backup: plan.backup.length ? `${a.backup}/${plan.id.slice(0, 8)}/tau-presets` : null };
   },
