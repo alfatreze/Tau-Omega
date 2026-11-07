@@ -90,6 +90,15 @@ impl MeterRegistry {
     pub fn from_json(bytes: &[u8]) -> Result<Self, TauError> {
         let v: Value = serde_json::from_slice(bytes)
             .map_err(|e| bad(format!("the meter registry is not JSON: {e}")))?;
+        // `meters_schema.json` has the list at its root; the lab drop's `lab-data.json` may carry that same object under a key.
+        let v = if v.get("meters").is_some() {
+            v
+        } else {
+            ["schema", "meters_schema", "registry"]
+                .iter()
+                .find_map(|k| v.get(*k).filter(|n| n.get("meters").is_some()).cloned())
+                .unwrap_or(v)
+        };
         let list = v
             .get("meters")
             .and_then(Value::as_array)
