@@ -68,6 +68,7 @@ pub mod package;
 pub mod persist_layout;
 pub mod playlist;
 pub mod preset_files;
+pub mod preset_install;
 pub mod problems;
 pub mod refresh;
 pub mod release_check;
