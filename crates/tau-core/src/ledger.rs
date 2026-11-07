@@ -140,6 +140,18 @@ pub struct Stats {
     pub read: u64,
 }
 
+/// The key a file is known by: its path in NFC. macOS lists accented names on an exFAT card decomposed while the plan and the
+/// index use the precomposed form, so one file would otherwise have two entries (a scan would drop the copy a sync recorded as
+/// "gone", and a repeat sync could no longer prove a converted copy was current).
+fn key(rel: &str) -> String {
+    use unicode_normalization::{UnicodeNormalization, is_nfc};
+    if is_nfc(rel) {
+        rel.to_string()
+    } else {
+        rel.nfc().collect()
+    }
+}
+
 /// One working session on one card's ledger: open, ask and record, then `finish`.
 pub struct Session {
     path: PathBuf,
@@ -175,6 +187,7 @@ impl Session {
 
     /// Cached tags for `rel` if its fingerprint still matches and the entry is not racy. Marks it seen.
     pub fn tags(&mut self, rel: &str, fp: &Fingerprint) -> Option<TagRecord> {
+        let rel = &key(rel);
         self.seen.insert(rel.to_string());
         if !self.trust {
             return None;
@@ -192,6 +205,7 @@ impl Session {
 
     /// Records freshly read tags. Provenance for the same fingerprint is kept; a changed file starts over.
     pub fn put_tags(&mut self, rel: &str, fp: Fingerprint, tags: TagRecord) {
+        let rel = &key(rel);
         self.stats.read += 1;
         self.seen.insert(rel.to_string());
         if !self.trust {
@@ -226,7 +240,7 @@ impl Session {
         if !self.trust {
             return None;
         }
-        let record = self.files.get(rel).filter(|r| r.trustworthy(fp))?;
+        let record = self.files.get(&key(rel)).filter(|r| r.trustworthy(fp))?;
         let prov = record
             .provenance
             .clone()
@@ -238,6 +252,7 @@ impl Session {
     /// that bypasses the cache), and `fp` is the file as it stands after the final rename. Trust comes from
     /// that verification, so the entry is not subject to the racy-timestamp rule.
     pub fn record_verified(&mut self, rel: &str, fp: Fingerprint, provenance: Provenance) {
+        let rel = &key(rel);
         let now = now_ms();
         self.files.insert(
             rel.to_string(),
@@ -255,7 +270,7 @@ impl Session {
 
     /// Drops the provenance of `rel`: the canary found the file is not what the ledger said.
     pub fn invalidate(&mut self, rel: &str) {
-        if let Some(record) = self.files.get_mut(rel) {
+        if let Some(record) = self.files.get_mut(&key(rel)) {
             record.provenance = None;
             record.verified_ms = 0;
             self.dirty = true;
@@ -264,7 +279,7 @@ impl Session {
 
     /// Marks a file's provenance as freshly re-proven.
     pub fn touch_verified(&mut self, rel: &str) {
-        if let Some(record) = self.files.get_mut(rel) {
+        if let Some(record) = self.files.get_mut(&key(rel)) {
             record.verified_ms = now_ms();
             self.dirty = true;
         }
@@ -348,7 +363,7 @@ fn load(path: &Path) -> Option<BTreeMap<String, Record>> {
     if root.get("v")?.as_u64()? != FORMAT {
         return None;
     }
-    let mut out = BTreeMap::new();
+    let mut out: BTreeMap<String, Record> = BTreeMap::new();
     for (rel, v) in root.get("files")?.as_object()? {
         let fp = Fingerprint {
             size: v.get("s")?.as_u64()?,
@@ -374,16 +389,20 @@ fn load(path: &Path) -> Option<BTreeMap<String, Record>> {
                 output_sha: p.get("os")?.as_str()?.to_string(),
             })
         });
-        out.insert(
-            rel.clone(),
-            Record {
-                fp,
-                recorded_ms: v.get("r").and_then(Value::as_i64).unwrap_or(0),
-                tags,
-                provenance,
-                verified_ms: v.get("vm").and_then(Value::as_i64).unwrap_or(0),
-            },
-        );
+        let record = Record {
+            fp,
+            recorded_ms: v.get("r").and_then(Value::as_i64).unwrap_or(0),
+            tags,
+            provenance,
+            verified_ms: v.get("vm").and_then(Value::as_i64).unwrap_or(0),
+        };
+        // An older ledger may hold the same file under its decomposed name and its precomposed one: one entry, and the one
+        // that knows how the file came to be wins.
+        let k = key(rel);
+        if !matches!(out.get(&k), Some(old) if old.provenance.is_some() && record.provenance.is_none())
+        {
+            out.insert(k, record);
+        }
     }
     Some(out)
 }
@@ -710,6 +729,69 @@ mod tests {
         assert!(clear(&root), "forgetting the card deletes the ledger");
         assert_eq!(crate::scan_dir(&root, false).unwrap().reused, 0);
         fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn a_file_is_one_entry_whichever_unicode_form_its_name_comes_in() {
+        // macOS lists accented names on exFAT decomposed; a sync records the precomposed name.
+        let composed = "Omega/cp437/Caf\u{e9}.mp3";
+        let decomposed = "Omega/cp437/Cafe\u{301}.mp3";
+        let mut s = session("nfc");
+        let prov = Provenance {
+            source_sha: "a".into(),
+            cover_sha: String::new(),
+            embed_version: EMBED_VERSION,
+            output_sha: "b".into(),
+        };
+        s.record_verified(composed, fp(10, OLD), prov);
+        assert!(
+            s.provenance(decomposed, &fp(10, OLD)).is_some(),
+            "found by the other form"
+        );
+        assert!(s.provenance(composed, &fp(10, OLD)).is_some());
+        // A complete scan that saw the file under the decomposed name keeps the entry.
+        s.seen.clear();
+        s.put_tags(decomposed, fp(10, OLD), tags("C"));
+        let path = s.path.clone();
+        s.finish_scan();
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded.len(), 1, "one entry, not two");
+        assert!(
+            loaded[&key(composed)].provenance.is_some(),
+            "and it still knows how the copy was made"
+        );
+    }
+
+    #[test]
+    fn an_older_ledger_with_both_forms_loads_as_one_entry_keeping_the_provenance() {
+        let mut files = BTreeMap::new();
+        let rec = |provenance| Record {
+            fp: fp(5, OLD),
+            recorded_ms: OLD + 10 * RACY_MS,
+            tags: None,
+            provenance,
+            verified_ms: 1,
+        };
+        let prov = Provenance {
+            source_sha: "a".into(),
+            cover_sha: String::new(),
+            embed_version: EMBED_VERSION,
+            output_sha: "b".into(),
+        };
+        files.insert("x/Caf\u{e9}.mp3".to_string(), rec(Some(prov)));
+        files.insert("x/Cafe\u{301}.mp3".to_string(), rec(None));
+        let dir = std::env::temp_dir().join(format!(
+            "tau-ledger-nfc-{}-{}",
+            std::process::id(),
+            now_ms()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("l.ledger");
+        store(&path, &files).unwrap();
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded.values().next().unwrap().provenance.is_some());
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
