@@ -50,7 +50,8 @@ pub(crate) fn rebuild_index(
 ) -> Result<(), TauError> {
     let scan = scan_dir_measuring(media_root, true, progress)?;
     warnings.extend(scan.warnings);
-    let index = build_index(&scan.entries, &scan.playlists, root_prefix, warnings)?;
+    let (index, names) =
+        crate::build_index_with_names(&scan.entries, &scan.playlists, root_prefix, warnings)?;
     parse(&index)?;
     let temp = media_root.join(format!(".tau-library-source-{plan_id}.tmp"));
     write_durable(&temp, &index)?;
@@ -63,6 +64,13 @@ pub(crate) fn rebuild_index(
     }
     parse(&reparse)?;
     swap_in_index(&temp, &media_root.join("tau-library.tdb"))?;
+    crate::name_sidecar::write_after_build(
+        media_root,
+        &index,
+        &names,
+        &Default::default(),
+        warnings,
+    );
     // Skip silence: one `tau-skip.bin` per album folder (only while the setting is on).
     crate::trim::write_after_scan(media_root, &scan.entries, warnings);
     Ok(())
@@ -228,14 +236,16 @@ pub(super) fn collect_source(
             && (supported(&path) || (convertible && crate::convert::convertible_extension(&path)))
         {
             let rel = path.strip_prefix(root).unwrap();
-            let mut converted = PathBuf::new();
+            // The original relative path: `plan_candidates` turns it into card names
+            // (code page 437 kept, the rest transliterated, collisions numbered).
+            let mut original = PathBuf::new();
             if include_root {
-                converted.push(ascii_name(&required_file_name(root)?));
+                original.push(required_file_name(root)?);
             }
             for part in rel.components() {
-                converted.push(ascii_file_name(part.as_os_str().to_string_lossy().as_ref()));
+                original.push(part.as_os_str());
             }
-            out.push((path, converted));
+            out.push((path, original));
         }
     }
     Ok(())
@@ -278,14 +288,6 @@ pub(super) fn required_file_name(path: &Path) -> Result<String, TauError> {
                 ),
             )
         })
-}
-pub(crate) fn ascii_file_name(name: &str) -> String {
-    let name = ascii_name(name);
-    if name.is_empty() {
-        "track".into()
-    } else {
-        name
-    }
 }
 pub(crate) fn sha256_file(path: &Path) -> Result<String, TauError> {
     let mut file = fs::File::open(path)?;

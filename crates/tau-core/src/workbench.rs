@@ -8,8 +8,7 @@
 //! and the index is rebuilt (and verified) last.
 
 use crate::{
-    ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, ascii_name, cover, playlist,
-    sync, tick,
+    ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, cover, playlist, sync, tick,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -25,7 +24,7 @@ pub use edits::*;
 /// The device-ASCII display of a name, exposed so a front-end can preview
 /// what a rename will look like on the Pocket.
 pub fn device_name(input: &str) -> String {
-    ascii_name(input)
+    crate::card_name::card_part(input, true)
 }
 
 #[cfg(test)]

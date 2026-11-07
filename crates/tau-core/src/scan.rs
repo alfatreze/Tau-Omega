@@ -141,6 +141,11 @@ pub(super) fn sort_key(input: &str) -> (u8, Vec<Token>) {
             break;
         }
     }
+    // A letter with a mark sorts as its plain letter (as the reference does).
+    let t: String = {
+        use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};
+        t.nfkd().filter(|&c| !is_combining_mark(c)).collect()
+    };
     let class = t
         .as_bytes()
         .first()

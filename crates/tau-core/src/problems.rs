@@ -74,16 +74,16 @@ fn tag_problems(entries: &[Entry]) -> Vec<Problem> {
         .collect()
 }
 
-/// Non-ASCII names, over-length paths, and names that collide once folded to
-/// the on-card ASCII a sync would actually write (see [`crate::ascii_name`]).
+/// Non-ASCII names, over-length paths, and names that collide once converted to
+/// the card names a sync would write (see [`crate::card_name`]).
 fn path_problems(entries: &[Entry]) -> Vec<Problem> {
     let mut problems = Vec::new();
     let mut folded: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for entry in entries {
-        if !entry.rel.is_ascii() {
+        if !crate::card_name::reachable(&entry.rel) {
             problems.push(Problem {
                 kind: ProblemKind::PathIssue,
-                message: "non-ASCII filename will be renamed when synced to a card".into(),
+                message: "this name has characters the Pocket cannot open (outside code page 437); it is renamed when synced to a card".into(),
                 files: vec![entry.rel.clone()],
             });
         }
@@ -98,7 +98,10 @@ fn path_problems(entries: &[Entry]) -> Vec<Problem> {
             });
         }
         folded
-            .entry((entry.dir.clone(), crate::ascii_name(&entry.file)))
+            .entry((
+                entry.dir.clone(),
+                crate::card_name::card_part(&entry.file, true).to_lowercase(),
+            ))
             .or_default()
             .push(entry.rel.clone());
     }
@@ -258,10 +261,10 @@ mod tests {
     #[test]
     fn flags_missing_tags_and_path_collisions() {
         let root = scratch_root("tags");
-        fs::write(root.join("café.mp3"), b"a").unwrap();
+        fs::write(root.join("cafė.mp3"), b"a").unwrap();
         fs::write(root.join("cafe.mp3"), b"b").unwrap();
         let entries = [
-            entry("café.mp3", &[("TIT2", "Song"), ("TPE1", "Artist")], 1),
+            entry("cafė.mp3", &[("TIT2", "Song"), ("TPE1", "Artist")], 1),
             entry("cafe.mp3", &[], 1),
         ];
         let problems = find_problems(&root, &entries).unwrap();
@@ -273,7 +276,7 @@ mod tests {
         assert!(
             problems
                 .iter()
-                .any(|p| p.kind == ProblemKind::PathIssue && p.files == ["café.mp3"])
+                .any(|p| p.kind == ProblemKind::PathIssue && p.files == ["cafė.mp3"])
         );
         assert!(problems.iter().any(|p| p.kind == ProblemKind::PathIssue
             && p.files.len() == 2

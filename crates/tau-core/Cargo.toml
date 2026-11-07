@@ -18,6 +18,8 @@ serde_json = "1.0"
 sha2 = "0.10"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 zune-jpeg = "0.5"
+deunicode = "1.6.2"
+unicode-normalization = "0.1.25"
 
 [features]
 # Adds `Serialize`/`Deserialize` to every public data type (see

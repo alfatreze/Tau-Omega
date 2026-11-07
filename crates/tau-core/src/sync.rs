@@ -2,8 +2,8 @@
 //! execute that exact plan after an explicit token confirmation.
 
 use crate::{
-    ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, WarningCode, ascii_name,
-    build_index, convert, cover, image, ledger, parse, scan_dir_measuring, tick, verify,
+    ErrorCode, Progress, ProgressObserver, Stage, TauError, Warning, WarningCode, convert, cover,
+    image, ledger, parse, scan_dir_measuring, tick, verify,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -115,6 +115,10 @@ pub struct SyncPlan {
     /// The `lame` found when planning (used to make MP3s).
     #[cfg_attr(feature = "serde", serde(default))]
     pub lame: Option<PathBuf>,
+    /// Card path -> the original path it was made from (both relative, `/`, NFC), for the
+    /// name sidecar. Not part of the plan's identity.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub origins: std::collections::BTreeMap<String, String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

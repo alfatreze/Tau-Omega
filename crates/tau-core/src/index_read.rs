@@ -106,7 +106,9 @@ pub fn parse(data: impl AsRef<[u8]>) -> Result<Index, TauError> {
     walk(&ix)?;
     Ok(ix)
 }
-pub(super) fn string_at(ix: &Index, offset: u32) -> Result<&str, TauError> {
+/// A pool string as a path piece: the index stores folder and file names as
+/// code page 437 bytes (the root and every name are plain ASCII or cp437).
+pub(super) fn string_at(ix: &Index, offset: u32) -> Result<String, TauError> {
     let (off, len) = ix.sections["strings"];
     let start = off + offset as usize;
     if offset as usize >= len {
@@ -114,8 +116,7 @@ pub(super) fn string_at(ix: &Index, offset: u32) -> Result<&str, TauError> {
     }
     let bytes = &ix.data[start..off + len];
     let end = bytes.iter().position(|x| *x == 0).unwrap_or(bytes.len());
-    std::str::from_utf8(&bytes[..end])
-        .map_err(|_| TauError::e(ErrorCode::IndexRecordRange, "non-ASCII string"))
+    Ok(crate::card_name::from_cp437(&bytes[..end]))
 }
 pub(super) fn walk(ix: &Index) -> Result<(), TauError> {
     let strings = ix.sections["strings"].1;
@@ -197,7 +198,9 @@ pub fn verify(data: impl AsRef<[u8]>, root: Option<&Path>) -> Result<Vec<String>
     if let Some(root) = root {
         for id in 0..ix.counts.tracks {
             let path = track_path(&ix, id)?;
-            let relative = path.strip_prefix(string_at(&ix, ix.root)?).unwrap_or(&path);
+            let relative = path
+                .strip_prefix(string_at(&ix, ix.root)?.as_str())
+                .unwrap_or(&path);
             if !root.join(relative).is_file() {
                 issues.push(format!("file missing: {relative}"));
             }

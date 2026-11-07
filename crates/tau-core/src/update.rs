@@ -69,7 +69,12 @@ pub const CATALOG_CACHES: [&str; 5] = [
 ];
 
 /// User files an update never touches because no package contains them.
-const USER_FILES: [&str; 2] = ["tau-library.tdb", "tau-assets.bin"];
+const USER_FILES: [&str; 4] = [
+    "tau-library.tdb",
+    "tau-assets.bin",
+    "tau-names.json",
+    "tau-names.bin",
+];
 
 /// What identifies one build of a core, read from either a package or a card.
 #[derive(Debug, Clone, PartialEq, Eq)]

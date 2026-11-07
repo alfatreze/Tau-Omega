@@ -32,6 +32,7 @@ fn space_is_counted_in_whole_clusters_and_checked_before_writing() {
         bytes_to_write: 1000,
         skipped: Vec::new(),
         lame: None,
+        origins: Default::default(),
     };
     let needed = bytes_on_disk(&plan, 131_072);
     assert!(needed >= 1000 * 131_072, "exFAT-sized clusters: {needed}");
@@ -349,10 +350,10 @@ fn an_unusable_cover_warns_instead_of_failing_the_sync() {
 }
 
 /// The card's file system ignores letter case, so two sources that differ only
-/// by case must be refused at plan time instead of the second silently
-/// replacing the first on the card.
+/// by case must not replace each other on the card: the second is numbered
+/// (CARD_NAME_RULES.md rule 6), in the sorted order of the originals.
 #[test]
-fn names_that_differ_only_by_case_collide() {
+fn names_that_differ_only_by_case_are_numbered() {
     let base = root("case-collision");
     let (upper, lower) = (base.join("x/Rock"), base.join("y/rock"));
     let common = base.join("card/Assets/tau/common");
@@ -361,7 +362,7 @@ fn names_that_differ_only_by_case_collide() {
     }
     fs::write(upper.join("01.mp3"), b"first").unwrap();
     fs::write(lower.join("01.mp3"), b"second").unwrap();
-    let error = plan(
+    let planned = plan(
         &[upper, lower],
         &common,
         "/Assets/tau/common/",
@@ -373,8 +374,107 @@ fn names_that_differ_only_by_case_collide() {
         },
         &mut None,
     )
-    .unwrap_err();
-    assert_eq!(error.code(), ErrorCode::NameCollision);
+    .unwrap();
+    let mut names: Vec<String> = planned
+        .items
+        .iter()
+        .map(|i| {
+            i.destination
+                .strip_prefix(common.canonicalize().unwrap())
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Rock/01.mp3", "rock (2)/01.mp3"]);
+}
+
+/// End to end: names the Pocket cannot open are transliterated on the card, the ones it can
+/// open are kept, the index holds code page 437 bytes, and the name sidecar keeps the originals.
+#[test]
+fn a_sync_writes_openable_names_and_the_name_sidecar() {
+    let source = root("names-source");
+    let common = root("names-card").join("Assets/tau/common");
+    fs::create_dir_all(source.join("Альбом")).unwrap();
+    fs::create_dir_all(&common).unwrap();
+    fs::write(source.join("Альбом/01 Песня.mp3"), b"one").unwrap();
+    fs::write(source.join("Альбом/02 Café.mp3"), b"two").unwrap();
+    fs::write(source.join("Альбом/03 \u{1F600}.mp3"), b"three").unwrap();
+    let sync_plan = plan(
+        std::slice::from_ref(&source),
+        &common,
+        "/Assets/tau/common/",
+        PlanOptions::default(),
+        &mut None,
+    )
+    .unwrap();
+    let report = execute(&sync_plan, &sync_plan.id, &mut None).unwrap();
+    assert_eq!(report.copied, 3);
+    // The folder name is transliterated (the table decides how), never left as Cyrillic.
+    let folders: Vec<_> = fs::read_dir(&common)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| !n.starts_with('.') && !n.starts_with("tau-"))
+        .collect();
+    assert_eq!(folders.len(), 1, "{folders:?}");
+    assert!(
+        folders[0].is_ascii() && !folders[0].is_empty(),
+        "{folders:?}"
+    );
+    let album = common.join(&folders[0]);
+    let mut names: Vec<_> = fs::read_dir(&album)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names.len(), 3);
+    assert!(names[0].starts_with("01 ") && names[0].is_ascii() && names[0].ends_with(".mp3"));
+    assert_eq!(names[1], "02 Café.mp3"); // é is in code page 437: kept
+    assert_eq!(names[2], "03.mp3"); // an emoji gives nothing and leaves no trailing space
+    // Everything the index names opens on the Pocket and exists on the card.
+    let index = fs::read(common.join("tau-library.tdb")).unwrap();
+    assert!(verify(&index, Some(&common)).unwrap().is_empty());
+    assert!(
+        index.windows(2).all(|w| w != [0xC3, 0xA9]),
+        "no UTF-8 é in the pool"
+    );
+    // The sidecar: the original path of each renamed track, bound to this index.
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(common.join("tau-names.json")).unwrap()).unwrap();
+    let ix = parse(&index).unwrap();
+    assert_eq!(manifest["index_build_id"], ix.build_id);
+    let origs: Vec<_> = manifest["tracks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["orig"].as_str().unwrap().to_string())
+        .collect();
+    assert!(
+        origs.contains(&"Альбом/01 Песня.mp3".to_string()),
+        "{origs:?}"
+    );
+    assert!(
+        origs.contains(&"Альбом/03 \u{1F600}.mp3".to_string()),
+        "{origs:?}"
+    );
+    crate::name_sidecar::parse_bin(
+        &fs::read(common.join("tau-names.bin")).unwrap(),
+        Some(ix.build_id),
+        Some((3, 1, 1)),
+    )
+    .unwrap();
+    // A second identical sync changes nothing and leaves the sidecar in place.
+    let again = plan(
+        std::slice::from_ref(&source),
+        &common,
+        "/Assets/tau/common/",
+        PlanOptions::default(),
+        &mut None,
+    )
+    .unwrap();
+    execute(&again, &again.id, &mut None).unwrap();
+    assert!(common.join("tau-names.json").is_file() && common.join("tau-names.bin").is_file());
 }
 
 /// The read-back must go through the host's cache evictor before it reads.
@@ -513,7 +613,7 @@ fn sync_is_plan_first_and_leaves_sources_untouched() {
     assert!(
         common
             .join(source.file_name().unwrap())
-            .join("01 Nausicaa.mp3")
+            .join("01 Nausicaä.mp3")
             .is_file()
     );
     let retry = plan(
