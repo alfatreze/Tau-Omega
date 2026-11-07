@@ -1,6 +1,6 @@
 # Real-card test: meter presets on the Pocket (plan for the owner's yes, 2026-11-07)
 
-**Status (2026-11-07): steps 1 to 5 run** (snapshot, plan, write, Pocket check, read-back of the persisted id; results in `docs/FIRMWARE_SYNC.md`). Steps 6 and 7 are next. Every card write waits for the owner's yes.
+**Status (2026-11-07): all 7 steps run** (results in `docs/FIRMWARE_SYNC.md`). Step 6: the PRESET row showed DEFAULT on the Pocket (owner); the persist re-read was not valid because the owner changed the preset afterwards. Step 7: `tau-presets/` is byte-identical to the snapshot again (51 files). Every card write waits for the owner's yes.
 Evidence labels: what the owner sees on the Pocket is **run on a Pocket**; what Omega decodes from the card afterwards is **host-read from a Pocket's file**.
 
 ## The card and the core (read-only facts, checked 2026-11-07)
