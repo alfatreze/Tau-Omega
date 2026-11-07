@@ -8,8 +8,9 @@
   import { modal } from './a11y';
   import { defaultOf, isColour, loadRegistry, rangeOf, visible, type MeterDef, type ParamDef, type Registry } from './meters/registry';
   import type { MeterPresetsView, PresetInstallPlan, SetPreset } from './types';
-  import { labTarget } from './meters/labBus';
+  import { labOptions, labSend, labTarget, type LabOption } from './meters/labBus';
   import RealMeterLab from './RealMeterLab.svelte';
+  import MeterListPreview from './MeterListPreview.svelte';
 
   export let mediaRoot = '';
   export let cardLabel = '';
@@ -27,6 +28,11 @@
   let confirmDelete = false;
   let query = '';
   let moreOpen = false; let confirmReplace = false;
+  // The controls of the chosen meter: its settings, the list of its presets, and the preview options that apply to every meter.
+  const TABS = [{ id: 'settings', label: 'Settings' }, { id: 'presets', label: 'Presets' }, { id: 'common', label: 'Common' }] as const;
+  let tab: (typeof TABS)[number]['id'] = 'settings';
+  // Two pages of the Meter Lab: shaping a meter, and (a design preview only) choosing which meters are on the Pocket.
+  let mode: 'edit' | 'list' = 'edit';
 
   const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
   const same = (a: Record<string, number>, b: Record<string, number>) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
@@ -98,6 +104,29 @@
     queueMicrotask(() => document.querySelector<HTMLElement>('.mp-presets li.on .mp-pick')?.focus());
   }
   function touch() { work = work; notice = ''; confirmDelete = false; }
+
+  /** Previous or next preset from the Settings tab (DEFAULT first), so the list tab is not needed just to change preset. */
+  $: order = [null, ...list.map((p) => p.id)] as (number | null)[];
+  $: prevDisabled = order.indexOf(selId) <= 0;
+  $: nextDisabled = order.indexOf(selId) >= order.length - 1;
+  function step(delta: number) {
+    const at = order.indexOf(selId), next = order[at + delta];
+    if (next === undefined) return;
+    selId = next; confirmDelete = false;
+  }
+
+  // ---- Common: the preview options of the lab, in plain words, for the meter being shown ----
+  const EVERY_METER = ['theme', 'mode', 'accent', 'src'];   // the small / full-screen view has its own toggle above the preview
+  const ONLY_FOR: Record<string, string[]> = { winamp_bars: ['barready'], layered_wave: ['timedg'], sound_map: ['statsok', 'corr'] };
+  const PLAIN: Record<string, string> = {
+    theme: 'Colour theme', mode: 'Light or dark', accent: 'Accent colour', src: 'Test sound', fullfig: 'Full-screen figure (400 × 323)',
+    barready: 'Use the fast bar drawing', timedg: 'Count processor time like the Pocket', statsok: 'Level meter chip present', corr: 'Left and right balance'
+  };
+  const PLAIN_SOURCE: Record<string, string> = { demo: 'Demo sound', sweep: 'Sweep', silence: 'Silence' };
+  $: commonOptions = $labOptions.filter((o) => EVERY_METER.includes(o.id) || (ONLY_FOR[meter?.key ?? ''] ?? []).includes(o.id));
+  const plainLabel = (o: LabOption) => PLAIN[o.id] ?? o.label;
+  const plainChoice = (o: LabOption, c: { value: string; text: string }) => (o.id === 'src' ? PLAIN_SOURCE[c.value] ?? c.text : c.text);
+  const setOption = (id: string, value: string | number | boolean) => $labSend?.({ type: 'omega-lab-option', id, value });
 
   const isFactory = (p: SetPreset) => {
     const f = view?.factory.presets.find((x) => x.id === p.id);
@@ -234,7 +263,14 @@
   {:else}
     {#if problem}<p class="mp-bad" role="alert">{problem}</p>{/if}
     {#if notice}<p class="mp-notice" role="status" data-testid="mp-notice">{notice}</p>{/if}
-    <div class="mp-layout">
+    <div class="mp-modes" role="tablist" aria-label="Meter Lab pages">
+      <button role="tab" aria-selected={mode === 'edit'} class:on={mode === 'edit'} on:click={() => (mode = 'edit')} data-testid="mp-mode-edit">Shape a meter</button>
+      <button role="tab" aria-selected={mode === 'list'} class:on={mode === 'list'} on:click={() => (mode = 'list')} data-testid="mp-mode-list">Meters on the Pocket <small class="mp-soon">preview</small></button>
+    </div>
+    {#if mode === 'list'}
+      <MeterListPreview meters={registry.meters} />
+    {/if}
+    <div class="mp-layout" hidden={mode === 'list'}>
       <nav class="mp-meters" aria-label="Meters">
         {#each registry.meters as m (m.id)}
           <button class:on={selMeter === m.id} on:click={() => pickMeter(m.id)} data-testid="mp-meter-{m.key}">
@@ -250,114 +286,167 @@
         </div>
 
         <div class="mp-right">
-        {#if mediaRoot}
-        <div class="mp-list-bar">
-          <h3>{meter?.name} <small>{needle ? `${shownList.length} shown · ` : ''}{list.length} of {MAX_PRESETS}</small></h3>
-          {#if list.length}<p class="mp-onbar" data-testid="mp-onbar"><span><b>{onCount}</b> of {list.length} will be on the Pocket{offCount ? ` · ${offCount} stay in Omega only` : ''}</span>
-            <button class="quiet" on:click={() => setShownOn(true)} disabled={busy || !shownList.length || shownList.every((p) => !p.hidden)}>{needle ? 'Put shown on the Pocket' : 'Put all on the Pocket'}</button>
-            <button class="quiet" on:click={() => setShownOn(false)} disabled={busy || !shownList.length || shownList.every((p) => p.hidden)}>{needle ? 'Take shown off the Pocket' : 'Take all off the Pocket'}</button></p>{/if}
-          <div class="mp-actions">
-            <button on:click={() => add()} disabled={busy}>New preset</button>
-            <button on:click={addFactory} disabled={busy || !missingFactory} title={missingFactory ? 'Adds the factory presets this list does not have yet. Presets already in the list are not changed.' : 'All the factory presets are already in the list.'} data-testid="mp-restore-factory">Add missing factory presets{missingFactory ? ` (${missingFactory})` : ''}</button>
-            {#if dirtyIds.includes(selMeter)}<button class="quiet" on:click={revert}>Undo changes</button>{/if}
-            <details class="mp-more" bind:open={moreOpen}>
-              <summary>More</summary>
-              <div class="mp-menu">
-                {#if confirmReplace}
-                  <p>Start over with only the factory presets? This takes all {list.length} preset{list.length === 1 ? '' : 's'} of {meter?.name} out of the list, including your own, and puts the factory ones in. Nothing is saved to the card until you press Save, and “Undo changes” brings everything back.</p>
-                  <div class="mp-actions"><button class="danger" on:click={resetToFactory} data-testid="mp-replace-yes">Yes, start over</button><button class="quiet" on:click={() => (confirmReplace = false)}>Cancel</button></div>
-                {:else}
-                  <button class="quiet" on:click={() => (confirmReplace = true)} disabled={busy || !view?.factory.presets.length} data-testid="mp-replace">Start over with the factory presets…</button>
-                {/if}
-              </div>
-            </details>
-          </div>
+        <div class="mp-tabs" role="tablist" aria-label="Meter controls">
+          {#each TABS as t}
+            <button role="tab" id="mp-tab-{t.id}" aria-selected={tab === t.id} aria-controls="mp-panel-{t.id}" class:on={tab === t.id} on:click={() => (tab = t.id)} data-testid="mp-tab-{t.id}">{t.label}{#if t.id === 'presets' && mediaRoot}<small>{list.length}</small>{/if}</button>
+          {/each}
         </div>
 
-        {#if list.length > 8}
-        <label class="mp-find"><span class="mp-sr">Find a preset</span><input type="search" placeholder="Find a preset by name or id" bind:value={query} data-testid="mp-find" /></label>
-        {/if}
-        <!-- The arrow keys are handled for the buttons inside (they bubble to the list); the list itself is not a control. -->
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <ol class="mp-presets" aria-label="Presets of {meter?.name}" data-testid="mp-list" on:keydown={walk}>
-          <li class="mp-default" class:on={selId === null} aria-label="DEFAULT, built in">
-            <input type="checkbox" class="mp-on" checked disabled aria-label="DEFAULT is always on the Pocket" title="DEFAULT is built into the Pocket: it is always there" />
-            <button class="mp-pick" on:click={() => { selId = null; confirmDelete = false; }} aria-current={selId === null}><span class="mp-name">DEFAULT</span><span class="mp-tags"><span class="mp-tag">built in</span></span></button>
-          </li>
-          {#each shownList as p (p.id)}
-            <li class:on={p.id === selId} class:hid={p.hidden} use:reveal={p.id === selId}>
-              <input type="checkbox" class="mp-on" checked={!p.hidden} on:change={() => toggleOn(p)} aria-label="Put {p.name || 'this preset'} on the Pocket" title={p.hidden ? 'Not on the Pocket (kept in Omega only). Tick to put it on the Pocket.' : 'On the Pocket. Untick to keep it in Omega only.'} data-testid="mp-on-{p.id}" />
-              <button class="mp-pick" on:click={() => { selId = p.id; confirmDelete = false; }} aria-current={p.id === selId}>
-                <span class="mp-name">{p.name || '(no name)'}</span>
-                <small>no. {p.id}</small>
-                <span class="mp-tags">
-                  {#if isFactory(p)}<span class="mp-tag">factory</span>{:else if isEditedFactory(p)}<span class="mp-tag edit">factory, changed</span>{:else}<span class="mp-tag mine">yours</span>{/if}
-                  {#if p.hidden}<span class="mp-tag hide">not on the Pocket</span>{/if}
-                </span>
-              </button>
-            </li>
+        <div class="mp-panel" role="tabpanel" id="mp-panel-settings" aria-labelledby="mp-tab-settings" hidden={tab !== 'settings'}>
+          {#if !mediaRoot}
+            <p class="mp-note" data-testid="mp-no-card" role="status">Select a Pocket card with the Tau core on the Cards page to edit presets. The meter list and the preview work without one.</p>
           {:else}
-            <li class="mp-empty">{needle ? `No preset matches “${query.trim()}”.` : 'This meter has no presets on the card, so it uses DEFAULT only. Add the factory presets or make your own.'}</li>
-          {/each}
-        </ol>
-        {/if}
-        {#if !mediaRoot}
-          <p class="mp-note" data-testid="mp-no-card" role="status">Select a Pocket card with the Tau core on the Cards page to edit presets. The meter list and the preview work without one.</p>
-        {/if}
-        {#if view?.problem}<p class="mp-bad" role="alert" data-testid="mp-folder-problem">The presets on the card for this meter cannot be read: {view.problem} The Pocket ignores them. Saving replaces them, after a backup.</p>{/if}
-        {#if preset}
-          <div class="mp-edit" data-testid="mp-edit">
-            <div class="mp-edit-bar">
-              <label class="mp-field">Name
-                <input type="text" value={preset.name} maxlength={NAME_MAX} on:input={(e) => setName(e.currentTarget.value)} data-testid="mp-name" aria-invalid={!!nameProblem(preset.name)} />
-              </label>
+            {#if view?.problem}<p class="mp-bad" role="alert" data-testid="mp-folder-problem">The presets on the card for this meter cannot be read: {view.problem} The Pocket ignores them. Saving replaces them, after a backup.</p>{/if}
+            <div class="mp-which" data-testid="mp-which">
+              <button class="quiet" on:click={() => step(-1)} aria-label="Previous preset" disabled={prevDisabled}>‹</button>
+              <span class="mp-which-name"><b>{preset ? preset.name || '(no name)' : 'DEFAULT'}</b> <small>{preset ? `no. ${preset.id}` : 'built in'}</small></span>
+              <button class="quiet" on:click={() => step(1)} aria-label="Next preset" disabled={nextDisabled}>›</button>
+              <button class="quiet mp-choose" on:click={() => (tab = 'presets')}>Choose another preset…</button>
+            </div>
+            {#if preset}
+              <div class="mp-edit" data-testid="mp-edit">
+                <div class="mp-edit-bar">
+                  <label class="mp-field">Name
+                    <input type="text" value={preset.name} maxlength={NAME_MAX} on:input={(e) => setName(e.currentTarget.value)} data-testid="mp-name" aria-invalid={!!nameProblem(preset.name)} />
+                  </label>
+                </div>
+                {#if nameProblem(preset.name)}<p class="mp-bad" role="alert">{nameProblem(preset.name)}</p>{/if}
+                {#each groups as g (g.name)}
+                  <fieldset>
+                    <legend>{g.name}</legend>
+                    {#each g.params as p (p.key)}
+                      <div class="mp-param" class:set={isSet(p)}>
+                        <label for="mp-{p.key}" title={p.help ?? ''}>{label(p)}</label>
+                        {#if p.type === 'bool'}
+                          <input id="mp-{p.key}" type="checkbox" checked={Boolean(valueOf(p))} on:change={(e) => setValue(p, e.currentTarget.checked ? 1 : 0)} />
+                        {:else if p.type === 'enum'}
+                          <select id="mp-{p.key}" value={valueOf(p)} on:change={(e) => setValue(p, Number(e.currentTarget.value))}>
+                            {#each p.values ?? [] as option, i}<option value={i}>{option}</option>{/each}
+                          </select>
+                        {:else if isColour(p)}
+                          <span class="mp-colour"><input id="mp-{p.key}" type="color" value={hex565(valueOf(p))} on:input={(e) => setValue(p, from565(e.currentTarget.value))} /><output>{valueOf(p)}</output></span>
+                        {:else}
+                          <span class="mp-range"><input id="mp-{p.key}" type="range" min={rangeOf(p)[0]} max={rangeOf(p)[1]} step={p.step ?? 1} value={valueOf(p)} on:input={(e) => setValue(p, Number(e.currentTarget.value))} /><output>{shownValue(p)}</output></span>
+                        {/if}
+                        <button class="quiet mp-unset" disabled={!isSet(p)} on:click={() => unset(p)} aria-label="Reset {p.label} to its default">Default</button>
+                      </div>
+                    {/each}
+                  </fieldset>
+                {/each}
+              </div>
+            {:else}
+              <div class="mp-defaultcard" data-testid="mp-default-card">
+                <h3>DEFAULT</h3>
+                <p>DEFAULT uses the standard value for every setting of {meter?.name ?? 'this meter'}. It is always on the Pocket and cannot be changed. To change settings, make a new preset: it starts from these values.</p>
+                <div class="mp-actions"><button on:click={() => add()} disabled={busy}>New preset from DEFAULT</button></div>
+              </div>
+            {/if}
+          {/if}
+        </div>
+
+        <div class="mp-panel" role="tabpanel" id="mp-panel-presets" aria-labelledby="mp-tab-presets" hidden={tab !== 'presets'}>
+          {#if !mediaRoot}
+            <p class="mp-note" role="status">Select a Pocket card with the Tau core on the Cards page to edit presets.</p>
+          {:else}
+            {#if view?.problem}<p class="mp-bad" role="alert">The presets on the card for this meter cannot be read: {view.problem} The Pocket ignores them. Saving replaces them, after a backup.</p>{/if}
+            <div class="mp-list-bar">
+              <h3>{meter?.name} <small>{needle ? `${shownList.length} shown · ` : ''}{list.length} of {MAX_PRESETS}</small></h3>
+              {#if list.length}<p class="mp-onbar" data-testid="mp-onbar"><span><b>{onCount}</b> of {list.length} will be on the Pocket{offCount ? ` · ${offCount} stay in Omega only` : ''}</span>
+                <button class="quiet" on:click={() => setShownOn(true)} disabled={busy || !shownList.length || shownList.every((p) => !p.hidden)}>{needle ? 'Put shown on the Pocket' : 'Put all on the Pocket'}</button>
+                <button class="quiet" on:click={() => setShownOn(false)} disabled={busy || !shownList.length || shownList.every((p) => p.hidden)}>{needle ? 'Take shown off the Pocket' : 'Take all off the Pocket'}</button></p>{/if}
               <div class="mp-actions">
-                <button on:click={() => move(-1)} disabled={list[0]?.id === preset.id} aria-label="Move up">Up</button>
-                <button on:click={() => move(1)} disabled={list[list.length - 1]?.id === preset.id} aria-label="Move down">Down</button>
-                <button on:click={toggleHidden} data-testid="mp-hide" title={preset.hidden ? 'Put it back on the Pocket' : 'Take it off the Pocket but keep it in Omega'}>{preset.hidden ? 'Put on Pocket' : 'Take off Pocket'}</button>
-                <button on:click={() => add(preset)}>Duplicate</button>
-                {#if confirmDelete}
-                  <button class="danger" on:click={remove} data-testid="mp-delete-yes">Delete {preset.name}</button>
-                  <button class="quiet" on:click={() => (confirmDelete = false)}>Keep</button>
-                {:else}
-                  <button class="danger" on:click={() => (confirmDelete = true)} data-testid="mp-delete">Delete</button>
-                {/if}
+                <button on:click={() => add()} disabled={busy}>New preset</button>
+                <button on:click={addFactory} disabled={busy || !missingFactory} title={missingFactory ? 'Adds the factory presets this list does not have yet. Presets already in the list are not changed.' : 'All the factory presets are already in the list.'} data-testid="mp-restore-factory">Add missing factory presets{missingFactory ? ` (${missingFactory})` : ''}</button>
+                {#if dirtyIds.includes(selMeter)}<button class="quiet" on:click={revert}>Undo changes</button>{/if}
+                <details class="mp-more" bind:open={moreOpen}>
+                  <summary>More</summary>
+                  <div class="mp-menu">
+                    {#if confirmReplace}
+                      <p>Start over with only the factory presets? This takes all {list.length} preset{list.length === 1 ? '' : 's'} of {meter?.name} out of the list, including your own, and puts the factory ones in. Nothing is saved to the card until you press Save, and “Undo changes” brings everything back.</p>
+                      <div class="mp-actions"><button class="danger" on:click={resetToFactory} data-testid="mp-replace-yes">Yes, start over</button><button class="quiet" on:click={() => (confirmReplace = false)}>Cancel</button></div>
+                    {:else}
+                      <button class="quiet" on:click={() => (confirmReplace = true)} disabled={busy || !view?.factory.presets.length} data-testid="mp-replace">Start over with the factory presets…</button>
+                    {/if}
+                  </div>
+                </details>
               </div>
             </div>
-            {#if nameProblem(preset.name)}<p class="mp-bad" role="alert">{nameProblem(preset.name)}</p>{/if}
-            {#if preset.hidden}<p class="mp-hint" role="note" data-testid="mp-hidden-note">Not on the Pocket: this preset stays in Omega only. Put it back on the Pocket any time and it keeps the same number.</p>{/if}
-            <p class="mp-hint">Number {preset.id}: the Pocket remembers your choice by this number, so it is never given to a different preset, even after you delete one.</p>
 
-            {#each groups as g (g.name)}
-              <fieldset>
-                <legend>{g.name}</legend>
-                {#each g.params as p (p.key)}
-                  <div class="mp-param" class:set={isSet(p)}>
-                    <label for="mp-{p.key}" title={p.help ?? ''}>{label(p)}</label>
-                    {#if p.type === 'bool'}
-                      <input id="mp-{p.key}" type="checkbox" checked={Boolean(valueOf(p))} on:change={(e) => setValue(p, e.currentTarget.checked ? 1 : 0)} />
-                    {:else if p.type === 'enum'}
-                      <select id="mp-{p.key}" value={valueOf(p)} on:change={(e) => setValue(p, Number(e.currentTarget.value))}>
-                        {#each p.values ?? [] as option, i}<option value={i}>{option}</option>{/each}
-                      </select>
-                    {:else if isColour(p)}
-                      <span class="mp-colour"><input id="mp-{p.key}" type="color" value={hex565(valueOf(p))} on:input={(e) => setValue(p, from565(e.currentTarget.value))} /><output>{valueOf(p)}</output></span>
-                    {:else}
-                      <span class="mp-range"><input id="mp-{p.key}" type="range" min={rangeOf(p)[0]} max={rangeOf(p)[1]} step={p.step ?? 1} value={valueOf(p)} on:input={(e) => setValue(p, Number(e.currentTarget.value))} /><output>{shownValue(p)}</output></span>
-                    {/if}
-                    <button class="quiet mp-unset" disabled={!isSet(p)} on:click={() => unset(p)} aria-label="Reset {p.label} to its default">Default</button>
-                  </div>
-                {/each}
-              </fieldset>
-            {/each}
-          </div>
-        {:else if mediaRoot}
-          <div class="mp-defaultcard" data-testid="mp-default-card">
-            <h3>DEFAULT</h3>
-            <p>DEFAULT uses the standard value for every setting of {meter?.name ?? 'this meter'}. It is always on the Pocket and cannot be changed. To change settings, make a new preset: it starts from these values.</p>
-            <div class="mp-actions"><button on:click={() => add()} disabled={busy}>New preset from DEFAULT</button></div>
-          </div>
-        {/if}
+            {#if list.length > 8}
+              <label class="mp-find"><span class="mp-sr">Find a preset</span><input type="search" placeholder="Find a preset by name or number" bind:value={query} data-testid="mp-find" /></label>
+            {/if}
+            <!-- The arrow keys are handled for the buttons inside (they bubble to the list); the list itself is not a control. -->
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <ol class="mp-presets" aria-label="Presets of {meter?.name}" data-testid="mp-list" on:keydown={walk}>
+              <li class="mp-default" class:on={selId === null} aria-label="DEFAULT, built in">
+                <input type="checkbox" class="mp-on" checked disabled aria-label="DEFAULT is always on the Pocket" title="DEFAULT is built into the Pocket: it is always there" />
+                <button class="mp-pick" on:click={() => { selId = null; confirmDelete = false; }} aria-current={selId === null}><span class="mp-name">DEFAULT</span><span class="mp-tags"><span class="mp-tag">built in</span></span></button>
+              </li>
+              {#each shownList as p (p.id)}
+                <li class:on={p.id === selId} class:hid={p.hidden} use:reveal={p.id === selId}>
+                  <input type="checkbox" class="mp-on" checked={!p.hidden} on:change={() => toggleOn(p)} aria-label="Put {p.name || 'this preset'} on the Pocket" title={p.hidden ? 'Not on the Pocket (kept in Omega only). Tick to put it on the Pocket.' : 'On the Pocket. Untick to keep it in Omega only.'} data-testid="mp-on-{p.id}" />
+                  <button class="mp-pick" on:click={() => { selId = p.id; confirmDelete = false; }} aria-current={p.id === selId}>
+                    <span class="mp-name">{p.name || '(no name)'}</span>
+                    <small>no. {p.id}</small>
+                    <span class="mp-tags">
+                      {#if isFactory(p)}<span class="mp-tag">factory</span>{:else if isEditedFactory(p)}<span class="mp-tag edit">factory, changed</span>{:else}<span class="mp-tag mine">yours</span>{/if}
+                      {#if p.hidden}<span class="mp-tag hide">not on the Pocket</span>{/if}
+                    </span>
+                  </button>
+                </li>
+              {:else}
+                <li class="mp-empty">{needle ? `No preset matches “${query.trim()}”.` : 'This meter has no presets on the card, so it uses DEFAULT only. Add the factory presets or make your own.'}</li>
+              {/each}
+            </ol>
+
+            {#if preset}
+              <div class="mp-selected" data-testid="mp-selected">
+                <p class="mp-selected-title">Selected: <b>{preset.name || '(no name)'}</b> <small>no. {preset.id}</small></p>
+                <div class="mp-actions">
+                  <button on:click={() => move(-1)} disabled={list[0]?.id === preset.id} aria-label="Move up">Up</button>
+                  <button on:click={() => move(1)} disabled={list[list.length - 1]?.id === preset.id} aria-label="Move down">Down</button>
+                  <button on:click={toggleHidden} data-testid="mp-hide" title={preset.hidden ? 'Put it back on the Pocket' : 'Take it off the Pocket but keep it in Omega'}>{preset.hidden ? 'Put on Pocket' : 'Take off Pocket'}</button>
+                  <button on:click={() => add(preset)}>Duplicate</button>
+                  {#if confirmDelete}
+                    <button class="danger" on:click={remove} data-testid="mp-delete-yes">Delete {preset.name}</button>
+                    <button class="quiet" on:click={() => (confirmDelete = false)}>Keep</button>
+                  {:else}
+                    <button class="danger" on:click={() => (confirmDelete = true)} data-testid="mp-delete">Delete</button>
+                  {/if}
+                </div>
+                {#if preset.hidden}<p class="mp-hint" role="note" data-testid="mp-hidden-note">Not on the Pocket: this preset stays in Omega only. Put it back on the Pocket any time and it keeps the same number.</p>{/if}
+                <p class="mp-hint">Number {preset.id}: the Pocket remembers your choice by this number, so it is never given to a different preset, even after you delete one.</p>
+              </div>
+            {/if}
+          {/if}
+        </div>
+
+        <div class="mp-panel" role="tabpanel" id="mp-panel-common" aria-labelledby="mp-tab-common" data-testid="mp-common" hidden={tab !== 'common'}>
+          <p class="mp-hint">These change only the preview. They are not saved to the card and start again when the page reloads.</p>
+          {#if !commonOptions.length}
+            <p class="mp-note" role="status">The preview options appear when the preview is ready.</p>
+          {:else}
+            <fieldset>
+              <legend>Preview</legend>
+              {#each commonOptions as o (o.id)}
+                <div class="mp-param">
+                  <label for="mp-opt-{o.id}" title={o.help}>{plainLabel(o)}</label>
+                  {#if o.type === 'select'}
+                    <select id="mp-opt-{o.id}" value={o.value} on:change={(e) => setOption(o.id, e.currentTarget.value)} data-testid="mp-opt-{o.id}">
+                      {#each o.choices as c}<option value={c.value}>{plainChoice(o, c)}</option>{/each}
+                    </select>
+                  {:else if o.type === 'bool'}
+                    <input id="mp-opt-{o.id}" type="checkbox" checked={o.value} on:change={(e) => setOption(o.id, e.currentTarget.checked)} data-testid="mp-opt-{o.id}" />
+                  {:else}
+                    <span class="mp-range"><input id="mp-opt-{o.id}" type="range" min={o.min} max={o.max} value={o.value} on:input={(e) => setOption(o.id, Number(e.currentTarget.value))} data-testid="mp-opt-{o.id}" /><output>{o.value}</output></span>
+                  {/if}
+                  <span></span>
+                </div>
+              {/each}
+            </fieldset>
+          {/if}
+          <p class="mp-hint">To play your own audio file or a recorded trace, use Tau Alpha's own lab.</p>
+        </div>
         </div>
       </div>
     </div>
@@ -399,11 +488,24 @@
   .mp-note code{background:#101617;padding:1px 5px;border-radius:4px}
   .mp-bad{margin:0;color:#ffb4a8;font-size:13px}.mp-warn{margin:0;color:#e5c88a;font-size:13px}
   .mp-layout{display:grid;gap:14px}
+  .mp-layout[hidden]{display:none}
   .mp-meters{display:flex;flex-wrap:wrap;gap:6px;margin:0}
   .mp-meters button{display:flex;align-items:baseline;gap:7px;text-align:left;padding:7px 12px}
   .mp-meters button.on{border-color:#c1f0ad;background:#26352f}.mp-meters small{color:#8f9e9d;font-size:11px;white-space:nowrap}
-  .mp-main{display:grid;grid-template-columns:minmax(300px,424px) minmax(0,1fr);gap:20px;align-items:start;min-width:0}
-  .mp-left{display:grid;gap:12px;align-content:start;min-width:0;position:sticky;top:12px}
+  .mp-modes{display:flex;gap:6px}
+  .mp-modes button{padding:7px 14px!important;border-radius:99px!important}
+  .mp-modes button.on{background:#26352f!important;border-color:#c1f0ad!important}
+  .mp-soon{font-size:10.5px;color:#d9c47e;margin-left:4px;letter-spacing:.04em;text-transform:uppercase}
+  .mp-tabs{display:flex;gap:2px;border-bottom:1px solid #2c393a;margin-bottom:2px}
+  .mp-tabs button{background:transparent!important;border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;padding:9px 14px!important;color:#98a5a4!important}
+  .mp-tabs button small{margin-left:6px;color:#7d8c8b;font-size:11px}
+  .mp-tabs button.on{color:#e8ecec!important;border-bottom-color:#c1f0ad!important}
+  .mp-panel{display:grid;gap:12px;align-content:start;min-width:0}.mp-panel[hidden]{display:none}
+  .mp-which{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.mp-which-name{font-size:14px}.mp-which-name small{color:#8f9e9d;margin-left:4px}.mp-choose{margin-left:auto}
+  .mp-which button{padding:5px 11px!important}
+  .mp-selected{display:grid;gap:8px;border:1px solid #2c393a;border-radius:12px;padding:12px 14px;background:#1a2325}.mp-selected-title{margin:0;font-size:13px}.mp-selected-title small{color:#8f9e9d}
+  .mp-main{display:grid;grid-template-columns:416px minmax(0,1fr);gap:18px;align-items:start;min-width:0}
+  .mp-left{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-content:start;min-width:0;position:sticky;top:12px}
   .mp-right{display:grid;gap:12px;align-content:start;min-width:0}
   .mp-defaultcard{border:1px dashed #2c393a;border-radius:12px;padding:16px;display:grid;gap:8px;color:#aab8b7;font-size:13px;line-height:1.5}.mp-defaultcard p{margin:0}
   .mp-list-bar{display:grid;gap:8px}
@@ -412,7 +514,6 @@
   .mp-onbar{margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:#aab8b7}.mp-onbar span{margin-right:auto}.mp-onbar b{color:#e8ecec}
   .mp-onbar button{padding:4px 9px!important;font-size:12px!important}
   .mp-presets{list-style:none;margin:0;padding:0 4px 0 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;max-height:min(264px,32vh);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#3b4a4b transparent}
-  .mp-presets .mp-default{position:sticky;top:0;z-index:1}
   .mp-find input{width:100%;box-sizing:border-box;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:8px 11px;font:inherit;font-size:13px}
   .mp-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .mp-presets li{border:1px solid #2c393a;border-radius:8px;background:#1a2325;display:flex;align-items:center;min-width:0}
@@ -454,6 +555,6 @@
   .mp-modal button.quiet{background:transparent}.mp-modal button.primary{background:#c1f0ad;color:#142015;font-weight:700;border-color:#c1f0ad}
   .mp-modal button:disabled{opacity:.5;cursor:not-allowed}
   /* Side by side only when there is room for the preview and the controls; otherwise the preview sits above them. */
-  @container (max-width: 880px){.mp-main{grid-template-columns:1fr}.mp-left{position:static}}
+  @container (max-width: 780px){.mp-main{grid-template-columns:1fr}.mp-left{position:static}}
   @container (max-width: 520px){.mp-param{grid-template-columns:1fr}}
 </style>
