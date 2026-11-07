@@ -7,6 +7,7 @@ Approved exception to "never share literal files" (Tau Alpha interop **D-007**, 
 
 | Folder | Tau Alpha commit | State |
 |---|---|---|
+| `pre-0.7.0-bfe351d4/` | `bfe351d4e8df4a61e553675967d662077244a0c0` | pinned 2026-11-07 (verifies; adds the host message handler `tau-lab-set` / `tau-lab-ready` / `tau-lab-applied` and `preview/tau_host.js`; **this is the drop the app installs**) |
 | `pre-0.7.0-d6d43725/` | `d6d43725f6da4a5835a054049718029f8b584da4` | pinned 2026-11-07 (verifies against its SHA256SUMS.txt; **all eight WebAssembly modules**, the built `meter_lab.html`, `lab-data.json`, module provenance in `MANIFEST.json`; installed for the page and the preset editor's registry) |
 | `pre-0.7.0-b163ebb2/` | `b163ebb2d2e7710e6151b0aba90f2c29e3682737` | pinned 2026-10-26 (29 files verify; a `pre-*` drop to build against; the final drop comes with v0.7.0) |
 

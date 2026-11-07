@@ -8,6 +8,7 @@
   import { modal } from './a11y';
   import { defaultOf, isColour, loadRegistry, rangeOf, visible, type MeterDef, type ParamDef, type Registry } from './meters/registry';
   import type { MeterPresetsView, PresetInstallPlan, SetPreset } from './types';
+  import { labTarget } from './meters/labBus';
 
   export let mediaRoot = '';
   export let cardLabel = '';
@@ -33,6 +34,8 @@
   $: preset = list.find((p) => p.id === selId) as SetPreset | undefined;
   $: dirtyIds = Object.keys(work).map(Number).filter((id) => JSON.stringify(work[id]) !== baseline[id]);
   $: dirty = dirtyIds.length > 0;
+  // The lab shows what is being edited (a sparse set: what the preset does not name is the meter's default, as on the Pocket).
+  $: labTarget.set(meter ? { meter: meter.id, values: preset ? { ...preset.values } : {} } : null);
 
   async function load() {
     loading = true; problem = '';
