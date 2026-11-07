@@ -14,6 +14,9 @@ Tau Alpha keeps `LEDGER.md` in their repository; this is Omega's own list of **w
 | **F-023** | The result of testing a **`count = 0` bundle** on a Pocket, and which is right for "Winamp Bars only": no file, or an empty bundle | the "no extra meters" choice | 005, 006 | "not tested yet" |
 | **Q-021** | The firmware applying `METR` **`flags`/`order`** (hide, reorder) | writing anything but default `flags`/`order` | 005 | scheduled (D-O03), not in v0.7.0 unless added |
 | **F-005** | **When v0.7.0 will publish**, and the **final `tau-compat.json`** (and a second rehearsal against it) | Omega 0.6.0 must exist first (`min_omega 0.6.0`); Omega re-checks the final manifest | 003, 006 | gate stated; final manifest at the release |
+| **R-025** | A **new lab drop** at/after `696ff9ad`: built `meter_lab.html`, `lab-data.json` (registry, ranges, defaults, factory presets, themes), every `*_wasm.js` with its SHA-256, adapters | the preset editor (real parameters), the lab preview of presets, Omega 0.6.0 (owner: 0.6.0 includes the editor and the new lab) | 007 | not answered yet |
+| **Q-026** | Does "seeded when missing" (B-982) mean per meter folder (Omega's rule) or per file? | confirming the install rule for `tau-presets/` | 007 | not answered yet |
+| **Q-027** | Slot -> meter lookup for `MPRE`/`MPID` (built-in slot 0 + pack descriptors) is the intended way? | naming the chosen preset in the Settings screen | 007 | not answered yet |
 | **note** | Their `main` on GitHub holds only message `to-omega/001`; messages 002 to 005 (and the lab drop, rehearsal) exist only in their local checkout | Omega reads them from the local checkout on this machine; nobody else can | this file | their call to push |
 
 ## Owed by Omega (nothing from Tau Alpha needed)
