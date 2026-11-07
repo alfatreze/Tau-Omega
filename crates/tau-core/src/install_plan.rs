@@ -132,6 +132,13 @@ pub fn plan(
         && files.new_files == 0
         && files.updated_files == 0;
 
+    if files.kept_files > 0 {
+        cautions.push(format!(
+            "{} factory meter preset file(s) were left alone: the card already has presets for those meters, and they stay yours.",
+            files.kept_files
+        ));
+    }
+
     // Back up what will be overwritten, and what a manifest marks obsolete.
     let size_on_card = |path: &str| {
         fs::metadata(card_root.join(path))

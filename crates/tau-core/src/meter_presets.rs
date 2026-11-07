@@ -36,6 +36,8 @@ pub struct RegParam {
     pub max: i64,
     /// The names of an enum's values (the legal range is `0..len`).
     pub values: Vec<String>,
+    /// The value a meter runs on when no preset sets this parameter (the registry's `default`, else the minimum).
+    pub default: i64,
 }
 
 impl RegParam {
@@ -127,6 +129,10 @@ impl MeterRegistry {
                                 .collect()
                         })
                         .unwrap_or_default(),
+                    default: p
+                        .get("default")
+                        .and_then(|d| d.as_i64().or_else(|| d.as_bool().map(i64::from)))
+                        .unwrap_or_else(|| int(p, "min").unwrap_or(0)),
                 });
             }
             meters.push(RegMeter {

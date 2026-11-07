@@ -63,6 +63,9 @@ pub struct PackagePlan {
     pub new_files: usize,
     pub updated_files: usize,
     pub unchanged_files: usize,
+    /// Package files left alone because the card's own copy wins: the factory meter presets of a meter that already has an
+    /// `index.tpi` (see [`kept_for_user`]). Counted among `unchanged_files` too, so the executor skips them.
+    pub kept_files: usize,
     pub bytes_to_write: u64,
 }
 
@@ -97,13 +100,43 @@ pub fn inspect(zip_path: &Path) -> Result<PackageManifest, TauError> {
 /// different at `card_root` would be written; unchanged entries are left
 /// alone. `card_root` need not exist yet -- a first-ever install commonly
 /// starts from nothing.
+/// The factory meter presets travel in a release (`Assets/<platform>/common/tau-presets/<meter id>/index.tpi`, `p<id>.tpr`, role
+/// `shared` in `tau-compat.json`: "seeded when missing"). A meter folder that already has an `index.tpi` is the owner's (Omega
+/// or the factory set from an earlier install): the update must not overwrite it, rename its ids or bring back a preset the
+/// owner deleted, so every file of that meter folder stays as it is. A meter with no `index.tpi` is seeded whole.
+pub fn kept_for_user(card_root: &Path, path: &str) -> bool {
+    let parts: Vec<&str> = path.split('/').collect();
+    let [assets, _platform, common, dir, meter, _file] = parts[..] else {
+        return false;
+    };
+    assets == "Assets"
+        && common == "common"
+        && dir == crate::preset_files::DIR
+        && !meter.is_empty()
+        && meter.bytes().all(|b| b.is_ascii_digit())
+        && card_root
+            .join(parts[..5].join("/"))
+            .join(crate::preset_files::INDEX_NAME)
+            .is_file()
+}
+
 pub fn plan_install(zip_path: &Path, card_root: &Path) -> Result<PackagePlan, TauError> {
     let entries = read_entries(zip_path)?;
     let mut items = Vec::with_capacity(entries.len());
-    let (mut new_files, mut updated_files, mut unchanged_files) = (0, 0, 0);
+    let (mut new_files, mut updated_files, mut unchanged_files, mut kept_files) = (0, 0, 0, 0);
     let mut bytes_to_write = 0u64;
     for entry in &entries {
         let destination = card_root.join(&entry.path);
+        if kept_for_user(card_root, &entry.path) {
+            kept_files += 1;
+            unchanged_files += 1;
+            items.push(PackageItem {
+                path: entry.path.clone(),
+                state: DifferenceState::Identical,
+                bytes: entry.bytes,
+            });
+            continue;
+        }
         let state = match fs::read(&destination) {
             Ok(existing) if sha256_bytes(&existing) == entry.sha256 => {
                 unchanged_files += 1;
@@ -134,6 +167,7 @@ pub fn plan_install(zip_path: &Path, card_root: &Path) -> Result<PackagePlan, Ta
         new_files,
         updated_files,
         unchanged_files,
+        kept_files,
         bytes_to_write,
     })
 }
