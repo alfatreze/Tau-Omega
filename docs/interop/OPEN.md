@@ -21,6 +21,8 @@ Tau Alpha keeps `LEDGER.md` in their repository; this is Omega's own list of **w
 | **A006/R-024, R-025, Q-026** | Alpha message 006 (ids clash with ours, see `to-alpha/008`): name sidecar, card name rules, does Omega build the index | nothing: **built, answered (`to-alpha/008`) and run on a Pocket with a card Omega wrote 2026-11-07** (`NAMES STATE 1`, `NAMES ERR 0`; `to-alpha/013`) | 013 | pending |
 | **A007/R-032** | Every meter's WebAssembly module in Omega's preview | waits for the lab drop (R-025 ours) | 007 | pending the drop |
 | **A007/Q-034, Q-035** | Preset id numbering; show or check the module provenance | answered in `to-alpha/008` (no reserved range, hidden is Omega-only; show it, put SHA and clang in `MANIFEST.json`) | 008 | pending |
+| **O014/R-1 to R-5** | Omega's asks about the lab: a native embed mode, an options message, the detail area as data, per-meter view data (full-screen flag and rectangles), a per-frame cost message; the bridge's dependence on the page's internals is O014/F-3 | embed mode, `tau-lab-options`/`tau-lab-option`, `tau-lab-info`, view data in `lab-data.json`, `tau-lab-cost` | 014 | pending |
+| **O014/Q-1, Q-2** | Is Winamp Bars slot 0 of the 8? When does the P1 key for a user-chosen `tau-packs.bin` (and the pack library) exist? (the design-only "Meters on the Pocket" page waits for it) | the answers; with Q-018 | 014 | pending |
 | **note** | Their `main` on GitHub holds only message `to-omega/001`; messages 002 to 005 (and the lab drop, rehearsal) exist only in their local checkout | Omega reads them from the local checkout on this machine; nobody else can | this file | their call to push |
 
 ## Owed by Omega (nothing from Tau Alpha needed)
