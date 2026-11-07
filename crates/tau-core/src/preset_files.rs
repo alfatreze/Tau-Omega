@@ -368,6 +368,33 @@ pub fn factory_set(meter: &RegMeter, presets_json: &[u8]) -> Result<PresetSet, T
     })
 }
 
+/// The factory set of a meter from the registry's own `presets` list (the same values as `presets.json`, which is where the
+/// registry gets them): ids are the positions, names upper-cased and cut to 15, only the meter's keys kept.
+pub fn factory_from_registry(meter: &RegMeter) -> Result<PresetSet, TauError> {
+    let mut presets = Vec::new();
+    for (i, f) in meter.factory.iter().enumerate() {
+        let id = u8::try_from(i)
+            .ok()
+            .filter(|n| *n <= MAX_ID)
+            .ok_or_else(|| bad(format!("{}: more than 127 factory presets", meter.key)))?;
+        presets.push(SetPreset {
+            id,
+            name: f.name.to_uppercase().chars().take(NAME_MAX).collect(),
+            hidden: false,
+            values: f
+                .values
+                .iter()
+                .filter(|(k, _)| meter.params.iter().any(|p| &p.key == *k))
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
+        });
+    }
+    Ok(PresetSet {
+        meter_id: u16::from(meter.id),
+        presets,
+    })
+}
+
 /// File name of a preset (`p12.tpr`).
 pub fn preset_file_name(id: u8) -> String {
     format!("p{id}.tpr")
@@ -494,6 +521,8 @@ mod tests {
     fn meter() -> RegMeter {
         RegMeter {
             key: "demo".into(),
+            name: "DEMO".into(),
+            factory: Vec::new(),
             id: 16,
             schema: 1,
             list_position: 0,

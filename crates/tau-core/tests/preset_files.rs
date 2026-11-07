@@ -335,3 +335,19 @@ fn kept_for_user_only_matches_a_meter_folder_with_an_index() {
     }
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_registrys_own_factory_list_gives_the_same_files_as_presets_json_and_the_card() {
+    let reg = registry();
+    let card = card();
+    for (id, files) in &card {
+        let meter = reg.meters.iter().find(|m| u16::from(m.id) == *id).unwrap();
+        let specs = preset_files::param_specs(meter).unwrap();
+        let set = preset_files::factory_from_registry(meter).unwrap();
+        assert_eq!(set.presets.len(), meter.factory.len());
+        for (path, bytes) in set.to_files(&specs).unwrap() {
+            let name = path.rsplit('/').next().unwrap();
+            assert_eq!(bytes, files[name], "{} {path}", meter.key);
+        }
+    }
+}

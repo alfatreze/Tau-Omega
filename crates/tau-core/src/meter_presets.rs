@@ -57,10 +57,22 @@ impl RegParam {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RegMeter {
     pub key: String,
+    /// The display name (`LAYERED WAVE`), the key when the registry has none.
+    pub name: String,
     pub id: u8,
     pub schema: u8,
     pub list_position: u8,
     pub params: Vec<RegParam>,
+    /// The factory presets the registry lists (`presets`: name and values by key, in list order; ids are the positions).
+    pub factory: Vec<FactoryPreset>,
+}
+
+/// One factory preset of a meter as the registry lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FactoryPreset {
+    pub name: String,
+    pub values: BTreeMap<String, i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -135,8 +147,38 @@ impl MeterRegistry {
                         .unwrap_or_else(|| int(p, "min").unwrap_or(0)),
                 });
             }
+            let name = m
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(&key)
+                .to_string();
+            let factory = m
+                .get("presets")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|pr| FactoryPreset {
+                    name: pr
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    values: pr
+                        .get("values")
+                        .and_then(Value::as_object)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|(k, v)| {
+                            v.as_i64()
+                                .or_else(|| v.as_bool().map(i64::from))
+                                .map(|n| (k.clone(), n))
+                        })
+                        .collect(),
+                })
+                .collect();
             meters.push(RegMeter {
                 key,
+                name,
                 id,
                 schema: int(m, "schema")
                     .and_then(|n| u8::try_from(n).ok())
@@ -145,6 +187,7 @@ impl MeterRegistry {
                     .and_then(|n| u8::try_from(n).ok())
                     .unwrap_or(0),
                 params,
+                factory,
             });
         }
         Ok(Self { meters })
