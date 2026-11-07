@@ -15,3 +15,5 @@ from the parsed set, and also from `presets.json` through `factory_set`. The dec
 
 Hardware status: these files were *read by a Pocket* only in the sense that the card held them while TAU DEV 213 ran; no run on a Pocket that
 reads a preset written by Omega has happened yet (see `docs/FIRMWARE_SYNC.md`).
+
+| `card_after_omega_write/tau-presets/12/*` | Meter 12's six files as they were on `Pock` after Omega wrote the real-card test set (2026-11-07, `docs/REAL_CARD_PRESETS_TEST.md`): FLUID, CLASSIC 2, BOUNCY, (hidden) SNAPPY, TEST ONE. Written by Omega; read by Tau Alpha's `mpreset.py show`; shown on the Pocket by TAU DEV 213 (SNAPPY was still listed: the firmware ignores the hidden flag). |

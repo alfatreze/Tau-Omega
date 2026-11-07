@@ -245,4 +245,26 @@ mod layout_tests {
         assert_eq!(view.values.iter().find(|v| v.label == "Meter slot 3 preset").unwrap().text, "preset id 4");
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    /// The first real capture of a preset-file id: the file TAU DEV 213 wrote on the owner's Pocket after Omega wrote meter 12's presets and
+    /// the owner chose TEST ONE (id 5) on WINAMP BARS (slot 0, built in, manifest id 12) and rebooted.
+    #[test]
+    fn a_real_capture_from_a_pocket_names_the_preset_omega_wrote() {
+        let root = std::env::temp_dir().join(format!("tau-namer-real-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let d = root.join("Settings/alfatreze.TAU DEV 213/Interact/_core");
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("interact_persist.json");
+        std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/persist_layout/dev213_after_omega_presets_interact_persist.json"), &f).unwrap();
+        let idx = root.join("Assets/tau/common/tau-presets/12");
+        std::fs::create_dir_all(&idx).unwrap();
+        for name in ["index.tpi", "p5.tpr"] {
+            std::fs::copy(format!("{}/../testdata/preset_files/card_after_omega_write/tau-presets/12/{name}", env!("CARGO_MANIFEST_DIR")), idx.join(name)).unwrap();
+        }
+        let view = describe_persisted_layout(f.to_string_lossy().into_owned()).unwrap().unwrap();
+        assert_eq!(view.layout, tau_core::persist_layout::Layout::New);
+        let row = view.values.iter().find(|v| v.label == "Meter slot 0 preset").expect("the chosen preset is decoded from the real file");
+        assert_eq!(row.text, "TEST ONE (id 5)");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
