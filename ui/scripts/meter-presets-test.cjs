@@ -24,19 +24,19 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
 
   // rename (upper-cased), the factory mark becomes "edited"
   await t('mp-name').fill('quiet room'); assert.equal(await t('mp-name').inputValue(), 'QUIET ROOM'); ok('names are upper-cased as typed');
-  assert.match(await items().first().innerText(), /QUIET ROOM[\s\S]*factory, edited[\s\S]*id 0/); ok('an edited factory preset says so and keeps its id');
-  assert.match(await p.locator('.mp-meters button.on').innerText(), /edited/); ok('the meter shows that it has unsaved edits');
+  assert.match(await items().first().innerText(), /QUIET ROOM[\s\S]*no\. 0[\s\S]*factory, changed/); ok('an edited factory preset says so and keeps its id');
+  assert.match(await p.locator('.mp-meters button.on').innerText(), /changed/); ok('the meter shows that it has unsaved changes');
   assert.ok(await t('mp-save').isEnabled()); ok('saving becomes possible');
   await t('mp-name').fill('CAFÉ'); assert.equal(await t('mp-name').getAttribute('aria-invalid'), 'true'); assert.match(await p.locator('.mp-edit [role=alert]').innerText(), /no accents/); ok('a name the files cannot hold is explained as you type');
   await t('mp-name').fill('QUIET ROOM');
 
   // hide, reorder, duplicate (first free id), delete with a confirm and an id that is retired
   await t('mp-hide').click(); assert.equal(await items().first().locator('.mp-tag.hide').count(), 1); ok('Hide marks the preset hidden');
-  assert.match(await t('mp-hidden-note').innerText(), /stays in Omega and is not put on the Pocket[\s\S]*same id/); ok('the page says a hidden preset stays in Omega and is not on the Pocket');
+  assert.match(await t('mp-hidden-note').innerText(), /stays in Omega only[\s\S]*same number/); ok('the page says a hidden preset stays in Omega and is not on the Pocket');
   await p.getByRole('button', { name: 'Move down' }).click(); assert.deepEqual((await names()).slice(0, 2), ['CLASSIC', 'QUIET ROOM']); ok('Down moves the preset in the list order');
-  await p.getByRole('button', { name: 'Duplicate' }).click(); assert.deepEqual((await names()).length, 6); assert.match(await items().last().innerText(), /QUIET ROOM COPY[\s\S]*yours[\s\S]*id 5/); ok('a duplicate is a new preset of yours with the first free id');
+  await p.getByRole('button', { name: 'Duplicate' }).click(); assert.deepEqual((await names()).length, 6); assert.match(await items().last().innerText(), /QUIET ROOM COPY[\s\S]*no\. 5[\s\S]*yours/); ok('a duplicate is a new preset of yours with the first free id');
   await t('mp-delete').click(); assert.equal(await items().count(), 6); await t('mp-delete-yes').click(); assert.equal(await items().count(), 5); ok('Delete asks first, then removes');
-  await p.getByRole('button', { name: 'New preset' }).click(); assert.match(await items().last().innerText(), /MY PRESET[\s\S]*id 5/); ok('a new preset takes the first free id');
+  await p.getByRole('button', { name: 'New preset' }).click(); assert.match(await items().last().innerText(), /MY PRESET[\s\S]*no\. 5/); ok('a new preset takes the first free id');
 
   // parameters: change one, it is remembered as set; Default clears it
   const first = p.locator('.mp-param').first(); const unset = first.locator('.mp-unset');
@@ -47,7 +47,7 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   // review and save
   await t('mp-save').click(); await p.waitForTimeout(300);
   const review = t('mp-review'); assert.equal(await review.count(), 1);
-  assert.match(await review.innerText(), /WINAMP BARS[\s\S]*new[\s\S]*changed[\s\S]*removed[\s\S]*Hidden[\s\S]*1 hidden preset kept in Omega only[\s\S]*Backup[\s\S]*saved to/); ok('the review lists new, changed and removed files, the hidden preset kept in Omega only, and the backup');
+  assert.match(await review.innerText(), /WINAMP BARS[\s\S]*new[\s\S]*changed[\s\S]*removed[\s\S]*Not on the Pocket[\s\S]*1 preset stays in Omega only[\s\S]*Backup[\s\S]*saved to/); ok('the review lists new, changed and removed files, the hidden preset kept in Omega only, and the backup');
   await review.getByRole('button', { name: 'Cancel' }).click(); assert.equal(await t('mp-review').count(), 0); assert.ok(await t('mp-save').isEnabled()); ok('cancelling writes nothing and keeps the edits');
   await t('mp-save').click(); await p.waitForTimeout(300); await t('mp-confirm').click(); await p.waitForTimeout(500);
   assert.match(await t('mp-notice').innerText(), /Saved to .*files? written.*read back and checked/); ok('saving reports what was written');
@@ -61,17 +61,17 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await t('mp-save').click(); await p.waitForTimeout(300); assert.match(await t('mp-review').innerText(), /1 removed/); ok('the review says what is removed');
   await t('mp-confirm').click(); await p.waitForTimeout(500);
   await p.getByRole('button', { name: 'New preset' }).click();
-  assert.match(await items().last().innerText(), /id 6/); ok('an id that was deleted and saved is never given to another preset');
+  assert.match(await items().last().innerText(), /no\. 6/); ok('an id that was deleted and saved is never given to another preset');
 
   // showing a hidden preset again puts it back (same id) in the pending list
   await items().filter({ hasText: 'QUIET ROOM' }).locator('.mp-pick').click(); await t('mp-hide').click();
-  assert.equal(await items().filter({ hasText: 'QUIET ROOM' }).locator('.mp-tag.hide').count(), 0); assert.match(await items().filter({ hasText: 'QUIET ROOM' }).innerText(), /id 0/); ok('Show brings a hidden preset back with its own id');
-  await t('mp-save').click(); await p.waitForTimeout(300); assert.match(await t('mp-review').innerText(), /new/); assert.doesNotMatch(await t('mp-review').innerText(), /Hidden/); await t('mp-review').getByRole('button', { name: 'Cancel' }).click(); ok('showing it again would write its file and nothing is hidden any more');
+  assert.equal(await items().filter({ hasText: 'QUIET ROOM' }).locator('.mp-tag.hide').count(), 0); assert.match(await items().filter({ hasText: 'QUIET ROOM' }).innerText(), /no\. 0/); ok('Show brings a hidden preset back with its own id');
+  await t('mp-save').click(); await p.waitForTimeout(300); assert.match(await t('mp-review').innerText(), /new/); assert.doesNotMatch(await t('mp-review').innerText(), /Not on the Pocket/); await t('mp-review').getByRole('button', { name: 'Cancel' }).click(); ok('showing it again would write its file and nothing is hidden any more');
 
   // undo and factory actions
-  await p.getByRole('button', { name: 'Undo edits' }).click(); assert.equal(await items().count(), 5); ok('Undo edits returns to what the card holds');
-  await p.getByRole('button', { name: 'Reset to factory' }).click(); assert.deepEqual(await names(), ['FLUID', 'CLASSIC', 'BOUNCY', 'SLOW FADE', 'SNAPPY']); ok('Reset to factory restores the factory list (not written until saved)');
-  await p.getByRole('button', { name: 'Undo edits' }).click();
+  await p.getByRole('button', { name: 'Undo changes' }).click(); assert.equal(await items().count(), 5); ok('Undo edits returns to what the card holds');
+  await p.locator('.mp-more summary').click(); await t('mp-replace').click(); await t('mp-replace-yes').click(); assert.deepEqual(await names(), ['FLUID', 'CLASSIC', 'BOUNCY', 'SLOW FADE', 'SNAPPY']); ok('Replacing the list with the factory set (after a confirmation) restores the factory list (not written until saved)');
+  await p.getByRole('button', { name: 'Undo changes' }).click();
 
   // a meter with a conditional parameter set (Layered Wave): `when` hides and shows parameters
   await t('mp-meter-layered_wave').click(); assert.equal(await items().count(), 16); ok('Layered Wave lists its 16 factory presets');
@@ -82,6 +82,25 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   const after = await labels();
   assert.notDeepEqual(after, before); assert.ok(after.some((l) => !before.includes(l)) && before.some((l) => !after.includes(l))); ok('a parameter that depends on another appears or disappears with it');
   assert.ok(await p.locator('fieldset legend', { hasText: /experimental/i }).count() >= 1); ok('experimental parameters are grouped apart');
+  // Factory actions: "Restore" only adds what is missing (and says how many); replacing the whole list is behind More and a confirmation.
+  await t('mp-meter-winamp_bars').click(); await p.waitForTimeout(250);
+  assert.equal(await t('mp-restore-factory').isDisabled(), true); ok('Restore factory presets is off while every factory preset is in the list');
+  assert.equal(await p.getByRole('button', { name: 'Reset to factory' }).count(), 0); ok('the destructive reset is not a toolbar button any more');
+  // Many presets: the list is bounded and filterable, and the editor stays in reach.
+  for (let i = 0; i < 40; i++) await p.getByRole('button', { name: 'New preset' }).click();
+  const box = await t('mp-list').boundingBox(); assert.ok(box.height <= 300, `list height ${box.height}`);
+  assert.equal(await items().count(), 45); assert.ok((await t('mp-name').boundingBox()).y < 1100); ok('45 presets: the list scrolls inside a bounded area and the editor is still on screen');
+  await t('mp-find').fill('my preset 7'); assert.equal(await items().count(), 1); assert.match(await t('mp-list').innerText(), /MY PRESET 7/); ok('a filter finds a preset by name among many');
+  await t('mp-find').fill('');
+  // What goes on the card is a choice per preset (a preset not on the Pocket is kept in Omega only).
+  if (await p.getByRole('button', { name: 'Put all on the Pocket' }).isEnabled()) await p.getByRole('button', { name: 'Put all on the Pocket' }).click();
+  const firstOn = items().first().locator('input.mp-on'); assert.equal(await firstOn.isChecked(), true);
+  await firstOn.uncheck(); assert.equal(await items().first().locator('.mp-tag.hide').count(), 1); assert.match(await t('mp-onbar').innerText(), /44 of 45 will be on the Pocket · 1 stays? in Omega only/); ok('unticking a preset keeps it off the Pocket and the count says so');
+  await p.getByRole('button', { name: 'Take all off the Pocket' }).click(); assert.match(await t('mp-onbar').innerText(), /0 of 45 will be on the Pocket/);
+  await p.getByRole('button', { name: 'Put all on the Pocket' }).click(); assert.match(await t('mp-onbar').innerText(), /45 of 45 will be on the Pocket/); ok('bulk actions put every preset on the Pocket or keep every one off');
+  await t('mp-find').fill('my preset 4'); await p.getByRole('button', { name: 'Take shown off the Pocket' }).click();
+  await t('mp-find').fill(''); assert.match(await t('mp-onbar').innerText(), /(\d+) of 45 will be on the Pocket · (\d+) stay in Omega only/); ok('with a filter, a bulk change only touches the presets shown');
+  await p.getByRole('button', { name: 'Undo changes' }).click();
   await p.screenshot({ path: process.env.SHOT || '/tmp/meter-presets.png' });
   assert.deepEqual(errors, []); ok('no page errors');
   await b.close(); console.log(`\n${passed} checks passed`);
