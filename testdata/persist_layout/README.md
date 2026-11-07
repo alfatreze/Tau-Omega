@@ -9,6 +9,7 @@ Used by `crates/tau-core/src/persist_layout.rs` (the Rust port is checked agains
 | `dev181_interact_persist.json` | A real **legacy-layout** file (TAU DEV 181: volume 73, colour 7, meter 6, Space Grotesk, presets, last played). |
 | `dev182_...`, `dev184_...` | Real **new-layout** files (they started from empty settings, so they are not migrations). |
 | `dev213_interact_persist.json` | A real new-layout file from TAU DEV 213 (copied 2026-11-07 from the owner's `Pock`): volume 94 (the default: the saved word is 0), METER 3, no preset file chosen (MPID bits all 0), so it does **not** exercise the preset-id fields. |
+| `dev213_after_omega_presets_interact_persist.json` | The file TAU DEV 213 wrote on the owner's Pocket **after Omega wrote meter 12's presets** (copied 2026-11-07 from `Pock`): the owner chose preset id 5 (`TEST ONE`) on WINAMP BARS and rebooted; word 6 holds `MPID0` = 6 (id + 1). **The first real capture of a preset-file id**; hardware-observed. |
 | `dev185_after_migration_interact_persist.json` | The file TAU DEV 185 wrote after migrating `dev181` on a Pocket (hardware-confirmed 2026-10-26, "SET MIGRATED 1", second boot "0"): equals the reference migration of `dev181` word for word. |
 
 What is NOT hardware-proven (Tau Alpha's own note): other legacy files, and a power loss in the middle of a migration (host-proven only).
