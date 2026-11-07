@@ -31,7 +31,8 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await t('mp-name').fill('QUIET ROOM');
 
   // hide, reorder, duplicate (first free id), delete with a confirm and an id that is retired
-  await t('mp-hide').click(); assert.equal(await items().first().locator('.mp-tag.hide').count(), 1); ok('Hide marks the preset hidden (kept in the list, not shown on the Pocket)');
+  await t('mp-hide').click(); assert.equal(await items().first().locator('.mp-tag.hide').count(), 1); ok('Hide marks the preset hidden in the file');
+  assert.match(await t('mp-hidden-note').innerText(), /still lists this preset[\s\S]*once a release applies/); ok('the page says honestly that the current firmware still lists a hidden preset');
   await p.getByRole('button', { name: 'Move down' }).click(); assert.deepEqual((await names()).slice(0, 2), ['CLASSIC', 'QUIET ROOM']); ok('Down moves the preset in the list order');
   await p.getByRole('button', { name: 'Duplicate' }).click(); assert.deepEqual((await names()).length, 6); assert.match(await items().last().innerText(), /QUIET ROOM COPY[\s\S]*yours[\s\S]*id 5/); ok('a duplicate is a new preset of yours with the first free id');
   await t('mp-delete').click(); assert.equal(await items().count(), 6); await t('mp-delete-yes').click(); assert.equal(await items().count(), 5); ok('Delete asks first, then removes');
