@@ -178,6 +178,9 @@ pub enum WarningCode {
     CardFileChanged,
     /// A source file the Pocket's player refuses (for example FLAC above 48 kHz); it is copied as it is.
     WillNotPlay,
+    /// The library was written, but its name sidecar (`tau-names.json`/`.bin`) could not be.
+    /// The Pocket then shows the index text, exactly as before the sidecar existed.
+    NamesNotWritten,
 }
 
 impl WarningCode {
@@ -194,6 +197,7 @@ impl WarningCode {
             Self::CoverNotEmbedded => "cover_not_embedded",
             Self::CardFileChanged => "card_file_changed",
             Self::WillNotPlay => "will_not_play",
+            Self::NamesNotWritten => "names_not_written",
         }
     }
 }

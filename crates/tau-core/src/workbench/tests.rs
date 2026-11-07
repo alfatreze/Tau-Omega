@@ -174,8 +174,10 @@ fn albums_without_or_with_broken_pictures_give_none_not_an_error() {
 }
 
 #[test]
-fn dest_dir_is_device_ascii() {
-    assert_eq!(dest_dir("Björk/Post"), "Bjork/Post");
+fn dest_dir_is_the_card_name() {
+    // ö is in code page 437 and is kept; letters it lacks are transliterated.
+    assert_eq!(dest_dir("Björk/Post"), "Björk/Post");
+    assert_eq!(dest_dir("Søren/Post"), "Soren/Post");
 }
 
 #[test]

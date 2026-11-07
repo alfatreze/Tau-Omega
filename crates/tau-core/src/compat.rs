@@ -488,7 +488,7 @@ fn format_problem(bytes: &[u8], fmt: &Format) -> Option<String> {
                     Err(e) => return Some(format!("the index does not parse ({})", e.message)),
                 };
                 match crate::string_at(&ix, ix.root) {
-                    Ok(r) if r == root => {}
+                    Ok(r) if r == *root => {}
                     Ok(r) => {
                         return Some(format!(
                             "the index root is {r}; this core's music is under {root}, so tracks would not open"

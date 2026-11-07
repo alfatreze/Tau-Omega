@@ -73,10 +73,7 @@ pub(super) fn plan_with_layout(
                 &mut candidates,
             )?;
         } else {
-            candidates.push((
-                source.clone(),
-                PathBuf::from(ascii_file_name(&required_file_name(source)?)),
-            ));
+            candidates.push((source.clone(), PathBuf::from(required_file_name(source)?)));
         }
     }
     plan_candidates(candidates, common, root_prefix, options, progress)
@@ -108,6 +105,25 @@ pub(crate) fn plan_candidates(
     let destination = common
         .canonicalize()
         .unwrap_or_else(|_| common.to_path_buf());
+    // Card names: each original relative path becomes its card path (rules of
+    // `card_name`), two that convert to one name are numbered in sorted order.
+    let names = crate::card_name::NameMap::new(candidates.iter().map(|(_, rel)| path_parts(rel)));
+    let mut original_of: std::collections::BTreeMap<PathBuf, String> = Default::default();
+    for (_, rel) in &mut candidates {
+        if let Some(card) = names.get(&path_parts(rel)) {
+            let original = path_parts(rel)
+                .iter()
+                .map(|p| {
+                    unicode_normalization::UnicodeNormalization::nfc(p.as_str()).collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join("/");
+            let card: PathBuf = card.iter().collect();
+            original_of.insert(card.clone(), original);
+            *rel = card;
+        }
+    }
+    let mut origins: std::collections::BTreeMap<String, String> = Default::default();
     candidates.sort_by(|a, b| a.1.cmp(&b.1));
     let mut seen = std::collections::BTreeSet::new();
     let mut folder_tracks: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
@@ -153,6 +169,7 @@ pub(crate) fn plan_candidates(
             continue;
         }
         let converted = matches!(decision.action, Action::Convert(_));
+        let card_before_conversion = relative.clone();
         let relative = match &decision.action {
             Action::Convert(kind) => convert::converted_name(&relative, kind),
             _ => relative,
@@ -175,6 +192,9 @@ pub(crate) fn plan_candidates(
                     relative.display()
                 ),
             ));
+        }
+        if let Some(original) = original_of.get(&card_before_conversion) {
+            origins.insert(path_parts(&relative).join("/"), original.clone());
         }
         let target = destination.join(&relative);
         if source == target {
@@ -418,6 +438,7 @@ pub(crate) fn plan_candidates(
         bytes_to_write,
         skipped,
         lame,
+        origins,
     })
 }
 
@@ -452,4 +473,10 @@ pub(crate) fn art_source(
         return Ok(Some((file, hash, false)));
     }
     Ok(None)
+}
+
+fn path_parts(rel: &Path) -> Vec<String> {
+    rel.components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect()
 }

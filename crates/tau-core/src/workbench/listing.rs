@@ -78,7 +78,7 @@ pub struct LibraryListing {
 pub fn dest_dir(id: &str) -> String {
     id.split('/')
         .filter(|part| !part.is_empty())
-        .map(sync::ascii_file_name)
+        .map(|part| crate::card_name::card_part(part, false))
         .collect::<Vec<_>>()
         .join("/")
 }

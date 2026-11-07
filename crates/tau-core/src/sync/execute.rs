@@ -195,7 +195,7 @@ pub(super) fn execute_with_mirror_inner(
     let scan = scan_dir_measuring(&plan.destination, true, progress)?;
     let mut warnings = plan.warnings.clone();
     warnings.extend(scan.warnings);
-    let index = build_index(
+    let (index, names) = crate::build_index_with_names(
         &scan.entries,
         &scan.playlists,
         &plan.root_prefix,
@@ -215,6 +215,14 @@ pub(super) fn execute_with_mirror_inner(
         ));
     }
     swap_in_index(&temp, &index_path)?;
+    // The name sidecar, bound to the index just written (a failure is a warning, not a failed sync).
+    crate::name_sidecar::write_after_build(
+        &plan.destination,
+        &index,
+        &names,
+        &plan.origins,
+        &mut warnings,
+    );
     // Skip silence: the tables for the tracks just scanned (only while the setting is on).
     crate::trim::write_after_scan(&plan.destination, &scan.entries, &mut warnings);
     Ok(SyncReport {

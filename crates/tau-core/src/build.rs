@@ -62,23 +62,37 @@ pub(super) fn align(out: &mut Vec<u8>) {
 #[derive(Default)]
 pub(super) struct Pool {
     buffer: Vec<u8>,
-    offsets: BTreeMap<String, u32>,
+    offsets: BTreeMap<Vec<u8>, u32>,
 }
 impl Pool {
     fn new() -> Self {
         let mut out = Self::default();
         out.buffer.push(0);
-        out.offsets.insert(String::new(), 0);
+        out.offsets.insert(Vec::new(), 0);
         out
     }
+    /// Display text: Latin-1, one byte per character (anything above U+00FF is `?`).
     fn add(&mut self, text: &str) -> u32 {
-        if let Some(offset) = self.offsets.get(text) {
+        let bytes = text
+            .chars()
+            .map(|c| u8::try_from(c as u32).unwrap_or(b'?'))
+            .collect();
+        self.add_bytes(bytes)
+    }
+    /// A folder or file name as the Pocket opens it: code page 437 bytes of the
+    /// NFC form. The caller has checked that the path is reachable.
+    fn add_path(&mut self, text: &str) -> u32 {
+        let bytes = crate::card_name::path_bytes(text).unwrap_or_else(|| text.as_bytes().to_vec());
+        self.add_bytes(bytes)
+    }
+    fn add_bytes(&mut self, bytes: Vec<u8>) -> u32 {
+        if let Some(offset) = self.offsets.get(&bytes) {
             return *offset;
         }
         let offset = self.buffer.len() as u32;
-        self.buffer.extend_from_slice(text.as_bytes());
+        self.buffer.extend_from_slice(&bytes);
         self.buffer.push(0);
-        self.offsets.insert(text.into(), offset);
+        self.offsets.insert(bytes, offset);
         offset
     }
 }
@@ -86,6 +100,9 @@ impl Pool {
 #[derive(Clone)]
 pub(super) struct Album {
     dir: String,
+    /// The original (unfolded) tag text the index text was made from, for the name sidecar.
+    artist_raw: Option<String>,
+    title_raw: Option<String>,
     ids: Vec<usize>,
     artist: String,
     title: String,
@@ -100,10 +117,34 @@ pub fn build_index(
     root_prefix: &str,
     warnings: &mut Vec<Warning>,
 ) -> Result<Vec<u8>, TauError> {
+    build_index_inner(entries, playlists, root_prefix, warnings, None)
+}
+
+/// [`build_index`] that also returns the original text behind everything the
+/// index displays, by index id, for the name sidecar (`name_sidecar`).
+pub fn build_index_with_names(
+    entries: &[Entry],
+    playlists: &[Playlist],
+    root_prefix: &str,
+    warnings: &mut Vec<Warning>,
+) -> Result<(Vec<u8>, crate::name_sidecar::NameSide), TauError> {
+    let mut side = crate::name_sidecar::NameSide::default();
+    let index = build_index_inner(entries, playlists, root_prefix, warnings, Some(&mut side))?;
+    Ok((index, side))
+}
+
+fn build_index_inner(
+    entries: &[Entry],
+    playlists: &[Playlist],
+    root_prefix: &str,
+    warnings: &mut Vec<Warning>,
+    side: Option<&mut crate::name_sidecar::NameSide>,
+) -> Result<Vec<u8>, TauError> {
     let mut entries = entries.to_vec();
     let mut grouped: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (i, e) in entries.iter_mut().enumerate() {
-        let title = ascii_text(e.tags.get("TIT2").map(String::as_str).unwrap_or(""), 63);
+        let title =
+            crate::card_name::latin1_text(e.tags.get("TIT2").map(String::as_str).unwrap_or(""), 63);
         e.tags.insert(
             "_title".into(),
             if title.is_empty() {
@@ -127,7 +168,17 @@ pub fn build_index(
         );
         let tno = (num(e.tags.get("TPOS"), 63) << 10) | num(e.tags.get("TRCK"), 1023);
         e.tags.insert("_tno".into(), tno.to_string());
-        if (root_prefix.len() + e.rel.len()) > MAX_PATH {
+        // The Pocket reads a path as code page 437, one byte per character.
+        let Some(path_len) = crate::card_name::path_bytes(&e.rel).map(|b| b.len()) else {
+            return Err(TauError::e(
+                ErrorCode::InvalidPathReference,
+                format!(
+                    "the Pocket cannot open this name (a character outside code page 437): {}",
+                    e.rel
+                ),
+            ));
+        };
+        if (root_prefix.len() + path_len) > MAX_PATH {
             return Err(TauError::e(
                 ErrorCode::IndexCapExceeded,
                 format!("path over {MAX_PATH} bytes: {}", e.rel),
@@ -150,22 +201,29 @@ pub fn build_index(
             (tno >> 10, tno & 1023, natural(&entries[i].file))
         });
         let first = &entries[ids[0]];
-        let artist = ids
+        let (artist, artist_raw) = ids
             .iter()
             .find_map(|&i| {
-                let t = ascii_text(
-                    entries[i]
-                        .tags
-                        .get("TPE2")
-                        .or_else(|| entries[i].tags.get("TPE1"))
-                        .map(String::as_str)
-                        .unwrap_or(""),
-                    63,
-                );
-                (!t.is_empty()).then_some(t)
+                let tags = &entries[i].tags;
+                let text = |key: &str| {
+                    crate::card_name::latin1_text(
+                        tags.get(key).map(String::as_str).unwrap_or(""),
+                        63,
+                    )
+                };
+                let (t2, t1) = (text("TPE2"), text("TPE1"));
+                let (t, raw) = if t2.is_empty() {
+                    (t1, "TPE1")
+                } else {
+                    (t2, "TPE2")
+                };
+                (!t.is_empty()).then(|| (t, tags.get(raw).cloned()))
             })
-            .unwrap_or_else(|| "Unknown Artist".into());
-        let title = ascii_text(first.tags.get("TALB").map(String::as_str).unwrap_or(""), 63);
+            .unwrap_or_else(|| ("Unknown Artist".into(), None));
+        let title = crate::card_name::latin1_text(
+            first.tags.get("TALB").map(String::as_str).unwrap_or(""),
+            63,
+        );
         let title = if title.is_empty() {
             let fallback = ascii_text(dir.rsplit('/').next().unwrap_or(""), 63);
             if fallback.is_empty() {
@@ -187,6 +245,8 @@ pub fn build_index(
             artist,
             title,
             year: album_year,
+            artist_raw,
+            title_raw: first.tags.get("TALB").filter(|t| !t.is_empty()).cloned(),
         });
     }
     let mut artist_names: Vec<_> = albums.iter().map(|a| a.artist.clone()).collect();
@@ -205,6 +265,49 @@ pub fn build_index(
             a.dir.clone(),
         )
     });
+    if let Some(side) = side {
+        use crate::name_sidecar::{AlbumSide, ArtistSide, TrackSide};
+        side.tracks = albums
+            .iter()
+            .flat_map(|a| {
+                a.ids.iter().map(|&i| {
+                    let e = &entries[i];
+                    TrackSide {
+                        rel: e.rel.clone(),
+                        file: e.file.clone(),
+                        title: e.tags.get("TIT2").filter(|t| !t.is_empty()).cloned(),
+                        artist: a.artist_raw.clone(),
+                        album: a.title_raw.clone(),
+                        idx_title: title_of(e).to_string(),
+                        idx_artist: a.artist.clone(),
+                        idx_album: a.title.clone(),
+                    }
+                })
+            })
+            .collect();
+        side.albums = albums
+            .iter()
+            .map(|a| AlbumSide {
+                title: a.title_raw.clone(),
+                artist: a.artist_raw.clone(),
+                idx_title: a.title.clone(),
+                idx_artist: a.artist.clone(),
+            })
+            .collect();
+        let mut first_raw: BTreeMap<&str, Option<String>> = BTreeMap::new();
+        for a in &albums {
+            first_raw
+                .entry(a.artist.as_str())
+                .or_insert_with(|| a.artist_raw.clone());
+        }
+        side.artists = artist_names
+            .iter()
+            .map(|n| ArtistSide {
+                name: first_raw.get(n.as_str()).cloned().flatten(),
+                idx_name: n.clone(),
+            })
+            .collect();
+    }
     if entries.len() > MAX_TRACKS
         || albums.len() > MAX_ALBUMS
         || artist_names.len() > MAX_ARTISTS
@@ -227,7 +330,7 @@ pub fn build_index(
         let item = first_album.entry(artist).or_insert((ai, 0usize));
         item.1 += 1;
         push_u32(&mut albums_b, pool.add(&a.title));
-        push_u32(&mut albums_b, pool.add(&a.dir));
+        push_u32(&mut albums_b, pool.add_path(&a.dir));
         push_u16(&mut albums_b, artist as u16);
         push_u16(&mut albums_b, a.year);
         push_u16(&mut albums_b, (tracks.len() / 16) as u16);
@@ -241,7 +344,7 @@ pub fn build_index(
             let title = title_of(e).to_string();
             track_titles.push(title.clone());
             push_u32(&mut tracks, pool.add(&title));
-            push_u32(&mut tracks, pool.add(&e.file));
+            push_u32(&mut tracks, pool.add_path(&e.file));
             push_u16(&mut tracks, e.secs);
             push_u16(&mut tracks, tno_of(e));
             push_u16(&mut tracks, ai as u16);

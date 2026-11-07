@@ -23,9 +23,13 @@ pub fn plan_selection(
     let mut candidates = Vec::new();
     for id in album_ids {
         let dir = checked_dir(library_root, id)?;
-        let dest = dest_dir(id);
+        let dest = id
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("/");
         for file in direct_files(&dir, options.convert.enabled)? {
-            let name = sync::ascii_file_name(&file.file_name().unwrap().to_string_lossy());
+            let name = file.file_name().unwrap().to_string_lossy().into_owned();
             let relative = if dest.is_empty() {
                 PathBuf::from(name)
             } else {

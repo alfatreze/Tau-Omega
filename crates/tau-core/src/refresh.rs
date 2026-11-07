@@ -15,8 +15,8 @@
 //! play for that reason is still listed.
 
 use crate::{
-    ErrorCode, MAX_ALBUMS, MAX_ARTISTS, MAX_TRACKS, TauError, WarningCode, ascii_name, ascii_text,
-    build_index, parse, root_prefix, scan_dir, string_at, sync, verify,
+    ErrorCode, MAX_ALBUMS, MAX_ARTISTS, MAX_TRACKS, TauError, WarningCode, ascii_text, build_index,
+    parse, root_prefix, scan_dir, string_at, sync, verify,
 };
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -28,6 +28,12 @@ use std::{
 
 const MAX_PATH: usize = 200;
 const INDEX: &str = "tau-library.tdb";
+/// The files a refresh regenerates, backed up and restored together.
+const GENERATED: [&str; 3] = [
+    INDEX,
+    crate::name_sidecar::JSON_NAME,
+    crate::name_sidecar::BIN_NAME,
+];
 const JOURNAL: &str = "refresh-journal.json";
 /// Audio formats people copy over that the Pocket cannot play.
 const OTHER_AUDIO: [&str; 15] = [
@@ -163,7 +169,7 @@ fn index_state_of_index(media_root: &Path) -> IndexState {
     };
     state.valid = true;
     state.tracks = Some(index.counts.tracks);
-    state.root = string_at(&index, index.root).ok().map(str::to_string);
+    state.root = string_at(&index, index.root).ok();
     state.root_matches = state.root.as_deref() == Some(prefix.as_str());
     state.missing_files = if state.root_matches {
         verify(&bytes, Some(media_root))
@@ -256,11 +262,11 @@ fn plan_renames(all_rels: &[String]) -> RenamePlan {
                 format!("{p}/{n}")
             }
         };
-        if name.is_ascii() {
+        if crate::card_name::reachable(name) {
             mapped.insert(prefix.clone(), join(&parent_final, name));
             continue;
         }
-        let folded = ascii_name(name);
+        let folded = crate::card_name::card_part(name, depth == parts.len());
         let lower = folded.to_lowercase();
         let taken = targets.entry(parent_orig.clone()).or_default();
         if folded.is_empty()
@@ -292,6 +298,29 @@ fn plan_renames(all_rels: &[String]) -> RenamePlan {
     let order = renames.into_iter().map(|(_, _, r)| r).collect();
     let changed = mapped.into_iter().filter(|(k, v)| k != v).collect();
     (order, changed, blocked)
+}
+
+/// Card path -> the name it had before this refresh renamed it (files only).
+fn renamed_origins(
+    renames: &[Rename],
+    entries: &[crate::Entry],
+) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for e in entries {
+        let mut original = e.rel.clone();
+        // Renames are ordered shallow to deep; undo them deep to shallow.
+        for r in renames.iter().rev() {
+            if original == r.to {
+                original = r.from.clone();
+            } else if let Some(rest) = original.strip_prefix(&format!("{}/", r.to)) {
+                original = format!("{}/{rest}", r.from);
+            }
+        }
+        if original != e.rel {
+            out.insert(e.rel.clone(), original);
+        }
+    }
+    out
 }
 
 /// Resolves a playlist line to a path relative to the media root, the way the Pocket does.
@@ -453,11 +482,11 @@ fn analyse(media_root: &Path) -> Result<Analysis, TauError> {
             excluded.insert(e.rel.clone());
             continue;
         }
-        if !e.rel.is_ascii() {
+        if !crate::card_name::reachable(&e.rel) {
             findings.push(Finding {
                 rel: e.rel.clone(),
                 reason: Reason::NonAsciiName,
-                message: "The Pocket cannot open names with accents or other non-ASCII characters; this is renamed to its plain form.".into(),
+                message: "The Pocket cannot open names with characters outside code page 437 (Cyrillic, Chinese, emoji, some accented letters); this is renamed to its closest spelling.".into(),
                 fix: Some(final_rel.clone()),
                 skipped: false,
             });
@@ -723,8 +752,10 @@ pub fn execute_refresh(
         .iter()
         .map(|(orig, _, _)| orig.clone())
         .collect();
-    if media_root.join(INDEX).is_file() {
-        to_save.push(INDEX.to_string());
+    for generated in GENERATED {
+        if media_root.join(generated).is_file() {
+            to_save.push(generated.to_string());
+        }
     }
     for rel in &to_save {
         let bytes = fs::read(media_root.join(rel))?;
@@ -778,7 +809,9 @@ pub fn execute_refresh(
         let entries: Vec<_> = scan
             .entries
             .iter()
-            .filter(|e| e.rel.is_ascii() && prefix_fits(&plan.root_prefix, &e.rel))
+            .filter(|e| {
+                crate::card_name::reachable(&e.rel) && prefix_fits(&plan.root_prefix, &e.rel)
+            })
             .cloned()
             .collect();
         let position: BTreeMap<&str, usize> = entries
@@ -799,7 +832,12 @@ pub fn execute_refresh(
                 p
             })
             .collect();
-        let index = build_index(&entries, &playlists, &plan.root_prefix, &mut Vec::new())?;
+        let (index, names) = crate::build_index_with_names(
+            &entries,
+            &playlists,
+            &plan.root_prefix,
+            &mut Vec::new(),
+        )?;
         parse(&index)?;
         let temp = media_root.join(".tau-library-refresh.tmp");
         sync::write_durable(&temp, &index)?;
@@ -810,6 +848,15 @@ pub fn execute_refresh(
             ));
         }
         sync::swap_in_index(&temp, &media_root.join(INDEX))?;
+        // The name sidecar. A renamed file keeps the name it had as its original.
+        let origins = renamed_origins(&plan.renames, &entries);
+        crate::name_sidecar::write_after_build(
+            media_root,
+            &index,
+            &names,
+            &origins,
+            &mut Vec::new(),
+        );
         let stubs = stubs + sync::sweep_appledouble(media_root);
         let after = index_state(media_root);
         if !after.valid || !after.root_matches || after.missing_files != 0 {
@@ -950,15 +997,17 @@ pub fn rollback_refresh(media_root: &Path, backup_dir: &Path) -> Result<(), TauE
             let _ = fs::remove_file(companion(media_root, backup));
         }
     }
-    // The index the refresh wrote is gone if there was none before.
-    let had_index = journal
-        .get("files")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .any(|f| f.get("backup").and_then(Value::as_str) == Some(INDEX));
-    if !had_index {
-        let _ = fs::remove_file(media_root.join(INDEX));
+    // The index and name sidecar the refresh wrote are gone if there were none before.
+    for generated in GENERATED {
+        let had = journal
+            .get("files")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|f| f.get("backup").and_then(Value::as_str) == Some(generated));
+        if !had {
+            let _ = fs::remove_file(media_root.join(generated));
+        }
     }
     let mut journal = journal;
     journal["state"] = json!("rolled_back");
@@ -1033,11 +1082,40 @@ mod tests {
     }
 
     #[test]
+    fn names_the_pocket_can_open_are_left_alone_and_indexed_as_code_page_437() {
+        let (root, common) = card("cp437");
+        // é, ï, ö and ñ are in code page 437: nothing to rename, and the index holds one byte each.
+        put(&common, "Beyoncé/Lemonade/01 Naïve.mp3");
+        put(&common, "Björk/Año/02 Sorry.mp3");
+        let plan = plan_refresh(&common).unwrap();
+        assert!(plan.renames.is_empty(), "{:?}", plan.renames);
+        assert_eq!(plan.would_index, 2);
+        let report = execute_refresh(&common, &plan, &plan.id, &backups(&root)).unwrap();
+        assert_eq!(report.renamed, 0);
+        let bytes = fs::read(common.join(INDEX)).unwrap();
+        let ix = parse(&bytes).unwrap();
+        assert_eq!(ix.counts.tracks, 2);
+        let mut paths: Vec<_> = (0..2).map(|i| crate::track_path(&ix, i).unwrap()).collect();
+        paths.sort();
+        assert!(
+            paths[0].ends_with("Beyoncé/Lemonade/01 Naïve.mp3"),
+            "{paths:?}"
+        );
+        // The file name bytes in the pool are code page 437 (é = 0x82), not UTF-8.
+        let needle = [b'B', b'e', b'y', b'o', b'n', b'c', 0x82, b'/'];
+        assert!(bytes.windows(needle.len()).any(|w| w == needle));
+        assert!(!bytes.windows(2).any(|w| w == [0xC3, 0xA9]));
+        assert!(crate::verify(&bytes, Some(&common)).unwrap().is_empty());
+        assert!(plan_refresh(&common).unwrap().nothing_to_do);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn accented_folders_and_files_are_renamed_to_ascii_and_indexed() {
         let (root, common) = card("ascii");
-        put(&common, "Beyoncé/Lemonade/01 Formation.mp3");
-        put(&common, "Beyoncé/Lemonade/02 Sorry.mp3");
-        put(&common, "Plain/Album/01 Naïve.flac");
+        put(&common, "Beyoncė/Lemonade/01 Formation.mp3");
+        put(&common, "Beyoncė/Lemonade/02 Sorry.mp3");
+        put(&common, "Plain/Album/01 Naėve.flac");
         let plan = plan_refresh(&common).unwrap();
         let froms: Vec<_> = plan
             .renames
@@ -1046,10 +1124,10 @@ mod tests {
             .collect();
         assert_eq!(
             froms[0],
-            ("Beyoncé", "Beyonce"),
+            ("Beyoncė", "Beyonce"),
             "a folder is renamed before what is inside it: {froms:?}"
         );
-        assert!(froms.contains(&("Plain/Album/01 Naïve.flac", "Plain/Album/01 Naive.flac")));
+        assert!(froms.contains(&("Plain/Album/01 Naėve.flac", "Plain/Album/01 Naeve.flac")));
         let ascii = plan
             .findings
             .iter()
@@ -1062,7 +1140,7 @@ mod tests {
         assert_eq!(report.renamed, 2);
         assert!(
             common.join("Beyonce/Lemonade/01 Formation.mp3").is_file()
-                && !common.join("Beyoncé").exists()
+                && !common.join("Beyoncė").exists()
         );
         let index = parse(fs::read(common.join(INDEX)).unwrap()).unwrap();
         assert_eq!(index.counts.tracks, 3);
@@ -1078,7 +1156,7 @@ mod tests {
     fn a_name_that_would_collide_is_left_alone_and_kept_out_of_the_library() {
         let (root, common) = card("collide");
         put(&common, "Cafe/Album/01 One.mp3");
-        put(&common, "Café/Album/01 One.mp3");
+        put(&common, "Cafė/Album/01 One.mp3");
         put(&common, "Other/01 Fine.mp3");
         let plan = plan_refresh(&common).unwrap();
         assert!(plan.renames.is_empty(), "{:?}", plan.renames);
@@ -1088,7 +1166,7 @@ mod tests {
             .filter(|f| f.reason == Reason::NameCollision)
             .map(|f| f.rel.as_str())
             .collect();
-        assert_eq!(skipped, ["Café/Album/01 One.mp3"]);
+        assert_eq!(skipped, ["Cafė/Album/01 One.mp3"]);
         assert_eq!(plan.would_index, 2);
         let before = tree(&common);
         let report = execute_refresh(&common, &plan, &plan.id, &backups(&root)).unwrap();
@@ -1171,15 +1249,15 @@ mod tests {
     #[test]
     fn playlists_that_point_at_renamed_files_are_rewritten() {
         let (root, common) = card("playlist");
-        put(&common, "Beyoncé/Lemonade/01 Formation.mp3");
-        put(&common, "Beyoncé/Lemonade/02 Sorry.mp3");
+        put(&common, "Beyoncė/Lemonade/01 Formation.mp3");
+        put(&common, "Beyoncė/Lemonade/02 Sorry.mp3");
         fs::write(
             common.join("All.m3u"),
-            "#EXTM3U\n/Beyoncé/Lemonade/01 Formation.mp3\nBeyoncé/Lemonade/02 Sorry.mp3\n",
+            "#EXTM3U\n/Beyoncė/Lemonade/01 Formation.mp3\nBeyoncė/Lemonade/02 Sorry.mp3\n",
         )
         .unwrap();
         fs::write(
-            common.join("Beyoncé/Lemonade/Mix.m3u"),
+            common.join("Beyoncė/Lemonade/Mix.m3u"),
             "01 Formation.mp3\n",
         )
         .unwrap();
@@ -1207,7 +1285,7 @@ mod tests {
         assert!(
             fs::read_to_string(common.join("All.m3u"))
                 .unwrap()
-                .contains("Beyoncé")
+                .contains("Beyoncė")
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -1215,8 +1293,8 @@ mod tests {
     #[test]
     fn a_playlist_spelled_differently_from_how_the_card_stores_the_name_is_still_followed() {
         let (root, common) = card("nfd");
-        // The card stores "é" decomposed (as macOS does on exFAT); the playlist, written elsewhere, uses the composed form.
-        put(&common, "Beyonce\u{301}/Lemonade/01 Formation.mp3");
+        // The card stores "ė" decomposed (as macOS does on exFAT); the playlist, written elsewhere, uses the composed form.
+        put(&common, "Beyonce\u{307}/Lemonade/01 Formation.mp3");
         fs::write(
             common.join("All.m3u"),
             "/Beyonc\u{e9}/Lemonade/01 Formation.mp3\n",
@@ -1285,7 +1363,7 @@ mod tests {
     #[test]
     fn guards_run_before_anything_is_touched() {
         let (root, common) = card("guards");
-        put(&common, "Beyoncé/A/01 One.mp3");
+        put(&common, "Beyoncė/A/01 One.mp3");
         let before = tree(&common);
         let plan = plan_refresh(&common).unwrap();
         assert_eq!(
@@ -1309,14 +1387,14 @@ mod tests {
             ErrorCode::SourceChangedSincePlan
         );
         assert!(tree(&common).len() == before.len() + 1 && !common.join(INDEX).exists());
-        assert!(common.join("Beyoncé").exists(), "nothing was renamed");
+        assert!(common.join("Beyoncė").exists(), "nothing was renamed");
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn a_failure_after_the_renames_puts_everything_back() {
         let (root, common) = card("failure");
-        put(&common, "Beyoncé/A/01 One.mp3");
+        put(&common, "Beyoncė/A/01 One.mp3");
         let before = tree(&common);
         let plan = plan_refresh(&common).unwrap();
         // The temp file the new index is written to is now a folder: the build fails after the renames.
@@ -1326,7 +1404,7 @@ mod tests {
         // (The extra folder changes the plan's file list only if it holds files; it holds none.)
         let error = error.unwrap_err();
         assert!(error.message.contains("put back"), "{}", error.message);
-        assert!(common.join("Beyoncé/A/01 One.mp3").is_file() && !common.join("Beyonce").exists());
+        assert!(common.join("Beyoncė/A/01 One.mp3").is_file() && !common.join("Beyonce").exists());
         assert_eq!(tree(&common), before_with_dir);
         let _ = before;
         fs::remove_dir_all(root).unwrap();
