@@ -155,8 +155,38 @@ pub fn describe_persisted_layout(path: String) -> Result<Option<tau_core::persis
     if !core.is_some_and(|c| tau_core::core_update::is_tau_core(c)) {
         return Ok(None);
     }
-    let settings = tau_core::diag::read_persisted_settings(path)?;
-    Ok(Some(tau_core::persist_layout::describe(&settings)))
+    let settings = tau_core::diag::read_persisted_settings(&path)?;
+    let card: std::path::PathBuf = components.iter().take_while(|c| *c != "Settings").collect();
+    let namer = preset_namer(&card, core.map(String::as_str).unwrap_or_default());
+    Ok(Some(tau_core::persist_layout::describe_with_names(&settings, &|slot, id| namer(slot, id))))
+}
+
+/// A lookup from (saved meter slot, preset file id) to the preset's name on this card. The slot is the meter's table slot (`MPRE`/`MPID`
+/// are indexed by it); the folder is the meter's manifest id. Pack-only meters are found through the descriptors in the core's own
+/// `tau-packs.bin` (`Assets/<platform>/<core id>/`), the built-in meter (slot 0, Winamp Bars, id 12) when no pack says otherwise.
+/// Reads only; a name that cannot be found is simply not shown.
+fn preset_namer(card: &std::path::Path, core_id: &str) -> impl Fn(usize, u8) -> Option<String> {
+    let mut slot_ids: std::collections::BTreeMap<u16, u16> = std::collections::BTreeMap::from([(0, 12)]);
+    let mut roots: Vec<std::path::PathBuf> = Vec::new();
+    for platform in std::fs::read_dir(card.join("Assets")).into_iter().flatten().flatten() {
+        if let Ok(bundle) = std::fs::read(platform.path().join(core_id).join("tau-packs.bin"))
+            && let Ok(found) = tau_core::meter_packs::slot_ids(&bundle)
+        {
+            slot_ids.extend(found);
+        }
+        let common = platform.path().join("common");
+        if common.join(tau_core::preset_files::DIR).is_dir() {
+            roots.push(common);
+        }
+    }
+    move |slot, id| {
+        let manifest = slot_ids.get(&u16::try_from(slot).ok()?)?;
+        roots.iter().find_map(|root| {
+            let files = tau_core::preset_install::read_folder(root, *manifest);
+            let (_, entries) = tau_core::preset_files::parse_index(files.get(tau_core::preset_files::INDEX_NAME)?).ok()?;
+            entries.into_iter().find(|e| e.id == id).map(|e| e.name)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -183,5 +213,36 @@ mod layout_tests {
         let loose = std::env::temp_dir().join("loose_interact_persist.json");
         std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/persist_layout/dev181_interact_persist.json"), &loose).unwrap();
         assert!(describe_persisted_layout(loose.to_string_lossy().into_owned()).unwrap().is_none());
+    }
+
+    #[test]
+    fn the_chosen_preset_is_shown_by_name_found_through_the_packs_descriptors() {
+        let root = std::env::temp_dir().join(format!("tau-namer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let core = "alfatreze.TAU DEV 213";
+        let d = root.join("Settings").join(core).join("Interact/_core");
+        std::fs::create_dir_all(&d).unwrap();
+        // The real DEV 213 file with one change: slot 3 is set to preset id 4 (word 15 = converted mark | id + 1; persist id 30).
+        let mut json: serde_json::Value = serde_json::from_slice(&std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/persist_layout/dev213_interact_persist.json")).unwrap()).unwrap();
+        for v in json["interact_persist"]["variables"].as_array_mut().unwrap() {
+            if v["id"] == 30 { v["val"] = serde_json::json!((1u64 << 30) | 5); }
+        }
+        let f = d.join("interact_persist.json");
+        std::fs::write(&f, serde_json::to_vec(&json).unwrap()).unwrap();
+        // The core's packs (real DEV 184 bundle: slot 3 is Layered Wave, manifest id 16) and the card's real index for meter 16.
+        let packs = root.join("Assets/tau").join(core);
+        std::fs::create_dir_all(&packs).unwrap();
+        std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/meter_packs/tau-packs_dev184.bin"), packs.join("tau-packs.bin")).unwrap();
+        let idx = root.join("Assets/tau/common/tau-presets/16");
+        std::fs::create_dir_all(&idx).unwrap();
+        std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/preset_files/card/tau-presets/16/index.tpi"), idx.join("index.tpi")).unwrap();
+        let view = describe_persisted_layout(f.to_string_lossy().into_owned()).unwrap().unwrap();
+        let row = view.values.iter().find(|v| v.label == "Meter slot 3 preset").expect("the chosen preset is listed");
+        assert_eq!(row.text, "NEON (id 4)");
+        // Without the index the id is still shown, just not its name.
+        std::fs::remove_dir_all(root.join("Assets/tau/common")).unwrap();
+        let view = describe_persisted_layout(f.to_string_lossy().into_owned()).unwrap().unwrap();
+        assert_eq!(view.values.iter().find(|v| v.label == "Meter slot 3 preset").unwrap().text, "preset id 4");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
