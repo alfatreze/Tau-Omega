@@ -3,7 +3,7 @@
 import { writable } from 'svelte/store';
 
 export type LabTarget = { meter: number; values: Record<string, number> } | null;
-export type LabModule = { id: number; key: string; wasm_sha256: string };
+export type LabModule = { id: number; key: string; wasm_sha256: string; wasm_sha256_timed?: string };
 export type LabApplied = { meter: number; ignored: string[]; clamped: Record<string, number>; values?: Record<string, number>; error?: string };
 
 /** What the editor wants shown (null: nothing selected). */
