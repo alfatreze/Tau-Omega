@@ -50,9 +50,23 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
     // The processing budget bar: the worst frame against what the meter's cost class allows, over or under, right under the preview.
     await p.locator('[data-testid=mp-meter-winamp_bars]').click(); await p.waitForTimeout(2500);
     const bud = p.locator('[data-testid=rml-budget]'); await bud.waitFor({ timeout: 8000 });
-    assert.match(await p.locator('[data-testid=rml-budget-text]').innerText(), /^(Under|Over) by [\d.]+ \(\d+ %\)$/); assert.match(await bud.getAttribute('aria-label'), /Processing budget: worst frame \d+ drawing commands, 100 allowed/); ok('the budget bar says how far under or over the allowance the meter is (Winamp Bars: 100 allowed)');
+    assert.match(await p.locator('[data-testid=rml-budget-text]').innerText(), /^(Under|Over) by [\d.]+ \(\d+ %\)$/); assert.match(await bud.getAttribute('aria-label'), /Processing budget over the last second: worst frame \d+ drawing commands, 100 allowed/); ok('the budget bar says how far under or over the allowance the meter is (Winamp Bars: 100 allowed)');
     assert.equal(await bud.getAttribute('data-kind'), 'under'); const fillW = await bud.locator('.bb-fill').evaluate((e) => e.getBoundingClientRect().width), trackW = await bud.locator('.bb-track').evaluate((e) => e.getBoundingClientRect().width);
-    assert.ok(fillW > 0 && fillW < trackW * 0.5); assert.equal(await bud.locator('.bb-over').count(), 0); ok('under budget the bar fills part of the allowance and there is no red stretch');
+    assert.ok(fillW > 0 && fillW < trackW * 0.5); assert.equal(await bud.locator('.bb-over').evaluate((e) => e.getBoundingClientRect().width), 0); ok('under budget the bar fills part of the allowance and there is no red stretch');
+    // It reacts within about a second to a change of setting, the allowance tick never moves, and the last meter's numbers are never shown against the next meter's allowance.
+    const worstNow = async () => Number((await bud.getAttribute('aria-label')).match(/worst frame (\d+)/)?.[1] ?? NaN);
+    await p.locator('[data-testid=mp-tab-settings]').click(); const bands = p.locator('#mp-bands'); const maxBands = await bands.getAttribute('max'), minBands = await bands.getAttribute('min');
+    await bands.fill(maxBands); await p.waitForTimeout(2200); const wHigh = await worstNow(); const ticks = new Set();
+    await bands.fill(minBands); const t0 = Date.now(); let wLow = wHigh;
+    while (Date.now() - t0 < 2000 && !(wLow < wHigh)) { await p.waitForTimeout(100); wLow = await worstNow(); ticks.add(await bud.locator('.bb-allowed').getAttribute('style')); }
+    assert.ok(wLow < wHigh, `worst did not fall after fewer bands: ${wHigh} -> ${wLow}`); assert.ok(Date.now() - t0 < 1900, 'the bar took longer than 1.9 s to follow a change'); assert.ok(ticks.size <= 1, `the allowance tick moved: ${[...ticks]}`);
+    ok('the budget bar follows a change of setting within about a second and the allowance tick stays put');
+    await bands.fill('16' >= minBands ? '16' : maxBands);
+    await p.locator('[data-testid=mp-meter-layered_wave]').click(); const seen = [];
+    for (let i = 0; i < 12; i++) { seen.push(await bud.getAttribute('aria-label')); await p.waitForTimeout(100); }
+    assert.ok(!seen.some((l) => /100 allowed/.test(l)), 'the bar showed Winamp Bars\' numbers against Layered Wave\'s allowance'); assert.ok(seen.some((l) => /400 allowed/.test(l)), 'the bar never settled on Layered Wave\'s allowance');
+    ok('after changing meter the bar never shows the old meter\'s numbers, then settles on the new allowance');
+    await p.locator('[data-testid=mp-meter-winamp_bars]').click(); await p.waitForTimeout(1500);
     assert.ok((await p.locator('[data-testid=rml-budget]').boundingBox()).y > (await p.locator('iframe[aria-label^="Meter preview"]').boundingBox()).y); ok('the bar sits under the preview, outside the Details panel, so it is always visible');
     // The small view shows exactly the meter's band (368 x 122, never scaled); the toggle above the preview switches to the full-screen figure (400 x 323).
     await p.locator('[data-testid=mp-meter-winamp_bars]').click(); await p.waitForTimeout(800);

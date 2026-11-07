@@ -13,7 +13,7 @@
   import { onDestroy, onMount } from 'svelte';
     import { labOptions, labSend, labStatus, labTarget, previewView, type LabInfo, type LabOption, type LabTarget } from './meters/labBus';
   import { checkProvenance, parseManifest, type Manifest } from './meters/provenance';
-  import { parseBudget, parseCostLines } from './meters/costInfo';
+  import { parseCostLines, type Budget } from './meters/costInfo';
   import BudgetBar from './BudgetBar.svelte';
   const LAB = '/tau-lab/meter_lab.html';
   const MANIFEST = '/tau-lab/MANIFEST.json';
@@ -57,6 +57,11 @@ function info(){var table=[];var t=document.querySelector('#costtable table');
  var tn=document.querySelector('#costtable .cost'),sn=document.getElementById('splitnote');
  return{lines:lines(document.getElementById('cost')),table:table,tableNote:tn?tn.textContent.trim():'',note:sn?sn.textContent.trim():''};}
 function post(m){parent.postMessage(m,'*');}
+/* The lab passes its live list of per-frame costs to TauCost.summarize on every frame; keep a reference (read only) and report the last second of it, so the budget bar reacts quickly. */
+var perFrame=null,costClass=null;
+if(window.TauCost&&TauCost.summarize){var sum=TauCost.summarize;TauCost.summarize=function(list,cls){perFrame=list;costClass=cls;return sum.apply(this,arguments);};}
+function budget(){if(!perFrame||perFrame.length<3||!window.TauCost)return null;var n=Math.min(38,perFrame.length),a=perFrame.slice(-n),mx=Math.max.apply(null,a),me=a.reduce(function(x,y){return x+y;},0)/n,c=costClass==null?2:costClass,al=TauCost.BUDGET[c];return{mean:Math.round(me*10)/10,worst:mx,allowed:al,costClass:String(c),over:mx>al};}
+setInterval(function(){var b=budget();if(b)post({type:'omega-lab-budget',budget:b});},250);
 function size(){var s=document.querySelector('.stage');if(!s)return;var w=document.getElementById('cv').getBoundingClientRect().width;var sw=document.getElementById('splitwrap');if(sw&&!sw.hidden)w=Math.max(w,400);post({type:'omega-lab-size',height:Math.ceil(s.getBoundingClientRect().height),width:Math.ceil(w)});}
 window.addEventListener('message',function(e){var d=e.data||{};
  if(d.type==='omega-lab-get-options')post({type:'omega-lab-options',options:describe()});
@@ -93,6 +98,8 @@ var st=document.querySelector('.stage');if(st&&window.ResizeObserver)new ResizeO
       sendView();
     } else if (d?.type === 'omega-lab-options') {
       labOptions.set(Array.isArray(d.options) ? (d.options as LabOption[]) : []);
+    } else if (d?.type === 'omega-lab-budget') {
+      if (d.budget && typeof d.budget.worst === 'number' && typeof d.budget.allowed === 'number') budget = d.budget as Budget;
     } else if (d?.type === 'omega-lab-info') {
       info = d.info ?? null;
     } else if (d?.type === 'omega-lab-size') {
@@ -116,11 +123,15 @@ var st=document.querySelector('.stage');if(st&&window.ResizeObserver)new ResizeO
       manifest = r.ok ? parseManifest(await r.json()) : null;
     } catch { manifest = null; }
   });
-  // The lab's detail text is read about once a second while the preview is ready: the budget bar always shows it, and the Details panel uses the same data.
+  // The budget comes from the bridge (about four times a second, from the last second of frames). The Details panel asks the lab for its
+  // detail text while it is open.
+  let budget: Budget | null = null;
   $: ready = $labStatus.ready;
   $: if (ready) { ask({ type: 'omega-lab-details', open: detailsOpen }); }
-  $: if (ready) { clearInterval(infoTimer); ask({ type: 'omega-lab-get-info' }); infoTimer = setInterval(() => ask({ type: 'omega-lab-get-info' }), 1200); } else { clearInterval(infoTimer); }
-  $: budget = info ? parseBudget(info.lines) : null;
+  $: if (ready && detailsOpen) { clearInterval(infoTimer); ask({ type: 'omega-lab-get-info' }); infoTimer = setInterval(() => ask({ type: 'omega-lab-get-info' }), 1500); } else { clearInterval(infoTimer); }
+  // A different meter has a different allowance: never show the last meter's numbers against the new meter's.
+  let shownMeter: number | null = null;
+  $: if ((target?.meter ?? null) !== shownMeter) { shownMeter = target?.meter ?? null; budget = null; }
   $: costRows = info ? parseCostLines(info.lines) : [];
   $: applied = $labStatus.applied;
   $: modules = $labStatus.modules;
@@ -143,7 +154,7 @@ var st=document.querySelector('.stage');if(st&&window.ResizeObserver)new ResizeO
       <!-- svelte-ignore a11y_missing_attribute -->
       <iframe bind:this={frame} aria-label="Meter preview (Tau Alpha's lab)" {srcdoc} sandbox="allow-scripts" scrolling="no" style="width:{frameWidth}px;height:{frameHeight}px" loading="lazy"></iframe>
     </div>
-    {#if budget}<BudgetBar {budget} />{/if}
+    <BudgetBar {budget} />
     <p class="rml-cap">Drawn by the Pocket's own meter code (Tau Alpha's lab) · an estimate, not measured</p>
     <details class="rml-details" bind:open={detailsOpen} data-testid="rml-details">
       <summary>Details: commands, processor time and cost</summary>
