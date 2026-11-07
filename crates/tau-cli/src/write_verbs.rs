@@ -316,3 +316,154 @@ pub fn assets_install(a: &[String], j: bool) -> Result<(), CliError> {
         )
     })
 }
+
+// ---- meter presets (tau-presets/<meter id>/ files on the card) ----
+
+fn registry(a: &[String], verb: &str) -> Result<tau_core::meter_presets::MeterRegistry, CliError> {
+    let path = need(a, "--registry", verb)?;
+    Ok(tau_core::meter_presets::MeterRegistry::from_json(
+        &fs::read(path).map_err(TauError::from)?,
+    )?)
+}
+
+fn desired(
+    reg: &tau_core::meter_presets::MeterRegistry,
+    sets: &[tau_core::preset_files::PresetSet],
+) -> Result<std::collections::BTreeMap<u16, tau_core::preset_install::Folder>, CliError> {
+    let mut out = std::collections::BTreeMap::new();
+    for set in sets {
+        let meter = reg
+            .meters
+            .iter()
+            .find(|m| u16::from(m.id) == set.meter_id)
+            .ok_or_else(|| {
+                CliError::Usage(format!("the registry has no meter {}", set.meter_id))
+            })?;
+        let specs = tau_core::preset_files::param_specs(meter)?;
+        out.insert(set.meter_id, set.folder(&specs)?);
+    }
+    Ok(out)
+}
+
+/// `tau meter-presets-show <media-root> --registry <meters_schema.json|lab-data.json> [--json]`: what the card holds for every meter that has
+/// parameters, next to the factory set (the `PresetSet` JSON this prints is what `meter-presets-plan --sets` reads). Reads only.
+pub fn meter_presets_show(a: &[String], j: bool) -> Result<(), CliError> {
+    let root = first(a, "a media root")?;
+    let reg = registry(a, "meter-presets-show")?;
+    #[derive(Serialize)]
+    struct Row {
+        meter_id: u16,
+        key: String,
+        on_card: Option<tau_core::preset_files::PresetSet>,
+        problem: Option<String>,
+        factory_count: usize,
+    }
+    let mut rows = Vec::new();
+    for m in reg.meters.iter().filter(|m| !m.params.is_empty()) {
+        let id = u16::from(m.id);
+        let specs = tau_core::preset_files::param_specs(m)?;
+        let files = tau_core::preset_install::read_folder(root, id);
+        let (on_card, problem) = if files.is_empty() {
+            (None, None)
+        } else {
+            match tau_core::preset_files::PresetSet::from_files(id, &files, &specs) {
+                Ok(s) => (Some(s), None),
+                Err(e) => (None, Some(e.message)),
+            }
+        };
+        rows.push(Row {
+            meter_id: id,
+            key: m.key.clone(),
+            on_card,
+            problem,
+            factory_count: m.factory.len(),
+        });
+    }
+    emit(j, &rows, || {
+        rows.iter()
+            .map(|r| match (&r.on_card, &r.problem) {
+                (Some(s), _) => format!(
+                    "{:>3} {:<16} {} presets: {}",
+                    r.meter_id,
+                    r.key,
+                    s.presets.len(),
+                    s.presets
+                        .iter()
+                        .map(|p| format!(
+                            "{}{}:{}",
+                            if p.hidden { "(hidden) " } else { "" },
+                            p.id,
+                            p.name
+                        ))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                (None, Some(p)) => format!("{:>3} {:<16} unreadable: {p}", r.meter_id, r.key),
+                (None, None) => format!(
+                    "{:>3} {:<16} no folder (DEFAULT only; {} factory presets available)",
+                    r.meter_id, r.key, r.factory_count
+                ),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    })
+}
+
+/// `tau meter-presets-plan <media-root> --registry <file> --sets <sets.json>`: plans writing the given preset sets (a JSON list of
+/// `PresetSet`, only the meters named are touched). Writes nothing and prints the plan id.
+pub fn meter_presets_plan(a: &[String], j: bool) -> Result<(), CliError> {
+    let root = first(a, "a media root")?;
+    let reg = registry(a, "meter-presets-plan")?;
+    let sets: Vec<tau_core::preset_files::PresetSet> =
+        read_json(need(a, "--sets", "meter-presets-plan")?)?;
+    let plan = tau_core::preset_install::plan(root, &desired(&reg, &sets)?)?;
+    emit(j, &plan, || {
+        format!(
+            "plan {}: meters {:?}, {} write(s) ({} unchanged), removals {:?}, backs up {} file(s){}",
+            plan.id,
+            plan.meters,
+            plan.writes
+                .iter()
+                .filter(|w| w.state != tau_core::preset_install::FileState::Unchanged)
+                .count(),
+            plan.unchanged,
+            plan.removals,
+            plan.backup.len(),
+            plan.warnings
+                .iter()
+                .map(|w| format!("\nwarning: {w}"))
+                .collect::<String>()
+        )
+    })
+}
+
+/// `tau meter-presets-install <media-root> --registry <file> --sets <sets.json> --confirm <plan-id> --backup-dir <outside the card> --yes`.
+pub fn meter_presets_install(a: &[String], j: bool) -> Result<(), CliError> {
+    yes(a)?;
+    let root = first(a, "a media root")?;
+    let reg = registry(a, "meter-presets-install")?;
+    let sets: Vec<tau_core::preset_files::PresetSet> =
+        read_json(need(a, "--sets", "meter-presets-install")?)?;
+    let want = desired(&reg, &sets)?;
+    let plan = tau_core::preset_install::plan(root, &want)?;
+    let card = root.ancestors().nth(3).unwrap_or(root);
+    let backup = backup_dir(a, card, "meter-presets-install")?;
+    let r = tau_core::preset_install::execute(
+        root,
+        &want,
+        &plan,
+        need(a, "--confirm", "meter-presets-install")?,
+        Some(&backup),
+    )?;
+    emit(j, &r, || {
+        format!(
+            "wrote {} file(s), removed {}{}",
+            r.written,
+            r.removed,
+            r.backup
+                .as_ref()
+                .map(|b| format!(", backup at {}", b.display()))
+                .unwrap_or_default()
+        )
+    })
+}
