@@ -15,6 +15,8 @@
 - **F-029 (finding): AppleDouble stubs in the installed tree.** The owner's `tau-presets/` had **58 `._*` files** beside the 51 real ones (macOS wrote them while copying). Harmless to the firmware (it opens exact names), but `install_factory_presets.py` could remove them after copying. Omega's eject now sweeps them.
 - **F-030 (note): names.** The factory names use `[` and `]` (`SILK [EX]`), so they are not limited to the `METR` set `A-Z 0-9 space _ -`. Omega allows printable ASCII, 1 to 15 characters. Does the Pocket font have lower-case glyphs? (The editor will default to upper case until you say.)
 
+- **Q-031 (question): previewing a preset in the lab.** Omega's editor holds a preset as `{parameter key: value}`. Can `meter_lab.html` take a meter and such a set from the host (for example a `postMessage` `{type, meter, values}`, or a URL hash), so Omega can show the chosen preset live? If not, please say how the lab expects presets to be loaded; until then Omega shows no live preview and says so.
+
 ## Omega 0.6.0 and your gate
 The owner decided that Omega **0.6.0 includes the preset editor and the new lab**. `min_omega 0.6.0` therefore stays; v0.7.0 should not publish before that Omega does. We will tell you the date when the drop (R-025) has arrived and the end-to-end test on a Pocket has run.
 
