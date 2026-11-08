@@ -1,0 +1,11 @@
+Tau Omega test build 0.6.0-dev.4   (NOT a release)
+Release goal : 0.6.0
+Built        : 2026-11-08 00:11 WET
+Branch       : main
+Commit       : f6a2400   Lab embed contract 1 wired (Tau Alpha 012): stylesheet and bridge removed, options/size/cost/info as data, seven-row meter list; drops d8633caa and 2db91494 pinned (class fix); replies 015
+Working tree : clean
+Toolchain    : rustc 1.98.1 (48a229cea 2026-09-01)
+App          : Tau Omega.app   (unsigned: right-click > Open the first time)
+SHA-256      : bb8b5e662094dfa5bfca79204c1fca0a7242eadc942c49441ad5ff99a93d6b95  (of Contents/MacOS/tau-omega)
+
+What is in it: the 0.6.0 release candidate with Tau Alpha's lab embed contract 1 (their drop 2db91494): the preview is the lab page exactly as Tau Alpha ships it, driven by its own messages, with no stylesheet or script added by Omega. Meter Lab: one meter list, Small view / Full screen toggle, Settings / Presets / Common tabs, the Details table, the processing budget bar, "on the Pocket" ticks per preset, and a design-only "Meters on the Pocket" page (seven rows). Version inside the app is 0.6.0-dev.4.
