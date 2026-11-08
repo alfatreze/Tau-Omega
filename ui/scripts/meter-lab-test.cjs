@@ -45,8 +45,9 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
     const frameBox = async () => (await p.locator('iframe[aria-label^="Meter preview"]').boundingBox());
     const h1 = (await frameBox()).height; assert.ok(h1 >= 120 && h1 <= 130, `Winamp Bars frame ${h1}`); assert.equal((await frameBox()).width, 368); assert.equal(await p.locator('iframe[aria-label^="Meter preview"]').getAttribute('scrolling'), 'no');
     await p.locator('[data-testid=mp-meter-layered_wave]').click(); await p.waitForTimeout(1200);
-    const h2 = (await frameBox()).height; assert.ok(h2 > h1 + 40, `Layered Wave frame ${h2} vs ${h1}`);
-    assert.equal(await fr.locator('html').evaluate((e) => e.scrollHeight <= e.clientHeight + 1), true); ok('the frame grows to fit Layered Wave\'s strip, and the preview never needs to scroll');
+    const h2 = (await frameBox()).height; assert.equal(h2, h1, `Layered Wave frame ${h2} vs ${h1}`);
+    assert.equal(await fr.locator('html').evaluate((e) => e.scrollHeight <= e.clientHeight + 1), true); ok('in embed mode every meter\'s view is the same exact size (the lab hides Layered Wave\'s boundary strip) and the preview never needs to scroll');
+    assert.equal(await p.locator('[data-testid=rml-contract]').count(), 0); assert.equal(await fr.locator('#cv').evaluate((e) => getComputedStyle(e).borderTopWidth), '0px'); ok('the lab page speaks embed contract 1, is shown as the drop has it, and its canvas has no border');
     // The processing budget bar: the worst frame against what the meter's cost class allows, over or under, right under the preview.
     await p.locator('[data-testid=mp-meter-winamp_bars]').click(); await p.waitForTimeout(2500);
     const bud = p.locator('[data-testid=rml-budget]'); await bud.waitFor({ timeout: 8000 });
@@ -54,8 +55,8 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
     assert.equal(await bud.getAttribute('data-kind'), 'under'); const fillW = await bud.locator('.bb-fill').evaluate((e) => e.getBoundingClientRect().width), trackW = await bud.locator('.bb-track').evaluate((e) => e.getBoundingClientRect().width);
     assert.ok(fillW > 0 && fillW < trackW * 0.5); assert.equal(await bud.locator('.bb-over').evaluate((e) => e.getBoundingClientRect().width), 0); ok('under budget the bar fills part of the allowance and there is no red stretch');
     // The budget is pushed every other frame (about 19 times a second), not once in a while.
-    await p.evaluate(() => { window.__budgetMsgs = 0; window.addEventListener('message', (e) => { if (e.data && e.data.type === 'omega-lab-budget') window.__budgetMsgs++; }); });
-    await p.waitForTimeout(2000); const msgs = await p.evaluate(() => window.__budgetMsgs); assert.ok(msgs >= 20 && msgs <= 60, `budget messages in 2 s: ${msgs}`); ok(`the budget is sent every other frame (${msgs} updates in 2 s, about ${Math.round(msgs / 2)} a second)`);
+    await p.evaluate(() => { window.__budgetMsgs = 0; window.addEventListener('message', (e) => { if (e.data && e.data.type === 'tau-lab-cost') window.__budgetMsgs++; }); });
+    await p.waitForTimeout(2000); const msgs = await p.evaluate(() => window.__budgetMsgs); assert.ok(msgs >= 12 && msgs <= 60, `cost messages in 2 s: ${msgs}`); ok(`the lab sends the cost every other frame (${msgs} updates in 2 s, about ${Math.round(msgs / 2)} a second)`);
     // It reacts within about a second to a change of setting, the allowance tick never moves, and the last meter's numbers are never shown against the next meter's allowance.
     const worstNow = async () => Number((await bud.getAttribute('aria-label')).match(/worst frame (\d+)/)?.[1] ?? NaN);
     await p.locator('[data-testid=mp-tab-settings]').click(); const bands = p.locator('#mp-bands'); const maxBands = await bands.getAttribute('max'), minBands = await bands.getAttribute('min');
@@ -84,6 +85,10 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
     await p.locator('[data-testid=mp-tab-common]').click();
     await p.waitForFunction(() => document.querySelectorAll('[data-testid=mp-common] select').length >= 3, null, { timeout: 8000 });
     assert.equal(await p.locator('[data-testid=mp-opt-theme]').count(), 1); assert.equal(await p.locator('[data-testid=mp-opt-barready]').count(), 0); ok('the Common tab shows the preview options that apply to the shown meter, in plain words');
+    assert.equal(await p.locator('[data-testid=mp-opt-timedg]').count(), 1); assert.equal(await p.locator('[data-testid=mp-opt-fullfig]').count(), 0); ok('Layered Wave shows its own option (processor time) and the full-screen view is not repeated here');
+    await p.locator('[data-testid=mp-meter-sound_map]').click(); await p.waitForTimeout(1200);
+    assert.equal(await p.locator('[data-testid=mp-opt-corr]').count(), 1); assert.equal(await p.locator('[data-testid=mp-opt-statsok]').count(), 1); assert.equal(await p.locator('[data-testid=mp-opt-timedg]').count(), 0); ok('Sound Map shows its own two options and not Layered Wave\'s: the lab says which options apply to which meter');
+    await p.locator('[data-testid=mp-meter-layered_wave]').click(); await p.waitForTimeout(1200);
     await p.locator('[data-testid=mp-opt-mode]').selectOption('1'); await p.waitForTimeout(500);
     assert.equal(await fr.locator('#mode').inputValue(), '1'); ok('choosing Light in the Common tab changes the lab\'s own control');
     await p.locator('[data-testid=mp-opt-mode]').selectOption('0');
