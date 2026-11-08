@@ -32,9 +32,9 @@ macOS, Windows and Linux. Free and open source (MIT OR Apache-2.0). Releases: <h
 - **Convert** what the Pocket cannot play (hi-res or unsupported FLAC, WAV, M4A and more) to FLAC or MP3 on the copies, with
   **ReplayGain** added; **cover files** for every album from a folder image or the art in the tracks.
 - **Skip silence:** measures lead-in and tail silence per track so the player can skip it (on by default, adjustable).
-- **Names the Pocket can open:** the Pocket reads file paths as code page 437, so Omega keeps the accents it can draw, transliterates other
-  scripts, drops emoji and symbols, numbers names that collide, and keeps the original names and tags in a small sidecar file, so
-  titles never show as `?`.
+- **Names your Pocket can open:** Omega names your files so the Pocket can always open them. It keeps the accents the Pocket can show, turns
+  other writing into letters it can show, and numbers names that would clash. Your original names and tags are kept too, so titles
+  never show as question marks.
 - **Library workbench:** problems with plain reasons and fixes (names, paths, duplicates, covers, tags), tag editing on the copies,
   **named playlists** (add albums to a playlist from the library, on the computer or already on the card), search and filters.
 - **Card-space bar** and a verification ledger that makes repeat scans fast, plus fast loading of local and network libraries.
@@ -44,11 +44,10 @@ macOS, Windows and Linux. Free and open source (MIT OR Apache-2.0). Releases: <h
 **Tau extras**
 - **Halcyon EQ:** edit presets, import Equalizer APO / AutoEQ profiles, write them to `tau-assets.bin`, preview the response curve.
 - **Appearance:** theme editor and install for the Tau core.
-- **Meter Lab:** see each Tau meter drawn by the Pocket's own code (Tau Alpha's lab, pinned and checked against its manifest), with a
-  Small view / Full screen toggle, a processing budget bar (under or over what the meter is allowed), and a Details table. Shape the
-  presets each meter offers: Settings, Presets and Common tabs, up to 127 presets per meter with search, a tick for which presets go
-  on the Pocket, and plain factory actions. Presets are files on the card, written through a reviewed plan with a backup.
-  *Meters on the Pocket* (choosing which meters are in the Pocket's list) is a design preview only until Tau Alpha allows it.
+- **Meter Lab:** watch each Tau meter drawn the way the Pocket draws it, switch between the small and full-screen views, and see at a
+  glance whether a meter asks too much of the Pocket. Shape the presets each meter offers: change settings and see the result at once,
+  keep up to 127 presets per meter, choose which ones go on your Pocket, and bring back the factory presets in one click. Choosing
+  which meters are in the Pocket's list is shown as a preview only, until Tau Alpha allows it.
 - **Send diagnostics:** reads the Tau Check report codes from screenshots (QR and pixel-grid), shows the verdict, and builds a zip for
   a bug report. Nothing is uploaded.
 
