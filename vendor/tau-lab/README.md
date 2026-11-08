@@ -7,7 +7,7 @@ Approved exception to "never share literal files" (Tau Alpha interop **D-007**, 
 
 | Folder | Tau Alpha commit | State |
 |---|---|---|
-| `pre-0.7.0-2db91494/` | `2db91494` (full hash in its `MANIFEST.json`) | pinned 2026-11-08 (verifies against its SHA256SUMS.txt; contract 1 with `tau-lab-info` and `tau-lab-cost` sending the same `class`, no class = 2: answers Omega 015 F-1; **this is the drop the app installs**) |
+| `pre-0.7.0-2db91494/` | `2db91494` (full hash in its `MANIFEST.json`) | pinned 2026-11-08 (verifies against its SHA256SUMS.txt; contract 1 with `tau-lab-info` and `tau-lab-cost` sending the same `class`, no class = 2: answers Omega 015 F-1; **this is the drop the app installs**; Tau Alpha 014 (2026-11-08) names it as the lab drop of the v0.7.0 release: the lab sources have not changed since, so `pre-0.7.0-` is only its folder name) |
 | `pre-0.7.0-d8633caa/` | `d8633caaa782f9173420ad8020daeabb63271021` | pinned 2026-11-07 (verifies against its SHA256SUMS.txt; **lab embed contract 1** (`tau-lab-embed`, `tau-lab-option(s)`, `tau-lab-size`, `tau-lab-cost`, `tau-lab-info`, views in `lab-data.json`), 8 modules; answers Omega 014 R-1 to R-5) |
 | `pre-0.7.0-bfe351d4/` | `bfe351d4e8df4a61e553675967d662077244a0c0` | pinned 2026-11-07 (verifies; adds the host message handler `tau-lab-set` / `tau-lab-ready` / `tau-lab-applied` and `preview/tau_host.js`) |
 | `pre-0.7.0-d6d43725/` | `d6d43725f6da4a5835a054049718029f8b584da4` | pinned 2026-11-07 (verifies against its SHA256SUMS.txt; **all eight WebAssembly modules**, the built `meter_lab.html`, `lab-data.json`, module provenance in `MANIFEST.json`; installed for the page and the preset editor's registry) |
