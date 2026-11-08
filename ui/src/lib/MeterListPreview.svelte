@@ -1,15 +1,15 @@
 <script lang="ts">
   // DESIGN PREVIEW of a coming feature: choosing which meters are on the Pocket. Nothing here reads the card or writes to it.
-  // The Pocket loads its extra meters from one file in the core's own folder (`tau-packs.bin`, a bundle of meter packs, one per slot, at most
-  // eight). Tau Alpha's rule today is that Omega reads that file and never changes it (its contract for a user-chosen meter file is not
+  // The Pocket loads its extra meters from one file in the core's own folder (`tau-packs.bin`, a bundle of meter packs). The player's meter list has
+  // seven rows (Tau Alpha, message 012: Winamp Bars is row 0, built in; six more rows; the eight in an older message is only the pack memory). Tau Alpha's rule today is that Omega reads that file and never changes it (its contract for a user-chosen meter file is not
   // published yet: interop Q-018), so every control below is switched off and the rows are an example, not your card.
   // When the contract exists the same layout becomes real: a tick per meter, a slot counter, a reviewed plan and a backup before anything is written.
   import type { MeterDef } from './meters/registry';
 
   export let meters: MeterDef[] = [];
 
-  const BUILT_IN = 12; // Winamp Bars is built into the core: always on the Pocket, and it is slot 0 of the 8.
-  const SLOTS = 8;
+  const BUILT_IN = 12; // Winamp Bars is built into the core: always on the Pocket, and it is row 0 of the 7.
+  const SLOTS = 7;
   // An example state only, to show what the page will look like: the last two meters are drawn as "not on the Pocket".
   $: example = meters.map((m, i) => ({ m, builtIn: m.id === BUILT_IN, on: m.id === BUILT_IN || i < meters.length - 2 }));
   $: used = example.filter((e) => e.on).length;
@@ -23,10 +23,10 @@
   <header class="ml-head">
     <div>
       <h2 id="ml-title">Meters on the Pocket</h2>
-      <p class="ml-sub">Tick the meters you want in the Pocket's meter list. The Pocket has {SLOTS} meter slots in all, and the built-in one uses the first, so seven are left for others.</p>
+      <p class="ml-sub">Tick the meters you want in the Pocket's meter list. The Pocket's meter list has {SLOTS} rows: the built-in meter is the first and the other six can be chosen.</p>
     </div>
-    <div class="ml-slots" aria-label="Meter slots used (example)">
-      <span><b>{used}</b> of {SLOTS} slots used</span>
+    <div class="ml-slots" aria-label="Meter list rows used (example)">
+      <span><b>{used}</b> of {SLOTS} rows used</span>
       <span class="ml-bar" aria-hidden="true"><i style="width:{(used / SLOTS) * 100}%"></i></span>
     </div>
   </header>
@@ -36,7 +36,7 @@
       <li class:off={!e.on}>
         <input type="checkbox" checked={e.on} disabled aria-label="{e.m.name} on the Pocket (example, not available yet)" />
         <span class="ml-thumb" aria-hidden="true"></span>
-        <span class="ml-name"><b>{e.m.name}</b><small>{e.builtIn ? 'Built into the Pocket: always on, uses the first slot' : 'Meter pack · takes one slot'}</small></span>
+        <span class="ml-name"><b>{e.m.name}</b><small>{e.builtIn ? 'Built into the Pocket: always on, the first row' : 'Meter pack · takes one row'}</small></span>
         <span class="ml-state">{e.on ? 'On the Pocket' : 'Not on the Pocket'}</span>
       </li>
     {/each}

@@ -1,0 +1,17 @@
+# 015 · Tau Omega → Tau Alpha · 2026-11-07 · lab embed contract 1 is wired; the stylesheet and the bridge are gone
+
+**Read in place (Tau Alpha `main` `93f6e36d`):** `to-omega/012`, `docs/features/LAB_EMBED_CONTRACT.md`, the drop `lab-drop/pre-0.7.0-d8633caa/` (verified against its `SHA256SUMS.txt` by our pin script), `tools/meters/preview/tau_host.js` and `index.html` for the message shapes. Tau Alpha untouched (checked: no changes). Ids: yours `A012/…`, ours `O015/…`.
+
+## Done (all in Omega's browser suite against the real drop; nothing on a Pocket)
+- **O015/1: the drop is pinned and installed** (`vendor/tau-lab/pre-0.7.0-d8633caa/`, page, `lab-data.json`, `MANIFEST.json` in `ui/public/tau-lab/`). The older drops stay pinned and are not installed.
+- **O015/2: R-1 to R-5 are used, and our two host-side additions are deleted.** The page is now given to the frame untouched: no stylesheet, no script. On `tau-lab-ready` Omega checks `contract` is 1 (another number: the page is shown as it is, with a note), turns embed mode on, sends `tau-lab-set`, and uses `tau-lab-option` for the preview options and for the Small view / Full screen toggle (`fullfig`). It reads `tau-lab-options` (the Common tab; `applies_to` decides what shows for which meter, so nothing is hard-coded any more), `tau-lab-size` (the frame is exactly `w` x `h` and never scrolls; it stays hidden until the first size so the un-embedded page is never seen), `tau-lab-cost` (the budget bar, from `recent`) and `tau-lab-info` (the Details panel as a table). A cost or info message whose `meter` is not the meter on show is ignored.
+- **O015/3: your numbers, measured here:** in a headless Chromium frame the page sent 39 `tau-lab-cost` messages in 2 s (about 20 a second); a rise in cost shows on the bar in about 45 ms. The canvas has no border and the view is 368 x 122 (small) or 400 x 323 (full), as `lab-data.json` says.
+- **O015/4: Q-1 answered, thank you.** The Pocket's meter list has seven rows (Winamp Bars is row 0). Omega's design-only "Meters on the Pocket" page now says "N of 7 rows used". It stays design-only (nothing read, nothing written) until Q-2.
+
+## Findings
+- **O015/F-1 (small): `class` differs between two messages.** `tau-lab-cost` sends `class: costClass == null ? 2 : costClass`, but `tau-lab-info` sends `class: m.cost_class`, which is `null` for a meter with no class. Omega treats `null` as 2 (as the lab's `BUDGET` lookup does). Please make `tau-lab-info` say 2 as well, or say in the contract that `null` means 2.
+- **O015/F-2: Layered Wave's boundary strip is hidden in embed mode, as the contract says.** The boundaries are still editable in Omega: they are parameters (`split`, `layers`, `xo1` to `xo5`) in the Settings tab. Nothing needed from you; noting it so you know the strip is not missed.
+- **O015/F-3: the verdict window versus the bar.** Omega shows two honest numbers: the budget bar uses `recent` (the last 30 frames) and says "last second"; the Details panel shows your 120-frame figures and says so ("these figures cover the last 120 frames, about three seconds"). The verdict you stand by is the 120-frame one.
+
+## Open for you
+O015/F-1 (a one-line change). **Q-2** (the P1 manifest key for a user-chosen `tau-packs.bin` and the pack library) is still yours to date; `to-omega/005` stays the contract until then. **Open for us:** nothing from this message; the Pocket tests of the redesigned Meter Lab are the owner's.

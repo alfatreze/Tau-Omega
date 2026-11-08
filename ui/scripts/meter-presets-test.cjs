@@ -118,7 +118,7 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await t('mp-mode-list').click(); const ml = t('meter-list-preview'); assert.equal(await ml.isVisible(), true);
   assert.match(await ml.innerText(), /Preview of a coming feature[\s\S]*Nothing on this page reads your card or changes it/); ok('the Meters on the Pocket page says it is a preview and touches nothing');
   assert.equal(await ml.locator('input:not(:disabled), button:not(:disabled)').count(), 0); assert.equal(await ml.locator('li').count(), 7); ok('every control on it is switched off, and it lists the meters Omega knows');
-  assert.match(await ml.innerText(), /\d of 8 slots used/); await t('mp-mode-edit').click(); assert.equal(await p.locator('.mp-layout').isVisible(), true); ok('switching back returns to the meter workspace');
+  assert.match(await ml.innerText(), /\d of 7 rows used/); await t('mp-mode-edit').click(); assert.equal(await p.locator('.mp-layout').isVisible(), true); ok('switching back returns to the meter workspace');
   await p.screenshot({ path: process.env.SHOT || '/tmp/meter-presets.png' });
   assert.deepEqual(errors, []); ok('no page errors');
   await b.close(); console.log(`\n${passed} checks passed`);

@@ -1,54 +1,39 @@
-// The lab's "Info: commands, CPU, cost of each option" area, turned from running text into labelled rows (a label, a value that lines up on
-// the right, and an explanation). The lab writes it as lines separated by line breaks; the bridge in RealMeterLab sends the lines apart. A line
-// this does not recognise is kept as a plain note, so nothing the lab says is lost if its wording changes.
+// The lab's cost figures, turned into what the page shows: labelled rows for the Details panel (a label, a value that lines up on the right,
+// an explanation) and the numbers behind the processing budget bar. The lab sends them as data (lab embed contract 1: `tau-lab-info` and
+// `tau-lab-cost`), so nothing here reads text.
+import type { LabCost } from './labBus';
 
 export type CostRow = { label: string; value: string; note?: string; tone?: 'ok' | 'bad' };
 
-const num = '[\\d.]+';
+const rnd = (n: number, digits = 1) => String(Math.round(n * 10 ** digits) / 10 ** digits);
 
-/** `engine writes 0k px/frame` can trail any line (the lab appends it to the processor line). */
-function takeEngine(line: string): { rest: string; px?: string } {
-  const m = line.match(/\s*·\s*engine writes ([\d.]+k?) px\/frame\s*$/);
-  return m ? { rest: line.slice(0, m.index), px: m[1] } : { rest: line };
+/** The Details panel's summary rows. The lab's figures cover the worst and the average of its last 120 frames. */
+export function costRows(c: LabCost): CostRow[] {
+  const cls = c.class ?? 2;
+  return [
+    { label: 'Drawing commands per frame, average', value: rnd(c.mean) },
+    { label: 'Drawing commands per frame, worst', value: rnd(c.max, 0) },
+    { label: `Allowed for this meter (class ${cls})`, value: rnd(c.budget, 0) },
+    { label: 'Compared with the bars meter', value: `${rnd(c.vs_bars, 2)}×` },
+    { label: 'Within the allowance?', value: c.over ? 'No, over' : 'Yes', tone: c.over ? 'bad' : 'ok' },
+    { label: 'Based on', value: c.basis },
+    { label: 'Drawing cell width', value: `${c.cell_width} px`, note: c.cell_width > 1 ? 'widened by the cost guard and the Resolution setting' : 'full resolution' },
+    { label: 'Processor use (estimate)', value: `${rnd(c.cpu_low)}–${rnd(c.cpu_high)} %`, note: 'of one processor core. The model: issuing a command takes 60 to 400 cycles, evaluating a column 30 to 80, at 38 Hz on a 66.7 MHz clock. Not measured on a Pocket.' },
+    { label: 'Pixels drawn per frame', value: `${c.engine_kpx}k px`, note: 'by the drawing engine' }
+  ];
 }
 
-export function parseCostLines(lines: string[]): CostRow[] {
-  const rows: CostRow[] = [];
-  const engineRows: CostRow[] = [];
-  for (const raw of lines) {
-    const { rest: line, px } = takeEngine(raw.trim());
-    if (px !== undefined) engineRows.push({ label: 'Pixels drawn per frame', value: `${px} px`, note: 'by the drawing engine' });
-    let m: RegExpMatchArray | null;
-    if ((m = line.match(new RegExp(`^commands/frame: mean (${num}), worst (${num}) \\(class (\\S+) budget (${num})\\)(?: · (${num})× VIZ_BARS)?(?: · (within budget|OVER BUDGET))?(?: · (.+))?$`)))) {
-      rows.push({ label: 'Drawing commands per frame, average', value: m[1] });
-      rows.push({ label: 'Drawing commands per frame, worst', value: m[2] });
-      rows.push({ label: `Allowed for this meter (class ${m[3]})`, value: m[4] });
-      if (m[5]) rows.push({ label: 'Compared with the bars meter', value: `${m[5]}×` });
-      if (m[6]) rows.push({ label: 'Within the allowance?', value: m[6] === 'OVER BUDGET' ? 'No, over' : 'Yes', tone: m[6] === 'OVER BUDGET' ? 'bad' : 'ok' });
-      if (m[7]) rows.push({ label: 'Based on', value: m[7] });
-    } else if ((m = line.match(new RegExp(`^drawing cell width: (${num}) px(?: \\((.*)\\))?$`)))) {
-      rows.push({ label: 'Drawing cell width', value: `${m[1]} px`, note: m[2] });
-    } else if ((m = line.match(new RegExp(`^CPU estimate: (${num})[–-](${num})% of one core(?: \\((.*)\\))?$`)))) {
-      rows.push({ label: 'Processor use (estimate)', value: `${m[1]}–${m[2]} %`, note: `of one processor core${m[3] ? `. ${m[3]}` : ''}` });
-    } else if (line) {
-      rows.push({ label: 'Note', value: '', note: line });
-    }
-  }
-  return [...rows, ...engineRows];
-}
+/** The signed change shown beside an option's processor use, as in the lab: +0.4, -0.6, +0.0. */
+export const signed = (n: number) => (n >= 0 ? '+' : '-') + Math.abs(n).toFixed(1);
 
 /** The numbers behind the budget line: how many drawing commands a frame costs against what the meter's cost class allows. */
 export type Budget = { mean: number; worst: number; allowed: number; costClass: string; over: boolean };
 
-export function parseBudget(lines: string[]): Budget | null {
-  for (const raw of lines) {
-    const m = raw.match(new RegExp(`^commands/frame: mean (${num}), worst (${num}) \\(class (\\S+) budget (${num})\\)`));
-    if (m) {
-      const [mean, worst, allowed] = [Number(m[1]), Number(m[2]), Number(m[4])];
-      return { mean, worst, allowed, costClass: m[3], over: worst > allowed };   // the lab's own rule: the worst frame against the allowance
-    }
-  }
-  return null;
+/** The budget from a `tau-lab-cost` message. The bar uses the lab's `recent` window (the last 30 frames, a fast-moving figure); the verdict the
+ *  lab itself stands by is the worst of the last 120 frames, which the Details panel shows. */
+export function budgetFromCost(m: { recent?: { n: number; mean: number; max: number }; budget?: number; class?: number | null }): Budget | null {
+  if (!m.recent || typeof m.budget !== 'number' || !m.recent.n) return null;
+  return { mean: Math.round(m.recent.mean * 10) / 10, worst: m.recent.max, allowed: m.budget, costClass: String(m.class ?? 2), over: m.recent.max > m.budget };
 }
 
 /** What the budget bar draws, all as percentages of the bar's width, and the sentence that goes with it. */

@@ -115,18 +115,17 @@
     selId = next; confirmDelete = false;
   }
 
-  // ---- Common: the preview options of the lab, in plain words, for the meter being shown ----
-  const EVERY_METER = ['theme', 'mode', 'accent', 'src'];   // the small / full-screen view has its own toggle above the preview
-  const ONLY_FOR: Record<string, string[]> = { winamp_bars: ['barready'], layered_wave: ['timedg'], sound_map: ['statsok', 'corr'] };
+  // ---- Common: the lab's preview options for the meter on show, in plain words (the lab says which options apply to which meter) ----
   const PLAIN: Record<string, string> = {
-    theme: 'Colour theme', mode: 'Light or dark', accent: 'Accent colour', src: 'Test sound', fullfig: 'Full-screen figure (400 × 323)',
+    theme: 'Colour theme', mode: 'Light or dark', accent: 'Accent colour', src: 'Test sound',
     barready: 'Use the fast bar drawing', timedg: 'Count processor time like the Pocket', statsok: 'Level meter chip present', corr: 'Left and right balance'
   };
-  const PLAIN_SOURCE: Record<string, string> = { demo: 'Demo sound', sweep: 'Sweep', silence: 'Silence' };
-  $: commonOptions = $labOptions.filter((o) => EVERY_METER.includes(o.id) || (ONLY_FOR[meter?.key ?? ''] ?? []).includes(o.id));
+  const PLAIN_CHOICE: Record<string, string> = { 'Demo (deterministic)': 'Demo sound' };
+  // The small / full-screen view has its own toggle above the preview, so it is not repeated here.
+  $: commonOptions = $labOptions.filter((o) => o.id !== 'fullfig');
   const plainLabel = (o: LabOption) => PLAIN[o.id] ?? o.label;
-  const plainChoice = (o: LabOption, c: { value: string; text: string }) => (o.id === 'src' ? PLAIN_SOURCE[c.value] ?? c.text : c.text);
-  const setOption = (id: string, value: string | number | boolean) => $labSend?.({ type: 'omega-lab-option', id, value });
+  const plainChoice = (text: string) => PLAIN_CHOICE[text] ?? text;
+  const setOption = (id: string, value: number | boolean) => $labSend?.({ type: 'tau-lab-option', id, value });
 
   const isFactory = (p: SetPreset) => {
     const f = view?.factory.presets.find((x) => x.id === p.id);
@@ -430,10 +429,10 @@
               <legend>Preview</legend>
               {#each commonOptions as o (o.id)}
                 <div class="mp-param">
-                  <label for="mp-opt-{o.id}" title={o.help}>{plainLabel(o)}</label>
-                  {#if o.type === 'select'}
-                    <select id="mp-opt-{o.id}" value={o.value} on:change={(e) => setOption(o.id, e.currentTarget.value)} data-testid="mp-opt-{o.id}">
-                      {#each o.choices as c}<option value={c.value}>{plainChoice(o, c)}</option>{/each}
+                  <label for="mp-opt-{o.id}">{plainLabel(o)}</label>
+                  {#if o.type === 'enum'}
+                    <select id="mp-opt-{o.id}" value={o.value} on:change={(e) => setOption(o.id, Number(e.currentTarget.value))} data-testid="mp-opt-{o.id}">
+                      {#each o.choices as c, i}<option value={i}>{plainChoice(c)}</option>{/each}
                     </select>
                   {:else if o.type === 'bool'}
                     <input id="mp-opt-{o.id}" type="checkbox" checked={o.value} on:change={(e) => setOption(o.id, e.currentTarget.checked)} data-testid="mp-opt-{o.id}" />

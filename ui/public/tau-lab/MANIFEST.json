@@ -1,12 +1,13 @@
 {
  "format": 1,
- "tau_alpha_commit": "bfe351d4e8df4a61e553675967d662077244a0c0",
+ "contract": 1,
+ "tau_alpha_commit": "2db914940caf64e78f8e7ab3ca9249bca3fa1119",
  "source_dir": "tools/meters/preview",
  "files": [
   {
    "path": "preview/build.py",
-   "sha256": "76b0302a41e9e4624f89527d24613a562a41fd4805e878e425f831e66eefefe8",
-   "bytes": 4442
+   "sha256": "8f72b93edb9f198c27cac14a3725420754da2298f4eb798afd87652c3216f6f0",
+   "bytes": 5616
   },
   {
    "path": "preview/fixtures/core_vectors.json",
@@ -40,8 +41,8 @@
   },
   {
    "path": "preview/index.html",
-   "sha256": "bf78bfca11eec5080d5490828e317ab5b692d2c89ae6cdfef6f8654689159591",
-   "bytes": 20600
+   "sha256": "01b529498cee5fd412a15b62e6d804ae5117770fa838b2da30c7ac5c20b55f69",
+   "bytes": 24786
   },
   {
    "path": "preview/lw_tables.js",
@@ -165,8 +166,8 @@
   },
   {
    "path": "preview/tau_host.js",
-   "sha256": "13ef21602d634685f069c3d4c22d1edc949c6da349c875aa75f920e5ed40ba76",
-   "bytes": 3059
+   "sha256": "449c2755fa579df972e26fbf4cfd481b2c7d67a6148d164befbf78c7d4a035e3",
+   "bytes": 8667
   },
   {
    "path": "preview/tau_live.js",
@@ -250,13 +251,13 @@
   },
   {
    "path": "meter_lab.html",
-   "sha256": "791d0b57572c6dea3b216833f94642af146e6860815ff0d97966769ebb23f0b8",
-   "bytes": 264011
+   "sha256": "e191535a7a95fae548614b3d3a45cbd8c1c63d51283334c1eff7e94354b5b164",
+   "bytes": 274533
   },
   {
    "path": "lab-data.json",
-   "sha256": "c9d0b6bd3bb74f6936ac208890514257bc9e08c5b497044f05c5151df409036c",
-   "bytes": 57924
+   "sha256": "1b7557a1dfac0a9f059a671b2e31cc1bf9b8a2e05c8796bc53010c64cb26d9ba",
+   "bytes": 59139
   }
  ],
  "wasm": {

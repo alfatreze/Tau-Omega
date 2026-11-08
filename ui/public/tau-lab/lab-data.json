@@ -1,4 +1,5 @@
 {
+ "contract": 1,
  "themes": [
   {
    "name": "TAU",
@@ -2546,5 +2547,99 @@
     "list_position": 0
    }
   ]
+ },
+ "views": {
+  "rects": {
+   "small": {
+    "x": 16,
+    "y": 152,
+    "w": 368,
+    "h": 122
+   },
+   "full": {
+    "x": 0,
+    "y": 0,
+    "w": 400,
+    "h": 323
+   }
+  },
+  "meters": {
+   "0": {
+    "small": true,
+    "full": true
+   },
+   "1": {
+    "small": true,
+    "full": true
+   },
+   "2": {
+    "small": false,
+    "full": false
+   },
+   "3": {
+    "small": true,
+    "full": true
+   },
+   "4": {
+    "small": true,
+    "full": true
+   },
+   "5": {
+    "small": true,
+    "full": true
+   },
+   "6": {
+    "small": true,
+    "full": true
+   },
+   "7": {
+    "small": false,
+    "full": false
+   },
+   "8": {
+    "small": true,
+    "full": true
+   },
+   "9": {
+    "small": false,
+    "full": false
+   },
+   "10": {
+    "small": true,
+    "full": true
+   },
+   "11": {
+    "small": false,
+    "full": false
+   },
+   "12": {
+    "small": true,
+    "full": true
+   },
+   "13": {
+    "small": true,
+    "full": true
+   },
+   "14": {
+    "small": true,
+    "full": true
+   },
+   "15": {
+    "small": true,
+    "full": true
+   },
+   "16": {
+    "small": true,
+    "full": true
+   },
+   "17": {
+    "small": true,
+    "full": true
+   },
+   "18": {
+    "small": true,
+    "full": true
+   }
+  }
  }
 }
