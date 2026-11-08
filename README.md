@@ -4,7 +4,7 @@
 It starts with the **Analogue Pocket** (and the **Tau** music player core, which it was born for) and is being built to grow past
 both: more devices, more kinds of library, and a plugin-friendly engine that other developers can build on.
 
-> **Status: v0.5.1, in the middle of a reorganisation.** The app began as a companion for the Tau core and is being widened into a
+> **Status: v0.6.0, in the middle of a reorganisation.** The app began as a companion for the Tau core and is being widened into a
 > general device manager. Everything it did before is kept and is still supported in full; the layout, naming and some screens are
 > moving while that happens, and the Tau-specific parts are being separated from the general ones. Expect screens to change between
 > releases. Nothing that touches a card changes meaning without a reviewed plan.
@@ -32,6 +32,9 @@ macOS, Windows and Linux. Free and open source (MIT OR Apache-2.0). Releases: <h
 - **Convert** what the Pocket cannot play (hi-res or unsupported FLAC, WAV, M4A and more) to FLAC or MP3 on the copies, with
   **ReplayGain** added; **cover files** for every album from a folder image or the art in the tracks.
 - **Skip silence:** measures lead-in and tail silence per track so the player can skip it (on by default, adjustable).
+- **Names the Pocket can open:** the Pocket reads file paths as code page 437, so Omega keeps the accents it can draw, transliterates other
+  scripts, drops emoji and symbols, numbers names that collide, and keeps the original names and tags in a small sidecar file, so
+  titles never show as `?`.
 - **Library workbench:** problems with plain reasons and fixes (names, paths, duplicates, covers, tags), tag editing on the copies,
   **named playlists** (add albums to a playlist from the library, on the computer or already on the card), search and filters.
 - **Card-space bar** and a verification ledger that makes repeat scans fast, plus fast loading of local and network libraries.
@@ -41,7 +44,11 @@ macOS, Windows and Linux. Free and open source (MIT OR Apache-2.0). Releases: <h
 **Tau extras**
 - **Halcyon EQ:** edit presets, import Equalizer APO / AutoEQ profiles, write them to `tau-assets.bin`, preview the response curve.
 - **Appearance:** theme editor and install for the Tau core.
-- **Meters** preview lab (synthetic until a final meter set ships).
+- **Meter Lab:** see each Tau meter drawn by the Pocket's own code (Tau Alpha's lab, pinned and checked against its manifest), with a
+  Small view / Full screen toggle, a processing budget bar (under or over what the meter is allowed), and a Details table. Shape the
+  presets each meter offers: Settings, Presets and Common tabs, up to 127 presets per meter with search, a tick for which presets go
+  on the Pocket, and plain factory actions. Presets are files on the card, written through a reviewed plan with a backup.
+  *Meters on the Pocket* (choosing which meters are in the Pocket's list) is a design preview only until Tau Alpha allows it.
 - **Send diagnostics:** reads the Tau Check report codes from screenshots (QR and pixel-grid), shows the verdict, and builds a zip for
   a bug report. Nothing is uploaded.
 
@@ -73,7 +80,7 @@ Rust engine (`crates/tau-core`, portable and UI-free), audio conversion (`tau-au
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --features tau-core/serde
-cd ui && npm install && npm run check          # browser suites: npm run dev, then bash scripts/run-all.sh
+cd ui && npm install && npm run check          # 22 browser suites: npm run dev, then bash scripts/run-all.sh
 cd src-tauri && cargo tauri dev                 # live app with hot reload
 tools/dev-build.sh                              # a local test build (Dev channel), filed in releases/dev-builds/
 ```
@@ -92,6 +99,9 @@ Release steps: `docs/RELEASING.md`. Contributor and agent rules: `CLAUDE.md`.
 | `docs/MARKETPLACE_SPEC.md`, `docs/CORES_SECTION_SPEC.md`, `docs/CORE_DISABLE_SPEC.md` | Cores: marketplace, per-core pages, disabling. |
 | `docs/CONVERSION_AND_REPLAYGAIN.md`, `docs/SKIP_SILENCE.md` | Music conversion, ReplayGain and silence skipping. |
 | `docs/FIRMWARE_SYNC.md` | What is read from the Tau Alpha repository and how it is checked. |
+| `docs/interop/`, `vendor/tau-lab/README.md` | Messages with Tau Alpha, what is open, and the pinned lab drops (how the app uses the lab). |
+| `docs/REAL_CARD_PRESETS_TEST.md`, `docs/REAL_CARD_NAMES_TEST.md` | The real-card tests for meter presets and for card names, with what the owner saw on a Pocket. |
+| `docs/RELEASE_NOTES_0.6.0.md` | What is new in 0.6.0: features, fixes, technical improvements, known limits. |
 | `docs/RELEASING.md` | Installers, channels, the in-app updater, publishing. |
 | `TEST_PLAN.md`, `docs/REAL_CARD_PASS.md` | Tests and the real-card checklist. |
 
