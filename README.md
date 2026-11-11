@@ -1,5 +1,8 @@
 # Tau Omega
 
+<img width="1127" height="766" alt="image" src="https://github.com/user-attachments/assets/6f1e4531-5120-4595-8027-8f80f7ea7516" />
+
+
 **One desktop manager for your Analogue devices: their SD cards, media, ROMs, saves, cores and settings, in one place.**
 It starts with the **Analogue Pocket** (and the **Tau** music player core, which it was born for) and is being built to grow past
 both: more devices, more kinds of library, and a plugin-friendly engine that other developers can build on.
