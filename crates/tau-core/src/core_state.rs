@@ -5,12 +5,18 @@
 //!
 //! Plan, confirm, execute like every other write: the plan lists the moves, the token covers them, and nothing moves with a wrong token.
 
-use crate::{ErrorCode, TauError, corehub, update::CATALOG_CACHES};
+// What only the `serde` build uses (the plan and the moves) is gated with it, so the engine also builds warning-free without the feature.
+#[cfg(feature = "serde")]
+use crate::update::CATALOG_CACHES;
+use crate::{ErrorCode, TauError, corehub};
 use sha2::{Digest, Sha256};
-use std::{fs, path::Path};
+#[cfg(feature = "serde")]
+use std::fs;
+use std::path::Path;
 
 /// The holding folder at the card root.
 pub const DISABLED_DIR: &str = "Disabled Cores";
+#[cfg(feature = "serde")]
 const INDEX: &str = "omega-disabled.json";
 
 fn refuse(msg: impl Into<String>) -> TauError {

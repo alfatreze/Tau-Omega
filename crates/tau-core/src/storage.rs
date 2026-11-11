@@ -29,9 +29,37 @@ pub struct VolumeSpace {
 pub fn volume_space(path: &Path) -> Result<VolumeSpace, TauError> {
     let existing = nearest_existing_ancestor(path)?;
     Ok(VolumeSpace {
-        total_bytes: fs4::total_space(&existing)?,
-        available_bytes: fs4::available_space(&existing)?,
+        total_bytes: total_space(&existing)?,
+        available_bytes: available_space(&existing)?,
     })
+}
+
+// The three disk-space questions the engine asks. On a computer they go to the operating system (`fs4`). WebAssembly (WASI) has no such call,
+// so there they answer "unsupported"; every caller outside `volume_space` already treats a failed measurement as "cannot measure: do not
+// block" (a 4096-byte cluster guess, or no space check), so a WebAssembly host (the Pocket Sync plugin) loses nothing it uses.
+#[cfg(not(target_os = "wasi"))]
+pub(crate) fn total_space(path: &Path) -> std::io::Result<u64> {
+    fs4::total_space(path)
+}
+#[cfg(not(target_os = "wasi"))]
+pub(crate) fn available_space(path: &Path) -> std::io::Result<u64> {
+    fs4::available_space(path)
+}
+#[cfg(not(target_os = "wasi"))]
+pub(crate) fn allocation_granularity(path: &Path) -> std::io::Result<u64> {
+    fs4::allocation_granularity(path)
+}
+#[cfg(target_os = "wasi")]
+pub(crate) fn total_space(_path: &Path) -> std::io::Result<u64> {
+    Err(std::io::ErrorKind::Unsupported.into())
+}
+#[cfg(target_os = "wasi")]
+pub(crate) fn available_space(_path: &Path) -> std::io::Result<u64> {
+    Err(std::io::ErrorKind::Unsupported.into())
+}
+#[cfg(target_os = "wasi")]
+pub(crate) fn allocation_granularity(_path: &Path) -> std::io::Result<u64> {
+    Err(std::io::ErrorKind::Unsupported.into())
 }
 
 /// Whether `bytes_needed` fits in the available space at `path`'s volume,
@@ -93,6 +121,18 @@ mod tests {
         fs,
         time::{SystemTime, UNIX_EPOCH},
     };
+
+    /// On a computer the three questions go to the operating system and `volume_space` is built from them; on WebAssembly they say
+    /// "unsupported" (not run here: it needs a WASI host, but `cargo check --target wasm32-wasip1` keeps it compiling).
+    #[cfg(not(target_os = "wasi"))]
+    #[test]
+    fn the_disk_space_questions_go_to_the_operating_system_on_a_computer() {
+        let dir = std::env::temp_dir();
+        let (total, free) = (total_space(&dir).unwrap(), available_space(&dir).unwrap());
+        assert!(total > 0 && free <= total, "{free} free of {total}");
+        assert!(allocation_granularity(&dir).unwrap() > 0);
+        assert_eq!(volume_space(&dir).unwrap().total_bytes, total);
+    }
 
     fn scratch_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(

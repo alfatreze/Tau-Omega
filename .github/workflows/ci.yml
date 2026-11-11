@@ -25,6 +25,18 @@ jobs:
       - run: cargo test --workspace --features tau-core/serde
       - run: python3 testdata/gen_golden.py
       - run: git diff --exit-code -- testdata
+  # `tau-core` is a portable engine (D-001) that Tau Alpha's Pocket Sync plugin also uses, as WebAssembly (D-023): it must build on its own, with and
+  # without the `serde` feature, on a computer and for `wasm32-wasip1`. The other jobs build it only together with the rest of the workspace.
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: wasm32-wasip1 }
+      - run: cargo clippy -p tau-core --locked -- -D warnings
+      - run: cargo check -p tau-core --locked --features serde
+      - run: cargo check -p tau-core --locked --target wasm32-wasip1
+      - run: cargo check -p tau-core --locked --target wasm32-wasip1 --features serde
   ui:
     runs-on: ubuntu-latest
     defaults:

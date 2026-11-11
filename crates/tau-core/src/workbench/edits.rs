@@ -190,7 +190,7 @@ pub fn execute_removal(
     // touched (a full host disk used to be discovered halfway through an album).
     if let Some(backup) = backup_root {
         let existing = crate::storage::nearest_existing_ancestor(backup)?;
-        let unit = fs4::allocation_granularity(&existing)
+        let unit = crate::storage::allocation_granularity(&existing)
             .ok()
             .filter(|u| *u > 0)
             .unwrap_or(4096);
@@ -199,7 +199,7 @@ pub fn execute_removal(
             .iter()
             .map(|i| sync::round_up_to(i.bytes, unit))
             .sum();
-        if let Ok(available) = fs4::available_space(&existing) {
+        if let Ok(available) = crate::storage::available_space(&existing) {
             sync::ensure_space(available, needed, crate::storage::DEFAULT_MARGIN_BYTES)?;
         }
     }
