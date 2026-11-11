@@ -240,12 +240,24 @@ struct ScanKind {
 /// How many files are read at once. A network share is waiting on the network, not on the processor, so more
 /// readers than cores still pay off; measuring silence is processor work and gains from every core.
 fn scan_threads() -> usize {
-    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
-    (cores * 2).clamp(4, 16)
+    // WebAssembly (WASI) has no threads: a scan there reads one file after the other (Tau Alpha 016, A016/R-1).
+    #[cfg(target_os = "wasi")]
+    {
+        1
+    }
+    #[cfg(not(target_os = "wasi"))]
+    {
+        let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+        (cores * 2).clamp(4, 16)
+    }
 }
 
-/// Runs `f` over `items` on several threads and returns the results in the order of the items.
+/// Runs `f` over `items` on several threads and returns the results in the order of the items. With one thread (or one item) it runs
+/// them here, in order, and starts no thread at all.
 fn par_map<T: Sync, R: Send>(items: &[T], threads: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    if threads <= 1 || items.len() <= 1 {
+        return items.iter().map(f).collect();
+    }
     let next = std::sync::atomic::AtomicUsize::new(0);
     let (tx, rx) = std::sync::mpsc::channel::<(usize, R)>();
     let mut out: Vec<Option<R>> = (0..items.len()).map(|_| None).collect();
@@ -305,6 +317,17 @@ fn scan_dir_options(
     kind: ScanKind,
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<Scan, TauError> {
+    scan_dir_threads(common, playlists, kind, progress, scan_threads())
+}
+
+/// The scan itself, reading with `threads` readers (one: no other thread is started, which is the only way on WebAssembly).
+fn scan_dir_threads(
+    common: &Path,
+    playlists: bool,
+    kind: ScanKind,
+    progress: &mut Option<&mut dyn ProgressObserver>,
+    threads: usize,
+) -> Result<Scan, TauError> {
     let mut files = Vec::new();
     collect_files(common, common, &mut files)?;
     files.sort();
@@ -351,7 +374,6 @@ fn scan_dir_options(
         });
     }
     let total = media.len() as u64;
-    let threads = scan_threads();
     let prints = par_map(&media, threads, |m| {
         fs::metadata(&m.path)
             .ok()
@@ -387,55 +409,73 @@ fn scan_dir_options(
     // progress observer (which is not shared between threads) is only ever called here, and a cancel stops the workers.
     let mut read: Vec<Option<TagRead>> = (0..media.len()).map(|_| None).collect();
     if !misses.is_empty() {
-        let cancel = std::sync::atomic::AtomicBool::new(false);
-        let next = std::sync::atomic::AtomicUsize::new(0);
-        let (tx, rx) = std::sync::mpsc::channel::<(usize, TagRead)>();
         let mut stopped: Option<TauError> = None;
         let mut done = total - misses.len() as u64;
-        std::thread::scope(|scope| {
-            for _ in 0..threads.min(misses.len()).max(1) {
-                let (tx, next, cancel, media, misses) =
-                    (tx.clone(), &next, &cancel, &media, &misses);
-                scope.spawn(move || {
-                    loop {
-                        let n = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        if n >= misses.len() || cancel.load(std::sync::atomic::Ordering::Relaxed) {
-                            break;
-                        }
-                        let i = misses[n];
-                        if tx
-                            .send((i, read_track(&media[i].path, media[i].convert, kind)))
-                            .is_err()
-                        {
-                            break;
-                        }
-                    }
-                });
-            }
-            drop(tx);
-            for (i, result) in rx {
-                read[i] = Some(result);
+        // One report of progress per file read, always made on this thread.
+        let mut report = |i: usize, done: u64| {
+            tick(
+                progress,
+                Progress {
+                    stage: if kind.silence {
+                        Stage::Silence
+                    } else {
+                        Stage::Scanning
+                    },
+                    done,
+                    total,
+                    path: Some(media[i].rel.clone()),
+                },
+            )
+        };
+        if threads <= 1 {
+            // No other thread (WebAssembly has none): one file after the other, with the same results and the same progress.
+            for &i in &misses {
+                read[i] = Some(read_track(&media[i].path, media[i].convert, kind));
                 done += 1;
-                if stopped.is_none()
-                    && let Err(e) = tick(
-                        progress,
-                        Progress {
-                            stage: if kind.silence {
-                                Stage::Silence
-                            } else {
-                                Stage::Scanning
-                            },
-                            done,
-                            total,
-                            path: Some(media[i].rel.clone()),
-                        },
-                    )
-                {
+                if let Err(e) = report(i, done) {
                     stopped = Some(e);
-                    cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                    break;
                 }
             }
-        });
+        } else {
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            let next = std::sync::atomic::AtomicUsize::new(0);
+            let (tx, rx) = std::sync::mpsc::channel::<(usize, TagRead)>();
+            std::thread::scope(|scope| {
+                for _ in 0..threads.min(misses.len()).max(1) {
+                    let (tx, next, cancel, media, misses) =
+                        (tx.clone(), &next, &cancel, &media, &misses);
+                    scope.spawn(move || {
+                        loop {
+                            let n = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if n >= misses.len()
+                                || cancel.load(std::sync::atomic::Ordering::Relaxed)
+                            {
+                                break;
+                            }
+                            let i = misses[n];
+                            if tx
+                                .send((i, read_track(&media[i].path, media[i].convert, kind)))
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    });
+                }
+                drop(tx);
+                for (i, result) in rx {
+                    read[i] = Some(result);
+                    done += 1;
+                    if stopped.is_none()
+                        && let Err(e) = report(i, done)
+                    {
+                        stopped = Some(e);
+                        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+            });
+        }
         if let Some(e) = stopped {
             return Err(e);
         }
@@ -758,5 +798,126 @@ mod natural_tests {
         assert_eq!(natural(composed), natural(decomposed));
         assert!(natural("S\u{e6}m.mp3") < natural(decomposed));
         assert!(natural("S\u{e6}m.mp3") < natural(composed));
+    }
+}
+
+#[cfg(test)]
+mod reader_tests {
+    use super::*;
+    use std::fs;
+
+    /// A small MP3 with an ID3v2 title, the same shape the ledger tests use.
+    fn mp3(title: &str) -> Vec<u8> {
+        let mut body = vec![0u8];
+        body.extend(title.as_bytes());
+        let mut frame = b"TIT2".to_vec();
+        frame.extend((body.len() as u32).to_be_bytes());
+        frame.extend([0, 0]);
+        frame.extend(body);
+        let size = frame.len();
+        let mut file = b"ID3\x03\x00\x00".to_vec();
+        file.extend([
+            (size >> 21 & 0x7f) as u8,
+            (size >> 14 & 0x7f) as u8,
+            (size >> 7 & 0x7f) as u8,
+            (size & 0x7f) as u8,
+        ]);
+        file.extend(frame);
+        file.extend(vec![0u8; 600]);
+        file
+    }
+
+    /// `std::env::temp_dir()` panics on WebAssembly ("not supported by WASI yet"); a WASI host gives the test `/tmp`.
+    fn tmp() -> PathBuf {
+        #[cfg(target_os = "wasi")]
+        {
+            PathBuf::from("/tmp")
+        }
+        #[cfg(not(target_os = "wasi"))]
+        {
+            std::env::temp_dir()
+        }
+    }
+
+    fn library(count: usize) -> PathBuf {
+        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        // No process id in the name: `std::process::id()` panics on WebAssembly ("no pids on this platform").
+        let root = tmp().join(format!(
+            "tau-readers-{}-{nanos}",
+            N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("Artist/Album")).unwrap();
+        for i in 0..count {
+            fs::write(
+                root.join(format!("Artist/Album/{:02} Track.mp3", i + 1)),
+                mp3(&format!("Title {:02}", i + 1)),
+            )
+            .unwrap();
+        }
+        root
+    }
+
+    const KIND: ScanKind = ScanKind {
+        convertible: false,
+        details: false,
+        silence: false,
+    };
+
+    /// The call Tau Alpha's plugin makes: a plain `scan_dir`. On WebAssembly it has one reader (there are no threads) and must read every
+    /// file, in order. This runs on every target, so a build for WebAssembly run under a WASI host keeps it honest.
+    #[test]
+    fn a_plain_scan_reads_every_file_in_order_on_any_platform() {
+        let root = library(12);
+        let scan = scan_dir(&root, false).unwrap();
+        assert_eq!(scan.entries.len(), 12);
+        assert_eq!(scan.read, 12);
+        for (i, e) in scan.entries.iter().enumerate() {
+            assert_eq!(
+                e.tags.get("TIT2").map(String::as_str),
+                Some(format!("Title {:02}", i + 1).as_str())
+            );
+        }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// One reader gives exactly what many readers give (computers only: a WebAssembly host has no threads to compare with).
+    #[cfg(not(target_os = "wasi"))]
+    #[test]
+    fn one_reader_gives_what_many_readers_give() {
+        let root = library(12);
+        let one = scan_dir_threads(&root, false, KIND, &mut None, 1).unwrap();
+        let many = scan_dir_threads(&root, false, KIND, &mut None, 8).unwrap();
+        assert_eq!(one.entries.len(), 12);
+        assert_eq!(
+            one.entries, many.entries,
+            "the same entries in the same order"
+        );
+        assert_eq!(one.read, many.read);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A cancel from the progress observer stops the one-reader scan after the file that asked, and the scan reports it.
+    #[test]
+    fn a_cancel_stops_the_one_reader_scan_at_once() {
+        let root = library(10);
+        let mut reads = 0;
+        let mut observer = |p: Progress| {
+            if p.stage == Stage::Scanning && p.path.is_some() {
+                reads += 1;
+            }
+            reads < 3
+        };
+        let mut progress: Option<&mut dyn ProgressObserver> = Some(&mut observer);
+        let result = scan_dir_threads(&root, false, KIND, &mut progress, 1);
+        assert!(
+            result.is_err(),
+            "a cancelled scan is an error, not a partial answer"
+        );
+        assert_eq!(reads, 3, "no file is read after the one that was cancelled");
+        let _ = fs::remove_dir_all(&root);
     }
 }
