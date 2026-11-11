@@ -45,9 +45,7 @@ jobs:
       - run: cargo test -p tau-core --lib --locked --target wasm32-wasip1 --no-run
       - run: node --no-warnings tools/run-wasi-tests.mjs scan::reader_tests
   ui:
-    # Pinned, not `ubuntu-latest`: on 2026-11-11 `ubuntu-latest` became a newer image (Ubuntu 26.04, "resolute") on which
-    # `playwright install --with-deps` could not reach Ubuntu's package servers (52 "Temporary failure resolving" errors, twice, before any test ran).
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ui
@@ -61,7 +59,11 @@ jobs:
       # Behaviour checks against the dev mock (ui/scripts/workbench-test.cjs). Playwright is installed globally so
       # the app's own dependencies stay unchanged; the script finds it through NODE_PATH.
       - name: Install a browser for the behaviour checks
-        run: npm install -g playwright && playwright install --with-deps chromium
+        # No `--with-deps`: the browser's system libraries are already on the runner image, and `--with-deps` only added nine font packages through
+        # apt (checked in the green run of 2026-11-08). On 2026-11-11 apt could not reach Ubuntu's package servers ("Temporary failure resolving",
+        # in every run for hours, on Ubuntu 24.04 and 26.04 alike), which failed the job before any test ran. These checks read text and behaviour,
+        # not pixels, so they need no extra fonts.
+        run: npm install -g playwright && playwright install chromium
       - name: Library workbench, Marketplace and Cores behaviour checks
         run: |
           npm run dev -- --port 5173 --strictPort > /tmp/vite.log 2>&1 &
