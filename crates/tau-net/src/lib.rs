@@ -119,7 +119,7 @@ pub fn check(
     }
     // Every installed Tau core is judged against its own channel; an Update is reported for the first one that has
     // one, otherwise the first core's answer ("up to date").
-    let mut checks: Vec<UpdateCheck> = cores
+    let checks: Vec<UpdateCheck> = cores
         .iter()
         .filter_map(|identity| {
             let installed = Installed {
@@ -131,14 +131,9 @@ pub fn check(
             release_check::evaluate_for_core(&releases, &installed, None, &docs)
         })
         .collect();
-    let position = checks
-        .iter()
-        .position(|c| c.newer == Some(true))
-        .unwrap_or(0);
-    if checks.is_empty() {
+    let Some(mut check) = release_check::combine_checks(checks) else {
         return Ok(None);
-    }
-    let mut check = checks.swap_remove(position);
+    };
     if let Some(sums) = sums_of(&check.latest) {
         check.zips.retain(|z| sums.contains_key(&z.name));
     }

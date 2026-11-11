@@ -122,7 +122,9 @@ pub struct UpdateCheck {
     pub message: String,
     /// The installed core's channel, when known.
     pub channel: Option<Channel>,
-    /// Releases of other channels that are newer than what is installed: information, never an Update.
+    /// Updates for the user's *other installed* Tau streams (another Tau core on the card, for example a Preview core beside the
+    /// Stable one), each as that core's own message: information, never this check's Update. A release stream that is not installed
+    /// is never mentioned (owner, 2026-11-11: someone with only normal releases is not told about previews).
     pub others: Vec<String>,
 }
 
@@ -231,7 +233,8 @@ pub fn evaluate_with_sums(
 
 /// The full judgement. With `installed.core_id` set, only releases that carry that core (by manifest `core_id` or
 /// `replaces` when `docs` knows the release, else by zip name) count, so a Stable user is never offered the Preview
-/// core as an update; newer releases of other channels are reported in `others`.
+/// core as an update, and a stream the user has not installed is never mentioned (`others` is filled by [`combine_checks`]
+/// from the other installed cores).
 pub fn evaluate_for_core(
     releases: &[GithubRelease],
     installed: &Installed,
@@ -331,38 +334,6 @@ pub fn evaluate_for_core(
         Some(false) => format!("{what} is up to date ({}).", latest.tag),
         None => format!("The newest {what} release is {}.", latest.tag),
     };
-    // Other channels: the newest release per other channel that is newer than what is installed.
-    let mut others = Vec::new();
-    if let (Some(own), Some(_)) = (channel, &installed.core_id) {
-        for other in [Channel::Stable, Channel::Preview, Channel::Dev] {
-            if other == own {
-                continue;
-            }
-            let newest = releases
-                .iter()
-                .filter(|r| {
-                    r.assets.iter().any(|a| {
-                        a.name.starts_with("alfatreze.TAU")
-                            && a.name.ends_with(".zip")
-                            && !is_diagnostics_zip(&a.name)
-                            && channel_of_name(&a.name) == other
-                    })
-                })
-                .filter(|r| {
-                    installed_tag
-                        .as_deref()
-                        .is_none_or(|t| compat::compare_tags(&r.tag, t) == Ordering::Greater)
-                })
-                .max_by(|a, b| compat::compare_tags(&a.tag, &b.tag));
-            if let Some(r) = newest {
-                others.push(format!(
-                    "{} {} is also available. Installing it adds a separate core; it does not update this one.",
-                    other.label(),
-                    r.tag
-                ));
-            }
-        }
-    }
     Some(UpdateCheck {
         manifest: find("tau-compat.json"),
         sums: find("SHA256SUMS.txt"),
@@ -371,9 +342,29 @@ pub fn evaluate_for_core(
         zips,
         message,
         channel,
-        others,
+        others: Vec::new(),
         latest,
     })
+}
+
+/// The answer for a card with several Tau cores, each already judged against its own stream. The one reported is the first core
+/// that has an Update, else the first core ("up to date"). The other installed cores that also have an Update are named in
+/// `others` (their own messages), so no installed stream is silently left out; a stream that is not installed is not mentioned.
+pub fn combine_checks(mut checks: Vec<UpdateCheck>) -> Option<UpdateCheck> {
+    if checks.is_empty() {
+        return None;
+    }
+    let position = checks
+        .iter()
+        .position(|c| c.newer == Some(true))
+        .unwrap_or(0);
+    let mut chosen = checks.swap_remove(position);
+    chosen.others = checks
+        .into_iter()
+        .filter(|c| c.newer == Some(true))
+        .map(|c| c.message)
+        .collect();
+    Some(chosen)
 }
 
 /// `SHA256SUMS.txt`: `<64 hex>  <name>` per line (`*name` marks binary mode).
@@ -647,8 +638,8 @@ mod tests {
         assert_eq!(check.channel, Some(Channel::Stable));
         let names: Vec<_> = check.zips.iter().map(|z| z.name.as_str()).collect();
         assert_eq!(names, ["alfatreze.TAU_0.6.0_2026-10-20.zip"]);
-        assert_eq!(check.others.len(), 1);
-        assert!(check.others[0].starts_with("Preview v0.7.0-preview.1 is also available"));
+        // A preview exists, but this user has no preview core: it is not mentioned.
+        assert!(check.others.is_empty(), "{:?}", check.others);
     }
 
     #[test]
@@ -670,7 +661,7 @@ mod tests {
             check.message,
             "No published release carries alfatreze.TAU yet."
         );
-        assert_eq!(check.others.len(), 1, "{:?}", check.others);
+        assert!(check.others.is_empty(), "{:?}", check.others);
     }
 
     #[test]
@@ -699,7 +690,7 @@ mod tests {
     }
 
     #[test]
-    fn a_preview_user_is_told_when_the_stable_release_overtakes_the_preview() {
+    fn a_stream_the_user_has_not_installed_is_never_mentioned() {
         let mut releases = channels();
         releases.push(rel("v0.7.0", &["alfatreze.TAU_0.7.0_2026-12-01.zip"]));
         let installed = core(
@@ -713,7 +704,67 @@ mod tests {
             Some(false),
             "Preview updates stay on the Preview channel"
         );
-        assert!(check.others.iter().any(|o| o.starts_with("Stable v0.7.0")));
+        assert!(check.others.is_empty(), "{:?}", check.others);
+    }
+
+    /// One answer for a card with several Tau cores: the first core with an Update is the one reported, and the other installed
+    /// cores that also have an Update are named by their own message. Nothing is said about a stream that is not installed.
+    #[test]
+    fn several_installed_streams_are_each_reported_by_their_own_update_and_nothing_else() {
+        let releases = channels();
+        let stable_old = evaluate_for_core(
+            &releases,
+            &core("alfatreze.TAU", "0.5.0", Some("v0.5.0")),
+            None,
+            &[],
+        )
+        .unwrap();
+        let stable_current = evaluate_for_core(
+            &releases,
+            &core("alfatreze.TAU", "0.6.0", Some("v0.6.0")),
+            None,
+            &[],
+        )
+        .unwrap();
+        let preview_old = evaluate_for_core(
+            &releases,
+            &core(
+                "alfatreze.TAU Preview",
+                "0.7.0-preview.0",
+                Some("v0.7.0-preview.0"),
+            ),
+            None,
+            &[],
+        )
+        .unwrap();
+        assert_eq!(
+            (stable_old.newer, stable_current.newer, preview_old.newer),
+            (Some(true), Some(false), Some(true))
+        );
+
+        // Only a Stable core, up to date: nothing to say, and nothing about previews.
+        let only = combine_checks(vec![stable_current.clone()]).unwrap();
+        assert_eq!(only.newer, Some(false));
+        assert!(only.others.is_empty());
+
+        // Stable up to date, Preview behind: the Preview core's update is the answer, and the up-to-date one adds no line.
+        let mixed = combine_checks(vec![stable_current.clone(), preview_old.clone()]).unwrap();
+        assert_eq!(mixed.channel, Some(Channel::Preview));
+        assert_eq!(mixed.newer, Some(true));
+        assert!(mixed.others.is_empty(), "{:?}", mixed.others);
+
+        // Both behind: the first is reported, the second is named, in its own words (it is an installed core, not "a separate core").
+        let both = combine_checks(vec![stable_old.clone(), preview_old.clone()]).unwrap();
+        assert_eq!(both.channel, Some(Channel::Stable));
+        assert_eq!(both.others.len(), 1, "{:?}", both.others);
+        assert!(
+            both.others[0].starts_with("Tau Preview v0.7.0-preview.1 is available"),
+            "{:?}",
+            both.others
+        );
+        assert!(!both.others[0].contains("separate core"));
+
+        assert!(combine_checks(Vec::new()).is_none());
     }
 
     #[test]
