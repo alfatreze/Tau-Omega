@@ -37,8 +37,17 @@ jobs:
       - run: cargo check -p tau-core --locked --features serde
       - run: cargo check -p tau-core --locked --target wasm32-wasip1
       - run: cargo check -p tau-core --locked --target wasm32-wasip1 --features serde
+      # It compiles for WebAssembly; this shows it also RUNS there: the scan tests, built for wasm32-wasip1, inside Node's WASI host
+      # (tools/run-wasi-tests.mjs). A scan that used threads compiled but aborted at run time (Tau Alpha 016).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: cargo test -p tau-core --lib --locked --target wasm32-wasip1 --no-run
+      - run: node --no-warnings tools/run-wasi-tests.mjs scan::reader_tests
   ui:
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`: on 2026-11-11 `ubuntu-latest` became a newer image (Ubuntu 26.04, "resolute") on which
+    # `playwright install --with-deps` could not reach Ubuntu's package servers (52 "Temporary failure resolving" errors, twice, before any test ran).
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ui
