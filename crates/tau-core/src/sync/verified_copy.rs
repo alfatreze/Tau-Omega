@@ -84,11 +84,11 @@ pub(crate) fn ensure_space(available: u64, needed: u64, margin: u64) -> Result<(
 /// Refuses a run that cannot fit **before anything is written**. Without this a
 /// full card failed halfway: some files copied, the old index left in place.
 pub(super) fn preflight_space(plan: &SyncPlan) -> Result<(), TauError> {
-    let unit = fs4::allocation_granularity(&plan.destination)
+    let unit = crate::storage::allocation_granularity(&plan.destination)
         .ok()
         .filter(|u| *u > 0)
         .unwrap_or(4096);
-    let Ok(available) = fs4::available_space(&plan.destination) else {
+    let Ok(available) = crate::storage::available_space(&plan.destination) else {
         return Ok(()); // cannot measure: do not block, the write itself will report a full card
     };
     ensure_space(

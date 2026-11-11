@@ -103,19 +103,12 @@ pub fn package_facts(zip_path: &Path) -> Result<(String, Vec<(String, String)>),
     Ok((zip_hash, bits))
 }
 
+#[cfg(feature = "serde")]
 fn load(path: &Path) -> Vec<RunNote> {
-    #[cfg(feature = "serde")]
-    {
-        fs::read(path)
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default()
-    }
-    #[cfg(not(feature = "serde"))]
-    {
-        let _ = path;
-        Vec::new()
-    }
+    fs::read(path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
 }
 
 #[cfg(feature = "serde")]

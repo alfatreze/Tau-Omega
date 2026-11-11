@@ -120,7 +120,7 @@ pub fn card_breakdown(
     progress: &mut Option<&mut dyn ProgressObserver>,
 ) -> Result<CardBreakdown, TauError> {
     let space = crate::storage::volume_space(root)?;
-    let unit = fs4::allocation_granularity(root)
+    let unit = crate::storage::allocation_granularity(root)
         .ok()
         .filter(|u| *u > 0)
         .unwrap_or(4096);
