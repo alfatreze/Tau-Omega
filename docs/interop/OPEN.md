@@ -32,6 +32,7 @@ Tau Alpha keeps `LEDGER.md` in their repository; this is Omega's own list of **w
 - Second real-card rehearsal with both v0.7.0 zips on the owner's `Pock` (owner's go needed: it is a card write).
 - Wire `METR` into the assets install plan (like `PRST`) and build the UI once R-017 arrives; the meter library once Q-019 arrives.
 - Reply to Tau Alpha 018 (external meters, `to-alpha/021`): they answer O021/3 items 5 and 6 (preview source, preset folder naming); owner confirms the in-principle yes on Q-1 and Q-2.
+- Signed meter index: library chosen (`ring`, D-024, `to-alpha/023`); waits on Tau Alpha's signed bytes / key encoding / `key_id` rule and on the owner keeping the branch.
 
 ## Closed since the last list
 R-011 (`required` rule, aligned), Q-010 (no CARDWRITE run), D-007 (lab drop approved and pinned), Q-016 (sandbox `allow-scripts` only), Q-020 (8 slots), Q-022 (`METR` replaces the whole set), F-009b (real-card rehearsal).
