@@ -404,6 +404,14 @@ const handlers: Record<string, (args: any) => unknown> = {
     return { notes: [], catalog: { cores: marketCores }, source: mode === 'offline' ? { Offline: 'Could not reach the server. Are you offline?' } : 'Network', fetched: Math.floor(Date.now() / 1000) - (mode === 'offline' ? 3 * 86400 : 120) };
   },
   marketplace_art: (a) => (a.coreId === 'zz.NoRelease' ? null : a.kind === 'Banner' ? svgUrl(521, 165, a.coreId as string) : svgUrl(36, 36, a.coreId as string)),
+  marketplace_repo_details: (a) => {
+    const g = globalThis as { __mkt?: string; __repo?: string };
+    if (g.__repo === 'offline') throw { code: 'E_IO', message: 'Could not reach the server. Are you offline?' };
+    if (g.__repo === 'partial') return { info: { description: 'Mock description for ' + a.coreId, homepage: '', license: 'MIT', stars: 4, topics: ['openfpga'], pushed: '2026-11-14' }, downloads: null, fetched: 1 };
+    return { info: { description: 'A mock description of ' + a.coreId + '. It shows what the core is, in the author\'s words.', homepage: 'https://example.com/core', license: 'MIT', stars: 12, topics: ['analogue-pocket', 'openfpga'], pushed: '2026-11-14' },
+      downloads: { total: 12345, newest: 678, newest_tag: 'v1.0.0', releases: 4, complete: true, notes: 'Fixed the menu.\nAdded a new option.' }, fetched: 1 };
+  },
+  marketplace_open_repo: (a) => { (globalThis as { __opened?: string[] }).__opened = [...((globalThis as { __opened?: string[] }).__opened ?? []), a.coreId as string]; return null; },
   marketplace_core_updates: () => ({ rows: [
     { id: 'agg23.SNES', installed_version: '1.2.0', latest_version: '1.4.0', release_date: '2026-09-02', status: 'UpdateAvailable' },
     { id: 'spiritualized.GB', installed_version: '1.0.0', latest_version: '1.2.1', release_date: '2026-08-14', status: 'UpdateAvailable' },

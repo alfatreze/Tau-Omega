@@ -12,6 +12,8 @@
   export let version = '';
   /** The button label before anything is downloaded. */
   export let label = 'Download and review';
+  /** The sentence above the button (what the review will show); the marketplace sheet leaves it out and shows only the button. */
+  export let intro = true;
   const dispatch = createEventDispatcher<{ installed: void }>();
   let download: MarketplaceDownload | null = null; let busy = false; let error = '';
   async function fetchZip() {
@@ -22,7 +24,7 @@
   }
 </script>
 {#if !download}
-  <p class="ci-small">Omega downloads the zip, checks it, and shows exactly what would change on <strong>{card.split('/').pop()}</strong>. Nothing is written yet.</p>
+  {#if intro}<p class="ci-small">Omega downloads the zip, checks it, and shows exactly what would change on <strong>{card.split('/').pop()}</strong>. Nothing is written yet.</p>{/if}
   <button class="primary" disabled={busy} on:click={fetchZip}>{busy ? 'Downloading and checking…' : label}</button>
   {#if error}<p class="ci-err" role="alert">{error}</p>{/if}
 {:else}

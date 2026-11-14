@@ -256,6 +256,10 @@ export type CatalogResult = { catalog: { cores: CatalogCore[] }; source: MarketS
 export type ArtKind = 'Icon' | 'Banner';
 export type CoreStatusKind = 'UpToDate' | 'UpdateAvailable' | 'NewerThanCatalog' | 'Unknown' | 'NotInCatalog' | 'Excluded' | { ReplacedBy: string };
 export type CoreStatus = { id: string; installed_version: string; latest_version: string; release_date: string; status: CoreStatusKind; manual_url?: string | null };
+export type RepoInfo = { description: string; homepage: string; license: string; stars: number; topics: string[]; pushed: string };
+export type RepoDownloads = { total: number; newest: number; newest_tag: string; releases: number; complete: boolean; notes: string };
+/** What GitHub says about a core's repository; either part is null when its request failed. */
+export type RepoDetails = { info: RepoInfo | null; downloads: RepoDownloads | null; fetched: number };
 export type CoreUpdates = { rows: CoreStatus[]; source: MarketSource; fetched: number };
 export type Vetted = { core_id: string; version: string; date_release: string; platform_ids: string[]; firmware_required: string; dock_supported: boolean | null; files: number; uncompressed_bytes: number; asset_files: number };
 export type MarketplaceDownload = { download: { path: string; bytes: number; sha256: string; checksum: 'Verified' | 'NotPublished' }; vetted: Vetted };

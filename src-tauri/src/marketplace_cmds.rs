@@ -74,6 +74,39 @@ pub fn marketplace_art(app: tauri::AppHandle, core_id: String, kind: ArtKind) ->
     Ok(marketplace::fetch_art(&Http, &dir, core, kind, now(), false)?.map(|png| format!("data:image/png;base64,{}", STANDARD.encode(png))))
 }
 
+/// The catalog's repository address for a core: `https://github.com/<owner>/<name>`, only when both parts are plain names.
+fn repo_address(core: &tau_core::catalog::CatalogCore) -> Option<(String, String, String)> {
+    let plain = |s: &str| !s.is_empty() && s.len() <= 100 && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    let (o, n) = (&core.repository.owner, &core.repository.name);
+    (plain(o) && plain(n)).then(|| (o.clone(), n.clone(), format!("https://github.com/{o}/{n}")))
+}
+
+/// What GitHub says about a core's repository (description, licence, download counts), for the details sheet. Cached for an hour.
+#[tauri::command(async)]
+pub fn marketplace_repo_details(app: tauri::AppHandle, core_id: String, force: bool) -> Result<marketplace::RepoDetails, TauError> {
+    let dir = cache(&app)?;
+    let catalog = full_catalog(&app, false)?.catalog;
+    let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
+    let (owner, name, _) = repo_address(core).ok_or_else(|| TauError { code: ErrorCode::InvalidPathReference, message: "This core has no GitHub repository Omega can look up.".into() })?;
+    marketplace::fetch_repo_details(&Http, &dir, &owner, &name, now(), force)
+}
+
+/// Opens a core's GitHub page in the computer's browser. The address is built here from the catalog entry (never taken from the screen),
+/// and only plain repository names are accepted, so nothing but `https://github.com/<owner>/<name>` is ever opened.
+#[tauri::command(async)]
+pub fn marketplace_open_repo(app: tauri::AppHandle, core_id: String) -> Result<(), TauError> {
+    let catalog = full_catalog(&app, false)?.catalog;
+    let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
+    let (_, _, url) = repo_address(core).ok_or_else(|| TauError { code: ErrorCode::InvalidPathReference, message: "This core has no GitHub repository Omega can open.".into() })?;
+    #[cfg(target_os = "macos")]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut cmd = { let mut c = std::process::Command::new("cmd"); c.args(["/C", "start", ""]); c };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut cmd = std::process::Command::new("xdg-open");
+    cmd.arg(&url).spawn().map(|_| ()).map_err(|e| TauError { code: ErrorCode::Io, message: format!("Could not open the browser: {e}") })
+}
+
 #[derive(Serialize)]
 pub struct CoreUpdates {
     pub rows: Vec<CoreStatus>,
