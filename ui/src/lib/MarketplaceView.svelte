@@ -7,10 +7,10 @@
   import MultiInstall from './MultiInstall.svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
-  import { getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, setPrefs } from './tau-api';
+  import { getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
   import { categoryCounts, filterCores, listedBy, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
-  import type { CatalogCore, CatalogResult, CoreStatus } from './types';
+  import type { CatalogCore, CatalogResult, CoreStatus, RepoDetails } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
   export let card = '';
 
@@ -88,11 +88,27 @@
   }
   const toggleCategory = (c: string) => (filters.category = filters.category === c ? '' : c);
 
-  function open(core: CatalogCore) { selected = core; chosen = ''; optVersion = ''; optDiag = false; optChannel = core.options?.[0]?.channel ?? ''; wantArt('Banner', core.id); wantArt('Icon', core.id); }
-  function close() { selected = null; }
+  /** The details sheet: `About` says what the core is, `Details` holds the technical facts and requirements. */
+  let tab: 'about' | 'details' = 'about';
+  /** What GitHub says about the open core (null until it answers or when it cannot be reached). */
+  let repo: RepoDetails | null = null; let repoState: 'loading' | 'done' | 'failed' = 'loading'; let linkError = '';
+  let repoFor = '';
+  async function loadRepo(core: CatalogCore) {
+    repo = null; repoState = 'loading'; repoFor = core.id;
+    try { const d = await marketplaceRepoDetails(core.id); if (repoFor === core.id) { repo = d; repoState = 'done'; } }
+    catch { if (repoFor === core.id) repoState = 'failed'; }
+  }
+  function open(core: CatalogCore) { selected = core; chosen = ''; optVersion = ''; optDiag = false; tab = 'about'; linkError = ''; optChannel = core.options?.[0]?.channel ?? ''; wantArt('Banner', core.id); wantArt('Icon', core.id); void loadRepo(core); }
+  function close() { selected = null; repoFor = ''; }
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
-  let copied = false;
-  async function copyRepo() { if (!selected) return; try { await navigator.clipboard.writeText(repoUrl(selected)); copied = true; setTimeout(() => (copied = false), 1500); } catch { /* the address stays visible to select */ } }
+  /** The address is opened by the app from the catalog entry (a plain click on the link; nothing typed or pasted is ever opened). */
+  async function openRepo(e: Event) { e.preventDefault(); if (!selected) return; linkError = ''; try { await marketplaceOpenRepo(selected.id); } catch (err) { linkError = errorMessage(err); } }
+  const count = (n: number) => n.toLocaleString('en-US');
+  function tabKey(e: KeyboardEvent) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault(); tab = tab === 'about' ? 'details' : 'about';
+    queueMicrotask(() => document.getElementById(`mk-tab-${tab}`)?.focus());
+  }
   /** Arrow keys move between cards: Left/Right by one, Up/Down by a row (the number of cards that share the first card's top edge). */
   function cardKey(e: KeyboardEvent) {
     if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
@@ -209,63 +225,93 @@
       <button class="quiet" data-autofocus on:click={close} aria-label="Close details">Close</button>
     </header>
 
-    <dl class="mk-facts">
-      <div><dt>Newest version</dt><dd>{selected.version || 'none published'}{selected.release_date ? ` · ${selected.release_date}` : ''}</dd></div>
-      <div><dt>{listedBy(selected).length > 1 ? 'Distributed by' : 'Listed by'}</dt><dd class="mk-listed">{#if selected.listings?.length}{#each selected.listings as l}<span class="chip">{sourceLabel(l.source)}{l.version ? ` · ${l.version}` : ''}</span>{/each}{:else}<span class="chip">{sourceLabel(selected.source)}</span>{/if}</dd></div>
-      <div><dt>Source</dt><dd><code>{repoUrl(selected)}</code> <button class="quiet" on:click={copyRepo}>{copied ? 'Copied' : 'Copy link'}</button></dd></div>
-      {#if statusOf(selected) && chip(selected)}<div><dt>On your card</dt><dd>{statusOf(selected)?.installed_version} · {chip(selected)}</dd></div>{/if}
-    </dl>
-
-    {#if selected.sponsor.links.length}
-      <p class="mk-small">Support the author: {#each selected.sponsor.links as l, i}<code>{l.replace('https://', '')}</code>{i < selected.sponsor.links.length - 1 ? ', ' : ''}{/each}</p>
-    {/if}
-
-    <h3>Requirements</h3>
-    <dl class="mk-reqs">
-      <div><dt>Pocket firmware</dt><dd>{selected.firmware_required ? `${selected.firmware_required} or newer` : 'not stated'}</dd></div>
-      <div><dt>Dock</dt><dd>{yesNo(selected.dock_supported)}</dd></div>
-      <div><dt>Link port</dt><dd>{yesNo(selected.link_port)}</dd></div>
-      <div><dt>Sleep</dt><dd>{yesNo(selected.sleep_supported)}</dd></div>
-      {#if selected.requires_license}
-        <div class="mk-req-key"><dt>Key file</dt><dd><code>{selected.license_filename || 'a file the author names'}</code> is not in the download: get it from the author (see Source above) and put it in <code>Cores/{selected.id}/</code> on the card. The core will not run without it.</dd></div>
-      {/if}
-      {#if selected.assets.length}
-        <div><dt>Your own files</dt><dd>{#each selected.assets as a, i}<code>Assets/{a.platform}/{a.core_specific ? selected.id : 'common'}</code>{#if a.extensions.length} ({a.extensions.map((x) => '.' + x).join(' ')}){/if}{i < selected.assets.length - 1 ? ', ' : ''}{/each}</dd></div>
-      {/if}
-    </dl>
-    {#if selected.declares_ai.length}<p class="mk-callout soft" role="note">The author says they used AI tools to build this core: {selected.declares_ai.join(', ')}.</p>{/if}
-    {#if selected.history.length > 1 && !opts.length}
-      <details class="mk-history"><summary>Earlier versions ({selected.history.length - 1})</summary>
-        <ul>{#each selected.history.slice(1) as h}<li><span>{h.version} · {h.release_date}</span>{#if card && selected.download_url}<button class="quiet" aria-pressed={chosen === h.version} on:click={() => (chosen = chosen === h.version ? '' : h.version)}>{chosen === h.version ? 'Use the newest instead' : 'Choose this version'}</button>{/if}</li>{/each}</ul>
-        <p class="mk-small">An older version replaces a newer one on the card only if you confirm the downgrade in the plan. Your files are kept, as with any update.</p>
-      </details>
-    {/if}
-
-    <h3>Install</h3>
-    {#if opts.length}
-      <div class="mk-opts">
-        <label>Channel<select value={optChannel} on:change={(e) => pickChannel(e.currentTarget.value)}>{#each channels as c}<option value={c}>{c}</option>{/each}</select></label>
-        {#if builds.length > 1}<label>Build<select value={optDiag ? 'diag' : 'std'} on:change={(e) => { optDiag = e.currentTarget.value === 'diag'; optVersion = ''; }}><option value="std">Standard</option><option value="diag">Diagnostics</option></select></label>{/if}
-        {#if option && option.history.length}<label>Version<select bind:value={optVersion}>{#each option.history as h, i}<option value={i === 0 ? '' : h.version}>{h.version} · {h.release_date}{i === 0 ? ' (newest)' : ''}</option>{/each}</select></label>{/if}
-      </div>
-      {#if option?.channel === 'Dev'}
-        <p class="mk-small">Dev builds are made locally and never published, so there is nothing to download. Install one from its zip or folder with the same review as any core.</p>
+    <div class="mk-install">
+      {#if opts.length}
+        <div class="mk-opts">
+          <label>Channel<select value={optChannel} on:change={(e) => pickChannel(e.currentTarget.value)}>{#each channels as c}<option value={c}>{c}</option>{/each}</select></label>
+          {#if builds.length > 1}<label>Build<select value={optDiag ? 'diag' : 'std'} on:change={(e) => { optDiag = e.currentTarget.value === 'diag'; optVersion = ''; }}><option value="std">Standard</option><option value="diag">Diagnostics</option></select></label>{/if}
+          {#if option && option.history.length}<label>Version<select bind:value={optVersion}>{#each option.history as h, i}<option value={i === 0 ? '' : h.version}>{h.version} · {h.release_date}{i === 0 ? ' (newest)' : ''}</option>{/each}</select></label>{/if}
+        </div>
+        {#if option?.channel === 'Dev'}
+          <button class="primary" on:click={() => { close(); openManualAdd(); }}>Install a local dev build…</button>
+          <p class="mk-small">Dev builds are made locally and never published: install one from its zip or folder.</p>
+        {:else if !card}
+          <button class="primary" disabled>Install</button><p class="mk-small">Open a card first (Cards page).</p>
+        {:else if option}
+          {#key `${option.core_id}|${optVersion}`}<CoreInstall coreId={option.core_id} {card} version={optVersion} intro={false} label={optVersion ? `Install version ${optVersion}` : 'Install'} on:installed={() => loadStatuses(card)} />{/key}
+        {/if}
+      {:else if selected.channel === 'Dev'}
         <button class="primary" on:click={() => { close(); openManualAdd(); }}>Install a local dev build…</button>
+        <p class="mk-small">Dev builds are made locally and never published: install one from its zip or folder.</p>
+      {:else if !selected.download_url}
+        <button class="primary" disabled>Install</button><p class="mk-small">The author has not published a download yet.</p>
       {:else if !card}
-        <p class="mk-small">Open a card first (Cards page) to install this core.</p>
-      {:else if option}
-        {#key `${option.core_id}|${optVersion}`}<CoreInstall coreId={option.core_id} {card} version={optVersion} label={optVersion ? `Download version ${optVersion} and review` : 'Download and review'} on:installed={() => loadStatuses(card)} />{/key}
+        <button class="primary" disabled>Install</button><p class="mk-small">Open a card first (Cards page).</p>
+      {:else}
+        {#key chosen}<CoreInstall coreId={selected.id} {card} version={chosen} intro={false} label={chosen ? `Install version ${chosen}` : 'Install'} on:installed={() => loadStatuses(card)} />{/key}
+        {#if chosen}<p class="mk-small">Version {chosen} is chosen (see Details).</p>{/if}
       {/if}
-    {:else if !card}
-      <p class="mk-small">Open a card first (Cards page) to install this core.</p>
-    {:else if selected.channel === 'Dev'}
-      <p class="mk-small">Dev builds are made locally and never published, so there is nothing to download. Install one from its zip or folder with the same review as any core.</p>
-      <button class="primary" on:click={() => { close(); openManualAdd(); }}>Install a local dev build…</button>
-    {:else if !selected.download_url}
-      <p class="mk-small">The author has not published a download yet.</p>
+      {#if selected.requires_license}<p class="mk-callout soft" role="note">This core needs a key file from its author, or it will not run. See Details.</p>{/if}
+    </div>
+
+    <div class="mk-tabs" role="tablist" aria-label="About this core" tabindex="-1" on:keydown={tabKey}>
+      <button id="mk-tab-about" role="tab" aria-selected={tab === 'about'} aria-controls="mk-panel" tabindex={tab === 'about' ? 0 : -1} on:click={() => (tab = 'about')}>About</button>
+      <button id="mk-tab-details" role="tab" aria-selected={tab === 'details'} aria-controls="mk-panel" tabindex={tab === 'details' ? 0 : -1} on:click={() => (tab = 'details')}>Details</button>
+    </div>
+
+    <div id="mk-panel" role="tabpanel" aria-labelledby={`mk-tab-${tab}`}>
+    {#if tab === 'about'}
+      {#if repoState === 'loading'}<p class="mk-small">Loading from GitHub…</p>
+      {:else if repo?.info?.description}<p class="mk-desc">{repo.info.description}</p>
+      {:else if repoState === 'failed' || !repo?.info}<p class="mk-small">The description could not be loaded from GitHub. Check your connection.</p>
+      {:else}<p class="mk-small">The author has not written a description on GitHub.</p>{/if}
+
+      <dl class="mk-facts">
+        <div><dt>Newest version</dt><dd>{selected.version || 'none published'}{selected.release_date ? ` · ${selected.release_date}` : ''}</dd></div>
+        <div><dt>Downloads</dt><dd>{#if repoState === 'loading'}…{:else if repo?.downloads}{repo.downloads.complete ? '' : 'At least '}{count(repo.downloads.total)} in total{#if repo.downloads.newest_tag}{' · '}{count(repo.downloads.newest)} for {repo.downloads.newest_tag}{/if}{:else}not available{/if}</dd></div>
+        {#if repo?.info?.license}<div><dt>Licence</dt><dd>{repo.info.license}</dd></div>{/if}
+        <div><dt>Source</dt><dd><a class="mk-link" href={repoUrl(selected)} on:click={openRepo}>{selected.repository.owner}/{selected.repository.name} on GitHub</a>{#if linkError}<span class="err"> {linkError}</span>{/if}</dd></div>
+        {#if statusOf(selected) && chip(selected)}<div><dt>On your card</dt><dd>{statusOf(selected)?.installed_version} · {chip(selected)}</dd></div>{/if}
+      </dl>
+
+      {#if repo?.downloads?.notes}<h3>What’s new in {repo.downloads.newest_tag}</h3><p class="mk-notes">{repo.downloads.notes}</p>{/if}
+      {#if selected.sponsor.links.length}
+        <p class="mk-small">Support the author: {#each selected.sponsor.links as l, i}<code>{l.replace('https://', '')}</code>{i < selected.sponsor.links.length - 1 ? ', ' : ''}{/each}</p>
+      {/if}
+      {#if selected.declares_ai.length}<p class="mk-callout soft" role="note">The author says they used AI tools to build this core: {selected.declares_ai.join(', ')}.</p>{/if}
     {:else}
-      {#key chosen}<CoreInstall coreId={selected.id} {card} version={chosen} label={chosen ? `Download version ${chosen} and review` : 'Download and review'} on:installed={() => loadStatuses(card)} />{/key}
+      <h3>Requirements</h3>
+      <dl class="mk-reqs">
+        <div><dt>Pocket firmware</dt><dd>{selected.firmware_required ? `${selected.firmware_required} or newer` : 'not stated'}</dd></div>
+        <div><dt>Dock</dt><dd>{yesNo(selected.dock_supported)}</dd></div>
+        <div><dt>Link port</dt><dd>{yesNo(selected.link_port)}</dd></div>
+        <div><dt>Sleep</dt><dd>{yesNo(selected.sleep_supported)}</dd></div>
+        {#if selected.requires_license}
+          <div class="mk-req-key"><dt>Key file</dt><dd><code>{selected.license_filename || 'a file the author names'}</code> is not in the download: get it from the author (see the link under About) and put it in <code>Cores/{selected.id}/</code> on the card. The core will not run without it.</dd></div>
+        {/if}
+        {#if selected.assets.length}
+          <div><dt>Your own files</dt><dd>{#each selected.assets as a, i}<code>Assets/{a.platform}/{a.core_specific ? selected.id : 'common'}</code>{#if a.extensions.length} ({a.extensions.map((x) => '.' + x).join(' ')}){/if}{i < selected.assets.length - 1 ? ', ' : ''}{/each}</dd></div>
+        {/if}
+      </dl>
+
+      <h3>About the core</h3>
+      <dl class="mk-reqs">
+        <div><dt>Core id</dt><dd><code>{selected.id}</code></dd></div>
+        {#if selected.category}<div><dt>Category</dt><dd>{selected.category}</dd></div>{/if}
+        {#if selected.manufacturer}<div><dt>Original maker</dt><dd>{selected.manufacturer}{selected.year ? ` · ${selected.year}` : ''}</dd></div>{/if}
+        <div><dt>{listedBy(selected).length > 1 ? 'Distributed by' : 'Listed by'}</dt><dd class="mk-listed">{#if selected.listings?.length}{#each selected.listings as l}<span class="chip">{sourceLabel(l.source)}{l.version ? ` · ${l.version}` : ''}</span>{/each}{:else}<span class="chip">{sourceLabel(selected.source)}</span>{/if}</dd></div>
+        {#if repo?.info?.topics.length}<div><dt>Topics</dt><dd class="mk-listed">{#each repo.info.topics as t}<span class="chip">{t}</span>{/each}</dd></div>{/if}
+        {#if repo?.info?.pushed}<div><dt>Repository updated</dt><dd>{repo.info.pushed}</dd></div>{/if}
+      </dl>
+
+      {#if selected.history.length > 1 && !opts.length}
+        <details class="mk-history"><summary>Earlier versions ({selected.history.length - 1})</summary>
+          <ul>{#each selected.history.slice(1) as h}<li><span>{h.version} · {h.release_date}</span>{#if card && selected.download_url}<button class="quiet" aria-pressed={chosen === h.version} on:click={() => (chosen = chosen === h.version ? '' : h.version)}>{chosen === h.version ? 'Use the newest instead' : 'Choose this version'}</button>{/if}</li>{/each}</ul>
+          <p class="mk-small">An older version replaces a newer one on the card only if you confirm the downgrade in the plan. Your files are kept, as with any update.</p>
+        </details>
+      {/if}
     {/if}
+    </div>
   </div>
 {/if}
 <style>
@@ -321,6 +367,13 @@
   .mk-sheet h3{font-size:14px;margin:22px 0 8px}
   .mk-sheet-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.mk-sheet-head h2{margin:0}.mk-by{color:#95a5a4;font-size:12px;margin:4px 0 0}
   .mk-facts{display:grid;gap:10px;margin:0 0 14px}.mk-facts div{display:grid;gap:2px}.mk-facts dt{font-size:11px;letter-spacing:.08em;color:#9fb3aa;font-weight:700}.mk-facts dd{margin:0;font-size:13px;color:#dce6e4;overflow-wrap:anywhere}
+  .mk-install{margin:2px 0 16px}.mk-install>.primary{width:100%}
+  .mk-tabs{display:flex;gap:4px;border-bottom:1px solid #2c393a;margin:0 0 14px}
+  .mk-tabs button{background:transparent;color:#a6b3b2;border:0;border-bottom:2px solid transparent;border-radius:0;padding:9px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:-1px}
+  .mk-tabs button[aria-selected="true"]{color:#e8ecec;border-bottom-color:#c1f0ad}
+  .mk-desc{font-size:14px;line-height:1.6;color:#e8ecec;margin:0 0 14px;overflow-wrap:anywhere}
+  .mk-notes{font-size:12.5px;line-height:1.6;color:#dce6e4;white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0 12px}
+  .mk-link{color:#c5f7ad;text-decoration:underline;text-underline-offset:2px;cursor:pointer}.mk-link:hover{color:#e1ffd4}
   .mk-small{font-size:12px;color:#a6b3b2;line-height:1.55;margin:6px 0}
   .mk-callout{border:1px solid #3b5a58;background:#16292a;border-radius:9px;padding:10px 12px;font-size:12px;line-height:1.5;color:#dce6e4;margin:10px 0}.mk-callout.soft{border-color:#5c5030;background:#241f12;color:#e5d9a8}
   code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px}

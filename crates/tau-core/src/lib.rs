@@ -75,6 +75,7 @@ pub mod problems;
 pub mod refresh;
 pub mod release_check;
 pub mod remove;
+pub mod repo_info;
 pub mod results;
 pub mod run_notes;
 pub mod screenshots;

@@ -18,6 +18,7 @@ use tau_core::{
     ErrorCode, TauError,
     catalog::{self, CATALOG_URL, Catalog, CatalogCore, PLATFORMS_URL},
     catalog_release::{self, CoreRelease},
+    repo_info::{self, Downloads, RepoInfo},
 };
 
 /// The v3 core list is about 4.5 MB (all releases of 333 cores); the platform list is small.
@@ -596,6 +597,88 @@ pub fn fetch_avatar(
     }
 }
 
+/// What GitHub says about a core's repository: its description and licence, and how often the release files were downloaded.
+/// Two requests (the repository, then its releases), each cached for [`RELEASE_TTL`] so opening a core again within the hour asks
+/// nothing (GitHub allows 60 unauthenticated requests an hour). The download counts are best effort: when only the repository
+/// answers, the description is still shown. Nothing about the user or the card is sent.
+pub fn fetch_repo_details(
+    t: &dyn Transport,
+    cache: &Path,
+    owner: &str,
+    repo: &str,
+    now: u64,
+    force: bool,
+) -> Result<RepoDetails, TauError> {
+    let plain = |s: &str| {
+        !s.is_empty()
+            && s.len() <= 100
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    };
+    if !plain(owner) || !plain(repo) {
+        return Err(err(
+            ErrorCode::InvalidPathReference,
+            "That repository name has characters Omega does not look up.",
+        ));
+    }
+    let dir = root(cache).join("repo");
+    let name = format!(
+        "{}__{}",
+        owner.to_ascii_lowercase(),
+        repo.to_ascii_lowercase()
+    );
+    let info = fetch_cached(
+        t,
+        &dir.join(format!("{name}.json")),
+        &format!("https://api.github.com/repos/{owner}/{repo}"),
+        DIGEST_LIMIT,
+        RELEASE_TTL,
+        now,
+        force,
+        &|b| repo_info::parse_repo(b).map(|_| ()).map_err(|e| e.message),
+    )
+    .and_then(|f| repo_info::parse_repo(&f.body).map(|i| (i, f.fetched)));
+    let downloads = fetch_cached(
+        t,
+        &dir.join(format!("{name}-releases.json")),
+        &format!(
+            "https://api.github.com/repos/{owner}/{repo}/releases?per_page={}",
+            repo_info::RELEASES_PER_PAGE
+        ),
+        DIGEST_LIMIT * 4,
+        RELEASE_TTL,
+        now,
+        force,
+        &|b| {
+            repo_info::parse_downloads(b)
+                .map(|_| ())
+                .map_err(|e| e.message)
+        },
+    )
+    .and_then(|f| repo_info::parse_downloads(&f.body).map(|d| (d, f.fetched)));
+    match (info, downloads) {
+        (Err(e), Err(_)) => Err(e),
+        (info, downloads) => Ok(RepoDetails {
+            fetched: info
+                .as_ref()
+                .ok()
+                .map(|x| x.1)
+                .or_else(|| downloads.as_ref().ok().map(|x| x.1))
+                .unwrap_or(now),
+            info: info.ok().map(|x| x.0),
+            downloads: downloads.ok().map(|x| x.0),
+        }),
+    }
+}
+
+/// What [`fetch_repo_details`] found: either part may be missing when its request failed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepoDetails {
+    pub info: Option<RepoInfo>,
+    pub downloads: Option<Downloads>,
+    pub fetched: u64,
+}
+
 /// The core's icon or its platform's banner (PNG bytes), cached for a week and revalidated with the ETag. `Ok(None)` when
 /// the library has no picture for it (a 404 is remembered for the same week so it is not asked again).
 pub fn fetch_art(
@@ -922,6 +1005,52 @@ mod tests {
             ErrorCode::InvalidPathReference
         );
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn repo_details_ask_two_pages_once_an_hour_and_survive_one_failing() {
+        let repo =
+            br#"{"description":"A gallery","license":{"spdx_id":"MIT"},"stargazers_count":3}"#;
+        let rels = br#"[{"tag_name":"0.9.0","assets":[{"download_count":12}]}]"#;
+        let dir = scratch();
+        let f = Fake::default();
+        f.push(ok(200, repo, None)).push(ok(200, rels, None));
+        let d = fetch_repo_details(&f, &dir, "alfatreze", "Tau-Gallery", 100, false).unwrap();
+        assert_eq!(d.info.unwrap().description, "A gallery");
+        assert_eq!(d.downloads.unwrap().total, 12);
+        let asked: Vec<_> = f.asked.borrow().iter().map(|a| a.0.clone()).collect();
+        assert_eq!(
+            asked[0],
+            "https://api.github.com/repos/alfatreze/Tau-Gallery"
+        );
+        assert!(
+            asked[1].starts_with(
+                "https://api.github.com/repos/alfatreze/Tau-Gallery/releases?per_page="
+            )
+        );
+        // inside the hour: nothing is asked
+        let g = Fake::default();
+        assert!(
+            fetch_repo_details(&g, &dir, "alfatreze", "Tau-Gallery", 200, false)
+                .unwrap()
+                .downloads
+                .is_some()
+        );
+        assert!(g.asked.borrow().is_empty());
+        // only the release list failing still gives the description
+        let h = Fake::default();
+        h.push(ok(200, repo, None)).push(offline());
+        let part = fetch_repo_details(&h, &scratch(), "a", "b", 1, false).unwrap();
+        assert!(part.info.is_some() && part.downloads.is_none());
+        // both failing is an error; an odd name is refused before any request
+        let k = Fake::default();
+        k.push(offline()).push(offline());
+        assert!(fetch_repo_details(&k, &scratch(), "a", "b", 1, false).is_err());
+        let n = Fake::default();
+        assert!(
+            fetch_repo_details(&n, &scratch(), "a/../b", "c", 1, false).is_err()
+                && n.asked.borrow().is_empty()
+        );
     }
 
     #[test]
