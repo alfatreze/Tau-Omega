@@ -260,6 +260,8 @@ export type RepoInfo = { description: string; homepage: string; license: string;
 export type RepoDownloads = { total: number; newest: number; newest_tag: string; releases: number; complete: boolean; notes: string };
 /** What GitHub says about a core's repository; either part is null when its request failed. */
 export type RepoDetails = { info: RepoInfo | null; downloads: RepoDownloads | null; fetched: number };
+/** A picture from a core's README on GitHub (`src` is a data address). */
+export type GalleryItem = { alt: string; src: string };
 export type CoreUpdates = { rows: CoreStatus[]; source: MarketSource; fetched: number };
 export type Vetted = { core_id: string; version: string; date_release: string; platform_ids: string[]; firmware_required: string; dock_supported: boolean | null; files: number; uncompressed_bytes: number; asset_files: number };
 export type MarketplaceDownload = { download: { path: string; bytes: number; sha256: string; checksum: 'Verified' | 'NotPublished' }; vetted: Vetted };

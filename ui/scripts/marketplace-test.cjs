@@ -114,6 +114,35 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.evaluate(() => { globalThis.__repo = undefined; });
   await search(''); await p.waitForTimeout(200);
 
+  // The gallery strip under the banner and its lightbox.
+  await search('arduboy'); await p.waitForTimeout(200);
+  await rows().first().click(); await p.waitForTimeout(700);
+  const strip = sheet().getByRole('list', { name: /Pictures of Arduboy from GitHub/ });
+  assert.equal(await strip.getByRole('button').count(), 3); ok('a strip of the pictures GitHub has sits in the sheet');
+  const bannerBox = await sheet().locator('img.mk-banner').boundingBox(); const stripBox = await strip.boundingBox(); const headBox = await sheet().locator('.mk-sheet-head').boundingBox();
+  assert.ok(stripBox.y >= bannerBox.y + bannerBox.height - 1 && stripBox.y < headBox.y); ok('the strip is right below the core image');
+  await strip.getByRole('button').nth(1).click(); await p.waitForTimeout(200);
+  const lb = p.getByRole('dialog', { name: /Pictures of Arduboy/ });
+  assert.equal(await lb.count(), 1); assert.match(await lb.innerText(), /2 of 3 · The viewer/); assert.equal(await lb.locator('img').getAttribute('alt'), 'The viewer'); ok('clicking a picture opens a lightbox on it, with its place and caption');
+  const im = await lb.locator('img').boundingBox(); assert.ok(im.width > 300 && im.height > 250); ok('the picture is shown large');
+  await lb.getByRole('button', { name: 'Next picture' }).click(); await p.waitForTimeout(100);
+  assert.match(await lb.innerText(), /3 of 3 · On the Pocket/); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(100);
+  assert.match(await lb.innerText(), /1 of 3 · The grid/); await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(100);
+  assert.match(await lb.innerText(), /3 of 3/); ok('the buttons and the arrow keys move between pictures, round the ends');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  assert.equal(await lb.count(), 0); assert.equal(await sheet().count(), 1); assert.match(await p.evaluate(() => document.activeElement?.className || ''), /mk-thumb/); ok('Escape closes only the lightbox and focus goes back to the picture');
+  await strip.getByRole('button').first().click(); await p.waitForTimeout(150);
+  await p.mouse.click(1200, 500); await p.waitForTimeout(200);
+  assert.equal(await lb.count(), 0); assert.equal(await sheet().count(), 1); ok('a click outside the picture closes the lightbox too');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+  assert.equal(await sheet().count(), 0); ok('Escape again closes the sheet');
+  await p.evaluate(() => { globalThis.__gallery = 'none'; });
+  await rows().first().click(); await p.waitForTimeout(500);
+  assert.equal(await sheet().getByRole('list', { name: /Pictures of/ }).count(), 0); ok('a core with no pictures shows no strip');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+  await p.evaluate(() => { globalThis.__gallery = undefined; });
+  await search(''); await p.waitForTimeout(200);
+
   // error and offline states (the mock switches modes through window.__mkt)
   await p.evaluate(() => { globalThis.__mkt = 'offline'; });
   await p.getByRole('button', { name: 'Refresh' }).click(); await p.waitForTimeout(500);

@@ -91,6 +91,29 @@ pub fn marketplace_repo_details(app: tauri::AppHandle, core_id: String, force: b
     marketplace::fetch_repo_details(&Http, &dir, &owner, &name, now(), force)
 }
 
+#[derive(Serialize)]
+pub struct GalleryItem {
+    pub alt: String,
+    /// The picture as a `data:` address (checked to really be a PNG, JPEG, GIF or WebP).
+    pub src: String,
+}
+
+/// The pictures a core's README shows on GitHub, for the gallery strip and lightbox in the details sheet. Best effort: no README, no
+/// pictures or no connection is an empty list, never an error on the screen.
+#[tauri::command(async)]
+pub fn marketplace_gallery(app: tauri::AppHandle, core_id: String, force: bool) -> Result<Vec<GalleryItem>, TauError> {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let dir = cache(&app)?;
+    let catalog = full_catalog(&app, false)?.catalog;
+    let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
+    let Some((owner, name, _)) = repo_address(core) else { return Ok(Vec::new()) };
+    Ok(marketplace::fetch_gallery(&Http, &dir, &owner, &name, now(), force)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| GalleryItem { alt: p.alt, src: format!("data:{};base64,{}", p.mime, STANDARD.encode(p.bytes)) })
+        .collect())
+}
+
 /// Opens a core's GitHub page in the computer's browser. The address is built here from the catalog entry (never taken from the screen),
 /// and only plain repository names are accepted, so nothing but `https://github.com/<owner>/<name>` is ever opened.
 #[tauri::command(async)]

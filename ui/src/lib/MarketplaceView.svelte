@@ -4,13 +4,14 @@
   import { openManualAdd } from './manualAddStore';
   import { onMount } from 'svelte';
   import CoreInstall from './CoreInstall.svelte';
+  import Lightbox from './Lightbox.svelte';
   import MultiInstall from './MultiInstall.svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
-  import { getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
+  import { getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceGallery, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
   import { categoryCounts, filterCores, listedBy, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
-  import type { CatalogCore, CatalogResult, CoreStatus, RepoDetails } from './types';
+  import type { CatalogCore, CatalogResult, CoreStatus, GalleryItem, RepoDetails } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
   export let card = '';
 
@@ -93,13 +94,19 @@
   /** What GitHub says about the open core (null until it answers or when it cannot be reached). */
   let repo: RepoDetails | null = null; let repoState: 'loading' | 'done' | 'failed' = 'loading'; let linkError = '';
   let repoFor = '';
+  /** The pictures the author's README shows on GitHub (empty when there are none or GitHub cannot be reached) and the one open in the lightbox. */
+  let gallery: GalleryItem[] = []; let lightbox: number | null = null;
+  async function loadGallery(core: CatalogCore) {
+    gallery = []; lightbox = null;
+    try { const g = await marketplaceGallery(core.id); if (repoFor === core.id) gallery = g; } catch { /* no pictures is fine */ }
+  }
   async function loadRepo(core: CatalogCore) {
     repo = null; repoState = 'loading'; repoFor = core.id;
     try { const d = await marketplaceRepoDetails(core.id); if (repoFor === core.id) { repo = d; repoState = 'done'; } }
     catch { if (repoFor === core.id) repoState = 'failed'; }
   }
-  function open(core: CatalogCore) { selected = core; chosen = ''; optVersion = ''; optDiag = false; tab = 'about'; linkError = ''; optChannel = core.options?.[0]?.channel ?? ''; wantArt('Banner', core.id); wantArt('Icon', core.id); void loadRepo(core); }
-  function close() { selected = null; repoFor = ''; }
+  function open(core: CatalogCore) { selected = core; chosen = ''; optVersion = ''; optDiag = false; tab = 'about'; linkError = ''; optChannel = core.options?.[0]?.channel ?? ''; wantArt('Banner', core.id); wantArt('Icon', core.id); void loadRepo(core); void loadGallery(core); }
+  function close() { selected = null; repoFor = ''; gallery = []; lightbox = null; }
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
   /** The address is opened by the app from the catalog entry (a plain click on the link; nothing typed or pasted is ever opened). */
   async function openRepo(e: Event) { e.preventDefault(); if (!selected) return; linkError = ''; try { await marketplaceOpenRepo(selected.id); } catch (err) { linkError = errorMessage(err); } }
@@ -220,6 +227,11 @@
   <div class="mk-backdrop" role="presentation" on:click={close}></div>
   <div class="mk-sheet" role="dialog" aria-modal="true" aria-labelledby="mk-title" use:modal>
     {#if art[`Banner:${selected.id}`]}<img class="mk-banner" src={art[`Banner:${selected.id}`]} alt={`${selected.name} platform artwork`} />{/if}
+    {#if gallery.length}
+      <ul class="mk-strip" aria-label={`Pictures of ${selected.name} from GitHub`}>
+        {#each gallery as g, i}<li><button class="mk-thumb" aria-label={`View picture ${i + 1} of ${gallery.length}${g.alt ? `: ${g.alt}` : ''}`} on:click={() => (lightbox = i)}><img src={g.src} alt="" loading="lazy" /></button></li>{/each}
+      </ul>
+    {/if}
     <header class="mk-sheet-head">
       <div><p class="eyebrow">{selected.category.toUpperCase()}</p><h2 id="mk-title">{selected.name}</h2><p class="mk-by">{selected.id}{selected.manufacturer ? ` · ${selected.manufacturer}` : ''}{selected.year ? ` · ${selected.year}` : ''}</p></div>
       <button class="quiet" data-autofocus on:click={close} aria-label="Close details">Close</button>
@@ -313,6 +325,7 @@
     {/if}
     </div>
   </div>
+  {#if lightbox !== null}<Lightbox items={gallery} index={lightbox} label={`Pictures of ${selected.name}`} on:close={() => (lightbox = null)} />{/if}
 {/if}
 <style>
   .sk{display:block;background:#222e30;border-radius:6px;position:relative;overflow:hidden}
@@ -367,6 +380,11 @@
   .mk-sheet h3{font-size:14px;margin:22px 0 8px}
   .mk-sheet-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.mk-sheet-head h2{margin:0}.mk-by{color:#95a5a4;font-size:12px;margin:4px 0 0}
   .mk-facts{display:grid;gap:10px;margin:0 0 14px}.mk-facts div{display:grid;gap:2px}.mk-facts dt{font-size:11px;letter-spacing:.08em;color:#9fb3aa;font-weight:700}.mk-facts dd{margin:0;font-size:13px;color:#dce6e4;overflow-wrap:anywhere}
+  .mk-strip{list-style:none;margin:10px 0 14px;padding:0 0 6px;display:flex;gap:8px;overflow-x:auto}
+  .mk-strip li{flex:none}
+  .mk-thumb{display:block;padding:0;border:1px solid #2c393a;border-radius:8px;overflow:hidden;background:#000;cursor:zoom-in;width:104px;height:68px}
+  .mk-thumb:hover,.mk-thumb:focus-visible{border-color:#c1f0ad}
+  .mk-thumb img{display:block;width:100%;height:100%;object-fit:cover}
   .mk-install{margin:2px 0 16px}.mk-install>.primary{width:100%}
   .mk-tabs{display:flex;gap:4px;border-bottom:1px solid #2c393a;margin:0 0 14px}
   .mk-tabs button{background:transparent;color:#a6b3b2;border:0;border-bottom:2px solid transparent;border-radius:0;padding:9px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:-1px}
