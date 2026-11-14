@@ -3,11 +3,11 @@
 // builds for WebAssembly; this shows that it RUNS there (Tau Alpha 016: a build that compiled still aborted at run time, because the scan
 // used threads and WebAssembly has none).
 //
-//   cargo test -p tau-core --lib --target wasm32-wasip1 --no-run
 //   node tools/run-wasi-tests.mjs scan::reader_tests          (the arguments are the test filters; none runs everything that can run on WASI)
 //
 // Not every unit test can run on WASI (many make temporary folders with `std::env::temp_dir()`, which panics there), so CI names the ones
 // that are written for it. The host gives the tests an empty `/tmp`, and they run on one thread (WebAssembly has none).
+import { spawnSync } from 'node:child_process';
 import { WASI } from 'node:wasi';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,16 +15,25 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const deps = path.join(root, 'target', 'wasm32-wasip1', 'debug', 'deps');
-const builds = fs.existsSync(deps)
-  ? fs.readdirSync(deps).filter((f) => /^tau_core-[0-9a-f]+\.wasm$/.test(f)).map((f) => path.join(deps, f))
-  : [];
-if (!builds.length) {
-  console.error('no tau-core test build found: run `cargo test -p tau-core --lib --target wasm32-wasip1 --no-run` first');
+
+// Where cargo put the test build. Asked of cargo itself (its JSON messages name the executable), because the folder differs between
+// cargo versions: older ones use target/<triple>/debug/deps, newer ones target/<triple>/debug/build/<crate>/<hash>/out (CI's newer
+// stable did, on 2026-11-14, and a runner that guessed the folder found nothing). Nothing is rebuilt when the build is already there.
+// TAU_CORE_WASM names a file to use instead.
+function findBuild() {
+  if (process.env.TAU_CORE_WASM) return process.env.TAU_CORE_WASM;
+  const r = spawnSync('cargo', ['test', '-p', 'tau-core', '--lib', '--locked', '--target', 'wasm32-wasip1', '--no-run', '--message-format=json'],
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) { console.error(r.stderr || 'cargo could not build the tau-core tests for wasm32-wasip1'); process.exit(2); }
+  const found = r.stdout.split('\n').filter((l) => l.startsWith('{')).map((l) => { try { return JSON.parse(l); } catch { return null; } })
+    .filter((m) => m?.reason === 'compiler-artifact' && m.profile?.test && m.target?.name === 'tau_core' && m.executable);
+  return found.at(-1)?.executable;
+}
+const wasm = findBuild();
+if (!wasm || !fs.existsSync(wasm)) {
+  console.error('no tau-core test build found: `cargo test -p tau-core --lib --target wasm32-wasip1 --no-run` did not report one');
   process.exit(2);
 }
-// The newest one: older builds of other hashes may be left behind.
-const wasm = builds.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tau-wasi-'));
 const filters = process.argv.slice(2);
 const wasi = new WASI({
