@@ -23,6 +23,7 @@
   import { tick } from 'svelte';
   import PackageView from './lib/PackageView.svelte';
   import MarketplaceView from './lib/MarketplaceView.svelte';
+  import FeedbackView from './lib/FeedbackView.svelte';
   import NavTree from './lib/NavTree.svelte';
   import CoresView from './lib/CoresView.svelte';
   import ManualAddSheet from './lib/ManualAddSheet.svelte';
@@ -40,7 +41,7 @@
   import { coresSelection, coresTab, coresTreeStore, findCore, refreshCores } from './lib/coresStore';
   import { autoCheckUpdates } from './lib/updatesStore';
   import { get } from 'svelte/store';
-  let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' | 'check' | 'builder' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
+  let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' | 'check' | 'builder' | 'feedback' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
   let packageZipPath = ''; let packageCardPath = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
   async function inspectPackageZip() { packageManifest = null; packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packageManifest = await inspectPackage(packageZipPath); packageInspectNotice = `${packageManifest.entries.length} files found. Nothing was changed.`; } catch (error) { packageInspectNotice = `Could not read this package: ${errorMessage(error)}`; } }
@@ -81,7 +82,7 @@
   });
   // Rarely-used tools and settings live in a collapsible sidebar section; it
   // stays open while one of its pages is showing and remembers the user's choice.
-  const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'settings'];
+  const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'feedback', 'settings'];
   const devItems = ['builds', 'results', 'check', 'builder'];
   let devOpen = true;
   try { devOpen = localStorage.getItem('tau.nav.dev') !== '0'; } catch { /* per-viewer convenience */ }
@@ -374,6 +375,7 @@
         <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
         <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
         <button class:active={page === 'diagnostics'} on:click={() => page = 'diagnostics'}>Send diagnostics</button>
+        <button class:active={page === 'feedback'} on:click={() => page = 'feedback'}>Send feedback</button>
         <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
       </div>
     {/if}
@@ -413,6 +415,8 @@
     <BuildsView card={path} />
   {:else if page === 'marketplace'}
     <MarketplaceView card={path} />
+  {:else if page === 'feedback'}
+    <FeedbackView />
   {:else if page === 'cores'}
     <CoresView card={path} {cores} openLibrary={openCoreLibrary} reloadCard={() => { void openFolder(); }} />
   {:else if page === 'meters'}

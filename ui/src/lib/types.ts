@@ -260,6 +260,11 @@ export type RepoInfo = { description: string; homepage: string; license: string;
 export type RepoDownloads = { total: number; newest: number; newest_tag: string; releases: number; complete: boolean; notes: string };
 /** What GitHub says about a core's repository; either part is null when its request failed. */
 export type RepoDetails = { info: RepoInfo | null; downloads: RepoDownloads | null; fetched: number };
+export type FeedbackInfo = { enabled: boolean; version: string; os: string; arch: string };
+export type FeedbackFile = { name: string; mime: string; /** base64 */ data: string };
+/** What the app hands to the feedback service: fields only; the service writes the issue's labels and text itself. */
+export type FeedbackSend = { kind: string; area: string; title: string; text: string; basics: { version: string; os: string; arch: string } | null; github: string; files: FeedbackFile[] };
+export type FeedbackSent = { number: number; url: string };
 /** A picture from a core's README on GitHub (`src` is a data address). */
 export type GalleryItem = { alt: string; src: string };
 export type CoreUpdates = { rows: CoreStatus[]; source: MarketSource; fetched: number };
