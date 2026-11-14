@@ -114,6 +114,30 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await p.evaluate(() => { globalThis.__repo = undefined; });
   await search(''); await p.waitForTimeout(200);
 
+  // The sheet's header: title with Install beside it, the developer under it, then category, maker and year; a round X top right.
+  await search('arduboy'); await p.waitForTimeout(200);
+  await rows().first().click(); await p.waitForTimeout(700);
+  const box = async (loc) => loc.boundingBox();
+  const titleB = await box(sheet().getByRole('heading', { name: 'Arduboy' })); const goB = await box(sheet().getByRole('button', { name: 'Install', exact: true }));
+  assert.ok(goB.x > titleB.x + 150 && Math.abs((goB.y + goB.height / 2) - (titleB.y + titleB.height / 2)) < 30); ok('Install is on the right, level with the core title');
+  const devB = await box(sheet().locator('.mk-dev')); const metaB = await box(sheet().locator('.mk-by'));
+  assert.match(await sheet().locator('.mk-dev').innerText(), /agg23/); assert.ok(devB.y > titleB.y + titleB.height - 2 && metaB.y > devB.y + devB.height - 2); ok('the developer comes under the title, then the line below it');
+  assert.equal((await sheet().locator('.mk-by').innerText()).trim(), 'Handheld · Arduboy · 2016'); assert.ok(!/agg23\.Arduboy/.test(await sheet().locator('.mk-by').innerText())); ok('that line reads category, maker and year, without the core id');
+  assert.equal(await sheet().locator('.mk-dev .mk-icon, .mk-dev .mk-avatar').count() >= 1, true); ok('the developer\'s icon is shown beside the name');
+  const xb = sheet().getByRole('button', { name: 'Close details' }); const xB = await box(xb); const sB = await box(sheet());
+  assert.ok(Math.abs(xB.width - xB.height) < 1 && xB.x + xB.width > sB.x + sB.width - 60 && xB.y < sB.y + 60); assert.equal((await xb.innerText()).trim(), ''); ok('Close is a round X button at the top right');
+  assert.equal(await sheet().locator('.eyebrow').count(), 0); ok('the category is no longer a label above the title');
+  await xb.click(); await p.waitForTimeout(200);
+  assert.equal(await sheet().count(), 0); ok('the X closes the sheet');
+  await rows().first().click(); await p.waitForTimeout(500);
+  await sheet().getByRole('button', { name: 'Install', exact: true }).click(); await p.waitForTimeout(600);
+  assert.equal(await sheet().getByRole('region', { name: 'Install review' }).count(), 1); assert.equal(await sheet().locator('.mk-go').isDisabled(), true); ok('the header Install starts the download and review, and cannot be pressed twice');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+  await rows().first().click(); await p.waitForTimeout(500);
+  assert.equal(await sheet().locator('.mk-go').isDisabled(), false); assert.equal(await sheet().getByRole('region', { name: 'Install review' }).count(), 0); ok('opening a core again starts clean');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+  await search(''); await p.waitForTimeout(200);
+
   // The gallery strip under the banner and its lightbox.
   await search('arduboy'); await p.waitForTimeout(200);
   await rows().first().click(); await p.waitForTimeout(700);
@@ -209,7 +233,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   await sel('Channel').selectOption('Preview'); await p.waitForTimeout(150);
   assert.match((await sel('Version').locator('option').allInnerTexts()).join('|'), /0\.6\.0-preview\.1/); ok('changing the channel changes the versions');
   await sel('Channel').selectOption('Dev'); await p.waitForTimeout(150);
-  assert.match(await sheet().innerText(), /never published/); assert.equal(await sheet().getByRole('button', { name: /Install a local dev build/ }).count(), 1); ok('Dev explains it is local and offers the local install');
+  assert.match(await sheet().innerText(), /never published/); assert.equal(await sheet().getByRole('button', { name: /Install a local build/ }).count(), 1); ok('Dev explains it is local and offers the local install');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   const dflt = p.getByRole('combobox', { name: 'Marketplace to check for updates' });
   assert.equal(await dflt.inputValue(), 'openfpga-library'); await dflt.selectOption('tau-alpha'); await p.waitForTimeout(500);

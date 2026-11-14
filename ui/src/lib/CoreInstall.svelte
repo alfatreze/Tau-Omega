@@ -14,8 +14,12 @@
   export let label = 'Download and review';
   /** The sentence above the button (what the review will show); the marketplace sheet leaves it out and shows only the button. */
   export let intro = true;
+  /** The page draws its own button and calls `start()`; this then shows only the progress, the checks and the review. */
+  export let buttonless = false;
   const dispatch = createEventDispatcher<{ installed: void }>();
-  let download: MarketplaceDownload | null = null; let busy = false; let error = '';
+  export let download: MarketplaceDownload | null = null; export let busy = false; export let error = '';
+  /** Downloads and checks the zip, then shows the review (the same as pressing this component's own button). */
+  export function start() { return fetchZip(); }
   async function fetchZip() {
     busy = true; error = ''; download = null;
     try { download = await marketplaceDownload(coreId, version || null); }
@@ -24,8 +28,8 @@
   }
 </script>
 {#if !download}
-  {#if intro}<p class="ci-small">Omega downloads the zip, checks it, and shows exactly what would change on <strong>{card.split('/').pop()}</strong>. Nothing is written yet.</p>{/if}
-  <button class="primary" disabled={busy} on:click={fetchZip}>{busy ? 'Downloading and checking…' : label}</button>
+  {#if intro && !buttonless}<p class="ci-small">Omega downloads the zip, checks it, and shows exactly what would change on <strong>{card.split('/').pop()}</strong>. Nothing is written yet.</p>{/if}
+  {#if !buttonless}<button class="primary" disabled={busy} on:click={fetchZip}>{busy ? 'Downloading and checking…' : label}</button>{:else if busy}<p class="ci-small" role="status">Downloading and checking…</p>{/if}
   {#if error}<p class="ci-err" role="alert">{error}</p>{/if}
 {:else}
   <p class="ci-small" role="status">Downloaded {size(download.download.bytes)} · {download.download.checksum === 'Verified' ? 'checksum verified against GitHub’s' : 'no checksum was published for this release'} · {download.vetted.files} files{download.vetted.asset_files ? ` (${download.vetted.asset_files} in Assets)` : ''}.
