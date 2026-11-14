@@ -411,6 +411,16 @@ const handlers: Record<string, (args: any) => unknown> = {
     return { info: { description: 'A mock description of ' + a.coreId + '. It shows what the core is, in the author\'s words.', homepage: 'https://example.com/core', license: 'MIT', stars: 12, topics: ['analogue-pocket', 'openfpga'], pushed: '2026-11-14' },
       downloads: { total: 12345, newest: 678, newest_tag: 'v1.0.0', releases: 4, complete: true, notes: 'Fixed the menu.\nAdded a new option.' }, fetched: 1 };
   },
+  // Feedback: set window.__feedback = 'off' (not connected, as in the real build today) | 'fail' | 'slow'.
+  feedback_info: () => ({ enabled: (globalThis as { __feedback?: string }).__feedback !== 'off', version: '0.6.0', os: 'macos', arch: 'aarch64' }),
+  feedback_send: (a) => {
+    const mode = (globalThis as { __feedback?: string }).__feedback;
+    (globalThis as { __sent?: unknown[] }).__sent = [...((globalThis as { __sent?: unknown[] }).__sent ?? []), a.message];
+    if (mode === 'fail') throw { code: 'E_IO', message: 'The feedback service could not be reached. Try again in a moment.' };
+    const done = { number: 123, url: 'https://github.com/alfatreze/Tau-Omega/issues/123' };
+    return mode === 'slow' ? new Promise((resolve) => setTimeout(() => resolve(done), 1200)) : done;
+  },
+  feedback_open_issue: (a) => { (globalThis as { __opened?: string[] }).__opened = [...((globalThis as { __opened?: string[] }).__opened ?? []), `issue ${a.number}`]; return null; },
   marketplace_gallery: (a) => {
     const g = globalThis as { __gallery?: string };
     if (g.__gallery === 'none' || a.coreId === 'zz.NoRelease') return [];
