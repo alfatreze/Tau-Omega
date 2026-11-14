@@ -1,0 +1,27 @@
+# The Tau Omega feedback service: one Worker, one R2 bucket (attachments), one KV namespace (rate-limit counts). Its own Worker, separate
+# from any other project's. Setup and deploy: README.md.
+name = "tau-omega-feedback"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+preview_urls = false
+
+[vars]
+GITHUB_REPO = "alfatreze/Tau-Omega"
+# The address attachments are served from: this Worker's own address, with no trailing slash. Set it after the first deploy.
+PUBLIC_URL = "https://tau-omega-feedback.CHANGE-ME.workers.dev"
+HOURLY = "5"
+DAILY = "20"
+GLOBAL_DAILY = "200"
+# Kill switch: set to "1" and redeploy (or set in the dashboard) and every message is answered "paused".
+PAUSED = "0"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "tau-omega-feedback-files"
+
+[[kv_namespaces]]
+binding = "LIMITS"
+id = "CREATE-WITH-wrangler-kv-namespace-create-LIMITS"
+
+# Secrets (never in this file): GITHUB_TOKEN (Issues: write on alfatreze/Tau-Omega only) and IP_SALT (any long random text).

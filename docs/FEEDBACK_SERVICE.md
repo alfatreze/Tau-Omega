@@ -1,19 +1,20 @@
 # Feedback to GitHub issues: the service and what is left to build (scope, 2026-11-14)
 
-**Status.** The sender side is built (the **Send feedback** page, `ui/src/lib/FeedbackView.svelte`, rules in `ui/src/lib/feedback.ts`, 11 logic and 21 browser checks). It cannot send yet: `feedback_info` reports `enabled: false`, so the page says "Sending is not connected yet". This document scopes the rest. Decision D-025: the route is an owner-run Cloudflare Worker (the owner already runs one for another project); Omega ships **no** GitHub token.
+**Status (2026-11-14).** The service is **written and tested but not deployed** (`services/feedback-worker/`, 9 tests, no account needed; deploy steps in its README). The sender side is built (the **Send feedback** page, `ui/src/lib/FeedbackView.svelte`, rules in `ui/src/lib/feedback.ts`, 11 logic and 21 browser checks). It cannot send yet: `feedback_info` reports `enabled: false`, so the page says "Sending is not connected yet". This document scopes the rest. Decision D-025: the route is an owner-run Cloudflare Worker (the owner already runs one for another project); Omega ships **no** GitHub token.
 
 ## 1. What a person sees (built)
 Tools & settings → Send feedback. They choose *what it is* (Something is wrong / An idea / A question), *where in Omega* (11 areas), write a title (80 characters) and a description (10 to 4,000), optionally attach up to **4 files, 5 MB each, 12 MB in all** (png, jpg, gif, webp, txt, log, json, zip; a picture can also be pasted into the description), optionally add their Omega version and system, and optionally a GitHub name for a reply. A plain note beside Send says everything will be public (no box to tick, no preview step). After sending they see the issue number and a link.
 
 ## 2. How a message becomes an issue
 ```
-Omega ──POST /v1/feedback (multipart)──▶ Worker ──GitHub REST: create issue──▶ alfatreze/Tau-Omega
+Omega ──POST /v1/feedback (JSON)──▶ Worker ──GitHub REST: create issue──▶ alfatreze/Tau-Omega
                                            └──R2: attachments (random names)
 ```
-- **The app sends fields, never finished text or labels.** Same shape as `FeedbackSend` (`ui/src/lib/types.ts`): `kind`, `area`, `title`, `text`, `basics {version, os, arch}` or null, `github`, `files[] {name, mime, data}`. The Worker writes the title, labels and body itself, so a hand-made request cannot set arbitrary labels or markup.
-- **Labels** the Worker sets from fixed lists: `type: bug|idea|question`, `area: <lower-case area>`, `from: omega`. They must exist in the repository once (a one-off setup step). Because the Worker's token has write access, labels work (they would not through a plain "new issue" link).
+- **The app sends fields, never finished text or labels,** as one JSON body with the files in base64 (a multipart body was planned; JSON is simpler for the Rust side and the body stays under 18 MB). Same shape as `FeedbackSend` (`ui/src/lib/types.ts`): `kind`, `area`, `title`, `text`, `basics {version, os, arch}` or null, `github`, `files[] {name, mime, data}`. The Worker writes the title, labels and body itself, so a hand-made request cannot set arbitrary labels or markup.
+- **Labels** the Worker sets from fixed lists: `type: bug|idea|question`, `area: <lower-case area>`, `from: omega`. GitHub creates a label the first time it is used (the Worker's token has write access; labels would be ignored through a plain "new issue" link).
 - **Body** (the Worker writes it): the text, an attachments line (images shown inline, other files as links), a rule, `Category: …`, `Sent from Tau Omega <version> (<system>, <arch>)` only when the sender chose it, `Reply on GitHub: @name` only when given.
-- **Response:** `201 {number, url}`. Errors are `{code, message}` with a plain-language message the app shows as it is: 400 (what is wrong), 413 (too large), 429 (`retry_after` seconds), 503 (paused or daily cap reached), 502 (GitHub unreachable).
+- **Also:** `GET /v1/status` returns `{ok, paused}` so the app can say "paused" before the sender writes anything; `GET /f/<key>` serves a stored attachment.
+- **Response:** `201 {number, url}`; also 409 for an identical message sent twice. Errors are `{code, message}` with a plain-language message the app shows as it is: 400 (what is wrong), 413 (too large), 429 (`retry_after` seconds), 503 (paused or daily cap reached), 502 (GitHub unreachable).
 
 ## 3. What the Worker must enforce (everything the app checks is re-checked)
 | Rule | Value |
@@ -39,13 +40,16 @@ A **fine-grained token (or a GitHub App installation token) limited to `Issues: 
 - The page already warns that everything is public. The service needs a short privacy note (what is kept, for how long, how to ask for removal); suggested text lives next to the page, in English only.
 
 ## 7. What is left to build, in order
-1. **Worker** (about 250 lines): validation, issue and body writer, R2 upload, limits, kill switch; tests with scripted GitHub answers; one live run against the staging repository.
-2. **Setup** (the owner, once): the R2 bucket and its public address, the two secrets, the labels, the rate-limit rule, the service address.
+1. **Worker: DONE** (about 250 lines in `services/feedback-worker/`, 9 tests with fakes). Not yet run against real GitHub: do one live run against a private test repository first.
+2. **Setup** (the owner, once; commands in the Worker's README): the R2 bucket, the KV namespace, the two secrets (the GitHub token and a salt), the one-year lifecycle rule on the bucket, then the deployed address into `PUBLIC_URL`.
 3. **Omega, Rust** (`src-tauri/src/feedback_cmds.rs`, `crates/tau-net`): `feedback_send` (re-check the limits, decode, build the multipart request, POST to the one fixed address with `ureq`, no redirects, 60 s limit, map errors to the plain messages), `feedback_open_issue(number)` (opens only `https://github.com/alfatreze/Tau-Omega/issues/<number>`), and `feedback_info.enabled` true once an address is built in. The page, the mock and the types already match. Tests with a scripted transport (the multipart body, each error code, the size caps).
 4. **Switch on:** set the address, run the page against staging, then production; update the sidebar and README note on what leaves the computer (the update check, the marketplace pages and now this, only when the person presses Send).
 No new dependency is expected (`ureq` is already in the app); multipart is written by hand (about 40 lines).
 
-## 8. Questions for the owner (none blocks the page)
+## 8. Choices made in the Worker (the defaults proposed to the owner; change in `rules.js` / `wrangler.toml`)
+Zip allowed; the sender's markdown kept with links as words and pictures removed; attachments kept one year; a fine-grained token limited to Issues on `Tau-Omega`; the `workers.dev` address to start with. The original open questions follow.
+
+## 9. Questions for the owner (none blocks the page)
 1. **Zip attachments:** allowed (as built) or only pictures and text?
 2. **Markdown policy:** keep the sender's markdown with links and images made plain (suggested), or put the whole text in a quote block?
 3. **Retention** of attachments (suggest one year) and who handles removal requests.
