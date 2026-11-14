@@ -11,7 +11,7 @@
   import { getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceGallery, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
   import { categoryCounts, filterCores, listedBy, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
-  import type { CatalogCore, CatalogResult, CoreStatus, GalleryItem, RepoDetails } from './types';
+  import type { CatalogCore, CatalogResult, CoreStatus, GalleryItem, MarketplaceDownload, RepoDetails } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
   export let card = '';
 
@@ -28,6 +28,16 @@
   $: channels = [...new Set(opts.map((o) => o.channel))];
   $: builds = opts.filter((o) => o.channel === optChannel);
   $: option = opts.find((o) => o.channel === optChannel && o.diagnostics === optDiag) ?? builds[0] ?? null;
+  /** The Install button sits in the header; the review it leads to is drawn by CoreInstall below it. */
+  let installer: CoreInstall | undefined; let installBusy = false; let review: MarketplaceDownload | null = null;
+  $: isDev = opts.length ? option?.channel === 'Dev' : selected?.channel === 'Dev';
+  $: target = isDev ? null : opts.length ? (option ? { id: option.core_id, version: optVersion } : null) : selected?.download_url ? { id: selected.id, version: chosen } : null;
+  $: canInstall = !!card && !!target;
+  /** A different core, channel or version starts the review over. */
+  $: { void target?.id; void target?.version; review = null; installBusy = false; }
+  $: installLabel = target?.version ? `Install version ${target.version}` : 'Install';
+  $: installNote = isDev ? 'Dev builds are made locally and never published: install one from its zip or folder.' : !card ? 'Open a card first (Cards page).' : !target ? 'The author has not published a download yet.' : '';
+  $: metaLine = selected ? [selected.category, selected.manufacturer, selected.year ? String(selected.year) : ''].filter(Boolean).join(' · ') : '';
   const pickChannel = (c: string) => { optChannel = c; optDiag = false; optVersion = ''; };
   /** Pictures by `kind:id`: undefined = not asked yet, null = the library has none. Fetched only for rows that are shown. */
   let art: Record<string, string | null | undefined> = {}; const asking = new Set<string>(); let queue: string[] = [];
@@ -105,7 +115,7 @@
     try { const d = await marketplaceRepoDetails(core.id); if (repoFor === core.id) { repo = d; repoState = 'done'; } }
     catch { if (repoFor === core.id) repoState = 'failed'; }
   }
-  function open(core: CatalogCore) { selected = core; chosen = ''; optVersion = ''; optDiag = false; tab = 'about'; linkError = ''; optChannel = core.options?.[0]?.channel ?? ''; wantArt('Banner', core.id); wantArt('Icon', core.id); void loadRepo(core); void loadGallery(core); }
+  function open(core: CatalogCore) { selected = core; chosen = ''; optVersion = ''; optDiag = false; tab = 'about'; linkError = ''; review = null; installBusy = false; optChannel = core.options?.[0]?.channel ?? ''; wantArt('Banner', core.id); wantArt('Icon', core.id); void loadRepo(core); void loadGallery(core); }
   function close() { selected = null; repoFor = ''; gallery = []; lightbox = null; }
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
   /** The address is opened by the app from the catalog entry (a plain click on the link; nothing typed or pasted is ever opened). */
@@ -226,6 +236,7 @@
 {#if selected}
   <div class="mk-backdrop" role="presentation" on:click={close}></div>
   <div class="mk-sheet" role="dialog" aria-modal="true" aria-labelledby="mk-title" use:modal>
+    <div class="mk-x-wrap"><button class="mk-x" data-autofocus on:click={close} aria-label="Close details"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" /></svg></button></div>
     {#if art[`Banner:${selected.id}`]}<img class="mk-banner" src={art[`Banner:${selected.id}`]} alt={`${selected.name} platform artwork`} />{/if}
     {#if gallery.length}
       <ul class="mk-strip" aria-label={`Pictures of ${selected.name} from GitHub`}>
@@ -233,8 +244,16 @@
       </ul>
     {/if}
     <header class="mk-sheet-head">
-      <div><p class="eyebrow">{selected.category.toUpperCase()}</p><h2 id="mk-title">{selected.name}</h2><p class="mk-by">{selected.id}{selected.manufacturer ? ` · ${selected.manufacturer}` : ''}{selected.year ? ` · ${selected.year}` : ''}</p></div>
-      <button class="quiet" data-autofocus on:click={close} aria-label="Close details">Close</button>
+      <div class="mk-head-main">
+        <h2 id="mk-title">{selected.name}</h2>
+        <p class="mk-dev"><span class="mk-avatar" aria-hidden="true">{#if art[`Icon:${selected.id}`]}<img class="mk-icon" src={art[`Icon:${selected.id}`]} alt="" width="28" height="28" />{:else}{selected.author.slice(0, 1).toUpperCase()}{/if}</span><span class="mk-author-name">{selected.author}</span></p>
+        {#if metaLine}<p class="mk-by">{metaLine}</p>{/if}
+      </div>
+      {#if isDev}
+        <button class="primary mk-go" on:click={() => { close(); openManualAdd(); }}>Install a local build…</button>
+      {:else}
+        <button class="primary mk-go" disabled={!canInstall || installBusy || !!review} on:click={() => installer?.start()}>{installBusy ? 'Working…' : installLabel}</button>
+      {/if}
     </header>
 
     <div class="mk-install">
@@ -244,25 +263,9 @@
           {#if builds.length > 1}<label>Build<select value={optDiag ? 'diag' : 'std'} on:change={(e) => { optDiag = e.currentTarget.value === 'diag'; optVersion = ''; }}><option value="std">Standard</option><option value="diag">Diagnostics</option></select></label>{/if}
           {#if option && option.history.length}<label>Version<select bind:value={optVersion}>{#each option.history as h, i}<option value={i === 0 ? '' : h.version}>{h.version} · {h.release_date}{i === 0 ? ' (newest)' : ''}</option>{/each}</select></label>{/if}
         </div>
-        {#if option?.channel === 'Dev'}
-          <button class="primary" on:click={() => { close(); openManualAdd(); }}>Install a local dev build…</button>
-          <p class="mk-small">Dev builds are made locally and never published: install one from its zip or folder.</p>
-        {:else if !card}
-          <button class="primary" disabled>Install</button><p class="mk-small">Open a card first (Cards page).</p>
-        {:else if option}
-          {#key `${option.core_id}|${optVersion}`}<CoreInstall coreId={option.core_id} {card} version={optVersion} intro={false} label={optVersion ? `Install version ${optVersion}` : 'Install'} on:installed={() => loadStatuses(card)} />{/key}
-        {/if}
-      {:else if selected.channel === 'Dev'}
-        <button class="primary" on:click={() => { close(); openManualAdd(); }}>Install a local dev build…</button>
-        <p class="mk-small">Dev builds are made locally and never published: install one from its zip or folder.</p>
-      {:else if !selected.download_url}
-        <button class="primary" disabled>Install</button><p class="mk-small">The author has not published a download yet.</p>
-      {:else if !card}
-        <button class="primary" disabled>Install</button><p class="mk-small">Open a card first (Cards page).</p>
-      {:else}
-        {#key chosen}<CoreInstall coreId={selected.id} {card} version={chosen} intro={false} label={chosen ? `Install version ${chosen}` : 'Install'} on:installed={() => loadStatuses(card)} />{/key}
-        {#if chosen}<p class="mk-small">Version {chosen} is chosen (see Details).</p>{/if}
       {/if}
+      {#if installNote}<p class="mk-small">{installNote}</p>{/if}
+      {#if canInstall}{#key `${target?.id}|${target?.version}`}<CoreInstall bind:this={installer} bind:busy={installBusy} bind:download={review} coreId={target?.id ?? ''} {card} version={target?.version ?? ''} buttonless on:installed={() => loadStatuses(card)} />{/key}{/if}
       {#if selected.requires_license}<p class="mk-callout soft" role="note">This core needs a key file from its author, or it will not run. See Details.</p>{/if}
     </div>
 
@@ -378,14 +381,20 @@
   .mk-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100}
   .mk-sheet{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);overflow:auto;z-index:101;background:#1a2325;border-left:1px solid #2c393a;padding:26px 28px 40px;box-sizing:border-box}
   .mk-sheet h3{font-size:14px;margin:22px 0 8px}
-  .mk-sheet-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.mk-sheet-head h2{margin:0}.mk-by{color:#95a5a4;font-size:12px;margin:4px 0 0}
+  .mk-x-wrap{position:sticky;top:0;height:0;z-index:4;display:flex;justify-content:flex-end;overflow:visible}
+  .mk-x{width:34px;height:34px;margin:10px 10px 0 0;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(10,16,17,.78);color:#e8ecec;display:grid;place-items:center;padding:0;cursor:pointer;backdrop-filter:blur(4px)}
+  .mk-x:hover,.mk-x:focus-visible{border-color:#c1f0ad;color:#fff}
+  .mk-sheet-head{display:flex;flex-wrap:nowrap;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.mk-head-main{flex:1 1 auto;min-width:0}.mk-sheet-head h2{margin:0;line-height:1.2}
+  .mk-go{flex:none;margin-top:-2px;white-space:nowrap}
+  .mk-dev{display:flex;align-items:center;gap:8px;margin:8px 0 0;min-width:0}
+  .mk-by{color:#95a5a4;font-size:12px;margin:8px 0 0}
   .mk-facts{display:grid;gap:10px;margin:0 0 14px}.mk-facts div{display:grid;gap:2px}.mk-facts dt{font-size:11px;letter-spacing:.08em;color:#9fb3aa;font-weight:700}.mk-facts dd{margin:0;font-size:13px;color:#dce6e4;overflow-wrap:anywhere}
   .mk-strip{list-style:none;margin:10px 0 14px;padding:0 0 6px;display:flex;gap:8px;overflow-x:auto}
   .mk-strip li{flex:none}
   .mk-thumb{display:block;padding:0;border:1px solid #2c393a;border-radius:8px;overflow:hidden;background:#000;cursor:zoom-in;width:104px;height:68px}
   .mk-thumb:hover,.mk-thumb:focus-visible{border-color:#c1f0ad}
   .mk-thumb img{display:block;width:100%;height:100%;object-fit:cover}
-  .mk-install{margin:2px 0 16px}.mk-install>.primary{width:100%}
+  .mk-install{margin:2px 0 16px}
   .mk-tabs{display:flex;gap:4px;border-bottom:1px solid #2c393a;margin:0 0 14px}
   .mk-tabs button{background:transparent;color:#a6b3b2;border:0;border-bottom:2px solid transparent;border-radius:0;padding:9px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:-1px}
   .mk-tabs button[aria-selected="true"]{color:#e8ecec;border-bottom-color:#c1f0ad}
