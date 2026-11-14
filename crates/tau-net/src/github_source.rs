@@ -196,7 +196,8 @@ pub fn readme(t: &dyn Transport, owner: &str, repo: &str) -> Option<String> {
     None
 }
 
-fn image_kind(b: &[u8]) -> Option<&'static str> {
+/// The media type of a PNG, JPEG, GIF or WebP, decided by the file's own first bytes.
+pub fn image_kind(b: &[u8]) -> Option<&'static str> {
     if b.starts_with(b"\x89PNG\r\n\x1a\n") {
         Some("image/png")
     } else if b.starts_with(&[0xFF, 0xD8, 0xFF]) {

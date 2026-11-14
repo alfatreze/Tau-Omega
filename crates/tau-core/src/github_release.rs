@@ -152,23 +152,47 @@ const IMAGE_HOSTS: [&str; 2] = [
 ];
 const IMAGE_EXT: [&str; 5] = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
 
+/// What GitHub's editor writes for a picture dragged into a README: `https://github.com/user-attachments/assets/<uuid>`, with no file
+/// extension (the address redirects to the file). Only the exact shape is accepted; the file's own bytes decide what it is.
+const ATTACHMENTS: &str = "https://github.com/user-attachments/assets/";
+
+fn attachment_ok(url: &str) -> bool {
+    url.strip_prefix(ATTACHMENTS)
+        .is_some_and(|id| id.len() == 36 && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-'))
+}
+
 fn image_ok(url: &str) -> bool {
     let path = url
         .split(['?', '#'])
         .next()
         .unwrap_or("")
         .to_ascii_lowercase();
-    IMAGE_HOSTS.iter().any(|h| url.starts_with(h))
-        && IMAGE_EXT.iter().any(|e| path.ends_with(e))
+    (IMAGE_HOSTS.iter().any(|h| url.starts_with(h)) && IMAGE_EXT.iter().any(|e| path.ends_with(e))
+        || attachment_ok(url))
         && !url.contains(['\\', ' ', '@']) // no user info tricks
         && !url.contains("/../")
+}
+
+/// A picture a README shows: where it is, and the text the author gave it (empty when none).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Picture {
+    pub url: String,
+    pub alt: String,
 }
 
 /// Up to `max` picture addresses a README refers to (`![](url)` and `<img src="url">`), only on GitHub's own image hosts; a relative path is
 /// resolved against the repository's default branch. Nothing else is ever fetched.
 pub fn readme_images(markdown: &str, owner: &str, repo: &str, max: usize) -> Vec<String> {
-    // every picture target in document order
-    let mut targets: Vec<String> = Vec::new();
+    readme_pictures(markdown, owner, repo, max)
+        .into_iter()
+        .map(|p| p.url)
+        .collect()
+}
+
+/// [`readme_images`] with each picture's alt text (`![alt](url)` or `<img alt="alt" src="url">`), cut to 120 characters.
+pub fn readme_pictures(markdown: &str, owner: &str, repo: &str, max: usize) -> Vec<Picture> {
+    // every picture target in document order, with its alt text
+    let mut targets: Vec<(String, String)> = Vec::new();
     let mut i = 0;
     while i < markdown.len() {
         let rest = &markdown[i..];
@@ -176,13 +200,14 @@ pub fn readme_images(markdown: &str, owner: &str, repo: &str, max: usize) -> Vec
             if let Some(close) = rest.find("](") {
                 let start = close + 2;
                 if let Some(end) = rest[start..].find(')') {
-                    targets.push(
+                    targets.push((
                         rest[start..start + end]
                             .split_whitespace()
                             .next()
                             .unwrap_or("")
                             .to_string(),
-                    );
+                        rest[2..close].to_string(),
+                    ));
                     i += start + end;
                     continue;
                 }
@@ -191,18 +216,21 @@ pub fn readme_images(markdown: &str, owner: &str, repo: &str, max: usize) -> Vec
             && let Some(end) = rest.find('>')
         {
             let tag = &rest[..end];
-            if let Some(s) = tag.find("src=\"").map(|p| p + 5)
-                && let Some(e) = tag[s..].find('"')
-            {
-                targets.push(tag[s..s + e].to_string());
+            let attr = |name: &str| {
+                tag.find(&format!("{name}=\""))
+                    .map(|p| p + name.len() + 2)
+                    .and_then(|s| tag[s..].find('"').map(|e| tag[s..s + e].to_string()))
+            };
+            if let Some(src) = attr("src") {
+                targets.push((src, attr("alt").unwrap_or_default()));
             }
             i += end;
             continue;
         }
         i += rest.chars().next().map_or(1, char::len_utf8);
     }
-    let mut found: Vec<String> = Vec::new();
-    for raw in targets {
+    let mut found: Vec<Picture> = Vec::new();
+    for (raw, alt) in targets {
         let raw = raw.trim().trim_matches(['<', '>']).to_string();
         let url = if raw.starts_with("https://") {
             raw
@@ -218,8 +246,11 @@ pub fn readme_images(markdown: &str, owner: &str, repo: &str, max: usize) -> Vec
                 raw.trim_start_matches("./").trim_start_matches('/')
             )
         };
-        if image_ok(&url) && !found.contains(&url) {
-            found.push(url);
+        if image_ok(&url) && !found.iter().any(|f| f.url == url) {
+            found.push(Picture {
+                url,
+                alt: alt.trim().chars().take(120).collect(),
+            });
             if found.len() == max {
                 break;
             }
@@ -300,5 +331,31 @@ mod tests {
             ]
         );
         assert!(readme_images("no pictures here", "o", "r", 3).is_empty());
+    }
+
+    #[test]
+    fn github_attachment_pictures_and_alt_text_are_found_and_nothing_looser() {
+        let id = "b3b89f90-f357-4e1a-8b28-e34ed9548dd0";
+        let md = format!(
+            "<img width=\"400\" alt=\"Tau Gallery grid\" src=\"https://github.com/user-attachments/assets/{id}\" />\n![The viewer](https://github.com/user-attachments/assets/a42b7f17-764c-431f-91da-00352ed44164)\n![bad](https://github.com/user-attachments/assets/not-an-id)\n![other](https://github.com/someone/else/assets/{id})\n![long](https://github.com/user-attachments/assets/{id}/../x)\n![](docs/c.png)"
+        );
+        let v = readme_pictures(&md, "o", "r", 8);
+        assert_eq!(
+            v.iter()
+                .map(|p| (p.url.as_str(), p.alt.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                (
+                    "https://github.com/user-attachments/assets/b3b89f90-f357-4e1a-8b28-e34ed9548dd0",
+                    "Tau Gallery grid"
+                ),
+                (
+                    "https://github.com/user-attachments/assets/a42b7f17-764c-431f-91da-00352ed44164",
+                    "The viewer"
+                ),
+                ("https://raw.githubusercontent.com/o/r/HEAD/docs/c.png", ""),
+            ]
+        );
+        assert_eq!(readme_images(&md, "o", "r", 1).len(), 1);
     }
 }

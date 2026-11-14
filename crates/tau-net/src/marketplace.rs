@@ -18,6 +18,7 @@ use tau_core::{
     ErrorCode, TauError,
     catalog::{self, CATALOG_URL, Catalog, CatalogCore, PLATFORMS_URL},
     catalog_release::{self, CoreRelease},
+    github_release,
     repo_info::{self, Downloads, RepoInfo},
 };
 
@@ -671,6 +672,110 @@ pub fn fetch_repo_details(
     }
 }
 
+/// Most pictures the details sheet shows for a core.
+pub const GALLERY_MAX: usize = 6;
+/// One picture of a README may be this large (screenshots are PNGs of a few hundred KB).
+const GALLERY_IMAGE_LIMIT: u64 = 1536 * 1024;
+const README_LIMIT: u64 = 400 * 1024;
+
+/// A picture from a core's README, checked to really be an image.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GalleryPicture {
+    pub alt: String,
+    pub mime: &'static str,
+    pub bytes: Vec<u8>,
+}
+
+/// The pictures a core's README shows (at most [`GALLERY_MAX`]), for the details sheet's gallery. The README is cached for an hour, each
+/// picture for a week. Only GitHub's own picture addresses are ever followed (`github_release::readme_pictures`), a file that is not
+/// really a PNG, JPEG, GIF or WebP is dropped, and a picture that cannot be fetched is skipped, never an error. `Ok(vec![])` when the
+/// repository has no README or shows no pictures.
+pub fn fetch_gallery(
+    t: &dyn Transport,
+    cache: &Path,
+    owner: &str,
+    repo: &str,
+    now: u64,
+    force: bool,
+) -> Result<Vec<GalleryPicture>, TauError> {
+    let plain = |s: &str| {
+        !s.is_empty()
+            && s.len() <= 100
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    };
+    if !plain(owner) || !plain(repo) {
+        return Err(err(
+            ErrorCode::InvalidPathReference,
+            "That repository name has characters Omega does not look up.",
+        ));
+    }
+    let dir = root(cache).join("gallery");
+    let name = format!(
+        "{}__{}",
+        owner.to_ascii_lowercase(),
+        repo.to_ascii_lowercase()
+    );
+    let text_ok = |b: &[u8]| {
+        if b.is_empty() {
+            Err("empty".to_string())
+        } else {
+            Ok(())
+        }
+    };
+    let mut readme = None;
+    for file in ["README.md", "readme.md", "README.markdown"] {
+        let url = format!("https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{file}");
+        match fetch_cached(
+            t,
+            &dir.join(format!("{name}.readme")),
+            &url,
+            README_LIMIT,
+            RELEASE_TTL,
+            now,
+            force,
+            &text_ok,
+        ) {
+            Ok(f) => {
+                readme = Some(String::from_utf8_lossy(&f.body).into_owned());
+                break;
+            }
+            Err(e) if e.code == ErrorCode::NotFound => {}
+            Err(e) => return Err(e),
+        }
+    }
+    let Some(readme) = readme else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for pic in github_release::readme_pictures(&readme, owner, repo, GALLERY_MAX) {
+        let key = format!("{:x}", Sha256::digest(pic.url.as_bytes()));
+        let image = |b: &[u8]| {
+            crate::github_source::image_kind(b)
+                .map(|_| ())
+                .ok_or_else(|| "not a picture".to_string())
+        };
+        if let Ok(f) = fetch_cached(
+            t,
+            &dir.join(format!("{name}-{}.img", &key[..16])),
+            &pic.url,
+            GALLERY_IMAGE_LIMIT,
+            ART_TTL,
+            now,
+            force,
+            &image,
+        ) && let Some(mime) = crate::github_source::image_kind(&f.body)
+        {
+            out.push(GalleryPicture {
+                alt: pic.alt,
+                mime,
+                bytes: f.body,
+            });
+        }
+    }
+    Ok(out)
+}
+
 /// What [`fetch_repo_details`] found: either part may be missing when its request failed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RepoDetails {
@@ -1050,6 +1155,56 @@ mod tests {
         assert!(
             fetch_repo_details(&n, &scratch(), "a/../b", "c", 1, false).is_err()
                 && n.asked.borrow().is_empty()
+        );
+    }
+
+    #[test]
+    fn the_gallery_finds_readme_pictures_skips_bad_ones_and_asks_nothing_twice() {
+        let readme = b"![Grid](https://github.com/user-attachments/assets/b3b89f90-f357-4e1a-8b28-e34ed9548dd0)\n![Fake](https://github.com/user-attachments/assets/a42b7f17-764c-431f-91da-00352ed44164)\n![Gone](docs/x.png)";
+        let good = png(8, 8);
+        let dir = scratch();
+        let f = Fake::default();
+        f.push(ok(200, readme, None))
+            .push(ok(200, &good, None))
+            .push(ok(200, b"<html>not a picture</html>", None))
+            .push(ok(404, b"", None));
+        let g = fetch_gallery(&f, &dir, "alfatreze", "Tau-Gallery", 10, false).unwrap();
+        assert_eq!(g.len(), 1);
+        assert_eq!((g[0].alt.as_str(), g[0].mime), ("Grid", "image/png"));
+        let asked: Vec<_> = f.asked.borrow().iter().map(|a| a.0.clone()).collect();
+        assert_eq!(
+            asked[0],
+            "https://raw.githubusercontent.com/alfatreze/Tau-Gallery/HEAD/README.md"
+        );
+        // inside the cache time the README and the good picture are not asked again (only the two that failed are retried)
+        let again = Fake::default();
+        again
+            .push(ok(200, b"<html>not a picture</html>", None))
+            .push(ok(404, b"", None));
+        let g2 = fetch_gallery(&again, &dir, "alfatreze", "Tau-Gallery", 20, false).unwrap();
+        assert_eq!(g2.len(), 1);
+        let retried: Vec<_> = again.asked.borrow().iter().map(|a| a.0.clone()).collect();
+        assert_eq!(retried.len(), 2);
+        assert!(
+            retried
+                .iter()
+                .all(|u| !u.ends_with("README.md") && !u.contains("b3b89f90"))
+        );
+        // no README at all: an empty gallery, not an error
+        let none = Fake::default();
+        none.push(ok(404, b"", None))
+            .push(ok(404, b"", None))
+            .push(ok(404, b"", None));
+        assert!(
+            fetch_gallery(&none, &scratch(), "a", "b", 1, false)
+                .unwrap()
+                .is_empty()
+        );
+        // an odd name is refused before any request
+        let odd = Fake::default();
+        assert!(
+            fetch_gallery(&odd, &scratch(), "a/b", "c", 1, false).is_err()
+                && odd.asked.borrow().is_empty()
         );
     }
 

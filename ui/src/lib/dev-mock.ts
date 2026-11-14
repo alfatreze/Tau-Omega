@@ -411,6 +411,11 @@ const handlers: Record<string, (args: any) => unknown> = {
     return { info: { description: 'A mock description of ' + a.coreId + '. It shows what the core is, in the author\'s words.', homepage: 'https://example.com/core', license: 'MIT', stars: 12, topics: ['analogue-pocket', 'openfpga'], pushed: '2026-11-14' },
       downloads: { total: 12345, newest: 678, newest_tag: 'v1.0.0', releases: 4, complete: true, notes: 'Fixed the menu.\nAdded a new option.' }, fetched: 1 };
   },
+  marketplace_gallery: (a) => {
+    const g = globalThis as { __gallery?: string };
+    if (g.__gallery === 'none' || a.coreId === 'zz.NoRelease') return [];
+    return [['The grid', 400, 360], ['The viewer', 800, 720], ['On the Pocket', 400, 360]].map(([alt, w, h]) => ({ alt: alt as string, src: svgUrl(w as number, h as number, `${a.coreId} ${alt}`) }));
+  },
   marketplace_open_repo: (a) => { (globalThis as { __opened?: string[] }).__opened = [...((globalThis as { __opened?: string[] }).__opened ?? []), a.coreId as string]; return null; },
   marketplace_core_updates: () => ({ rows: [
     { id: 'agg23.SNES', installed_version: '1.2.0', latest_version: '1.4.0', release_date: '2026-09-02', status: 'UpdateAvailable' },
