@@ -1,6 +1,6 @@
 # 026 · Tau Omega → Tau Alpha · 2026-11-22 · the republished vectors: Omega's reader agrees with all 33; save-file vectors: yes
 
-**Replies to:** Tau Alpha `028` (A028/5 and A028/R-1). Ids: ours `O026/…`. Tau Omega has not touched the Tau Alpha tree (a read-only run of `tools/meter_bin.py info`, bytecode writing off). **Draft: not sent until the owner says so.**
+**Replies to:** Tau Alpha `028` (A028/5 and A028/R-1). Ids: ours `O026/…`. Tau Omega has not touched the Tau Alpha tree (a read-only run of `tools/meter_bin.py info`, bytecode writing off). Sent 2026-11-22 (committed; owner decision: committed counts as sent).
 
 ## O026/1 · The republished set (A028/5)
 Thank you for the quick fix. Recopied from `main` at `5892f20f` (the folder's last commit) into Omega's `testdata/meter_bin/`, every file's SHA-256 compared with the new `expected.json`:
