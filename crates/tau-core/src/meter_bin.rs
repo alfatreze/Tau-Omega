@@ -6,7 +6,7 @@
 //! and the firmware's (`fw2/cores/meterbin_core.h`), so a damaged bin gets the same refusal code here as there.
 //!
 //! Three levels, as in the firmware:
-//! - [`open_toc`]: what the Pocket does at boot: the 40-byte header, then the table of contents and the previews (bytes `0..packs_off`), the
+//! - [`open_toc`]: what the Pocket's reader does at boot ([`boot_check`] adds the firmware's rule that a fallback row must exist): the 40-byte header, then the table of contents and the previews (bytes `0..packs_off`), the
 //!   `toc_crc`, and every row. No pack is read.
 //! - [`check_pack`]: one pack's own header against its row (the Pocket does this when the meter is selected).
 //! - [`parse`]: the full check Omega runs after a write: `open_toc`, then the whole-file CRC, then every pack's header against its row.
@@ -63,6 +63,8 @@ pub enum Refusal {
     Read = 17,
     Desc = 18,
     FileCrc = 19,
+    /// Not a reader check: the firmware's own rule at boot. A bin with no built-in fallback row is refused whole and the core keeps its own packs.
+    NoFallback = 20,
 }
 
 impl Refusal {
@@ -91,6 +93,7 @@ impl Refusal {
             Refusal::Read => "READ",
             Refusal::Desc => "DESC",
             Refusal::FileCrc => "FILECRC",
+            Refusal::NoFallback => "NOFALLBACK",
         }
     }
     /// The reason in plain words, for a screen.
@@ -116,6 +119,9 @@ impl Refusal {
             Refusal::Desc => "A meter's description block is damaged.",
             Refusal::FileCrc => {
                 "The meter file was changed after it was written (its checksum is wrong)."
+            }
+            Refusal::NoFallback => {
+                "The meter file has no built-in Winamp Bars entry, so the Pocket ignores the whole file."
             }
         }
     }
@@ -244,9 +250,8 @@ pub struct MeterBin {
 }
 
 impl MeterBin {
-    /// The built-in fallback row (Winamp Bars, flag bit 1), if the bin has one. Tau Alpha's message 027 says a firmware newer than the vectors
-    /// refuses a bin without one (their code 20), so a composer must always include it; the reader itself does not refuse, because the
-    /// published vectors (and their `expected.json`) accept bins without it.
+    /// The built-in fallback row (Winamp Bars, flag bit 1), if the bin has one. The Pocket refuses a bin without one (refusal 20,
+    /// [`boot_check`]); the reader's own checks do not, as Tau Alpha's vectors say, so a composer must always include it.
     pub fn fallback(&self) -> Option<&MeterRow> {
         self.rows.iter().find(|r| r.fallback())
     }
@@ -506,6 +511,17 @@ pub fn open_toc(b: &[u8], file_len: usize) -> Result<MeterBin, BinError> {
         bytes: file_len,
         rows,
     })
+}
+
+/// What the Pocket's firmware answers at boot for a user bin: the boot read ([`open_toc`]), then its own rule that a fallback row must exist
+/// (refusal 20, [`Refusal::NoFallback`]). `Ok` means the Pocket will use the file. An empty bin has no fallback row, so it is refused too (the
+/// core then keeps its own `tau-packs.bin`).
+pub fn boot_check(b: &[u8], file_len: usize) -> Result<MeterBin, BinError> {
+    let bin = open_toc(b, file_len)?;
+    if bin.fallback().is_none() {
+        return Err(BinError::new(Refusal::NoFallback));
+    }
+    Ok(bin)
 }
 
 /// One pack's own header against its row: magic, size, ABI, CRC, saved-state and bss sizes as the row says, the exact window fit and the
@@ -831,6 +847,10 @@ mod tests {
         assert_eq!(
             (Refusal::FileCrc.code(), Refusal::FileCrc.name()),
             (19, "FILECRC")
+        );
+        assert_eq!(
+            (Refusal::NoFallback.code(), Refusal::NoFallback.name()),
+            (20, "NOFALLBACK")
         );
         let e = BinError::at(Refusal::Dup, 1);
         assert_eq!(e.to_string(), "DUP (row 1)");

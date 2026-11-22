@@ -1,6 +1,6 @@
 //! `tau_core::meter_bin` against Tau Alpha's golden vectors for the meter bin v2 (`testdata/meter_bin/`, copied read-only from Tau Alpha
 //! `docs/research/meter_bin/`, `expected.json` and the files it names) and the output of their reference reader (`tools/meter_bin.py info`,
-//! kept in `*.reference.json`). Tau Alpha asked us (A027/R-1) to say where our reader differs from `expected.json`: this test is that check.
+//! kept in `*.reference.json`). Tau Alpha asked us (A027/R-1, and again in their 028 for the republished set) to say where our reader differs from `expected.json`: this test is that check.
 
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
@@ -33,7 +33,7 @@ fn row_of<T>(r: &Result<T, meter_bin::BinError>) -> Option<u64> {
 #[test]
 fn every_vector_is_the_file_tau_alpha_published() {
     let all = expected();
-    assert_eq!(all.len(), 32);
+    assert_eq!(all.len(), 33);
     for v in &all {
         let name = v["file"].as_str().unwrap();
         let b = bin(name);
@@ -79,17 +79,25 @@ fn the_full_check_gives_every_vector_the_code_and_row_tau_alpha_expects() {
 #[test]
 fn the_boot_check_gives_the_code_the_pocket_gives_and_needs_no_byte_past_the_previews() {
     for v in expected() {
-        let Some(want) = v["boot_code"].as_u64() else {
+        // `boot_code` is what the firmware answers (the reader's boot read, then its rule that a fallback row must exist: 20);
+        // `reader_boot_code` is given where the reader's own boot read says something else.
+        let Some(firmware) = v["boot_code"].as_u64() else {
             continue;
         }; // v1 files: the firmware does not read them
+        let reader = v["reader_boot_code"].as_u64().unwrap_or(firmware);
         let name = v["file"].as_str().unwrap();
         let b = bin(name);
         assert_eq!(
             code_of(&meter_bin::open_toc(&b, b.len())),
-            want,
-            "{name}: boot code"
+            reader,
+            "{name}: the reader's boot code"
         );
-        if want == 0 {
+        assert_eq!(
+            code_of(&meter_bin::boot_check(&b, b.len())),
+            firmware,
+            "{name}: the firmware's boot code"
+        );
+        if reader == 0 {
             // the Pocket reads only bytes 0..packs_off at boot: the same answer from just those bytes
             let packs_off = u32::from_le_bytes(b[24..28].try_into().unwrap()) as usize;
             let part = meter_bin::open_toc(&b[..packs_off], b.len())
@@ -183,7 +191,19 @@ fn the_seven_shipped_meters_come_in_order_with_winamp_bars_as_the_fallback_and_p
     let seven = meter_bin::parse(&b).unwrap();
     assert_eq!(seven.version, 2);
     assert_eq!(seven.rows[0].name, "WINAMP BARS");
-    assert!(seven.rows[0].visible());
+    assert!(
+        seven.rows[0].visible() && seven.rows[0].fallback(),
+        "Winamp Bars is flagged as the fallback"
+    );
+    assert_eq!(
+        seven.rows.iter().filter(|r| r.fallback()).count(),
+        1,
+        "and it is the only one"
+    );
+    assert_eq!(
+        seven.fallback().unwrap().id,
+        "7dddfe63121e904843088c075cc28ce9"
+    );
     assert!(
         seven
             .rows
@@ -223,37 +243,47 @@ fn the_seven_shipped_meters_come_in_order_with_winamp_bars_as_the_fallback_and_p
     );
 }
 
-/// A tripwire, not a wish: this records what the published files say TODAY. Their README says Winamp Bars is "flagged as the fallback", and
-/// message 027 says a bin without a fallback row is refused by newer firmware (code 20), but no row of any v2 vector has flag bit 1 set, and
-/// `expected.json`'s `fallback_id` (102d4d21...) is not Winamp Bars's id (7dddfe63..., from `packages/winamp_bars/meter.json`), which would
-/// explain it: the vectors were composed with a stale id. Reported to Tau Alpha (our message 025). If they republish the vectors with the flag
-/// set, this fails on purpose: update it and the note in `testdata/meter_bin/README.md`.
+/// Tau Alpha's rule, as republished (their 028, A028/5): every vector the firmware accepts has exactly one fallback row, Winamp Bars; the two
+/// that the firmware refuses with 20 (`v2_empty`, `v2_no_fallback`) have none. (The first published set had no fallback bit anywhere, because
+/// its generator used a stale id: reported in our message 025, fixed on their side.)
 #[test]
-fn the_published_vectors_carry_no_fallback_flag_on_any_row() {
-    for name in [
-        "v2_seven.bin",
-        "v2_reordered_hidden.bin",
-        "v2_unavailable_rows.bin",
-    ] {
-        let bin = meter_bin::parse(&bin(name)).unwrap();
-        assert!(
-            bin.fallback().is_none(),
-            "{name}: a row now carries the fallback flag: the vectors changed, review this test"
-        );
-    }
+fn every_accepted_vector_has_one_fallback_row_and_the_two_the_firmware_refuses_have_none() {
+    let all = expected();
+    let winamp_bars = "7dddfe63121e904843088c075cc28ce9";
     assert_eq!(
         json("expected.json")["fallback_id"],
-        "102d4d21726303d2f1c571f55e7e71c0"
-    );
-    let winamp_bars = meter_bin::parse(&bin("v2_seven.bin")).unwrap().rows[0]
-        .id
-        .clone();
-    assert_eq!(winamp_bars, "7dddfe63121e904843088c075cc28ce9");
-    assert_ne!(
         winamp_bars,
-        json("expected.json")["fallback_id"].as_str().unwrap(),
-        "expected.json names another id as the fallback"
+        "expected.json names Winamp Bars as the fallback"
     );
+    let mut checked = 0;
+    for v in &all {
+        let name = v["file"].as_str().unwrap();
+        if v["code"].as_u64() != Some(0) || name.starts_with("v1_") {
+            continue;
+        }
+        let refused_by_firmware = v["boot_code"].as_u64() == Some(20);
+        let bin = meter_bin::parse(&bin(name)).unwrap();
+        let n = bin.rows.iter().filter(|r| r.fallback()).count();
+        assert_eq!(
+            n,
+            usize::from(!refused_by_firmware),
+            "{name}: fallback rows"
+        );
+        assert_eq!(
+            refused_by_firmware,
+            matches!(name, "v2_empty.bin" | "v2_no_fallback.bin"),
+            "{name}"
+        );
+        if n == 1 && !name.starts_with("v2_tuning") {
+            assert_eq!(
+                bin.fallback().unwrap().id,
+                winamp_bars,
+                "{name}: the fallback is Winamp Bars"
+            );
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 6, "the six v2 vectors the reader accepts");
 }
 
 #[test]

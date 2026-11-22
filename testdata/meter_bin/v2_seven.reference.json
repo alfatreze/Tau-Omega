@@ -14,7 +14,7 @@
    ],
    "abi": 256,
    "tau_min": 0,
-   "flags": 5,
+   "flags": 7,
    "params_rev": 1,
    "nparams": 8,
    "cmds": 64,
