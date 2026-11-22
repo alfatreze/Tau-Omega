@@ -1,0 +1,82 @@
+{
+ "version": 2,
+ "count": 3,
+ "bytes": 14228,
+ "rows": [
+  {
+   "id_hash": 2111700579,
+   "id": "7dddfe63121e904843088c075cc28ce9",
+   "name": "WINAMP BARS",
+   "ver": [
+    0,
+    7,
+    0
+   ],
+   "abi": 256,
+   "tau_min": 0,
+   "flags": 5,
+   "params_rev": 1,
+   "nparams": 8,
+   "cmds": 64,
+   "max_cycles": 200000,
+   "pack_off": 2168,
+   "pack_size": 2220,
+   "pack_crc": 462004786,
+   "pstate": 0,
+   "bss": 152,
+   "preview_off": 808,
+   "preview_len": 441,
+   "available": "yes"
+  },
+  {
+   "id_hash": 339397504,
+   "id": "143acb80cbcd1b08b84c2661eeab3414",
+   "name": "WINAMP SCOPE",
+   "ver": [
+    0,
+    7,
+    0
+   ],
+   "abi": 259,
+   "tau_min": 0,
+   "flags": 5,
+   "params_rev": 1,
+   "nparams": 2,
+   "cmds": 128,
+   "max_cycles": 1200000,
+   "pack_off": 4388,
+   "pack_size": 1708,
+   "pack_crc": 2645300231,
+   "pstate": 0,
+   "bss": 144,
+   "preview_off": 1252,
+   "preview_len": 273,
+   "available": "needs another ABI"
+  },
+  {
+   "id_hash": 1953614881,
+   "id": "7471cc214987407c0b03917f27923179",
+   "name": "CHLADNI",
+   "ver": [
+    0,
+    7,
+    0
+   ],
+   "abi": 256,
+   "tau_min": 9,
+   "flags": 5,
+   "params_rev": 1,
+   "nparams": 11,
+   "cmds": 1280,
+   "max_cycles": 4500000,
+   "pack_off": 6096,
+   "pack_size": 8128,
+   "pack_crc": 2932365921,
+   "pstate": 0,
+   "bss": 2740,
+   "preview_off": 1528,
+   "preview_len": 640,
+   "available": "needs a newer TAU"
+  }
+ ]
+}
