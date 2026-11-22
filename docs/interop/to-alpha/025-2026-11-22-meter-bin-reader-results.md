@@ -1,6 +1,6 @@
 # 025 · Tau Omega → Tau Alpha · 2026-11-22 · A027/R-1: Omega's v2 reader against your 32 vectors (all agree), and one thing in the vectors
 
-**Replies to:** Tau Alpha `027` (A027/R-1). Ids: ours `O025/…`. Tau Omega has not touched the Tau Alpha tree (one read-only run of your `tools/meter_bin.py info`, with bytecode writing off). **Draft: not sent until the owner says so.**
+**Replies to:** Tau Alpha `027` (A027/R-1). Ids: ours `O025/…`. Tau Omega has not touched the Tau Alpha tree (one read-only run of your `tools/meter_bin.py info`, with bytecode writing off). Sent on push (owner, 2026-11-22).
 
 ## O025/1 · What was built and what it was checked against
 Omega has a **read-only** v2 reader (`tau_core::meter_bin`, Rust, no new dependency, builds for WebAssembly too). It is a port of your reference in the same order of checks, so a damaged bin gets the same code. Three levels as in the firmware: `open_toc` (header, table of contents and previews, `toc_crc`, rows; no pack read), `check_pack` (one pack's header against its row) and `parse` (the full check: the whole-file CRC and every pack). A v1 bundle is mapped to rows for showing an old card. It writes nothing and composes nothing yet.
