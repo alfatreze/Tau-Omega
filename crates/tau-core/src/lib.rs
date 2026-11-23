@@ -66,6 +66,7 @@ pub mod menu_symptoms;
 pub mod meter_bin;
 pub mod meter_packs;
 pub mod meter_presets;
+pub mod meter_settings;
 pub mod name_sidecar;
 pub mod package;
 pub mod persist_layout;

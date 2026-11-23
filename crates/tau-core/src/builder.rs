@@ -641,13 +641,17 @@ fn plan_of(a: &Assembled, lint: LintReport) -> BuildPlan {
     }
 }
 
+/// A working folder no two calls ever share: the clock alone is not fine enough (two builds that start in the same microsecond on macOS got
+/// the same folder and clobbered each other's `package.zip`), so a process-wide counter is part of the name.
 fn scratch(tag: &str) -> PathBuf {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     std::env::temp_dir().join(format!(
-        "omega-builder-{tag}-{}-{}",
+        "omega-builder-{tag}-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos())
+            .map_or(0, |d| d.as_nanos()),
+        N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
     ))
 }
 

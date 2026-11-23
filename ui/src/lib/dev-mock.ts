@@ -411,6 +411,17 @@ const handlers: Record<string, (args: any) => unknown> = {
     return { info: { description: 'A mock description of ' + a.coreId + '. It shows what the core is, in the author\'s words.', homepage: 'https://example.com/core', license: 'MIT', stars: 12, topics: ['analogue-pocket', 'openfpga'], pushed: '2026-11-14' },
       downloads: { total: 12345, newest: 678, newest_tag: 'v1.0.0', releases: 4, complete: true, notes: 'Fixed the menu.\nAdded a new option.' }, fetched: 1 };
   },
+  // The per-meter settings file: set window.__mset = 'wrong' before the page loads for a card whose file has the wrong size; 'fail' makes the delete fail.
+  meter_settings_scan: () => ((globalThis as { __mset?: string }).__mset === 'wrong' || (globalThis as { __mset?: string }).__mset === 'fail'
+    ? [{ rel_path: 'Saves/tau/alfatreze.TAU/tau-meter-settings.bin', platform: 'tau', core: 'alfatreze.TAU', bytes: 8191, state: 'wrong_size' }, { rel_path: 'Saves/tau_dev/alfatreze.TAU DEV 230/tau-meter-settings.bin', platform: 'tau_dev', core: 'alfatreze.TAU DEV 230', bytes: 8192, state: { saved: 4 } }]
+    : []),
+  meter_settings_plan_delete: (a) => ({ id: 'plan-1', rel_path: a.relPath as string, core: 'alfatreze.TAU', bytes: 8191, blocked: null }),
+  meter_settings_delete: (a) => {
+    const g = globalThis as { __mset?: string; __msetDeleted?: string[] };
+    if (g.__mset === 'fail') throw { code: 'E_IO', message: 'The backup of the file did not verify; it was not removed.' };
+    g.__msetDeleted = [...(g.__msetDeleted ?? []), a.relPath as string]; g.__mset = undefined;
+    return { bytes: 8191, backup_dir: '/backups/installs/0123456789abcdef' };
+  },
   // Feedback: set window.__feedback = 'off' (not connected, as in the real build today) | 'fail' | 'slow'.
   feedback_info: () => ({ enabled: (globalThis as { __feedback?: string }).__feedback !== 'off', version: '0.6.0', os: 'macos', arch: 'aarch64' }),
   feedback_send: (a) => {

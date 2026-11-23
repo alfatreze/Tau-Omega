@@ -260,6 +260,11 @@ export type RepoInfo = { description: string; homepage: string; license: string;
 export type RepoDownloads = { total: number; newest: number; newest_tag: string; releases: number; complete: boolean; notes: string };
 /** What GitHub says about a core's repository; either part is null when its request failed. */
 export type RepoDetails = { info: RepoInfo | null; downloads: RepoDownloads | null; fetched: number };
+/** A Tau core's per-meter settings file on a card. `wrong_size` = not 8,192 bytes: the Pocket refuses it and the core does not start. */
+export type SettingsFileState = 'defaults' | 'newer' | 'wrong_size' | { saved: number };
+export type SettingsFile = { rel_path: string; platform: string; core: string; bytes: number; state: SettingsFileState };
+export type SettingsDeletePlan = { id: string; rel_path: string; core: string; bytes: number; blocked: string | null };
+export type SettingsDeleteReport = { bytes: number; backup_dir: string };
 export type FeedbackInfo = { enabled: boolean; version: string; os: string; arch: string };
 export type FeedbackFile = { name: string; mime: string; /** base64 */ data: string };
 /** What the app hands to the feedback service: fields only; the service writes the issue's labels and text itself. */

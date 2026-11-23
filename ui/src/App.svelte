@@ -30,6 +30,7 @@
   import { manualAdd } from './lib/manualAddStore';
   import { coreUpdateCount } from './lib/marketStore';
   import UpdateBanner from './lib/UpdateBanner.svelte';
+  import SettingsFileWarning from './lib/SettingsFileWarning.svelte';
   import OmegaUpdate from './lib/OmegaUpdate.svelte';
   import CardMarkerPrompt from './lib/CardMarkerPrompt.svelte';
   import DisableCoresDialog from './lib/DisableCoresDialog.svelte';
@@ -382,6 +383,7 @@
   </nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
   <div class="content">
   <CardMarkerPrompt card={path} />
+  <SettingsFileWarning card={path} />
   <DisableCoresDialog card={path} ready={cores.length > 0} changed={() => { void openFolder(); }} />
   <UpdateBanner card={path} openPackage={(zip) => { packageZipPath = zip; if (!packageCardPath) packageCardPath = path; page = 'package'; void inspectPackageZip(); }} />
   <OmegaUpdate />
