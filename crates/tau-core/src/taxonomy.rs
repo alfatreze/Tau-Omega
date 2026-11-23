@@ -51,7 +51,8 @@ pub fn category_rank(name: &str) -> (u8, String) {
         "Computer" => 2,
         "Arcade" => 3,
         "Arcade Multi" => 4,
-        "Media Players" => 5,
+        // Tau Alpha renamed its platform category from "Media Players" to "Media" in v0.7.5; an installed card has either until it updates.
+        "Media Players" | "Media" => 5,
         OTHER => 9,
         _ => 6,
     };
@@ -91,6 +92,7 @@ mod tests {
             "Other",
             "Arcade",
             "Media Players",
+            "Media",
             "Zeta",
             "Console",
             "Handheld",
@@ -105,6 +107,7 @@ mod tests {
                 "Handheld",
                 "Computer",
                 "Arcade",
+                "Media",
                 "Media Players",
                 "Alpha",
                 "Zeta",

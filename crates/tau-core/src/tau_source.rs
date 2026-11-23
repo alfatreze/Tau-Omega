@@ -137,7 +137,8 @@ fn base(id: &str, channel: &str) -> CatalogCore {
             owner: OWNER.into(),
             name: "Tau-Alpha".into(),
         },
-        category: "Media Players".into(),
+        // A fallback only (the package's own `Platforms/tau.json` decides): v0.7.5 and later say "Media", earlier releases "Media Players".
+        category: "Media".into(),
         manufacturer: "alfatreze".into(),
         platform_id: "tau".into(),
         source: SOURCE_ID.into(),

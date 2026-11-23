@@ -21,7 +21,12 @@ fn real_tau_alpha_release_zips_pass_the_marketplace_vetting() {
         let vetted = vet_zip(&e.path(), &stem, Limits::default()).unwrap();
         let preview = tau_core::core_preview::preview(&e.path(), &vetted).unwrap();
         let platform = &preview.platforms[0];
-        assert_eq!(platform.category, "Media Players", "{name}");
+        // v0.7.5 renamed the category (Tau Alpha 030): both spellings are right, by release.
+        assert!(
+            matches!(platform.category.as_str(), "Media Players" | "Media"),
+            "{name}: {}",
+            platform.category
+        );
         assert_eq!(platform.manufacturer, "alfatreze", "{name}");
         assert_eq!(platform.year, 2026, "{name}");
         assert_eq!(preview.firmware_required, "1.1", "{name}");
