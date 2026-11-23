@@ -34,7 +34,9 @@ Tau Alpha keeps `LEDGER.md` in their repository; this is Omega's own list of **w
 - Reply to Tau Alpha 018 (external meters, `to-alpha/021`): they answer O021/3 items 5 and 6 (preview source, preset folder naming); owner confirms the in-principle yes on Q-1 and Q-2.
 - Signed meter index: library chosen (`ring`, D-024, `to-alpha/023`); waits on Tau Alpha's signed bytes / key encoding / `key_id` rule and on the owner keeping the branch.
 - **A027/R-1 (bin vectors): DONE.** Omega's v2 reader agrees with all 33 republished vectors (`to-alpha/025`, `026`); the fallback finding was fixed by Tau Alpha (A028/5).
-- **A028/R-1 (save-file vectors):** asked for in `to-alpha/026` (same form as the bin vectors, plus wrong-size files and a `seq` wrap); Omega's side would be read only plus the seed.
+- **A028/R-1, A029/R-1 (save-file vectors): DONE.** Omega's reader agrees with all 18 (`to-alpha/027`); Omega never creates, edits or overwrites the file (A030); a wrong-sized one is warned about and deletable only with a plan and a verified backup (A032).
+- **A030/R-1, A031/R-1, A034/R-1: DONE** (`to-alpha/027`): category accepted both ways, layout-2 mirror agrees with every golden case, the seven test-sheet cases pass. Not done: composing a bin and installing a package (A034's rest).
+- **O027/Q-1:** Omega 0.6.0 refuses v0.7.5 (`persist_layout` 2); asked Tau Alpha to set `min_omega` to the first Omega that knows a release's layout. Omega 0.6.1 carries the fix, not released.
 
 ## Closed since the last list
 R-011 (`required` rule, aligned), Q-010 (no CARDWRITE run), D-007 (lab drop approved and pinned), Q-016 (sandbox `allow-scripts` only), Q-020 (8 slots), Q-022 (`METR` replaces the whole set), F-009b (real-card rehearsal).
