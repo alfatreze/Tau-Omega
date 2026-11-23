@@ -1,4 +1,8 @@
-# Test fixtures are real files copied byte for byte from other projects (Tau Alpha's vectors, captures and release files). Some tests compare their
-# SHA-256, so git must never change their line endings: without this, a Windows checkout turned testdata/compat/tau-compat_v0.7.5.json into CRLF
-# and its checksum no longer matched the published file (CI, 2026-11-23).
-testdata/** -text
+# Fixtures copied byte for byte from Tau Alpha (vectors, captures, release files). Some tests compare their SHA-256, so git must never change their
+# line endings: without this, a Windows checkout turned testdata/compat/tau-compat_v0.7.5.json into CRLF and its checksum no longer matched the
+# published file (CI, 2026-11-23). Only these folders: the other fixtures are written by testdata/gen_golden.py, and CI checks that running it changes
+# nothing (`git diff --exit-code -- testdata`), which needs git's normal line-ending handling for them.
+testdata/compat/** -text
+testdata/meter_bin/** -text
+testdata/meter_settings/** -text
+testdata/persist_layout/** -text
