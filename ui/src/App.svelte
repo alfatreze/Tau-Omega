@@ -422,7 +422,7 @@
   {:else if page === 'cores'}
     <CoresView card={path} {cores} openLibrary={openCoreLibrary} reloadCard={() => { void openFolder(); }} />
   {:else if page === 'meters'}
-    <MetersView {mediaRoot} cardLabel={path ? cardName(path) : ''} />
+    <MetersView {mediaRoot} cardLabel={path ? cardName(path) : ''} card={path} />
   {:else if page === 'diagnostics'}
     <DiagnosticsView cardPath={path} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'halcyon'}

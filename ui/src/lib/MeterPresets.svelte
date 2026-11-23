@@ -10,10 +10,12 @@
   import type { MeterPresetsView, PresetInstallPlan, SetPreset } from './types';
   import { labOptions, labSend, labTarget, type LabOption } from './meters/labBus';
   import RealMeterLab from './RealMeterLab.svelte';
-  import MeterListPreview from './MeterListPreview.svelte';
+  import MetersOnPocket from './MetersOnPocket.svelte';
 
   export let mediaRoot = '';
   export let cardLabel = '';
+  /** The card folder currently open: the "Meters on the Pocket" page reads its meters. */
+  export let card = '';
 
   const MAX_PRESETS = 127, MAX_ID = 126, NAME_MAX = 15;
 
@@ -264,10 +266,10 @@
     {#if notice}<p class="mp-notice" role="status" data-testid="mp-notice">{notice}</p>{/if}
     <div class="mp-modes" role="tablist" aria-label="Meter Lab pages">
       <button role="tab" aria-selected={mode === 'edit'} class:on={mode === 'edit'} on:click={() => (mode = 'edit')} data-testid="mp-mode-edit">Shape a meter</button>
-      <button role="tab" aria-selected={mode === 'list'} class:on={mode === 'list'} on:click={() => (mode = 'list')} data-testid="mp-mode-list">Meters on the Pocket <small class="mp-soon">preview</small></button>
+      <button role="tab" aria-selected={mode === 'list'} class:on={mode === 'list'} on:click={() => (mode = 'list')} data-testid="mp-mode-list">Meters on the Pocket</button>
     </div>
     {#if mode === 'list'}
-      <MeterListPreview meters={registry.meters} />
+      <MetersOnPocket {card} />
     {/if}
     <div class="mp-layout" hidden={mode === 'list'}>
       <nav class="mp-meters" aria-label="Meters">
@@ -494,7 +496,6 @@
   .mp-modes{display:flex;gap:6px}
   .mp-modes button{padding:7px 14px!important;border-radius:99px!important}
   .mp-modes button.on{background:#26352f!important;border-color:#c1f0ad!important}
-  .mp-soon{font-size:10.5px;color:#d9c47e;margin-left:4px;letter-spacing:.04em;text-transform:uppercase}
   .mp-tabs{display:flex;gap:2px;border-bottom:1px solid #2c393a;margin-bottom:2px}
   .mp-tabs button{background:transparent!important;border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;padding:9px 14px!important;color:#98a5a4!important}
   .mp-tabs button small{margin-left:6px;color:#7d8c8b;font-size:11px}

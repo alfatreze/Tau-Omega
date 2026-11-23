@@ -5,11 +5,12 @@
 
   export let mediaRoot = '';
   export let cardLabel = '';
+  export let card = '';
 </script>
 <section class="page" aria-labelledby="meters-title">
   <header><div><p class="eyebrow">METER LAB</p><h1 id="meters-title">Meter Lab</h1><p class="lede">See each meter drawn by the real Pocket code and shape the presets it offers on your Pocket.</p></div></header>
 
-  <MeterPresets {mediaRoot} {cardLabel} />
+  <MeterPresets {mediaRoot} {cardLabel} {card} />
 </section>
 <style>
   /* A workspace (meter list, preview, controls side by side), so it may use more of the window than a text page. */

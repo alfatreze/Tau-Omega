@@ -411,6 +411,16 @@ const handlers: Record<string, (args: any) => unknown> = {
     return { info: { description: 'A mock description of ' + a.coreId + '. It shows what the core is, in the author\'s words.', homepage: 'https://example.com/core', license: 'MIT', stars: 12, topics: ['analogue-pocket', 'openfpga'], pushed: '2026-11-14' },
       downloads: { total: 12345, newest: 678, newest_tag: 'v1.0.0', releases: 4, complete: true, notes: 'Fixed the menu.\nAdded a new option.' }, fetched: 1 };
   },
+  // The meters on the card: window.__meters = 'none' (no meter files) | 'old' (v0.7.1: ignores the user file) | 'refused' (a file the Pocket will not use); default is v0.7.5 with a user file.
+  meters_on_card: () => {
+    const mode = (globalThis as { __meters?: string }).__meters;
+    const row = (name: string, o: Record<string, unknown> = {}) => ({ name, version: '1.0.0', fallback: false, visible: true, unavailable: null, tuning_lost: false, binary_only: true, ...o });
+    const seven = [row('WINAMP BARS', { fallback: true }), row('WINAMP SCOPE'), row('CHLADNI'), row('LAYERED WAVE'), row('VU MASTER', { visible: false }), row('WATERFALL'), row('SOUND MAP', { unavailable: 'It needs a newer Tau than the one on the card.' })];
+    if (mode === 'none') return { user_file: null, cores: [{ core: 'alfatreze.TAU', version: '0.7.5', reads_user_file: true, uses: 'built_in_only', bundle: null }] };
+    if (mode === 'old') return { user_file: { rel_path: 'Assets/tau/common/tau-meters.bin', bytes: 63604, format: 2, rows: seven, problem: null }, cores: [{ core: 'alfatreze.TAU', version: '0.7.1', reads_user_file: false, uses: 'own_bundle', bundle: { rel_path: 'Assets/tau/alfatreze.TAU/tau-packs.bin', bytes: 58468, format: 1, rows: seven.map((r) => ({ ...r, version: '', visible: true, unavailable: null })), problem: null } }] };
+    if (mode === 'refused') return { user_file: { rel_path: 'Assets/tau/common/tau-meters.bin', bytes: 63604, format: 2, rows: seven.map((r) => ({ ...r, fallback: false })), problem: 'The meter file has no built-in Winamp Bars entry, so the Pocket ignores the whole file.' }, cores: [{ core: 'alfatreze.TAU', version: '0.7.5', reads_user_file: true, uses: 'own_bundle', bundle: { rel_path: 'Assets/tau/alfatreze.TAU/tau-packs.bin', bytes: 63604, format: 2, rows: seven.slice(0, 4), problem: null } }] };
+    return { user_file: { rel_path: 'Assets/tau/common/tau-meters.bin', bytes: 67124, format: 2, rows: [...seven, row('LISSAJOUS LOCAL', { binary_only: false, tuning_lost: true })], problem: null }, cores: [{ core: 'alfatreze.TAU', version: '0.7.5', reads_user_file: true, uses: 'user_file', bundle: { rel_path: 'Assets/tau/alfatreze.TAU/tau-packs.bin', bytes: 63604, format: 2, rows: seven, problem: null } }] };
+  },
   // The per-meter settings file: set window.__mset = 'wrong' before the page loads for a card whose file has the wrong size; 'fail' makes the delete fail.
   meter_settings_scan: () => ((globalThis as { __mset?: string }).__mset === 'wrong' || (globalThis as { __mset?: string }).__mset === 'fail'
     ? [{ rel_path: 'Saves/tau/alfatreze.TAU/tau-meter-settings.bin', platform: 'tau', core: 'alfatreze.TAU', bytes: 8191, state: 'wrong_size' }, { rel_path: 'Saves/tau_dev/alfatreze.TAU DEV 230/tau-meter-settings.bin', platform: 'tau_dev', core: 'alfatreze.TAU DEV 230', bytes: 8192, state: { saved: 4 } }]

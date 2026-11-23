@@ -76,7 +76,7 @@ pub const SHIPPED_NAMES: [&str; 7] = [
     "Winamp Scope",
     "Chladni",
     "Layered Wave",
-    "Master VU",
+    "VU Master",
     "Waterfall",
     "Sound Map",
 ];
@@ -948,17 +948,23 @@ mod tests {
             );
         }
         assert_eq!((hash31_of_index(7), key_of_index(7)), (0, None));
-        // The same seven meters, in the same order, as the meter bin vector (names and ids hashes).
+        // The same seven meters, in the same order, as the meter bin vector (ids, revisions, and names but one).
         let bin = std::fs::read(fixture("../meter_bin/v2_seven.bin")).unwrap();
         let rows = crate::meter_bin::parse(&bin).unwrap().rows;
         for (i, row) in rows.iter().enumerate() {
             assert_eq!(row.id_hash, SHIPPED_METERS[i].0, "{}", row.name);
             assert_eq!(row.params_rev, SHIPPED_METERS[i].1, "{}", row.name);
-            assert_eq!(
-                row.name.to_ascii_lowercase(),
-                SHIPPED_NAMES[i].to_ascii_lowercase()
-            );
+            // The names are compared except the fifth: the vector was composed with an earlier build whose fifth meter was called
+            // MASTER VU; the shipped v0.7.5 pack says VU MASTER (`tests/update_v075_cases.rs` checks the shipped file's names).
+            if i != 4 {
+                assert_eq!(
+                    row.name.to_ascii_lowercase(),
+                    SHIPPED_NAMES[i].to_ascii_lowercase()
+                );
+            }
         }
+        assert_eq!(rows[4].name, "MASTER VU");
+        assert_eq!(SHIPPED_NAMES[4], "VU Master");
     }
 
     #[test]

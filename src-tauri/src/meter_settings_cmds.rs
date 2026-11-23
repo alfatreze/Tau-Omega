@@ -7,7 +7,15 @@ use std::path::Path;
 use tau_core::{
     TauError,
     meter_settings::{self, DeletePlan, DeleteReport, FoundFile},
+    meters_on_card::{self, OnCard},
 };
+
+/// The meters on the card, read only: per Tau core, which list the Pocket will use (the user's meter file, the core's own bundle or only the
+/// built-in meter) and the meters in it. Writes nothing.
+#[tauri::command(async)]
+pub fn meters_on_card(card: String) -> OnCard {
+    meters_on_card::read(Path::new(&card))
+}
 
 /// The Tau cores' settings files on the card and what the Pocket will do with each. Reads only.
 #[tauri::command(async)]
