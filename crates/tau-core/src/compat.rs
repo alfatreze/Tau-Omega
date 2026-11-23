@@ -53,6 +53,8 @@ pub struct Format {
     pub max_bytes: Option<u64>,
     /// TAUA: a writer must carry every section it does not write, byte for byte.
     pub preserve_unknown_sections: bool,
+    /// TMSF (the per-meter settings file): the exact size in bytes; the Pocket refuses a file of any other size.
+    pub bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,6 +120,13 @@ pub struct CompatDoc {
     /// `requires_omega.packs_abi`: the meter pack ABI major version inside `tau-packs.bin`; absent = unknown.
     #[cfg_attr(feature = "serde", serde(default))]
     pub packs_abi: Option<u64>,
+    /// `requires_omega.packs_abi_minor`: the highest pack ABI minor the firmware accepts (v0.7.5 and later); absent = unknown.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub packs_abi_minor: Option<u64>,
+    /// `requires_omega.meter_settings_version`: present only for a release that has the per-meter settings file
+    /// (`Saves/<platform>/<core>/tau-meter-settings.bin`, format `TMSF`); absent = this release has no such file.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub meter_settings_version: Option<u64>,
     pub notes: String,
     /// The commit the release was built from, and whether the tree had uncommitted changes.
     #[cfg_attr(feature = "serde", serde(default))]
@@ -213,6 +222,7 @@ pub fn parse_compat(bytes: &[u8]) -> Result<CompatDoc, TauError> {
                         .get("preserve_unknown_sections")
                         .and_then(Value::as_bool)
                         .unwrap_or(false),
+                    bytes: f.get("bytes").and_then(Value::as_u64),
                 })
             });
             layout.push(LayoutEntry {
@@ -290,6 +300,8 @@ pub fn parse_compat(bytes: &[u8]) -> Result<CompatDoc, TauError> {
         min_omega: s(req, "min_omega")?,
         persist_layout: req.get("persist_layout").and_then(Value::as_u64),
         packs_abi: req.get("packs_abi").and_then(Value::as_u64),
+        packs_abi_minor: req.get("packs_abi_minor").and_then(Value::as_u64),
+        meter_settings_version: req.get("meter_settings_version").and_then(Value::as_u64),
         notes: v
             .get("notes")
             .and_then(Value::as_str)
@@ -353,8 +365,9 @@ pub fn compare_tags(a: &str, b: &str) -> Ordering {
 }
 
 /// What this Tau Omega understands of the capability keys in `requires_omega` (Tau Alpha's interop message 001, Q-002): it reads
-/// persisted-settings layout 1 and leaves a meter pack file of ABI 1 alone. A release that needs more is refused, not guessed.
-pub const OMEGA_PERSIST_LAYOUT: u64 = 1;
+/// persisted-settings layouts 0 to 2 (`persist_layout`: layout 2 is v0.7.5's) and leaves a meter pack file of ABI 1 alone. A release that
+/// needs more is refused, not guessed. (Omega 0.6.0 knew layout 1 and so refused v0.7.5: Tau Alpha's message 033, our fix is 0.6.1.)
+pub const OMEGA_PERSIST_LAYOUT: u64 = 2;
 pub const OMEGA_PACKS_ABI: u64 = 1;
 
 /// Why this Tau Omega must not install `doc`'s release: `min_omega` newer than `omega_version`, or a capability key higher than
@@ -752,6 +765,7 @@ mod tests {
             sections: vec![],
             max_bytes: None,
             preserve_unknown_sections: false,
+            bytes: None,
         };
         let man_fmt = Format {
             name: "tau-names-manifest".into(),
@@ -1025,7 +1039,7 @@ mod tests {
     fn requirements_compare_min_omega_and_the_capability_keys() {
         let ok = |d: &CompatDoc| requirements_unmet(d, "0.6.0");
         assert!(
-            ok(&doc_with_requirements("0.6.0", Some(1), Some(1))).is_empty(),
+            ok(&doc_with_requirements("0.6.0", Some(2), Some(1))).is_empty(),
             "equal is fine"
         );
         assert!(
@@ -1037,11 +1051,11 @@ mod tests {
             newer.len() == 1 && newer[0].contains("needs Tau Omega 0.6.0 or newer"),
             "{newer:?}"
         );
-        let layout = ok(&doc_with_requirements("0.3.0", Some(2), None));
+        let layout = ok(&doc_with_requirements("0.3.0", Some(3), None));
         assert!(
             layout.len() == 1
-                && layout[0].contains("layout 2")
-                && layout[0].contains("reads layout 1"),
+                && layout[0].contains("layout 3")
+                && layout[0].contains("reads layout 2"),
             "{layout:?}"
         );
         let packs = ok(&doc_with_requirements("0.3.0", None, Some(2)));

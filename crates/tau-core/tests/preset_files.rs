@@ -127,7 +127,7 @@ fn the_real_capture_and_the_golden_layout_show_the_chosen_preset_by_name() {
     // The DEV 213 capture has no preset file chosen (MPID words are 0): nothing is invented for it.
     let settings = read_persisted_settings(fixtures.join("dev213_interact_persist.json")).unwrap();
     let view = persist_layout::describe(&settings);
-    assert_eq!(view.layout, persist_layout::Layout::New);
+    assert_eq!(view.layout, persist_layout::Layout::V1);
     assert!(
         !view
             .values

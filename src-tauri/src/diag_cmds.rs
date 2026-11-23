@@ -262,7 +262,7 @@ mod layout_tests {
             std::fs::copy(format!("{}/../testdata/preset_files/card_after_omega_write/tau-presets/12/{name}", env!("CARGO_MANIFEST_DIR")), idx.join(name)).unwrap();
         }
         let view = describe_persisted_layout(f.to_string_lossy().into_owned()).unwrap().unwrap();
-        assert_eq!(view.layout, tau_core::persist_layout::Layout::New);
+        assert_eq!(view.layout, tau_core::persist_layout::Layout::V1);
         let row = view.values.iter().find(|v| v.label == "Meter slot 0 preset").expect("the chosen preset is decoded from the real file");
         assert_eq!(row.text, "TEST ONE (id 5)");
         let _ = std::fs::remove_dir_all(&root);

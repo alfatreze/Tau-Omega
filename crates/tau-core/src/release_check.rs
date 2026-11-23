@@ -813,6 +813,8 @@ mod tests {
             min_omega: "0.3.0".into(),
             persist_layout: None,
             packs_abi: None,
+            packs_abi_minor: None,
+            meter_settings_version: None,
             notes: String::new(),
             source_commit: None,
             source_dirty: false,

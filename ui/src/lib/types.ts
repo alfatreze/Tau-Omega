@@ -385,7 +385,8 @@ export type NextName = { scheme: string; next: string };
 
 /** Mirrors `tau_core::persist_layout::LayoutView`: a Tau core's persisted settings decoded by their layout. */
 export type LayoutValue = { group: string; label: string; value: number; text: string };
-export type LayoutView = { layout: 'legacy' | 'new'; values: LayoutValue[]; migrated_words: [number, number][] };
+/** `v1` = Tau 0.7.0 and 0.7.1, `v2` = 0.7.5 (the meter by id hash), `newer` = a layout this Omega does not know. */
+export type LayoutView = { layout: 'legacy' | 'v1' | 'v2' | 'newer'; values: LayoutValue[]; migrated_words: [number, number][] };
 
 // ---- Meter presets as files on the card (tau_core::preset_files / preset_install) ----
 export type SetPreset = { id: number; name: string; hidden: boolean; values: Record<string, number> };
