@@ -1,0 +1,4 @@
+# Test fixtures are real files copied byte for byte from other projects (Tau Alpha's vectors, captures and release files). Some tests compare their
+# SHA-256, so git must never change their line endings: without this, a Windows checkout turned testdata/compat/tau-compat_v0.7.5.json into CRLF
+# and its checksum no longer matched the published file (CI, 2026-11-23).
+testdata/** -text
