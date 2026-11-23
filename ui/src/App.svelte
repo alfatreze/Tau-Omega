@@ -3,7 +3,7 @@
   import { open, save } from '@tauri-apps/plugin-dialog';
   import type { ConnectionKind, BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport, HistoryEntry, LayoutView } from './lib/types';
   import { invoke } from './lib/backend';
-  import { checkStorageCapacity, persistNames, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, describePersistedLayout, readPlatformImage, readQrReport, recordRecentCard, scanMedia, listHistory, pruneHistory } from './lib/tau-api';
+  import { feedbackInfo, checkStorageCapacity, persistNames, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, describePersistedLayout, readPlatformImage, readQrReport, recordRecentCard, scanMedia, listHistory, pruneHistory } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import HistoryView from './lib/HistoryView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
@@ -54,7 +54,10 @@
   async function confirmRemoveCore() { if (!removePlan) return; try { removeReport = await executeRemoveCore(packageCardPath, removeCoreId, removePlan.id, removeKeepMedia); removeConfirmNotice = 'Removed and verified.'; removePlan = null; await loadCoresToRemove(); } catch (error) { removeConfirmNotice = `Nothing was reported as complete: ${errorMessage(error)}`; } }
   // Where journals are written (the user's folder, or the app's default). Sync history reads from the same place.
   let reportsDir = ''; let historyEntries: HistoryEntry[] = []; let historyLoading = false; let historyNotice = ''; let historySelect = '';
+  /** The Send feedback page is only offered once the feedback service is connected (`feedback_info.enabled`); until then nothing in the menu leads to it. */
+  let feedbackOn = false;
   onMount(async () => {
+    void feedbackInfo().then((i) => { feedbackOn = i.enabled; }, () => {});
     void loadDeveloperTools();
     try { reportsDir = (await getReportsDir()) ?? ''; } catch { /* Compare cores then asks for a report file */ }
     pruneHistory().catch(() => { /* retention is best-effort */ });
@@ -376,7 +379,7 @@
         <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
         <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
         <button class:active={page === 'diagnostics'} on:click={() => page = 'diagnostics'}>Send diagnostics</button>
-        <button class:active={page === 'feedback'} on:click={() => page = 'feedback'}>Send feedback</button>
+        {#if feedbackOn}<button class:active={page === 'feedback'} on:click={() => page = 'feedback'}>Send feedback</button>{/if}
         <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
       </div>
     {/if}

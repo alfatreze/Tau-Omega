@@ -68,6 +68,14 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   assert.match(await p.locator('.fb-callout').first().innerText(), /Sending is not connected yet/); await fill();
   assert.equal(await send().isDisabled(), true); assert.match(await p.locator('.fb-send').innerText(), /not connected yet/); ok('when sending is not connected, the page says so and Send stays off while writing still works');
 
+  // not connected: the menu does not offer the page at all
+  const q = await b.newPage({ viewport: { width: 1440, height: 900 } });
+  await q.addInitScript(() => { globalThis.__feedback = 'off'; });
+  await q.goto(url); await q.evaluate(() => localStorage.clear()); await q.goto(url); await q.waitForTimeout(900);
+  const more = q.locator('nav button', { hasText: 'Tools & settings' }); if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  assert.equal(await q.locator('nav button', { hasText: 'Send feedback' }).count(), 0); assert.equal(await q.locator('nav button', { hasText: 'Send diagnostics' }).count(), 1); ok('while sending is not connected, Send feedback is not in the menu');
+  await q.close();
+
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   console.log(`\n${passed} checks passed`);
   await b.close();

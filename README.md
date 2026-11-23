@@ -7,7 +7,7 @@
 It starts with the **Analogue Pocket** (and the **Tau** music player core, which it was born for) and is being built to grow past
 both: more devices, more kinds of library, and a plugin-friendly engine that other developers can build on.
 
-> **Status: v0.6.0, in the middle of a reorganisation.** The app began as a companion for the Tau core and is being widened into a
+> **Status: v0.6.1, in the middle of a reorganisation.** The app began as a companion for the Tau core and is being widened into a
 > general device manager. Everything it did before is kept and is still supported in full; the layout, naming and some screens are
 > moving while that happens, and the Tau-specific parts are being separated from the general ones. Expect screens to change between
 > releases. Nothing that touches a card changes meaning without a reviewed plan.
