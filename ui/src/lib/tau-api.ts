@@ -112,6 +112,13 @@ export const marketplaceRepoDetails = (coreId: string, force = false) => invoke<
 /** Whether feedback can be sent from this build, and the few facts a sender may add (version, system). */
 /** The meters on the card: which list each Tau core's Pocket uses and the meters in it (reads only). */
 export const metersOnCard = (card: string) => invoke<MetersOnCard>('meters_on_card', { card });
+export const meterPackageInspect = (path: string) => invoke<import('./types').MeterPackageSummary>('meter_package_inspect', { path });
+export const meterBinPlanEdit = (card: string, rows: import('./types').MeterRowEdit[]) => invoke<import('./types').MeterBinPlan>('meter_bin_plan_edit', { card, rows });
+export const meterBinExecuteEdit = (card: string, rows: import('./types').MeterRowEdit[], confirmation: string) => invoke<import('./types').MeterBinReport>('meter_bin_execute_edit', { card, rows, confirmation });
+export const meterBinPlanInstall = (card: string, packagePath: string, allowSourceChange = false, overwritePresets = false) => invoke<import('./types').MeterBinPlan>('meter_bin_plan_install', { card, packagePath, allowSourceChange, overwritePresets });
+export const meterBinExecuteInstall = (card: string, packagePath: string, allowSourceChange: boolean, overwritePresets: boolean, confirmation: string) => invoke<import('./types').MeterBinReport>('meter_bin_execute_install', { card, packagePath, allowSourceChange, overwritePresets, confirmation });
+export const meterBinPlanReset = (card: string) => invoke<import('./types').MeterBinPlan>('meter_bin_plan_reset', { card });
+export const meterBinExecuteReset = (card: string, confirmation: string) => invoke<import('./types').MeterBinReport>('meter_bin_execute_reset', { card, confirmation });
 /** The Tau cores' per-meter settings files on the card and what the Pocket will do with each (reads only). */
 export const meterSettingsScan = (card: string) => invoke<SettingsFile[]>('meter_settings_scan', { card });
 export const meterSettingsPlanDelete = (card: string, relPath: string) => invoke<SettingsDeletePlan>('meter_settings_plan_delete', { card, relPath });

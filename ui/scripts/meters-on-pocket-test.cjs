@@ -35,6 +35,25 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   assert.match(text, /Only the built-in Winamp Bars\. No meter file is on the card\./); assert.equal(await page(p).locator('li').count(), 0); ok('a card with no meter files says so');
   await p.close();
 
+  // Default v0.7.5 card: install package review + plan + write, and edit meter list
+  p = await open('');
+  await page(p).locator('[data-testid=mop-install-btn]').click();
+  await page(p).locator('[data-testid=mop-pkg-review]').waitFor({ state: 'visible' });
+  const pkgText = await page(p).locator('[data-testid=mop-pkg-review]').innerText();
+  assert.match(pkgText, /LISSAJOUS[\s\S]*Independent: not reviewed[\s\S]*A meter runs with full access to the player\./);
+  ok('package review shows trust label, full-access notice, metadata and hashes');
+  await page(p).locator('[data-testid=mop-plan-install-btn]').click();
+  await page(p).locator('[data-testid=mop-plan]').waitFor({ state: 'visible' });
+  await page(p).locator('[data-testid=mop-confirm-write-btn]').click();
+  await page(p).locator('[data-testid=mop-done]').waitFor({ state: 'visible' });
+  ok('install plan confirms and writes to card');
+  await page(p).locator('[data-testid=mop-edit-btn]').click();
+  await page(p).locator('[data-testid=mop-editor]').waitFor({ state: 'visible' });
+  await page(p).locator('[data-testid=mop-review-edit-btn]').click();
+  await page(p).locator('[data-testid=mop-plan]').waitFor({ state: 'visible' });
+  ok('edit meter list builds a reviewed plan');
+  await p.close();
+
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');
   console.log(`\n${passed} checks passed`);
   await b.close();

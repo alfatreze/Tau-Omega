@@ -414,13 +414,33 @@ const handlers: Record<string, (args: any) => unknown> = {
   // The meters on the card: window.__meters = 'none' (no meter files) | 'old' (v0.7.1: ignores the user file) | 'refused' (a file the Pocket will not use); default is v0.7.5 with a user file.
   meters_on_card: () => {
     const mode = (globalThis as { __meters?: string }).__meters;
-    const row = (name: string, o: Record<string, unknown> = {}) => ({ name, version: '1.0.0', fallback: false, visible: true, unavailable: null, tuning_lost: false, binary_only: true, ...o });
+    let seq = 1;
+    const row = (name: string, o: Record<string, unknown> = {}) => {
+      const hex = (seq++).toString(16).padStart(8, '0');
+      return { id: hex.repeat(4), id_hash_hex: hex, name, version: '1.0.0', fallback: false, visible: true, unavailable: null, tuning_lost: false, binary_only: true, ...o };
+    };
     const seven = [row('WINAMP BARS', { fallback: true }), row('WINAMP SCOPE'), row('CHLADNI'), row('LAYERED WAVE'), row('VU MASTER', { visible: false }), row('WATERFALL'), row('SOUND MAP', { unavailable: 'It needs a newer Tau than the one on the card.' })];
     if (mode === 'none') return { user_file: null, cores: [{ core: 'alfatreze.TAU', version: '0.7.5', reads_user_file: true, uses: 'built_in_only', bundle: null }] };
-    if (mode === 'old') return { user_file: { rel_path: 'Assets/tau/common/tau-meters.bin', bytes: 63604, format: 2, rows: seven, problem: null }, cores: [{ core: 'alfatreze.TAU', version: '0.7.1', reads_user_file: false, uses: 'own_bundle', bundle: { rel_path: 'Assets/tau/alfatreze.TAU/tau-packs.bin', bytes: 58468, format: 1, rows: seven.map((r) => ({ ...r, version: '', visible: true, unavailable: null })), problem: null } }] };
+    if (mode === 'old') return { user_file: { rel_path: 'Assets/tau/common/tau-meters.bin', bytes: 63604, format: 2, rows: seven, problem: null }, cores: [{ core: 'alfatreze.TAU', version: '0.7.1', reads_user_file: false, uses: 'own_bundle', bundle: { rel_path: 'Assets/tau/alfatreze.TAU/tau-packs.bin', bytes: 58468, format: 1, rows: seven.map((r) => ({ ...r, id: '', version: '', visible: true, unavailable: null })), problem: null } }] };
     if (mode === 'refused') return { user_file: { rel_path: 'Assets/tau/common/tau-meters.bin', bytes: 63604, format: 2, rows: seven.map((r) => ({ ...r, fallback: false })), problem: 'The meter file has no built-in Winamp Bars entry, so the Pocket ignores the whole file.' }, cores: [{ core: 'alfatreze.TAU', version: '0.7.5', reads_user_file: true, uses: 'own_bundle', bundle: { rel_path: 'Assets/tau/alfatreze.TAU/tau-packs.bin', bytes: 63604, format: 2, rows: seven.slice(0, 4), problem: null } }] };
-    return { user_file: { rel_path: 'Assets/tau/common/tau-meters.bin', bytes: 67124, format: 2, rows: [...seven, row('LISSAJOUS LOCAL', { binary_only: false, tuning_lost: true })], problem: null }, cores: [{ core: 'alfatreze.TAU', version: '0.7.5', reads_user_file: true, uses: 'user_file', bundle: { rel_path: 'Assets/tau/alfatreze.TAU/tau-packs.bin', bytes: 63604, format: 2, rows: seven, problem: null } }] };
+    return { user_file: { rel_path: 'Assets/tau/common/tau-meters.bin', bytes: 67124, format: 2, rows: [...seven, row('LISSAJOUS', { version: '1.1.0', binary_only: false, tuning_lost: true })], problem: null }, cores: [{ core: 'alfatreze.TAU', version: '0.7.5', reads_user_file: true, uses: 'user_file', bundle: { rel_path: 'Assets/tau/alfatreze.TAU/tau-packs.bin', bytes: 63604, format: 2, rows: seven, problem: null } }] };
   },
+  meter_package_inspect: () => ({
+    id: 'a62829eea3754c7e97e5c084a46ed09d', id_hash: 0xa62829ee, id_hash_hex: 'a62829ee', name: 'LISSAJOUS', version: '1.1.0',
+    author: 'Tau Alpha Meters', licence: 'MIT', homepage: '', abi: '1.1', tau_min: '0.7', params_rev: 2, binary_only: false, preset_count: 10,
+    package_sha256: '1111111111111111111111111111111111111111111111111111111111111111', pack_sha256: '554d80abc6e058da84d549dab14f1064f91563cde26bbbdf017ac2ff0e8bce08',
+    pack_bytes: 6312, readme: 'Lissajous meter', license_text: 'MIT License', trust_label: 'Independent: not reviewed', warning_notice: 'A meter runs with full access to the player.'
+  }),
+  meter_bin_plan_edit: () => ({ id: 'plan-edit-1', rel_path: 'Assets/tau/common/tau-meters.bin', action_kind: 'edit', resulting_bytes: 67124, max_bytes: 4456448, rows: [], package: null, same_id_different_source: false, previous_author: null, preset_dir_rel: null, preset_files_to_write: [], preset_skipped_existing: false, backup_files: ['Assets/tau/common/tau-meters.bin'], warnings: [] }),
+  meter_bin_execute_edit: () => ({ rel_path: 'Assets/tau/common/tau-meters.bin', bytes_written: 67124, presets_written: 0, backup_dir: '/backups/meters-edit', prev_rel_path: 'Assets/tau/common/tau-meters.bin.prev' }),
+  meter_bin_plan_install: () => ({
+    id: 'plan-inst-1', rel_path: 'Assets/tau/common/tau-meters.bin', action_kind: 'install', resulting_bytes: 69980, max_bytes: 4456448, rows: [],
+    package: { id: 'a62829eea3754c7e97e5c084a46ed09d', id_hash: 0xa62829ee, id_hash_hex: 'a62829ee', name: 'LISSAJOUS', version: '1.1.0', author: 'Tau Alpha Meters', licence: 'MIT', homepage: '', abi: '1.1', tau_min: '0.7', params_rev: 2, binary_only: false, preset_count: 10, package_sha256: '1111111111111111111111111111111111111111111111111111111111111111', pack_sha256: '554d80abc6e058da84d549dab14f1064f91563cde26bbbdf017ac2ff0e8bce08', pack_bytes: 6312, readme: null, license_text: 'MIT', trust_label: 'Independent: not reviewed', warning_notice: 'A meter runs with full access to the player.' },
+    same_id_different_source: false, previous_author: null, preset_dir_rel: 'Assets/tau/common/tau-presets/a62829ee', preset_files_to_write: ['index.tpi', 'p0.tpr'], preset_skipped_existing: false, backup_files: ['Assets/tau/common/tau-meters.bin'], warnings: []
+  }),
+  meter_bin_execute_install: () => ({ rel_path: 'Assets/tau/common/tau-meters.bin', bytes_written: 69980, presets_written: 2, backup_dir: '/backups/meters-inst', prev_rel_path: 'Assets/tau/common/tau-meters.bin.prev' }),
+  meter_bin_plan_reset: () => ({ id: 'plan-reset-1', rel_path: 'Assets/tau/common/tau-meters.bin', action_kind: 'reset', resulting_bytes: 0, max_bytes: 4456448, rows: [], package: null, same_id_different_source: false, previous_author: null, preset_dir_rel: null, preset_files_to_write: [], preset_skipped_existing: false, backup_files: ['Assets/tau/common/tau-meters.bin'], warnings: [] }),
+  meter_bin_execute_reset: () => ({ rel_path: 'Assets/tau/common/tau-meters.bin', bytes_written: 0, presets_written: 0, backup_dir: '/backups/meters-reset', prev_rel_path: null }),
   // The per-meter settings file: set window.__mset = 'wrong' before the page loads for a card whose file has the wrong size; 'fail' makes the delete fail.
   meter_settings_scan: () => ((globalThis as { __mset?: string }).__mset === 'wrong' || (globalThis as { __mset?: string }).__mset === 'fail'
     ? [{ rel_path: 'Saves/tau/alfatreze.TAU/tau-meter-settings.bin', platform: 'tau', core: 'alfatreze.TAU', bytes: 8191, state: 'wrong_size' }, { rel_path: 'Saves/tau_dev/alfatreze.TAU DEV 230/tau-meter-settings.bin', platform: 'tau_dev', core: 'alfatreze.TAU DEV 230', bytes: 8192, state: { saved: 4 } }]

@@ -260,11 +260,16 @@ export type RepoInfo = { description: string; homepage: string; license: string;
 export type RepoDownloads = { total: number; newest: number; newest_tag: string; releases: number; complete: boolean; notes: string };
 /** What GitHub says about a core's repository; either part is null when its request failed. */
 export type RepoDetails = { info: RepoInfo | null; downloads: RepoDownloads | null; fetched: number };
-/** The meters on a card (read only). `uses`: which list the Pocket uses for a core. */
-export type MeterRowView = { name: string; version: string; fallback: boolean; visible: boolean; unavailable: string | null; tuning_lost: boolean; binary_only: boolean };
+/** The meters on a card. `uses`: which list the Pocket uses for a core. */
+export type MeterRowView = { id: string; id_hash_hex: string; name: string; version: string; fallback: boolean; visible: boolean; unavailable: string | null; tuning_lost: boolean; binary_only: boolean };
 export type MeterBinView = { rel_path: string; bytes: number; format: number; rows: MeterRowView[]; problem: string | null };
 export type CoreMeters = { core: string; version: string; reads_user_file: boolean; uses: 'user_file' | 'own_bundle' | 'built_in_only'; bundle: MeterBinView | null };
 export type MetersOnCard = { user_file: MeterBinView | null; cores: CoreMeters[] };
+export type MeterPackageSummary = { id: string; id_hash: number; id_hash_hex: string; name: string; version: string; author: string; licence: string; homepage: string; abi: string; tau_min: string; params_rev: number; binary_only: boolean; preset_count: number; package_sha256: string; pack_sha256: string; pack_bytes: number; readme: string | null; license_text: string; trust_label: string; warning_notice: string };
+export type MeterRowEdit = { id: string; visible: boolean };
+export type PlannedMeterRow = { id: string; id_hash_hex: string; name: string; version: string; visible: boolean; fallback: boolean; binary_only: boolean; tuning_lost: boolean; unavailable: string | null };
+export type MeterBinPlan = { id: string; rel_path: string; action_kind: string; resulting_bytes: number; max_bytes: number; rows: PlannedMeterRow[]; package: MeterPackageSummary | null; same_id_different_source: boolean; previous_author: string | null; preset_dir_rel: string | null; preset_files_to_write: string[]; preset_skipped_existing: boolean; backup_files: string[]; warnings: string[] };
+export type MeterBinReport = { rel_path: string; bytes_written: number; presets_written: number; backup_dir: string | null; prev_rel_path: string | null };
 /** A Tau core's per-meter settings file on a card. `wrong_size` = not 8,192 bytes: the Pocket refuses it and the core does not start. */
 export type SettingsFileState = 'defaults' | 'newer' | 'wrong_size' | { saved: number };
 export type SettingsFile = { rel_path: string; platform: string; core: string; bytes: number; state: SettingsFileState };

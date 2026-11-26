@@ -467,3 +467,102 @@ pub fn meter_presets_install(a: &[String], j: bool) -> Result<(), CliError> {
         )
     })
 }
+
+/// `tau meter-inspect <file.tmeter>`: validates a `.tmeter` package and prints its metadata, hashes and trust notice.
+pub fn meter_inspect(a: &[String], j: bool) -> Result<(), CliError> {
+    let path = first(a, "a .tmeter package")?;
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let pkg = tau_core::meter_package::parse(&bytes)?;
+    let s = pkg.summary;
+    emit(j, &s, || {
+        format!(
+            "{} {} ({})\nauthor: {} | licence: {} | {}\nABI: {} | tau_min: {} | params_rev: {} | presets: {}\npackage sha256: {}\npack sha256:    {}\n[{}] {}",
+            s.name,
+            s.version,
+            s.id,
+            s.author,
+            s.licence,
+            if s.binary_only {
+                "binary only"
+            } else {
+                "source included"
+            },
+            s.abi,
+            if s.tau_min.is_empty() {
+                "any"
+            } else {
+                &s.tau_min
+            },
+            s.params_rev,
+            s.preset_count,
+            s.package_sha256,
+            s.pack_sha256,
+            s.trust_label,
+            s.warning_notice
+        )
+    })
+}
+
+/// `tau meter-plan <card-root> --package <file.tmeter> [--overwrite-presets]`: plans installing a `.tmeter` package onto the card.
+pub fn meter_plan(a: &[String], j: bool) -> Result<(), CliError> {
+    let card = first(a, "a card root")?;
+    let pkg_path = need(a, "--package", "meter-plan")?;
+    let bytes = std::fs::read(pkg_path).map_err(|e| e.to_string())?;
+    let overwrite_presets = a.iter().any(|x| x == "--overwrite-presets");
+    let action = tau_core::meter_install::MeterAction::InstallPackage {
+        package_bytes: bytes,
+        allow_source_change: false,
+        overwrite_presets,
+    };
+    let plan = tau_core::meter_install::plan(card, &action, &std::collections::BTreeMap::new())?;
+    emit(j, &plan, || {
+        format!(
+            "plan {} ({}): {} ({} bytes, {} meters), {} preset file(s) to write, {} backup(s){}",
+            plan.id,
+            plan.action_kind,
+            plan.rel_path,
+            plan.resulting_bytes,
+            plan.rows.len(),
+            plan.preset_files_to_write.len(),
+            plan.backup_files.len(),
+            plan.warnings
+                .iter()
+                .map(|w| format!("\nwarning: {w}"))
+                .collect::<String>()
+        )
+    })
+}
+
+/// `tau meter-install <card-root> --package <file.tmeter> --confirm <plan-id> --backup-dir <outside> --yes [--overwrite-presets]`.
+pub fn meter_install(a: &[String], j: bool) -> Result<(), CliError> {
+    yes(a)?;
+    let card = first(a, "a card root")?;
+    let pkg_path = need(a, "--package", "meter-install")?;
+    let bytes = std::fs::read(pkg_path).map_err(|e| e.to_string())?;
+    let overwrite_presets = a.iter().any(|x| x == "--overwrite-presets");
+    let backup = backup_dir(a, card, "meter-install")?;
+    let action = tau_core::meter_install::MeterAction::InstallPackage {
+        package_bytes: bytes,
+        allow_source_change: true,
+        overwrite_presets,
+    };
+    let r = tau_core::meter_install::execute(
+        card,
+        &action,
+        &std::collections::BTreeMap::new(),
+        need(a, "--confirm", "meter-install")?,
+        &backup,
+    )?;
+    emit(j, &r, || {
+        format!(
+            "wrote {} ({} bytes), {} preset file(s){}",
+            r.rel_path,
+            r.bytes_written,
+            r.presets_written,
+            r.backup_dir
+                .as_ref()
+                .map(|b| format!(", backup at {}", b.display()))
+                .unwrap_or_default()
+        )
+    })
+}

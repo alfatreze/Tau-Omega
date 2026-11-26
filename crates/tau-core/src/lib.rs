@@ -64,6 +64,8 @@ pub mod manual_source;
 pub mod marker;
 pub mod menu_symptoms;
 pub mod meter_bin;
+pub mod meter_install;
+pub mod meter_package;
 pub mod meter_packs;
 pub mod meter_presets;
 pub mod meter_settings;

@@ -114,13 +114,13 @@ let passed = 0; const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   assert.match(await t('mp-which').innerText(), /DEFAULT/); assert.equal(await t('mp-default-card').count(), 1); assert.equal(await p.getByRole('button', { name: 'Previous preset' }).isDisabled(), true);
   ok('the Settings tab steps through the presets, DEFAULT first, and says DEFAULT cannot be changed');
   assert.deepEqual(await p.locator('[role=tab][data-testid^=mp-tab-]').allInnerTexts().then((x) => x.map((y) => y.replace(/\s*\d+$/, '').trim())), ['Settings', 'Presets', 'Common']); ok('the controls are three tabs: Settings, Presets, Common');
-  // "Meters on the Pocket" is the card's real meter list, read only (the mock card has TAU 0.7.5 with a user meter file of eight meters).
+  // "Meters on the Pocket" is the card's real meter list + composer (the mock card has TAU 0.7.5 with a user meter file of eight meters).
   await t('mp-mode-list').click(); const ml = t('meters-on-pocket'); assert.equal(await ml.isVisible(), true);
-  assert.match(await ml.innerText(), /read from your card[\s\S]*nothing here changes the card/); assert.ok(!/Preview of a coming feature|rows used|Not available yet/.test(await ml.innerText())); ok('the Meters on the Pocket page says it only reads, and is no longer a mock-up');
-  assert.equal(await ml.locator('input, button').count(), 0); ok('nothing on it can be changed');
+  assert.match(await ml.innerText(), /read from your card[\s\S]*reviewed and backed up first/); assert.ok(!/Preview of a coming feature|rows used|Not available yet/.test(await ml.innerText())); ok('the Meters on the Pocket page explains the reviewed composer flow and is no longer a mock-up');
+  assert.equal(await ml.locator('[data-testid=mop-actions] button').count(), 3); ok('install, edit and reset actions are shown for a Tau 0.7.5+ card');
   assert.match(await ml.locator('[data-testid=mop-core]').first().innerText(), /alfatreze\.TAU\s*0\.7\.5[\s\S]*Uses your meter file/); ok('it says which core it is about and that the Pocket uses the meter file');
   const rows = ml.locator('[data-testid=mop-core] li'); assert.equal(await rows.count(), 7);
-  assert.deepEqual((await rows.locator('b').allInnerTexts()), ['WINAMP BARS', 'WINAMP SCOPE', 'CHLADNI', 'LAYERED WAVE', 'WATERFALL', 'SOUND MAP', 'LISSAJOUS LOCAL']); ok('the meters are listed in the Pocket\'s order, and a hidden meter is not in the list');
+  assert.deepEqual((await rows.locator('b').allInnerTexts()), ['WINAMP BARS', 'WINAMP SCOPE', 'CHLADNI', 'LAYERED WAVE', 'WATERFALL', 'SOUND MAP', 'LISSAJOUS']); ok('the meters are listed in the Pocket\'s order, and a hidden meter is not in the list');
   assert.match(await ml.locator('[data-testid=mop-hidden]').innerText(), /1 more meter is in the file but hidden/); ok('it says how many are hidden');
   assert.match(await rows.first().innerText(), /Built into the Pocket: always on/); assert.match(await rows.nth(5).innerText(), /Greyed out: It needs a newer Tau/); assert.match(await rows.last().innerText(), /Cannot remember tuned settings/); ok('the built-in meter, a greyed-out meter and a meter that cannot remember tuning are each explained');
   await t('mp-mode-edit').click(); assert.equal(await p.locator('.mp-layout').isVisible(), true); ok('switching back returns to the meter workspace');

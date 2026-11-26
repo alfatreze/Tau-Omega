@@ -1,16 +1,19 @@
-//! The meter bin, version 2 (`Assets/tau/common/tau-meters.bin`, a `TPKB` file): reading and checking one. **Read side only**: nothing here
-//! composes a bin or touches a card.
+//! The meter bin, version 2 (`Assets/tau/common/tau-meters.bin`, a `TPKB` file): reading, checking, and composing one. Pure bytes, no disk I/O.
 //!
 //! Written from Tau Alpha's specification (`docs/features/meters/EXTERNAL_METERS_SPEC.md` sections 2, 3 and 7) and checked against their golden
 //! vectors (`testdata/meter_bin/`, `tests/meter_bin.rs`). The checks run in the same order as their reference reader (`tools/meter_bin.py`)
 //! and the firmware's (`fw2/cores/meterbin_core.h`), so a damaged bin gets the same refusal code here as there.
 //!
-//! Three levels, as in the firmware:
+//! Three read levels, as in the firmware:
 //! - [`open_toc`]: what the Pocket's reader does at boot ([`boot_check`] adds the firmware's rule that a fallback row must exist): the 40-byte header, then the table of contents and the previews (bytes `0..packs_off`), the
 //!   `toc_crc`, and every row. No pack is read.
 //! - [`check_pack`]: one pack's own header against its row (the Pocket does this when the meter is selected).
 //! - [`parse`]: the full check Omega runs after a write: `open_toc`, then the whole-file CRC, then every pack's header against its row.
 //!   A version 1 bundle (`tau-packs.bin` as old cores shipped it) is mapped to the same rows, to show an old card; the firmware reads v2 only.
+//!
+//! Write side: [`compose`] builds a v2 bin from [`ComposeEntry`] items (requiring a visible Winamp Bars fallback row, refusing hash collisions,
+//! checking every pack and preview, and self-checking the result with [`parse`] and [`boot_check`]); [`extract_entries`] pulls entries back out
+//! of an existing v2 bin or shipped `tau-packs.bin` for reordering, hiding, removing, or adding meters.
 
 use crate::{ErrorCode, TauError};
 
@@ -720,6 +723,293 @@ fn parse_v1(b: &[u8]) -> Result<MeterBin, BinError> {
         bytes: b.len(),
         rows,
     })
+}
+
+/// One meter ready to be composed into a v2 bin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ComposeEntry {
+    /// 32 lower-case hex digits.
+    pub id: String,
+    /// 1 to 23 printable ASCII characters.
+    pub name: String,
+    pub version: (u16, u16, u16),
+    /// Raw `TMPK` v2 pack bytes (48-byte header + image).
+    pub pack: Vec<u8>,
+    /// Oldest TAU that can run it (`major << 8 | minor`, 0 = any).
+    pub tau_min: u16,
+    /// Bits 0..2: `FLAG_VISIBLE`, `FLAG_FALLBACK`, `FLAG_BINARY_ONLY`.
+    pub flags: u16,
+    pub params_rev: u16,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PackHeader {
+    pub abi: u16,
+    #[allow(dead_code)]
+    pub mid: u16,
+    pub size: u32,
+    pub origin: u32,
+    pub crc: u32,
+    pub bss: u32,
+    pub ps_off: u32,
+    pub ps_size: u32,
+}
+
+pub(crate) fn valid_id_str(s: &str) -> bool {
+    valid_id(s.as_bytes())
+}
+
+pub(crate) fn valid_name_str(s: &str) -> bool {
+    let b = s.as_bytes();
+    (1..=MAX_NAME).contains(&b.len()) && b.iter().all(|c| (0x20..=0x7E).contains(c))
+}
+
+pub(crate) fn id_hash_of_str(s: &str) -> u32 {
+    id_hash_of(s.as_bytes())
+}
+
+pub(crate) fn pack_header(pack: &[u8], row: Option<usize>) -> Result<PackHeader, BinError> {
+    let err = |r, d| {
+        let e = match row {
+            Some(i) => BinError::at(r, i),
+            None => BinError::new(r),
+        };
+        e.why(d)
+    };
+    if pack.len() < PACK_HEADER || &pack[..4] != b"TMPK" {
+        return Err(err(Refusal::Pack, "header"));
+    }
+    let (abi, mid, size, origin, pack_crc, bss, ps_off, ps_size) = (
+        u16at(pack, 4),
+        u16at(pack, 6),
+        u32at(pack, 8),
+        u32at(pack, 12),
+        u32at(pack, 20),
+        u32at(pack, 36),
+        u32at(pack, 40),
+        u32at(pack, 44),
+    );
+    if size == 0 || PACK_HEADER + size as usize != pack.len() {
+        return Err(err(Refusal::Pack, "size"));
+    }
+    if crc(&pack[PACK_HEADER..]) != pack_crc {
+        return Err(err(Refusal::Pack, "image CRC does not match its header"));
+    }
+    Ok(PackHeader {
+        abi,
+        mid,
+        size,
+        origin,
+        crc: pack_crc,
+        bss,
+        ps_off,
+        ps_size,
+    })
+}
+
+pub(crate) struct ValidPack<'a> {
+    pub header: PackHeader,
+    pub nparams: u16,
+    pub cmds: u16,
+    pub max_cycles: u32,
+    pub preview: &'a [u8],
+}
+
+/// Validates a standalone `TMPK` v2 pack (header, image CRC, window origin and fit, descriptor, preview).
+pub(crate) fn validate_pack(pack: &[u8], row: Option<usize>) -> Result<ValidPack<'_>, BinError> {
+    let at = |r: Refusal, d: &str| {
+        let e = match row {
+            Some(i) => BinError::at(r, i),
+            None => BinError::new(r),
+        };
+        if d.is_empty() { e } else { e.why(d) }
+    };
+    let ph = pack_header(pack, row)?;
+    if ph.origin != WINDOW {
+        return Err(at(
+            Refusal::Origin,
+            &format!("linked for 0x{:08X}, expected 0x{:08X}", ph.origin, WINDOW),
+        ));
+    }
+    if !window_ok(ph.size, ph.ps_off, ph.ps_size) {
+        return Err(at(
+            Refusal::Window,
+            "does not fit 64 KiB window with pstate",
+        ));
+    }
+    let image = &pack[PACK_HEADER..];
+    let di = desc_info(image).map_err(|mut e| {
+        e.row = row;
+        e
+    })?;
+    let preview_start = PACK_HEADER + image.len() - di.tot + di.pal_o;
+    let preview = &pack[preview_start..preview_start + di.preview_len];
+    if !preview_ok(preview) {
+        return Err(at(Refusal::Preview, "not 56x32 in <= 1 KiB"));
+    }
+    Ok(ValidPack {
+        header: ph,
+        nparams: di.nparams,
+        cmds: di.cmds,
+        max_cycles: di.max_cycles,
+        preview,
+    })
+}
+
+fn pad4(n: usize) -> usize {
+    (n + 3) & !3
+}
+
+fn put_u16(b: &mut [u8], at: usize, v: u16) {
+    b[at..at + 2].copy_from_slice(&v.to_le_bytes());
+}
+
+fn put_u32(b: &mut [u8], at: usize, v: u32) {
+    b[at..at + 4].copy_from_slice(&v.to_le_bytes());
+}
+
+/// Composes a v2 meter bin (`TPKB` version 2) from `entries` in display order.
+///
+/// Enforces every firmware and format rule: at most 64 meters, at most 4.25 MiB, a visible built-in fallback row (`FLAG_FALLBACK`), unique
+/// `id_hash` values, valid names/ids/flags, and valid `TMPK` packs with 56×32 previews. Self-checks the output with [`parse`] and [`boot_check`].
+pub fn compose(entries: &[ComposeEntry]) -> Result<Vec<u8>, BinError> {
+    if entries.len() > MAX_METERS {
+        return Err(BinError::new(Refusal::Count));
+    }
+    if !entries.iter().any(|e| e.flags & FLAG_FALLBACK != 0) {
+        return Err(BinError::new(Refusal::NoFallback));
+    }
+    let mut hashes = Vec::with_capacity(entries.len());
+    let mut validated = Vec::with_capacity(entries.len());
+    for (i, e) in entries.iter().enumerate() {
+        if !valid_id(e.id.as_bytes()) {
+            return Err(BinError::at(Refusal::Id, i));
+        }
+        let h = id_hash_of(e.id.as_bytes());
+        if hashes.contains(&h) {
+            return Err(BinError::at(Refusal::Dup, i));
+        }
+        hashes.push(h);
+        if !valid_name_str(&e.name) {
+            return Err(BinError::at(Refusal::Name, i));
+        }
+        if e.flags & !7 != 0 {
+            return Err(BinError::at(Refusal::Reserved, i));
+        }
+        if e.flags & FLAG_FALLBACK != 0 && e.flags & FLAG_VISIBLE == 0 {
+            return Err(BinError::at(Refusal::Reserved, i)
+                .why("the built-in fallback meter cannot be hidden"));
+        }
+        let vp = validate_pack(&e.pack, Some(i))?;
+        validated.push((h, vp));
+    }
+
+    let toc_len = ROW_LEN * entries.len();
+    let pv_off = HEADER_LEN + toc_len;
+    let mut p = pv_off;
+    let mut pv_offs = Vec::with_capacity(entries.len());
+    for (_, vp) in &validated {
+        pv_offs.push(p);
+        p += pad4(vp.preview.len());
+    }
+    let packs_off = p;
+    let mut q = packs_off;
+    let mut pack_offs = Vec::with_capacity(entries.len());
+    for e in entries {
+        pack_offs.push(q);
+        q += pad4(e.pack.len());
+    }
+    let total = q + 4;
+    if total > MAX_BIN {
+        return Err(BinError::new(Refusal::Size).why(&format!(
+            "composed bin would be {total} bytes (limit {MAX_BIN})"
+        )));
+    }
+
+    let mut out = vec![0u8; total];
+    out[..4].copy_from_slice(b"TPKB");
+    put_u16(&mut out, 4, 2);
+    put_u16(&mut out, 6, entries.len() as u16);
+    put_u32(&mut out, 8, HEADER_LEN as u32);
+    put_u32(&mut out, 12, toc_len as u32);
+    put_u32(&mut out, 16, pv_off as u32);
+    put_u32(&mut out, 20, (packs_off - pv_off) as u32);
+    put_u32(&mut out, 24, packs_off as u32);
+    put_u32(&mut out, 28, total as u32);
+
+    for (i, ((e, (h, vp)), (&po, &ko))) in entries
+        .iter()
+        .zip(&validated)
+        .zip(pv_offs.iter().zip(&pack_offs))
+        .enumerate()
+    {
+        let o = HEADER_LEN + ROW_LEN * i;
+        put_u32(&mut out, o, *h);
+        out[o + 4..o + 4 + 32].copy_from_slice(e.id.as_bytes());
+        out[o + 44..o + 44 + e.name.len()].copy_from_slice(e.name.as_bytes());
+        put_u16(&mut out, o + 68, e.version.0);
+        put_u16(&mut out, o + 70, e.version.1);
+        put_u16(&mut out, o + 72, e.version.2);
+        put_u16(&mut out, o + 74, vp.header.abi);
+        put_u16(&mut out, o + 76, e.tau_min);
+        put_u16(&mut out, o + 78, e.flags);
+        put_u16(&mut out, o + 80, e.params_rev);
+        put_u16(&mut out, o + 82, vp.nparams);
+        put_u16(&mut out, o + 84, vp.cmds);
+        put_u32(&mut out, o + 88, vp.max_cycles);
+        put_u32(&mut out, o + 92, ko as u32);
+        put_u32(&mut out, o + 96, e.pack.len() as u32);
+        put_u32(&mut out, o + 100, vp.header.crc);
+        put_u32(&mut out, o + 104, vp.header.ps_size);
+        put_u32(&mut out, o + 108, vp.header.bss);
+        put_u32(&mut out, o + 112, po as u32);
+        put_u32(&mut out, o + 116, vp.preview.len() as u32);
+
+        out[po..po + vp.preview.len()].copy_from_slice(vp.preview);
+        out[ko..ko + e.pack.len()].copy_from_slice(&e.pack);
+    }
+
+    let toc_crc = crc(&out[HEADER_LEN..packs_off]);
+    put_u32(&mut out, 32, toc_crc);
+    let file_crc = crc(&out[HEADER_LEN..total - 4]);
+    put_u32(&mut out, total - 4, file_crc);
+
+    // Self-check against our own reader and the firmware's boot rule.
+    parse(&out)?;
+    boot_check(&out, out.len())?;
+    Ok(out)
+}
+
+/// Extracts [`ComposeEntry`] items from a valid v2 meter bin (such as `tau-meters.bin` or a core's shipped v2 `tau-packs.bin`).
+/// Refuses v1 bundles because they have no 128-bit ids or semvers.
+pub fn extract_entries(b: &[u8]) -> Result<Vec<ComposeEntry>, BinError> {
+    let bin = parse(b)?;
+    if bin.version != 2 {
+        return Err(BinError::new(Refusal::Version)
+            .why("only v2 meter bins can be recomposed (update Tau to 0.7.5 or newer first)"));
+    }
+    let mut out = Vec::with_capacity(bin.rows.len());
+    for (i, r) in bin.rows.iter().enumerate() {
+        let from = r.pack_off as usize;
+        let to = from + r.pack_size as usize;
+        let Some(pack) = b.get(from..to) else {
+            return Err(BinError::at(Refusal::Pack, i).why("range"));
+        };
+        if !pack_image_ok(b, r) {
+            return Err(BinError::at(Refusal::Pack, i).why("image CRC mismatch"));
+        }
+        out.push(ComposeEntry {
+            id: r.id.clone(),
+            name: r.name.clone(),
+            version: r.version,
+            pack: pack.to_vec(),
+            tau_min: r.tau_min,
+            flags: r.flags & 7,
+            params_rev: r.params_rev,
+        });
+    }
+    Ok(out)
 }
 
 /// The full check of a v2 bin; a v1 bundle is mapped to rows (inspection only: the firmware reads v2 alone). Never panics, whatever the bytes.

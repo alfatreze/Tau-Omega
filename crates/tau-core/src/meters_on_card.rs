@@ -20,6 +20,10 @@ const BUNDLE: &str = "tau-packs.bin";
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RowView {
+    /// 32 lower-case hex digits (empty for a meter of an old v1 bundle).
+    pub id: String,
+    /// First 8 hex digits of `id` (or synthetic v1 hash).
+    pub id_hash_hex: String,
     pub name: String,
     /// `1.2.0`; empty for a meter of an old v1 bundle (it has no version).
     pub version: String,
@@ -124,6 +128,8 @@ fn rows_of(bin: &MeterBin, tau: Option<u16>) -> Vec<RowView> {
         .iter()
         .zip(collisions)
         .map(|(r, lost): (&MeterRow, bool)| RowView {
+            id: r.id.clone(),
+            id_hash_hex: format!("{:08x}", r.id_hash),
             name: r.name.clone(),
             version: if r.from_v1() {
                 String::new()
