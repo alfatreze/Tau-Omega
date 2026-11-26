@@ -36,7 +36,7 @@ Tau Alpha keeps `LEDGER.md` in their repository; this is Omega's own list of **w
 - **A027/R-1 (bin vectors): DONE.** Omega's v2 reader agrees with all 33 republished vectors (`to-alpha/025`, `026`); the fallback finding was fixed by Tau Alpha (A028/5).
 - **A028/R-1, A029/R-1 (save-file vectors): DONE.** Omega's reader agrees with all 18 (`to-alpha/027`); Omega never creates, edits or overwrites the file (A030); a wrong-sized one is warned about and deletable only with a plan and a verified backup (A032).
 - **A030/R-1, A031/R-1, A034/R-1: DONE** (`to-alpha/027`): category accepted both ways, layout-2 mirror agrees with every golden case, the seven test-sheet cases pass. Not done: composing a bin and installing a package (A034's rest).
-- **O027/Q-1:** Omega 0.6.0 refuses v0.7.5 (`persist_layout` 2); asked Tau Alpha to set `min_omega` to the first Omega that knows a release's layout. Omega 0.6.1 carries the fix, not released.
+- **O027/Q-1: ANSWERED** (Tau Alpha `035`, D-M31: `min_omega` is the first Omega that knows the release's layout; v0.7.5's asset is not changed yet). **Omega 0.6.1 is published (2026-11-23) and Tau Alpha was told (`to-alpha/028`):** the republish decision for v0.7.5's `min_omega` is theirs. Still ours: the composer and package install (A034's remaining checks).
 
 ## Closed since the last list
 R-011 (`required` rule, aligned), Q-010 (no CARDWRITE run), D-007 (lab drop approved and pinned), Q-016 (sandbox `allow-scripts` only), Q-020 (8 slots), Q-022 (`METR` replaces the whole set), F-009b (real-card rehearsal).
