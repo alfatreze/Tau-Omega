@@ -43,13 +43,13 @@
   <div class="pp-actions"><button class="primary" disabled={!ok} on:click={() => chosen(file)}>Add to {file ? file.replace(/\.m3u$/i, '') : 'playlist'}</button></div>
 </div>
 <style>
-  .pp-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100}
-  .pp{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:#1a2325;border:1px solid #2c393a;border-radius:14px;padding:20px 24px;color:#e8ecec}
+  .pp-backdrop{position:fixed;inset:0;background:var(--shadow);z-index:100}
+  .pp{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px 24px;color:var(--text)}
   .pp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}.pp-head h2{margin:0;font-size:18px}
-  .pp-list{border:1px solid #2c393a;border-radius:10px;max-height:40vh;overflow:auto}
-  .pp-row{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid #222e2f;cursor:pointer}.pp-row:last-child{border:0}
-  .pp-row span{display:flex;flex-direction:column;gap:1px}.pp-row small{color:#95a5a4;font-size:12px}
-  .pp-name{display:grid;gap:5px;font-size:12.5px;color:#a6b3b2;margin:12px 0 4px}.pp-name input{font:inherit;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:9px 11px}
-  .pp-bad{color:#ff9b9b;font-size:12.5px;margin:6px 0}.pp-note{font-size:12px;color:#95a5a4;margin:8px 0}
+  .pp-list{border:1px solid var(--border);border-radius:10px;max-height:40vh;overflow:auto}
+  .pp-row{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--bg-hover);cursor:pointer}.pp-row:last-child{border:0}
+  .pp-row span{display:flex;flex-direction:column;gap:1px}.pp-row small{color:var(--text-muted);font-size:12px}
+  .pp-name{display:grid;gap:5px;font-size:12.5px;color:var(--text-secondary);margin:12px 0 4px}.pp-name input{font:inherit;color:var(--text);background:var(--bg-input);border:1px solid var(--border-strong);border-radius:8px;padding:9px 11px}
+  .pp-bad{color:var(--danger-text);font-size:12.5px;margin:6px 0}.pp-note{font-size:12px;color:var(--text-muted);margin:8px 0}
   .pp-actions{display:flex;justify-content:flex-end;margin-top:12px}
 </style>

@@ -48,11 +48,11 @@
 
 <style>
   .help-page { display: grid; gap: 18px; align-content: start; }
-  .help-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .help-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap:wrap; }
   .help-cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  .help-card { background: #161f20; border: 1px solid #2c393a; border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; }
-  .help-card h2 { margin: 0; font-size: 16px; color: #eff5f4; }
-  .help-card p, .help-card li { margin: 0; font-size: 13px; color: #b7c4c3; line-height: 1.55; }
+  .help-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; }
+  .help-card h2 { margin: 0; font-size: 16px; color: var(--text); }
+  .help-card p, .help-card li { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.55; }
   .help-card ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 4px; }
-  code { font-size: 11.5px; background: #101617; border-radius: 5px; padding: 1px 5px; color: #c1f0ad; }
+  code { font-size: 11.5px; background: var(--bg-input); border-radius: 5px; padding: 1px 5px; color: var(--accent); }
 </style>

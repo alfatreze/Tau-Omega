@@ -71,14 +71,14 @@
   {/if}
 </section>
 <style>
-  .ck-src{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:0 0 12px}.ck-in{display:grid;gap:5px;flex:1;min-width:260px;font-size:12px;color:#a6b3b2}
-  .ck-in input,.ck-in select{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:9px;padding:9px 12px;width:100%;box-sizing:border-box}
-  .ck-err{color:#ff9b9b;font-size:12.5px}.ck-note{font-size:12.5px;color:#95a5a4}.ck-ok{font-size:13px;color:#c5f7ad;margin:8px 0}.ck-h{font-size:15px;margin:18px 0 8px}
-  .ck-rows{list-style:none;margin:0;padding:0;border:1px solid #2c393a;border-radius:12px;background:#161f20}.ck-rows li{border-bottom:1px solid #2c393a}.ck-rows li:last-child{border:0}
-  .ck-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:12px;align-items:center;padding:11px 16px;background:transparent;color:inherit;text-align:left}.ck-row:hover{background:#1c282a}.ck-row:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
-  .ck-row small{color:#95a5a4;font-size:12px;overflow:hidden;text-overflow:ellipsis}.ck-chips{display:flex;gap:6px}
-  .ck-res{border:1px solid #2c393a;border-radius:12px;background:#161f20;padding:16px 18px;margin:16px 0}.ck-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.ck-head h2{margin:0;font-size:16px}
-  .ck-verdict{margin:4px 0 0;font-size:13px;color:#c5f7ad}.ck-verdict.bad{color:#ffb4b4}.ck-res h3{margin:16px 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}
-  .ck-sym{list-style:none;margin:6px 0;padding:0;border:1px solid #2c393a;border-radius:9px}.ck-sym li{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-bottom:1px solid #2c393a;font-size:12.5px}.ck-sym li:last-child{border:0}.ck-sym small{display:block;color:#95a5a4;font-size:11.5px;margin-top:2px}
-  .chip.bad{background:#3a1c1c;color:#ffb4b4}.chip.warn{background:#3a2e14;color:#e5d9a8}
+  .ck-src{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:0 0 12px}.ck-in{display:grid;gap:5px;flex:1;min-width:260px;font-size:12px;color:var(--text-secondary)}
+  .ck-in input,.ck-in select{font:inherit;font-size:13px;color:var(--text);background:var(--bg-input);border:1px solid var(--border-strong);border-radius:9px;padding:9px 12px;width:100%;box-sizing:border-box}
+  .ck-err{color:var(--danger-text);font-size:12.5px}.ck-note{font-size:12.5px;color:var(--text-muted)}.ck-ok{font-size:13px;color:var(--accent-soft-text);margin:8px 0}.ck-h{font-size:15px;margin:18px 0 8px}
+  .ck-rows{list-style:none;margin:0;padding:0;border:1px solid var(--border);border-radius:12px;background:var(--bg-surface)}.ck-rows li{border-bottom:1px solid var(--border)}.ck-rows li:last-child{border:0}
+  .ck-row{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:12px;align-items:center;padding:11px 16px;background:transparent;color:inherit;text-align:left}.ck-row:hover{background:var(--bg-card)}.ck-row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .ck-row small{color:var(--text-muted);font-size:12px;overflow:hidden;text-overflow:ellipsis}.ck-chips{display:flex;gap:6px}
+  .ck-res{border:1px solid var(--border);border-radius:12px;background:var(--bg-surface);padding:16px 18px;margin:16px 0}.ck-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.ck-head h2{margin:0;font-size:16px}
+  .ck-verdict{margin:4px 0 0;font-size:13px;color:var(--accent-soft-text)}.ck-verdict.bad{color:var(--danger-text)}.ck-res h3{margin:16px 0 6px;font-size:11px;letter-spacing:.09em;color:var(--text-secondary);text-transform:uppercase}
+  .ck-sym{list-style:none;margin:6px 0;padding:0;border:1px solid var(--border);border-radius:9px}.ck-sym li{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-bottom:1px solid var(--border);font-size:12.5px}.ck-sym li:last-child{border:0}.ck-sym small{display:block;color:var(--text-muted);font-size:11.5px;margin-top:2px}
+  .chip.bad{background:var(--danger-bg);color:var(--danger-text)}.chip.warn{background:var(--warn-bg);color:var(--warn-text)}
 </style>

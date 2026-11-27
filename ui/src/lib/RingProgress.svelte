@@ -36,10 +36,10 @@
 <style>
   .ring{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:20px;height:20px}
   svg{display:block}
-  .track{fill:none;stroke:#3a4a4c;stroke-width:2}
+  .track{fill:none;stroke:var(--border-strong);stroke-width:2}
   .queued .track{stroke-dasharray:2.4 2.6}
-  .arc{fill:none;stroke:#c1f0ad;stroke-width:2.4;stroke-linecap:round;transition:stroke-dasharray .25s linear}
-  .fill{fill:#234029;stroke:#c1f0ad;stroke-width:1}
-  .tick{fill:none;stroke:#c5f7ad;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .arc{fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linecap:round;transition:stroke-dasharray .25s linear}
+  .fill{fill:var(--accent);stroke:var(--accent);stroke-width:1}
+  .tick{fill:none;stroke:var(--accent-soft-text);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   @media (prefers-reduced-motion:reduce){.arc{transition:none}}
 </style>

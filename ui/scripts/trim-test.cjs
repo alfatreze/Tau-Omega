@@ -57,7 +57,8 @@ const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await p.getByRole('dialog', { name: 'Tracks and what is skipped' }).getByRole('button', { name: 'Done' }).click(); await p.waitForTimeout(200);
   // Settings keeps a pointer to the same options
   if (!(await p.getByRole('button', { name: 'Settings', exact: true }).isVisible())) await p.getByRole('button', { name: /Tools & settings/ }).click();
-  await p.getByRole('button', { name: 'Settings', exact: true }).click(); await p.waitForTimeout(500);
+  await p.getByRole('button', { name: 'Settings', exact: true }).click(); await p.waitForTimeout(300);
+  await p.getByRole('tab', { name: 'Music & Sync' }).click(); await p.waitForTimeout(300);
   await p.getByRole('button', { name: 'Skip silence…' }).click(); await p.waitForTimeout(400);
   const again = p.getByRole('dialog', { name: 'Skip silence' });
   assert.equal(await again.getByLabel('Smallest silence').inputValue(), '5000'); ok('Settings > Syncing music > Advanced opens the same options, with the saved values');

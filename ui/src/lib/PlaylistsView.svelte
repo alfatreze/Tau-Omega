@@ -91,12 +91,12 @@
   {/if}
 </section>
 <style>
-  .track-order { list-style: none; margin: 10px 0; padding: 0; border: 1px solid #2c393a; border-radius: 9px; overflow: hidden; max-height: 320px; overflow-y: auto; }
-  .track-order li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 12px; border-bottom: 1px solid #202b2c; font-size: 12px; color: #c7d1d0; background: #101617; }
+  .track-order { list-style: none; margin: 10px 0; padding: 0; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; max-height: 320px; overflow-y: auto; }
+  .track-order li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 12px; border-bottom: 1px solid var(--bg-card); font-size: 12px; color: var(--text-secondary); background: var(--bg-input); }
   .track-order li:last-child { border-bottom: 0; }
   .track-order-buttons button { padding: 4px 9px; font-size: 12px; }
-  .plan-inline { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 12px 14px; background: #101617; border: 1px solid #344244; border-radius: 9px; }
-  .plan-inline p { margin: 0; color: #aab8b7; font-size: 12px; flex: 1; }
-  .dropped-list { margin: 10px 0 0; padding-left: 20px; color: #e5c88a; font-size: 12px; }
-  textarea { width: 100%; min-height: 88px; margin: 10px 0; color: #e8ecec; background: #101617; border: 1px solid #3b4a4b; border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 13px; resize: vertical; }
+  .plan-inline { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 12px 14px; background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 9px; }
+  .plan-inline p { margin: 0; color: var(--text-secondary); font-size: 12px; flex: 1; }
+  .dropped-list { margin: 10px 0 0; padding-left: 20px; color: var(--warn-text); font-size: 12px; }
+  textarea { width: 100%; min-height: 88px; margin: 10px 0; color: var(--text); background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 13px; resize: vertical; }
 </style>

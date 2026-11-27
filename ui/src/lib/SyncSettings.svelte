@@ -6,6 +6,7 @@
   import ToggleSwitch from './ToggleSwitch.svelte';
   import { checkLame, errorMessage, getPrefs, installLame, lameStatus, setPrefs } from './tau-api';
   import SkipOptionsSheet from './SkipOptionsSheet.svelte';
+  import { showToast } from './toastStore';
   import type { ConvertSettings, LameStatus, PrefsView } from './types';
   export let card = ''; export let mediaRoot = '';
   let advanced = false;
@@ -17,7 +18,8 @@
   });
   async function change(part: Partial<ConvertSettings>, message = 'Saved.') {
     if (!prefs) return;
-    try { prefs = await setPrefs({ ...prefs, convert: { ...prefs.convert, ...part } }); lame = await lameStatus(); notice = message; }
+    notice = '';
+    try { prefs = await setPrefs({ ...prefs, convert: { ...prefs.convert, ...part } }); lame = await lameStatus(); showToast(message); }
     catch (error) { notice = `Could not save: ${errorMessage(error)}`; }
   }
   async function chooseLame() {
@@ -28,7 +30,7 @@
   }
   async function install(method: string) {
     busy = true; notice = 'Installing LAME… this can take a minute.';
-    try { lame = await installLame(method); notice = lame.path ? 'LAME is installed.' : 'The install finished but LAME was not found.'; }
+    try { lame = await installLame(method); notice = ''; showToast(lame.path ? 'LAME is installed.' : 'The install finished but LAME was not found.', lame.path ? 'success' : 'info'); }
     catch (error) { notice = errorMessage(error); }
     finally { busy = false; }
   }
@@ -82,14 +84,14 @@
   {:else}<p>{notice || 'Loading…'}</p>{/if}
 </section>
 <style>
-  .sync-settings{max-width:720px;margin-bottom:14px;padding:22px 24px;border:1px solid #2c393a;border-radius:12px;background:#1a2325}
-  h2{margin:0 0 12px}.ss-lede{margin:0 0 8px;font-size:13px;color:#9cacab}
+  .sync-settings{max-width:820px;margin-bottom:14px;padding:22px 24px;border:1px solid var(--border);border-radius:12px;background:var(--bg-card)}
+  h2{margin:0 0 12px}.ss-lede{margin:0 0 8px;font-size:13px;color:var(--text-muted)}
   fieldset{border:0;padding:0;margin:0 0 14px}legend{font-weight:700;margin:12px 0 8px}
   .radio{display:flex;gap:10px;align-items:flex-start;padding:8px 0;cursor:pointer}
-  .radio span{display:flex;flex-direction:column;gap:2px}.radio small,.ss-row small{color:#8c9c9b;font-size:12px}
-  .ss-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0;border-top:1px solid #2c393a}
+  .radio span{display:flex;flex-direction:column;gap:2px}.radio small,.ss-row small{color:var(--text-muted);font-size:12px}
+  .ss-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0;border-top:1px solid var(--border)}
   .ss-row > div:first-child{display:flex;flex-direction:column;gap:2px;min-width:0}
-  .ss-row select{background:#111617;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;padding:8px 10px;font-size:13px}
-  .ss-btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.ss-hint{font-size:12px;color:#9cacab;max-width:300px}
-  .ss-notice{min-height:1.2em;font-size:12px;color:#9cacab;margin:8px 0 0}
+  .ss-row select{background:var(--bg-app);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px}
+  .ss-btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.ss-hint{font-size:12px;color:var(--text-muted);max-width:300px}
+  .ss-notice{min-height:1.2em;font-size:12px;color:var(--text-muted);margin:8px 0 0}
 </style>

@@ -69,10 +69,10 @@
   {/if}
 </section>
 <style>
-  .cm{margin-top:18px;border-top:1px solid #2c393a;padding-top:12px}.cm h3{margin:0 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}
-  .cm-note{font-size:12.5px;color:#95a5a4;line-height:1.55;margin:6px 0}.cm-err{color:#ff9b9b;font-size:12.5px}
-  .cm-list{list-style:none;margin:8px 0;padding:0;border:1px solid #2c393a;border-radius:10px}.cm-list li{display:grid;gap:8px;padding:11px 14px;border-bottom:1px solid #2c393a}.cm-list li:last-child{border:0}
-  .cm-main{display:grid;gap:3px;font-size:12.5px}.cm-main strong{font-size:13.5px}.cm-main strong small,.cm-main>small{color:#8f9e9d;font-weight:400;font-size:12px}.cm-main code{font-size:11px;background:#101617;border-radius:5px;padding:1px 5px}
-  .cm-plan{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12.5px;color:#c7d1d0}.cm-msg{margin:0;font-size:12.5px;color:#c5f7ad}
-  li.shared .cm-main span{color:#c5f7ad}
+  .cm{margin-top:18px;border-top:1px solid var(--border);padding-top:12px}.cm h3{margin:0 0 6px;font-size:11px;letter-spacing:.09em;color:var(--text-secondary);text-transform:uppercase}
+  .cm-note{font-size:12.5px;color:var(--text-muted);line-height:1.55;margin:6px 0}.cm-err{color:var(--danger-text);font-size:12.5px}
+  .cm-list{list-style:none;margin:8px 0;padding:0;border:1px solid var(--border);border-radius:10px}.cm-list li{display:grid;gap:8px;padding:11px 14px;border-bottom:1px solid var(--border)}.cm-list li:last-child{border:0}
+  .cm-main{display:grid;gap:3px;font-size:12.5px}.cm-main strong{font-size:13.5px}.cm-main strong small,.cm-main>small{color:var(--text-muted);font-weight:400;font-size:12px}.cm-main code{font-size:11px;background:var(--bg-input);border-radius:5px;padding:1px 5px}
+  .cm-plan{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12.5px;color:var(--text-secondary)}.cm-msg{margin:0;font-size:12.5px;color:var(--accent-soft-text)}
+  li.shared .cm-main span{color:var(--accent-soft-text)}
 </style>

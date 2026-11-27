@@ -47,11 +47,11 @@
   {:else}<p class="ss-notice">{notice || 'Loading…'}</p>{/if}
 </div>
 <style>
-  .so-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100}
-  .so{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(720px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:#1a2325;border:1px solid #2c393a;border-radius:14px;padding:20px 24px;color:#e8ecec}
+  .so-backdrop{position:fixed;inset:0;background:var(--shadow);z-index:100}
+  .so{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(720px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px 24px;color:var(--text)}
   .so-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}.so-head h2{margin:0}
-  .ss-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0;border-top:1px solid #2c393a}
-  .ss-row > div:first-child{display:flex;flex-direction:column;gap:2px;min-width:0}.ss-row small{color:#8c9c9b;font-size:12px}
-  .ss-row select{background:#111617;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;padding:8px 10px;font-size:13px}
-  .ss-notice{min-height:1.2em;font-size:12px;color:#9cacab;margin:8px 0 0}
+  .ss-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0;border-top:1px solid var(--border)}
+  .ss-row > div:first-child{display:flex;flex-direction:column;gap:2px;min-width:0}.ss-row small{color:var(--text-muted);font-size:12px}
+  .ss-row select{background:var(--bg-app);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px}
+  .ss-notice{min-height:1.2em;font-size:12px;color:var(--text-muted);margin:8px 0 0}
 </style>

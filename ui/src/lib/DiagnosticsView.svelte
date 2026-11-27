@@ -94,15 +94,15 @@
   .dg{display:grid;gap:12px;align-content:start}
   .dg h3,.dg p:not(.eyebrow){margin:0}
   .dg-actions{display:flex;gap:8px;flex-wrap:wrap}
-  .dg button{padding:8px 12px;font-size:13px;background:#202b2d;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;cursor:pointer}
-  .dg button.quiet{background:transparent}.dg button.primary{background:#c1f0ad;color:#142015;font-weight:700;border-color:#c1f0ad}
+  .dg button{padding:8px 12px;font-size:13px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer}
+  .dg button.quiet{background:transparent}.dg button.primary{background:var(--accent-solid);color:var(--accent-on-solid);font-weight:700;border-color:var(--accent)}
   .dg button:disabled{opacity:.5;cursor:not-allowed}
-  .dg-note{padding:8px 12px;border:1px solid #2c393a;background:#161f20;border-radius:8px;font-size:13px}
-  .dg-bad{color:#ffb4a8;font-size:13px}
-  .dg-card{border:1px solid #2c393a;background:#161f20;border-radius:10px;padding:12px;display:grid;gap:6px}
-  .dg-card h3{font-size:14px}.dg-card small{color:#9fb3aa;font-weight:400}
-  .dg-card .ok{color:#c1f0ad}.dg-card .bad{color:#ffb4a8}
+  .dg-note{padding:8px 12px;border:1px solid var(--border);background:var(--bg-surface);border-radius:8px;font-size:13px}
+  .dg-bad{color:var(--danger-text);font-size:13px}
+  .dg-card{border:1px solid var(--border);background:var(--bg-surface);border-radius:10px;padding:12px;display:grid;gap:6px}
+  .dg-card h3{font-size:14px}.dg-card small{color:var(--text-secondary);font-weight:400}
+  .dg-card .ok{color:var(--accent)}.dg-card .bad{color:var(--danger-text)}
   .dg-tests{list-style:none;margin:0;padding:0;display:grid;gap:2px;font-size:12px}
-  .dg-tests li{display:grid;grid-template-columns:48px 1fr;gap:8px;color:#c7d1d0}.dg-tests li span{font-weight:700}
-  .dg-tests li.p span{color:#c1f0ad}.dg-tests li.f span{color:#ffb4a8}
+  .dg-tests li{display:grid;grid-template-columns:48px 1fr;gap:8px;color:var(--text-secondary)}.dg-tests li span{font-weight:700}
+  .dg-tests li.p span{color:var(--accent)}.dg-tests li.f span{color:var(--danger-text)}
 </style>

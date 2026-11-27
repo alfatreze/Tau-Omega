@@ -49,14 +49,14 @@
 </div>
 
 <style>
-  .toast{position:fixed;right:20px;bottom:20px;z-index:95;max-width:min(520px,calc(100vw - 40px));display:flex;align-items:center;gap:12px;background:#182320;border:1px solid #2f4a37;border-radius:12px;padding:10px 12px;color:#a6b3b2;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.35);animation:toast-in .18s ease-out}
+  .toast{position:fixed;right:20px;bottom:20px;z-index:95;max-width:min(520px,calc(100vw - 40px));display:flex;align-items:center;gap:12px;background:var(--accent-soft-bg);border:1px solid var(--accent-soft-border);border-radius:12px;padding:10px 12px;color:var(--text-secondary);font-size:13px;box-shadow:0 8px 24px var(--shadow);animation:toast-in .18s ease-out}
   @keyframes toast-in{from{transform:translateY(8px);opacity:0}}
   @media (prefers-reduced-motion:reduce){.toast{animation:none}}
-  .tick{color:#c1f0ad;font-weight:700}
+  .tick{color:var(--accent);font-weight:700}
   .body{display:flex;flex-direction:column;gap:2px;min-width:0}
-  .body b{color:#e8ecec;font-weight:600}
+  .body b{color:var(--text);font-weight:600}
   .body small{font-size:12px;overflow-wrap:anywhere}
-  .warn{color:#f0d59a}.ok{color:#c1f0ad}
+  .warn{color:var(--warn-text)}.ok{color:var(--accent)}
   .actions{display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0}
   .actions button{font-size:12px;padding:4px 10px}
 </style>

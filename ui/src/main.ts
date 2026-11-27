@@ -2,6 +2,10 @@ import App from './App.svelte';
 import './styles.css';
 import { mount } from 'svelte';
 import { installOverlayScroll } from './lib/overlayScroll';
+import { initTheme } from './lib/themeStore';
+
+// Apply stored or system theme early and watch OS/storage updates.
+initTheme();
 
 // Slim scroll thumbs that appear when useful (lib/overlayScroll.ts).
 installOverlayScroll();

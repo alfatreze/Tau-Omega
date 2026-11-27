@@ -117,16 +117,16 @@
   {/if}
 </section>
 <style>
-  .bd-h{font-size:14px;margin:22px 0 8px}.bd-help{font-size:12.5px;color:#95a5a4;margin:0 0 8px}.bd-note,.bd-info{font-size:12.5px;color:#a6b3b2;margin:8px 0}.bd-ok{color:#c5f7ad;font-size:13px}.bd-err{color:#ff9b9b;font-size:12.5px}
-  .bd-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:0 0 10px}.bd-in{display:grid;gap:5px;flex:1;min-width:240px;font-size:12px;color:#a6b3b2}.bd-in small{color:#7f8e8d}.bd-in small.over{color:#ffb4b4}
-  .bd-in input,.bd-in select,.bd-erow input{font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:9px;padding:9px 12px;width:100%;box-sizing:border-box}
-  .bd-kinds{display:flex;gap:18px;margin:0 0 10px;font-size:13px;color:#dce6e4}.bd-kinds label{display:inline-flex;gap:6px;align-items:center}
+  .bd-h{font-size:14px;margin:22px 0 8px}.bd-help{font-size:12.5px;color:var(--text-muted);margin:0 0 8px}.bd-note,.bd-info{font-size:12.5px;color:var(--text-secondary);margin:8px 0}.bd-ok{color:var(--accent-soft-text);font-size:13px}.bd-err{color:var(--danger-text);font-size:12.5px}
+  .bd-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:0 0 10px}.bd-in{display:grid;gap:5px;flex:1;min-width:240px;font-size:12px;color:var(--text-secondary)}.bd-in small{color:var(--text-muted)}.bd-in small.over{color:var(--danger-text)}
+  .bd-in input,.bd-in select,.bd-erow input{font:inherit;font-size:13px;color:var(--text);background:var(--bg-input);border:1px solid var(--border-strong);border-radius:9px;padding:9px 12px;width:100%;box-sizing:border-box}
+  .bd-kinds{display:flex;gap:18px;margin:0 0 10px;font-size:13px;color:var(--text)}.bd-kinds label{display:inline-flex;gap:6px;align-items:center}
   .bd-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.bd-with{display:flex;gap:8px}.bd-with input{flex:1}
-  .bd-extra{display:grid;gap:8px;margin:10px 0}.bd-sub{font-size:12px;color:#a6b3b2}.bd-sub small{color:#7f8e8d}.bd-erow{display:grid;grid-template-columns:1.2fr auto 1.4fr auto;gap:8px;align-items:center}
-  code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
+  .bd-extra{display:grid;gap:8px;margin:10px 0}.bd-sub{font-size:12px;color:var(--text-secondary)}.bd-sub small{color:var(--text-muted)}.bd-erow{display:grid;grid-template-columns:1.2fr auto 1.4fr auto;gap:8px;align-items:center}
+  code{font-size:11.5px;background:var(--bg-input);border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
   .bd-actions{display:flex;gap:10px;margin:18px 0 8px}
-  .bd-plan,.bd-done{border:1px solid #2c393a;border-radius:12px;background:#161f20;padding:16px 18px;margin:14px 0}.bd-plan h2,.bd-done h2{margin:0 0 6px;font-size:16px}.bd-plan h3{margin:14px 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}
-  .bd-files{list-style:none;margin:8px 0;padding:0;border:1px solid #2c393a;border-radius:9px}.bd-files li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid #2c393a;font-size:12.5px}.bd-files li:last-child{border:0}.bd-fn{overflow-wrap:anywhere}.bd-files small{color:#8f9e9d}
-  .bd-done p{font-size:12.5px;line-height:1.7;color:#c7d1d0}
+  .bd-plan,.bd-done{border:1px solid var(--border);border-radius:12px;background:var(--bg-surface);padding:16px 18px;margin:14px 0}.bd-plan h2,.bd-done h2{margin:0 0 6px;font-size:16px}.bd-plan h3{margin:14px 0 6px;font-size:11px;letter-spacing:.09em;color:var(--text-secondary);text-transform:uppercase}
+  .bd-files{list-style:none;margin:8px 0;padding:0;border:1px solid var(--border);border-radius:9px}.bd-files li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12.5px}.bd-files li:last-child{border:0}.bd-fn{overflow-wrap:anywhere}.bd-files small{color:var(--text-muted)}
+  .bd-done p{font-size:12.5px;line-height:1.7;color:var(--text-secondary)}
   @media(max-width:900px){.bd-grid{grid-template-columns:1fr}.bd-erow{grid-template-columns:1fr}}
 </style>

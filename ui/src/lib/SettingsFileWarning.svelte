@@ -52,8 +52,8 @@
   </div>
 {/if}
 <style>
-  .sf-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin:12px 16px 14px;padding:12px 56px 12px 16px;border:1px solid #6b4f27;border-left:3px solid #e5c88a;border-radius:10px;background:#2a2417;color:#f1e6cf;font-size:13px;line-height:1.55}
-  .sf-bar p{margin:0 0 4px}.sf-small{color:#cdbf9f;font-size:12px}.sf-plan{flex:1 1 420px}.sf-text{flex:1 1 420px}
-  .sf-actions{display:flex;gap:8px;flex-wrap:wrap}.sf-error{flex-basis:100%;color:#ff9b9b}
+  .sf-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin:12px 16px 14px;padding:12px 56px 12px 16px;border:1px solid var(--warn-border);border-left:3px solid var(--warn-border);border-radius:10px;background:var(--warn-bg);color:var(--warn-text);font-size:13px;line-height:1.55}
+  .sf-bar p{margin:0 0 4px}.sf-small{color:var(--warn-text);font-size:12px}.sf-plan{flex:1 1 420px}.sf-text{flex:1 1 420px}
+  .sf-actions{display:flex;gap:8px;flex-wrap:wrap}.sf-error{flex-basis:100%;color:var(--danger-text)}
   code{font-size:12px;overflow-wrap:anywhere}
 </style>

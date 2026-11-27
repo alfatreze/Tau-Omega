@@ -29,8 +29,9 @@
 </div>
 <style>
   .lb-backdrop{position:fixed;inset:0;z-index:200;background:rgba(5,9,10,.86)}
-  .lb{position:fixed;inset:0;z-index:201;display:flex;flex-direction:column;padding:16px 20px 24px;box-sizing:border-box}
+  .lb{position:fixed;inset:0;z-index:201;display:flex;flex-direction:column;padding:16px 20px 24px;box-sizing:border-box;color-scheme:dark}
   .lb-top{display:flex;justify-content:space-between;align-items:center;gap:16px;color:#dce6e4;font-size:13px;min-height:40px}
+  .lb-top :global(.quiet){color:#dce6e4}
   .lb-count{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .lb-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;gap:14px}
   .lb-stage img{max-width:100%;max-height:100%;min-width:0;object-fit:contain;border-radius:8px;background:#000;box-shadow:0 8px 40px rgba(0,0,0,.6)}

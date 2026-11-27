@@ -359,7 +359,7 @@
   .gart-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(7, 11, 12, 0.72);
+    background: var(--bg-backdrop);
     backdrop-filter: blur(4px);
     z-index: 60;
   }
@@ -370,10 +370,10 @@
     transform: translate(-50%, -50%);
     width: min(820px, calc(100vw - 32px));
     max-height: min(88vh, 780px);
-    background: #141c1d;
-    border: 1px solid #304142;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-strong);
     border-radius: 16px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 24px 60px var(--shadow);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -393,28 +393,28 @@
   .gart-sub {
     margin: 0;
     font-size: 12.5px;
-    color: #93a3a2;
+    color: var(--text-muted);
   }
   .gart-tabs {
     display: flex;
     gap: 6px;
     padding: 0 24px;
-    border-bottom: 1px solid #283536;
+    border-bottom: 1px solid var(--border-subtle);
   }
   .gart-tabs [role='tab'] {
     padding: 9px 14px;
     background: transparent;
-    color: #9cacab;
+    color: var(--text-muted);
     font-size: 13px;
     border-radius: 8px 8px 0 0;
   }
   .gart-tabs [role='tab']:hover {
-    color: #eff5f4;
-    background: #1a2426;
+    color: var(--text);
+    background: var(--bg-card);
   }
   .gart-tabs [role='tab'].current {
-    color: #c1f0ad;
-    box-shadow: inset 0 -2px 0 #c1f0ad;
+    color: var(--accent);
+    box-shadow: inset 0 -2px 0 var(--accent-solid);
   }
   .gart-body {
     flex: 1;
@@ -432,16 +432,16 @@
   .gart-search {
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap:wrap;
   }
   .gart-search input {
     flex: 1;
     min-width: 180px;
     font: inherit;
     font-size: 13px;
-    color: #e8ecec;
-    background: #0e1415;
-    border: 1px solid #304142;
+    color: var(--text);
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
     border-radius: 9px;
     padding: 8px 12px;
   }
@@ -454,39 +454,39 @@
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    flex-wrap:wrap;
   }
   .gart-kinds {
     display: inline-flex;
-    background: #0e1415;
-    border: 1px solid #2b3839;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
     border-radius: 9px;
     padding: 2px;
     gap: 2px;
   }
   .gart-kinds button {
     background: transparent;
-    color: #9cacab;
+    color: var(--text-muted);
     border-radius: 7px;
     padding: 5px 11px;
     font-size: 12px;
   }
   .gart-kinds button.active {
-    background: #233335;
-    color: #c1f0ad;
+    background: var(--bg-hover);
+    color: var(--accent);
   }
   .gart-plat-tag {
     font-size: 11.5px;
-    color: #8f9e9d;
+    color: var(--text-muted);
     padding: 3px 9px;
     border-radius: 999px;
-    background: #101718;
-    border: 1px solid #273435;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
   }
   .gart-count {
     margin: 0;
     font-size: 12px;
-    color: #8f9e9d;
+    color: var(--text-muted);
   }
   .gart-grid {
     display: grid;
@@ -498,21 +498,21 @@
     gap: 8px;
     padding: 9px;
     text-align: left;
-    background: #101718;
-    border: 1.5px solid #283536;
+    background: var(--bg-input);
+    border: 1.5px solid var(--border-subtle);
     border-radius: 11px;
-    color: #e8ecec;
+    color: var(--text);
     cursor: pointer;
     transition: border-color 0.14s ease, transform 0.14s ease;
   }
   .gart-opt:hover {
-    border-color: #4b6163;
+    border-color: var(--border-strong);
     transform: translateY(-1px);
   }
   .gart-opt.selected {
-    border-color: #c1f0ad;
-    background: #17251d;
-    box-shadow: 0 0 0 1px rgba(193, 240, 173, 0.35);
+    border-color: var(--accent);
+    background: var(--accent-soft-bg);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
   }
   .gart-frame {
     display: grid;
@@ -521,7 +521,7 @@
     aspect-ratio: 1 / 1;
     border-radius: 7px;
     overflow: hidden;
-    background: #0a0f10;
+    background: var(--bg-sidebar);
     padding: 4px;
     box-sizing: border-box;
   }
@@ -542,7 +542,7 @@
   }
   .gart-meta strong {
     font-size: 12.5px;
-    color: #eff5f4;
+    color: var(--text);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -551,7 +551,7 @@
   }
   .gart-meta small {
     font-size: 11px;
-    color: #8f9e9d;
+    color: var(--text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -564,11 +564,11 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    flex-wrap:wrap;
   }
   .gart-path {
     font-size: 12px;
-    color: #9fb3aa;
+    color: var(--text-secondary);
     overflow-wrap: anywhere;
   }
   .gart-preview-box {
@@ -576,15 +576,15 @@
     justify-items: center;
     gap: 8px;
     padding: 18px;
-    background: #101718;
-    border: 1px solid #283536;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     text-align: center;
   }
   .gart-preview-box p {
     margin: 0;
     font-size: 12px;
-    color: #93a3a2;
+    color: var(--text-muted);
   }
   .gart-state {
     display: grid;
@@ -592,27 +592,27 @@
     text-align: center;
     gap: 6px;
     padding: 28px 18px;
-    background: #101718;
-    border: 1px dashed #2e3e3f;
+    background: var(--bg-input);
+    border: 1px dashed var(--border);
     border-radius: 12px;
   }
   .gart-state.err {
-    border-color: #6b3535;
-    background: #231414;
+    border-color: var(--danger-border);
+    background: var(--danger-bg);
   }
   .gart-state p {
     margin: 0;
     max-width: 460px;
     font-size: 12.5px;
-    color: #95a5a4;
+    color: var(--text-muted);
     line-height: 1.5;
   }
   .gart-spinner {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 2px solid #2e4042;
-    border-top-color: #c1f0ad;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
     animation: gart-spin 0.8s linear infinite;
   }
   @keyframes gart-spin {
@@ -624,9 +624,9 @@
     margin: 0;
     padding: 10px 12px;
     border-radius: 9px;
-    border: 1px solid #6b3535;
-    background: #261616;
-    color: #f2b8b5;
+    border: 1px solid var(--danger-border);
+    background: var(--danger-bg);
+    color: var(--danger-text);
     font-size: 12.5px;
   }
   .gart-foot {
@@ -635,8 +635,8 @@
     align-items: center;
     gap: 12px;
     padding: 14px 24px 18px;
-    border-top: 1px solid #283536;
-    background: #111819;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-app);
   }
   .gart-foot-left,
   .gart-foot-right {
@@ -654,7 +654,7 @@
   }
   code {
     font-size: 11.5px;
-    background: #101617;
+    background: var(--bg-input);
     border-radius: 5px;
     padding: 1px 5px;
   }

@@ -35,7 +35,7 @@
 
 {#if manual}
   <section class="ou-card" aria-labelledby="ou-title">
-    <h3 id="ou-title">Tau Omega updates</h3>
+    <h2 id="ou-title">Tau Omega updates</h2>
     <p class="muted">Checks GitHub for a newer Tau Omega. Only the public update file is requested; nothing about you or your card is sent.</p>
     <label class="ou-channel">Update channel
       <select aria-label="Update channel" value={channel} on:change={(e) => chooseChannel(e.currentTarget.value as Channel)}>
@@ -65,14 +65,15 @@
 {/if}
 
 <style>
-  .ou-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin:12px 16px 14px;padding:12px 56px 12px 16px;border:1px solid #3b5a58;border-radius:10px;background:#16292a;color:#dce6e4;font-size:13px;line-height:1.5}
+  .ou-bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin:12px 16px 14px;padding:12px 56px 12px 16px;border:1px solid var(--border-strong);border-radius:10px;background:var(--info-bg);color:var(--text);font-size:13px;line-height:1.5}
   .ou-actions,.ou-row{display:flex;gap:8px;flex-wrap:wrap}
-  .ou-error{flex-basis:100%;color:#ff9b9b}
-  .ou-card{display:grid;gap:8px;margin:16px 0;padding:14px 16px;border:1px solid #2c393a;border-radius:10px;background:#161f20}
-  .ou-card h3,.ou-card p{margin:0}
-  .ou-channel{display:grid;gap:4px;font-size:12.5px;color:#a6b3b2}.ou-channel select{font:inherit;color:#e8ecec;background:#111617;border:1px solid #2c393a;border-radius:8px;padding:8px 10px;max-width:360px}.ou-hint{font-size:12px}
+  .ou-error{flex-basis:100%;color:var(--danger-text)}
+  .ou-card{display:grid;gap:8px;max-width:820px;margin:0 0 14px;padding:22px 24px;border:1px solid var(--border);border-radius:12px;background:var(--bg-card)}
+  .ou-card h2,.ou-card p{margin:0}
+  .ou-card .muted{color:var(--text-muted);font-size:13px;line-height:1.5}
+  .ou-channel{display:grid;gap:4px;font-size:12.5px;color:var(--text-secondary)}.ou-channel select{font:inherit;color:var(--text);background:var(--bg-app);border:1px solid var(--border);border-radius:8px;padding:8px 10px;max-width:360px}.ou-hint{font-size:12px}
   .ou-notes{white-space:pre-wrap;margin:0;font-size:12px;max-height:160px;overflow:auto}
-  button{padding:8px 12px;font-size:13px;background:#202b2d;color:#e8ecec;border:1px solid #2c393a;border-radius:8px;cursor:pointer}
-  button.quiet{background:transparent}button.primary{background:#c1f0ad;color:#142015;font-weight:700;border-color:#c1f0ad}
+  button{padding:8px 12px;font-size:13px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:8px;cursor:pointer}
+  button.quiet{background:transparent}button.primary{background:var(--accent-solid);color:var(--accent-on-solid);font-weight:700;border-color:var(--accent)}
   button:disabled{opacity:.5;cursor:not-allowed}
 </style>

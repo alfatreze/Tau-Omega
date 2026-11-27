@@ -18,6 +18,8 @@
   import HalcyonView from './lib/HalcyonView.svelte';
   import DiagnosticsView from './lib/DiagnosticsView.svelte';
   import LibrarySettings from './lib/LibrarySettings.svelte';
+  import ThemeSettings from './lib/ThemeSettings.svelte';
+  import GeneralSettings from './lib/GeneralSettings.svelte';
   import SyncSettings from './lib/SyncSettings.svelte';
   import ArtworkSettings from './lib/ArtworkSettings.svelte';
   import { modal, trap } from './lib/a11y';
@@ -124,6 +126,7 @@
   $: if (navOpen) tick().then(() => document.querySelector<HTMLElement>('#sidebar nav button')?.focus());
   function onWindowKey(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
+    if (showSwitcher) { showSwitcher = false; return; }
     if (tauUpdateZip) { tauUpdateZip = ''; return; }
     if (navOpen) { navOpen = false; navToggleEl?.focus(); }
   }
@@ -283,12 +286,29 @@
     try { mountedCards = await listMountedCards(); cardMounted = mountedCards.includes(path); } catch { /* a failed check isn't reason to flip to "ejected" */ }
   }
 
-  // The target core: whose media folder the Library, Halcyon and Appearance pages work on. The choice is listed from the cores that can
-  // play the library's files (a core whose slots take mp3 and flac first, then mp3 or flac, then one that serves the Tau library); any
-  // other core can be picked by hand ("Other cores"). Nothing is decided by a platform's category any more.
+  // The target core: whose media folder the Library, Halcyon and Appearance pages work on.
+  // Cores that share the same media_platform (e.g. TAU, TAU DEV, TAU Diagnostics) share one library
+  // on the card, so we collapse duplicates to one representative core here.
   const audioRank = (c: Core) => (c.library_capable ? 0 : c.audio_formats.length >= 2 ? 1 : c.audio_formats.length ? 2 : 3);
-  const byTarget = (a: Core, b: Core) => audioRank(a) - audioRank(b) || (a.shortname || a.id).localeCompare(b.shortname || b.id);
-  $: audioCores = cores.filter((c) => audioRank(c) < 3).sort(byTarget);
+  const corePref = (c: Core) => {
+    const n = c.shortname || c.id;
+    return (/\bdev\b|diagnostic/i.test(n) ? 1 : 0) * 100 + n.length;
+  };
+  const byTarget = (a: Core, b: Core) =>
+    audioRank(a) - audioRank(b) || corePref(a) - corePref(b) || (a.shortname || a.id).localeCompare(b.shortname || b.id);
+  $: audioCoresAll = cores.filter((c) => audioRank(c) < 3).sort(byTarget);
+  $: audioCores = (() => {
+    const seen = new Set<string>();
+    const unique: Core[] = [];
+    for (const c of audioCoresAll) {
+      const key = c.media_platform || c.id;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(c);
+      }
+    }
+    return unique;
+  })();
   $: otherTargets = cores.filter((c) => audioRank(c) === 3).sort(byTarget);
   const formatsOf = (c: Core) => (c.library_capable ? 'library' : c.playlist ? 'playlist' : c.audio_formats.join(' + ').toUpperCase());
 
@@ -324,8 +344,8 @@
   let activeCore: Core | null = null;
   $: if (!activeCore && audioCores.length) activeCore = audioCores[0];
   let cardTab: 'overview' | 'history' = 'overview';
-  let showSwitcher = false; let showAllTargets = false;
-  function selectActiveCore(core: Core) { activeCore = core; showSwitcher = false; openCoreLibrary(core); }
+  let settingsTab: 'general' | 'appearance' | 'sync' | 'artwork' | 'diagnostics' = 'general';
+  let showSwitcher = false;
   async function switchToKnownCard(card: string) { showSwitcher = false; await openKnownCard(card); }
 
   function openCoreLibrary(core: Core) {
@@ -348,11 +368,11 @@
   {#if navOpen}<div class="nav-backdrop" role="presentation" on:click={() => (navOpen = false)}></div>{/if}
   <aside id="sidebar" class:open={navOpen} aria-label="Primary navigation" use:trap={navOpen}><div class="brand"><span class="mark">τ</span><span>Tau Omega<small>Library companion</small></span></div>
   <div class="active-context">
-    <button class="active-context-btn" on:click={() => showSwitcher = !showSwitcher} aria-expanded={showSwitcher} aria-label="Switch card or core">
+    <button class="active-context-btn" on:click={() => showSwitcher = !showSwitcher} aria-expanded={showSwitcher} aria-label="Switch card">
       <span class="active-context-icon" aria-hidden="true"><CardIcon kind={connectionKinds[path]} /></span>
       <span class="active-context-text">
         <strong>{path ? cardName(path) : 'No card open'}</strong>
-        <small>{activeCore ? (activeCore.shortname || activeCore.id) : ($cardDevice?.device === 'game_bub' ? 'Game Bub' : (cores.length ? 'Choose a core' : 'Open a card to begin'))}</small>
+        <small>{path ? ($cardDevice?.device === 'game_bub' ? 'Game Bub' : 'Analogue Pocket') : 'Open a card to begin'}</small>
         {#if path && page !== 'workbench' && pendingFor(path, pendingTick)}<small class="ctx-pending">{pendingFor(path, pendingTick)} pending</small>{/if}
       </span>
       <svg class="active-context-chevron" class:open={showSwitcher} viewBox="0 0 24 24" fill="none" width="14" height="14" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -363,14 +383,6 @@
         {#if knownCards.length}
           <p class="switcher-label">Switch card</p>
           {#each knownCards as card}<button class="switcher-row" class:active={path === card} on:click={() => switchToKnownCard(card)}>{cardName(card)}{#if pendingFor(card, pendingTick)}<span class="switcher-pending">{pendingFor(card, pendingTick)} pending</span>{/if}{#if mountedCards.includes(card)}<span class="switcher-dot" aria-hidden="true"></span>{/if}</button>{/each}
-        {/if}
-        {#if cores.length}
-          <p class="switcher-label">{audioCores.length ? 'Target core: plays mp3 and flac' : 'Target core: pick one'}</p>
-          {#each audioCores as core}<button class="switcher-row" class:active={activeCore?.id === core.id} on:click={() => selectActiveCore(core)}>{core.shortname || core.id}<small class="switcher-fmt">{formatsOf(core)}</small></button>{/each}
-          {#if otherTargets.length}
-            <button class="switcher-row switcher-more" aria-expanded={showAllTargets || !audioCores.length} on:click={() => (showAllTargets = !showAllTargets)}>Other cores…</button>
-            {#if showAllTargets || !audioCores.length}{#each otherTargets as core}<button class="switcher-row" class:active={activeCore?.id === core.id} on:click={() => selectActiveCore(core)}>{core.shortname || core.id}</button>{/each}{/if}
-          {/if}
         {/if}
         <button class="switcher-manage" on:click={() => { page = 'cards'; showSwitcher = false; }}>Open the card page →</button>
       </div>
@@ -425,10 +437,10 @@
   <OmegaUpdate />
   {#if page === 'cards'}
     <CardsView {cardMounted} {ejectedSafely} {path} {knownCards} {notice} {cores} {mountedCards} {cardName} {chooseFolder} {openFolder} {openKnownCard} {openCoreLibrary} {openCore} {browseCores} {openUpdates} bind:tab={cardTab}>
-      <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} refresh={loadHistory} openSettings={() => { moreOpen = true; page = 'settings'; }} startSync={() => page = 'workbench'} />
+      <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} refresh={loadHistory} openSettings={() => { moreOpen = true; settingsTab = 'sync'; page = 'settings'; }} startSync={() => page = 'workbench'} />
     </CardsView>
   {:else if page === 'workbench'}
-    <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, media_platform: c.media_platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} targets={audioCores.map((c) => ({ id: c.id, label: c.shortname || c.id, note: formatsOf(c) }))} otherTargets={otherTargets.map((c) => ({ id: c.id, label: c.shortname || c.id, note: '' }))} targetId={activeCore?.id ?? ''} chooseTarget={(id) => { const c = cores.find((x) => x.id === id); if (c) activeCore = c; }} mediaRoot={mediaRoot} playlist={activeCore?.playlist ?? null} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
+    <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, media_platform: c.media_platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} targets={audioCores.map((c) => ({ id: c.id, label: c.shortname || c.id, note: formatsOf(c) }))} otherTargets={otherTargets.map((c) => ({ id: c.id, label: c.shortname || c.id, note: '' }))} targetId={activeCore?.id ?? ''} chooseTarget={(id) => { const c = cores.find((x) => x.id === id); if (c) activeCore = c; }} mediaRoot={mediaRoot} playlist={activeCore?.playlist ?? null} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; settingsTab = 'sync'; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
   {:else if page === 'compare'}
     <CompareView bind:leftCore bind:rightCore bind:copyReportPath {comparison} {compareNotice} {coreCopyPlan} {coreCopyCapacity} {size} {chooseFolder} {compareCores} {reviewCoreCopy} {runCoreCopy} />
   {:else if page === 'playlists'}
@@ -468,7 +480,12 @@
   {:else if page === 'appearance'}
     <AppearanceView {mediaRoot} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'settings'}
-    <SettingsView bind:settingsPath {settings} {layoutView} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading} ><LibrarySettings card={path} openHistory={() => openHistory()} /><SyncSettings card={path} {mediaRoot} /><ArtworkSettings card={path} /></SettingsView>
+    <SettingsView bind:tab={settingsTab} bind:settingsPath {settings} {layoutView} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading}>
+      <div slot="general"><GeneralSettings card={path} /></div>
+      <div slot="appearance"><ThemeSettings /></div>
+      <div slot="sync"><LibrarySettings openHistory={() => openHistory()} /><SyncSettings card={path} {mediaRoot} /></div>
+      <div slot="artwork"><ArtworkSettings card={path} /></div>
+    </SettingsView>
   {/if}
   </div>
 </main>
@@ -519,17 +536,17 @@
      as an inert, unstyled, non-overlaying block until this moved. */
   @font-face { font-family: 'Space Grotesk'; src: url('/assets/SpaceGrotesk-VariableFont_wght.ttf') format('truetype'); font-style: normal; font-weight: 300 700; font-display: swap; }
   :global(:root), :global(body) { font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; }
-  .tau-upd-backdrop{position:fixed;inset:0;background:rgba(6,10,11,.68);z-index:60}
-  .tau-upd-sheet{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 48px);display:flex;flex-direction:column;background:#121a1b;border:1px solid #354749;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.55);z-index:61;overflow:hidden}
-  .tau-upd-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #263334}
+  .tau-upd-backdrop{position:fixed;inset:0;background:var(--bg-backdrop);z-index:60}
+  .tau-upd-sheet{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 48px);display:flex;flex-direction:column;background:var(--bg-app);border:1px solid var(--border-strong);border-radius:14px;box-shadow:0 24px 60px var(--shadow);z-index:61;overflow:hidden}
+  .tau-upd-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border-subtle)}
   .tau-upd-head h2{margin:0;font-size:16px}
   .tau-upd-body{padding:16px 18px;overflow:auto}
-  .move-review { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 24px; background: rgb(5 9 10 / 72%); }
-  .move-review-card { width: min(560px, 100%); display: grid; gap: 14px; padding: 28px; border: 1px solid #455654; border-radius: 15px; background: #1a2325; box-shadow: 0 24px 80px rgb(0 0 0 / 40%); }
-  .move-review-card > p:not(.eyebrow) { color: #aab8b7; margin: 0; }
-  .move-review-card label { color: #dce6e4; font-size: 13px; line-height: 1.5; }
-  .move-review-card input[type='text'] { width: 100%; color: #e8ecec; background: #101617; border: 1px solid #3b4a4b; border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 13px; }
+  .move-review { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 24px; background: var(--bg-backdrop); }
+  .move-review-card { width: min(560px, 100%); display: grid; gap: 14px; padding: 28px; border: 1px solid var(--border-strong); border-radius: 15px; background: var(--bg-card); box-shadow: 0 24px 80px rgb(0 0 0 / 40%); }
+  .move-review-card > p:not(.eyebrow) { color: var(--text-secondary); margin: 0; }
+  .move-review-card label { color: var(--text); font-size: 13px; line-height: 1.5; }
+  .move-review-card input[type='text'] { width: 100%; color: var(--text); background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 8px; padding: 11px 12px; font: inherit; font-size: 13px; }
   .move-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
-  .move-actions button:first-child { padding: 11px 14px; background: #314244; color: #e8ecec; }
-  .move-actions .danger { padding: 11px 14px; background: #c1f0ad; color: #142015; font-weight: 700; }
+  .move-actions button:first-child { padding: 11px 14px; background: var(--bg-btn); color: var(--text); }
+  .move-actions .danger { padding: 11px 14px; background: var(--accent-solid); color: var(--accent-on-solid); font-weight: 700; }
 </style>

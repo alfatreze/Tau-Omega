@@ -499,8 +499,8 @@
 
 <style>
   .ci {
-    background: #161f20;
-    border: 1px solid #2c393a;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     overflow: hidden;
     display: grid;
@@ -509,7 +509,7 @@
   .art-wrap {
     position: relative;
     background: #000;
-    border-bottom: 1px solid #2c393a;
+    border-bottom: 1px solid var(--border);
   }
   .ci-banner {
     display: block;
@@ -522,9 +522,9 @@
     bottom: 10px;
     padding: 4px 10px;
     font-size: 11.5px;
-    background: rgba(16, 22, 23, 0.88);
-    color: #eff5f4;
-    border: 1px solid #3c4d4e;
+    background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+    color: var(--text-strong);
+    border: 1px solid var(--border-strong);
     border-radius: 7px;
     opacity: 0;
     transition: opacity 0.15s ease;
@@ -534,8 +534,8 @@
     opacity: 1;
   }
   .art-edit:hover {
-    border-color: #c1f0ad;
-    color: #c1f0ad;
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .ci-body {
     padding: 16px;
@@ -561,7 +561,7 @@
   .ci-head p {
     margin: 2px 0 0;
     font-size: 11.5px;
-    color: #8f9e9d;
+    color: var(--text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -571,9 +571,9 @@
     height: 44px;
     display: grid;
     place-items: center;
-    background: #273638;
+    background: var(--bg-elevated);
     border-radius: 10px;
-    color: #c1f0ad;
+    color: var(--accent);
     font-weight: 700;
   }
   .ci-icon img {
@@ -584,14 +584,14 @@
   .ci-desc {
     margin: 0;
     font-size: 12.5px;
-    color: #c7d1d0;
+    color: var(--text-secondary);
     line-height: 1.55;
   }
   .ci h3 {
     margin: 8px 0 0;
     font-size: 11px;
     letter-spacing: 0.09em;
-    color: #9fb3aa;
+    color: var(--text-secondary);
     text-transform: uppercase;
   }
   .ci-facts {
@@ -607,26 +607,26 @@
   }
   .ci-facts dt {
     font-size: 12px;
-    color: #8f9e9d;
+    color: var(--text-muted);
   }
   .ci-facts dd {
     margin: 0;
     font-size: 12.5px;
-    color: #e8ecec;
+    color: var(--text);
     overflow-wrap: anywhere;
     line-height: 1.45;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap:wrap;
     align-items: center;
     gap: 6px;
   }
   .ci-link {
-    color: #c1f0ad;
+    color: var(--accent);
     text-decoration: underline;
     text-underline-offset: 3px;
   }
   .ci-link:hover {
-    color: #eff5f4;
+    color: var(--text);
   }
   .ci-copy {
     padding: 2px 8px;
@@ -637,8 +637,8 @@
     gap: 8px;
     padding: 11px 12px;
     border-radius: 10px;
-    background: #111819;
-    border: 1px solid #283536;
+    background: var(--bg-app);
+    border: 1px solid var(--border-subtle);
   }
   .ci-ver-head {
     display: flex;
@@ -657,15 +657,15 @@
     width: 100%;
     font: inherit;
     font-size: 12.5px;
-    color: #e8ecec;
-    background: #0d1314;
-    border: 1px solid #354546;
+    color: var(--text);
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
     border-radius: 8px;
     padding: 7px 10px;
   }
   .ci-caps {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap:wrap;
     gap: 6px;
   }
   .ci-lib {
@@ -675,27 +675,27 @@
   }
   .ci-note {
     font-size: 12px;
-    color: #95a5a4;
+    color: var(--text-muted);
     margin: 0;
   }
   .ci-remove-sec {
     padding-top: 10px;
-    border-top: 1px solid #263334;
+    border-top: 1px solid var(--border-subtle);
     display: grid;
     gap: 8px;
   }
   .ci-rm-plan {
     padding: 11px 12px;
     border-radius: 10px;
-    border: 1px solid #6b3535;
-    background: #241515;
+    border: 1px solid var(--danger-border);
+    background: var(--danger-bg);
     display: grid;
     gap: 8px;
   }
   .ci-rm-plan p {
     margin: 0;
     font-size: 12px;
-    color: #e3d6d5;
+    color: var(--danger-text);
     line-height: 1.5;
   }
   .ci-rm-opt {
@@ -703,13 +703,13 @@
     align-items: flex-start;
     gap: 8px;
     font-size: 12px;
-    color: #f0d7a8;
+    color: var(--warn-text);
     line-height: 1.45;
     cursor: pointer;
   }
   .ci-rm-opt input {
     margin-top: 2px;
-    accent-color: #c1f0ad;
+    accent-color: var(--accent);
   }
   .ci-rm-btns {
     display: flex;
@@ -717,8 +717,8 @@
   }
   .danger-quiet {
     background: none;
-    border: 1px solid #6b3a3a;
-    color: #ff9b9b;
+    border: 1px solid var(--danger-border);
+    color: var(--danger-text);
     border-radius: 8px;
     padding: 7px 12px;
     font: inherit;
@@ -727,17 +727,17 @@
     justify-self: start;
   }
   .danger-quiet:hover {
-    background: #2b1717;
+    background: var(--danger-bg);
   }
   .ci-err {
     margin: 0;
     font-size: 12px;
-    color: #ff9b9b;
+    color: var(--danger-text);
   }
   .ci-upd-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(6, 10, 11, 0.72);
+    background: var(--bg-backdrop);
     backdrop-filter: blur(4px);
     z-index: 65;
   }
@@ -750,10 +750,10 @@
     max-height: min(86vh, 720px);
     display: flex;
     flex-direction: column;
-    background: #141c1d;
-    border: 1px solid #304142;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-strong);
     border-radius: 14px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 24px 60px var(--shadow);
     z-index: 66;
     overflow: hidden;
   }
@@ -763,7 +763,7 @@
     align-items: flex-start;
     gap: 12px;
     padding: 16px 20px;
-    border-bottom: 1px solid #283536;
+    border-bottom: 1px solid var(--border-subtle);
   }
   .ci-upd-head h3 {
     margin: 2px 0 0;
@@ -775,7 +775,7 @@
   }
   code {
     font-size: 11px;
-    background: #101617;
+    background: var(--bg-input);
     border-radius: 5px;
     padding: 1px 5px;
     overflow-wrap: anywhere;

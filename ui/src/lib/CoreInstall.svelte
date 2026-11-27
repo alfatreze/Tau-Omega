@@ -38,6 +38,6 @@
   <UpdatePlanView zipPath={download.download.path} cardPath={card} on:installed={() => dispatch('installed')} />
 {/if}
 <style>
-  .ci-small{font-size:12px;color:#a6b3b2;line-height:1.55;margin:6px 0}
-  .ci-err{color:#ff9b9b;font-size:12px}
+  .ci-small{font-size:12px;color:var(--text-secondary);line-height:1.55;margin:6px 0}
+  .ci-err{color:var(--danger-text);font-size:12px}
 </style>

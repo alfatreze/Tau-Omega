@@ -27,6 +27,27 @@
   const TABS: ['overview' | 'history', string][] = [['overview', 'Overview'], ['history', 'History']];
   $: needing = $coresTreeStore.flatMap((n) => n.cores.filter((c) => c.missing > 0).map((c) => ({ ...c, platformName: n.platform.name })));
   $: libraries = cores.filter((c) => c.library_capable);
+  $: libraryGroups = (() => {
+    const byKey = new Map<string, Core[]>();
+    for (const c of libraries) {
+      const k = c.media_platform || c.id;
+      const list = byKey.get(k);
+      if (list) list.push(c);
+      else byKey.set(k, [c]);
+    }
+    return [...byKey.entries()].map(([key, group]) => {
+      const sorted = [...group].sort((a, b) => {
+        const aName = a.shortname || a.id;
+        const bName = b.shortname || b.id;
+        const aSecondary = /\bdev\b|diagnostic/i.test(aName) ? 1 : 0;
+        const bSecondary = /\bdev\b|diagnostic/i.test(bName) ? 1 : 0;
+        return aSecondary - bSecondary || aName.length - bName.length || aName.localeCompare(bName);
+      });
+      const rep = sorted[0];
+      const tracksVal = group.find((c) => c.tracks !== null)?.tracks ?? null;
+      return { key, rep, cores: sorted, tracks: tracksVal };
+    });
+  })();
   // Card-wide numbers: space on the volume, what is on it, how many screenshots. Read-only; a failure just hides that figure.
   let space: VolumeSpace | null = null; let shots: number | null = null; let statsFor = '';
   $: if (path && statsFor !== path) { statsFor = path; space = null; shots = null; void loadStats(path); }
@@ -36,7 +57,7 @@
   }
   $: usedBytes = space ? space.total_bytes - space.available_bytes : 0;
   $: usedPct = space && space.total_bytes ? Math.min(100, Math.round((usedBytes / space.total_bytes) * 100)) : 0;
-  $: tracks = libraries.reduce((n, c) => n + (c.tracks ?? 0), 0);
+  $: tracks = libraryGroups.reduce((n, g) => n + (g.tracks ?? 0), 0);
   $: platformCount = $coresTreeStore.filter((n) => n.platform.id !== '_none').length;
   function tabKey(e: KeyboardEvent) {
     const i = TABS.findIndex(([t]) => t === tab);
@@ -66,7 +87,7 @@
           {#if !isGameBub}<div><dt>Platforms</dt><dd>{platformCount}</dd></div>{/if}
           {#if disabledCount}<div><dt>Disabled</dt><dd><button class="sum-link" aria-label={`${disabledCount} cores disabled on the Pocket. Open the Cores page`} on:click={browseCores}>{disabledCount} <small>on the Pocket</small></button></dd></div>{/if}
           {#if !isGameBub}<div><dt>Categories</dt><dd>{$coresGroups.filter((g) => g.name !== 'No platform').length}</dd></div>{/if}
-          {#if libraries.length}<div><dt>Library tracks</dt><dd>{tracks}</dd></div>{/if}
+          {#if libraryGroups.length}<div><dt>Library tracks</dt><dd>{tracks}</dd></div>{/if}
           <div class:ok={$coreUpdateCount === 0}><dt>Updates</dt><dd>{#if $coreUpdateCount}<button class="sum-link" aria-label={`${$coreUpdateCount} core updates available. Open the updates`} on:click={openUpdates}>{$coreUpdateCount} <small>available</small></button>{:else}0{/if}</dd></div>
           {#if !isGameBub && shots !== null}<div><dt>Screenshots</dt><dd>{shots}</dd></div>{/if}
         </dl>
@@ -84,9 +105,18 @@
           <h3 class="sum-h">Needs attention</h3>
           <ul class="sum-list" aria-label="Cores that need a file">{#each needing as c (c.id)}<li><button class="quiet" on:click={() => openCore(c.id)}><strong>{c.shortname}</strong> <small>{c.platformName} · needs {plural(c.missing, 'file')}</small></button></li>{/each}</ul>
         {:else}<p class="sum-ok">Every core has the files it needs.</p>{/if}
-        {#if libraries.length}
+        {#if libraryGroups.length}
           <h3 class="sum-h">Music libraries</h3>
-          <ul class="sum-list" aria-label="Music libraries">{#each libraries as c (c.id)}<li><button class="quiet" on:click={() => openCoreLibrary(c)}><strong>{c.shortname || c.id}</strong> <small>{c.tracks === null ? 'No index yet' : plural(c.tracks, 'track')} · open library</small></button></li>{/each}</ul>
+          <ul class="sum-list" aria-label="Music libraries">
+            {#each libraryGroups as g (g.key)}
+              <li>
+                <button class="quiet" on:click={() => openCoreLibrary(g.rep)}>
+                  <strong>{g.rep.shortname || g.rep.id}</strong>
+                  <small>{g.tracks === null ? 'No index yet' : plural(g.tracks, 'track')}{g.cores.length > 1 ? ` · shared by ${g.cores.length} cores` : ''} · open library</small>
+                </button>
+              </li>
+            {/each}
+          </ul>
         {/if}
       </section>
     {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}
@@ -95,16 +125,16 @@
     </div>
 </section>
 <style>
-  .card-tabs{display:flex;gap:4px;border-bottom:1px solid #2c393a;margin:6px 0 16px}
-  .card-tabs [role=tab]{padding:10px 14px;font-size:13.5px;color:#a4b0b0;background:transparent;border-radius:8px 8px 0 0}
-  .card-tabs [role=tab]:hover{color:#eff5f4;background:#1a2325}.card-tabs [role=tab].current{color:#c1f0ad;box-shadow:inset 0 -2px 0 #c1f0ad}
-  .card-tabs [role=tab]:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
-  .card-sum{border:1px solid #2c393a;border-radius:12px;background:#161f20;padding:14px 16px;margin-top:12px}
-  .sum-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin:12px 0 0}.sum-stats>div{background:#141c1d;border:1px solid #222d2f;border-radius:9px;padding:9px 12px}.sum-stats dt{font-size:11.5px;color:#8f9e9d}.sum-stats dd{margin:2px 0 0;font-size:17px;font-weight:700;color:#e8ecec}
-  .sum-space{margin:12px 0 0}.sum-space p{margin:6px 0 0;font-size:12.5px;color:#a6b3b2}.sum-bar{height:8px;border-radius:99px;background:#101617;border:1px solid #2c393a;overflow:hidden}.sum-bar span{display:block;height:100%;background:#c1f0ad}
-  .sum-link{background:none;border:0;padding:0;font:inherit;font-weight:700;color:#e5d9a8;cursor:pointer;text-align:left}.sum-link small{font-size:11.5px;font-weight:400;color:#c7b97f}.sum-link:hover{text-decoration:underline}.sum-link:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}
+  .card-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:6px 0 16px}
+  .card-tabs [role=tab]{padding:10px 14px;font-size:13.5px;color:var(--text-secondary);background:transparent;border-radius:8px 8px 0 0}
+  .card-tabs [role=tab]:hover{color:var(--text);background:var(--bg-card)}.card-tabs [role=tab].current{color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent-solid)}
+  .card-tabs [role=tab]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .card-sum{border:1px solid var(--border);border-radius:12px;background:var(--bg-surface);padding:14px 16px;margin-top:12px}
+  .sum-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin:12px 0 0}.sum-stats>div{background:var(--bg-subtle);border:1px solid var(--bg-hover);border-radius:9px;padding:9px 12px}.sum-stats dt{font-size:11.5px;color:var(--text-muted)}.sum-stats dd{margin:2px 0 0;font-size:17px;font-weight:700;color:var(--text)}
+  .sum-space{margin:12px 0 0}.sum-space p{margin:6px 0 0;font-size:12.5px;color:var(--text-secondary)}.sum-bar{height:8px;border-radius:99px;background:var(--bg-input);border:1px solid var(--border);overflow:hidden}.sum-bar span{display:block;height:100%;background:var(--accent-solid)}
+  .sum-link{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--warn-text);cursor:pointer;text-align:left}.sum-link small{font-size:11.5px;font-weight:400;color:var(--warn-text)}.sum-link:hover{text-decoration:underline}.sum-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .sum-actions{display:flex;gap:4px}
-  .role-row{display:flex;justify-content:space-between;align-items:center;gap:12px}.role-row p{margin:0;font-size:13px}.role-row small{color:#8f9e9d;font-size:12px;margin-left:6px}.sum-note{font-size:11.5px;color:#8f9e9d;margin:6px 0 0}
-  .sum-h{margin:14px 0 6px;font-size:11px;letter-spacing:.09em;color:#9fb3aa;text-transform:uppercase}.sum-ok{font-size:13px;color:#c5f7ad;margin:10px 0 0}
-  .sum-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}.sum-list .quiet{width:100%;text-align:left;display:flex;gap:8px;align-items:baseline}.sum-list small{color:#8f9e9d;font-size:12px}
+  .role-row{display:flex;justify-content:space-between;align-items:center;gap:12px}.role-row p{margin:0;font-size:13px}.role-row small{color:var(--text-muted);font-size:12px;margin-left:6px}.sum-note{font-size:11.5px;color:var(--text-muted);margin:6px 0 0}
+  .sum-h{margin:14px 0 6px;font-size:11px;letter-spacing:.09em;color:var(--text-secondary);text-transform:uppercase}.sum-ok{font-size:13px;color:var(--accent-soft-text);margin:10px 0 0}
+  .sum-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}.sum-list .quiet{width:100%;text-align:left;display:flex;gap:8px;align-items:baseline}.sum-list small{color:var(--text-muted);font-size:12px}
 </style>

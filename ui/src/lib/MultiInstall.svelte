@@ -74,11 +74,11 @@
   {/if}
 </div>
 <style>
-  .mi-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100}
-  .mi{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:#1a2325;border:1px solid #2c393a;border-radius:14px;padding:20px 24px;color:#e8ecec}
+  .mi-backdrop{position:fixed;inset:0;background:var(--shadow);z-index:100}
+  .mi{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px 24px;color:var(--text)}
   .mi-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}.mi-head h2{margin:0}
-  .mi-note{font-size:12.5px;color:#95a5a4;line-height:1.55}.mi-list{list-style:none;margin:10px 0;padding:0;border:1px solid #2c393a;border-radius:10px}
-  .mi-list li{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;border-bottom:1px solid #222e2f;font-size:13px}.mi-list li:last-child{border:0}
-  .mi-list span{color:#95a5a4;text-align:right}.mi-list span.ok,.ok{color:#c5f7ad}.mi-list span.bad,.bad{color:#ff9b9b}
+  .mi-note{font-size:12.5px;color:var(--text-muted);line-height:1.55}.mi-list{list-style:none;margin:10px 0;padding:0;border:1px solid var(--border);border-radius:10px}
+  .mi-list li{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;border-bottom:1px solid var(--bg-hover);font-size:13px}.mi-list li:last-child{border:0}
+  .mi-list span{color:var(--text-muted);text-align:right}.mi-list span.ok,.ok{color:var(--accent-soft-text)}.mi-list span.bad,.bad{color:var(--danger-text)}
   .mi-actions{display:flex;justify-content:flex-end;margin-top:12px}
 </style>

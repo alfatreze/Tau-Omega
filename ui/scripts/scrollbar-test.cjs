@@ -19,6 +19,9 @@ const ok = (n) => { passed++; console.log(`ok - ${n}`); };
       brandTop: a.querySelector('.brand').getBoundingClientRect().top, ctxTop: a.querySelector('.active-context').getBoundingClientRect().top, navTop: n.scrollTop };
   });
   const before = await info();
+  assert.equal(await p.evaluate(() => getComputedStyle(document.documentElement).scrollbarWidth), 'none');
+  assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector('aside nav[aria-label="Main"]')).scrollbarWidth), 'none');
+  ok('native scrollbars are suppressed so only the minimal colored thumb shows');
   assert.equal(before.asideOverflows, false); assert.equal(before.treeScrolls, false); ok('the panel itself does not scroll, and the cores tree does not scroll inside it');
   assert.equal(before.navOverflows, true); ok('the menu below the fixed header is the one scrolling area');
   // scroll the menu: the header stays, a thumb appears

@@ -107,20 +107,20 @@
   {#if error}<p class="sk-note bad" role="alert">{error}</p>{/if}
 </div>
 <style>
-  .sk-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100}
-  .sk{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(980px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:#1a2325;border:1px solid #2c393a;border-radius:14px;padding:20px 24px;color:#e8ecec}
+  .sk-backdrop{position:fixed;inset:0;background:var(--shadow);z-index:100}
+  .sk{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(980px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px 24px;color:var(--text)}
   .sk-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}.sk-head h2{margin:0}
   .sk-body{display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.3fr);gap:18px}
-  .sk-list{list-style:none;margin:0;padding:0;max-height:52vh;overflow:auto;border:1px solid #2c393a;border-radius:10px}
-  .sk-dir{padding:6px 12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8f9e9d;background:#141c1d;position:sticky;top:0}
-  .sk-track{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid #222e2f;color:inherit;padding:8px 12px;font:inherit;font-size:13px}
-  .sk-track:hover,.sk-track.on{background:#223033}.sk-track small{color:#95a5a4;white-space:nowrap}.sk-track em{margin-left:8px;font-style:normal;font-size:11px;color:#e5d9a8}
+  .sk-list{list-style:none;margin:0;padding:0;max-height:52vh;overflow:auto;border:1px solid var(--border);border-radius:10px}
+  .sk-dir{padding:6px 12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);background:var(--bg-subtle);position:sticky;top:0}
+  .sk-track{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--bg-hover);color:inherit;padding:8px 12px;font:inherit;font-size:13px}
+  .sk-track:hover,.sk-track.on{background:var(--bg-hover)}.sk-track small{color:var(--text-muted);white-space:nowrap}.sk-track em{margin-left:8px;font-style:normal;font-size:11px;color:var(--warn-text)}
   .sk-edit h3{margin:0 0 8px;font-size:14px;overflow-wrap:anywhere}
-  .sk-wave{display:block;width:100%;height:110px;background:#101617;border:1px solid #2c393a;border-radius:8px;touch-action:none}
-  .sk-bar{fill:#7fb7a8}.sk-cut{fill:rgba(255,155,155,.28)}.sk-handle{fill:#ffb86b;cursor:ew-resize}
-  .sk-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}.sk-fields label{display:grid;gap:4px;font-size:12.5px;color:#a6b3b2}
-  .sk-fields input{font:inherit;color:#e8ecec;background:#101617;border:1px solid #3b4a4b;border-radius:8px;padding:8px 10px}
+  .sk-wave{display:block;width:100%;height:110px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;touch-action:none}
+  .sk-bar{fill:var(--accent)}.sk-cut{fill:color-mix(in srgb,var(--danger-text) 28%,transparent)}.sk-handle{fill:var(--warn-text);cursor:ew-resize}
+  .sk-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}.sk-fields label{display:grid;gap:4px;font-size:12.5px;color:var(--text-secondary)}
+  .sk-fields input{font:inherit;color:var(--text);background:var(--bg-input);border:1px solid var(--border-strong);border-radius:8px;padding:8px 10px}
   .sk-check{display:block;font-size:12.5px;margin:8px 0}.sk-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
-  .sk-note{font-size:12.5px;color:#95a5a4;line-height:1.55;margin:6px 0}.sk-note.bad{color:#ff9b9b}.sk-note.ok{color:#c5f7ad}.sk-note.you{color:#e5d9a8}
+  .sk-note{font-size:12.5px;color:var(--text-muted);line-height:1.55;margin:6px 0}.sk-note.bad{color:var(--danger-text)}.sk-note.ok{color:var(--accent-soft-text)}.sk-note.you{color:var(--warn-text)}
   @media (max-width:760px){.sk-body{grid-template-columns:1fr}}
 </style>

@@ -190,8 +190,8 @@
 
 <style>
   .gi {
-    background: #161f20;
-    border: 1px solid #2c393a;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     overflow: hidden;
     display: grid;
@@ -201,8 +201,8 @@
     position: relative;
     width: 100%;
     aspect-ratio: 1 / 1;
-    background: #0a0f10;
-    border-bottom: 1px solid #2c393a;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border);
   }
   .gi-hero-img {
     display: block;
@@ -223,7 +223,7 @@
     height: 100%;
     display: grid;
     place-items: center;
-    color: #556867;
+    color: var(--border-strong);
   }
   .gi-art-edit {
     position: absolute;
@@ -231,9 +231,9 @@
     bottom: 10px;
     padding: 4px 10px;
     font-size: 11.5px;
-    background: rgba(16, 22, 23, 0.88);
-    color: #eff5f4;
-    border: 1px solid #3c4d4e;
+    background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+    color: var(--text-strong);
+    border: 1px solid var(--border-strong);
     border-radius: 7px;
     opacity: 0;
     transition: opacity 0.14s ease;
@@ -243,8 +243,8 @@
     opacity: 1;
   }
   .gi-art-edit:hover {
-    border-color: #c1f0ad;
-    color: #c1f0ad;
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .gi-body {
     padding: 16px;
@@ -259,19 +259,19 @@
   .gi-head h2 {
     margin: 0;
     font-size: 16px;
-    color: #eff5f4;
+    color: var(--text);
     line-height: 1.3;
   }
   .gi-badges {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap:wrap;
     gap: 6px;
   }
   .gi h3 {
     margin: 8px 0 0;
     font-size: 11px;
     letter-spacing: 0.09em;
-    color: #9fb3aa;
+    color: var(--text-secondary);
     text-transform: uppercase;
   }
   .gi-facts {
@@ -287,12 +287,12 @@
   }
   .gi-facts dt {
     font-size: 12px;
-    color: #8f9e9d;
+    color: var(--text-muted);
   }
   .gi-facts dd {
     margin: 0;
     font-size: 12.5px;
-    color: #e8ecec;
+    color: var(--text);
     overflow-wrap: anywhere;
     line-height: 1.45;
   }
@@ -305,17 +305,17 @@
     display: grid;
     gap: 4px;
     padding: 4px;
-    background: #101718;
-    border: 1px solid #2b3839;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    color: #b7c4c3;
+    color: var(--text-secondary);
     font-size: 10.5px;
     text-align: center;
     cursor: pointer;
   }
   .gi-thumb:hover {
-    border-color: #c1f0ad;
-    color: #eff5f4;
+    border-color: var(--accent);
+    color: var(--text);
   }
   .gi-thumb img {
     width: 100%;
@@ -323,7 +323,7 @@
     object-fit: cover;
     border-radius: 5px;
     display: block;
-    background: #0a0f10;
+    background: var(--bg-sidebar);
   }
   .gi-saves {
     list-style: none;
@@ -339,31 +339,31 @@
     gap: 10px;
     padding: 7px 10px;
     border-radius: 8px;
-    background: #111819;
-    border: 1px solid #253233;
+    background: var(--bg-app);
+    border: 1px solid var(--bg-hover);
     font-size: 12px;
   }
   .gi-saves strong {
     display: block;
-    color: #e8ecec;
+    color: var(--text);
     font-size: 12px;
   }
   .gi-saves small {
-    color: #8f9e9d;
+    color: var(--text-muted);
     font-size: 11px;
     overflow-wrap: anywhere;
   }
   .gi-actions {
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap:wrap;
     padding-top: 8px;
-    border-top: 1px solid #273435;
+    border-top: 1px solid var(--border-subtle);
   }
   .danger-quiet {
     background: none;
-    border: 1px solid #6b3a3a;
-    color: #ff9b9b;
+    border: 1px solid var(--danger-border);
+    color: var(--danger-text);
     border-radius: 8px;
     padding: 6px 12px;
     font: inherit;
@@ -371,16 +371,16 @@
     cursor: pointer;
   }
   .danger-quiet:hover {
-    background: #2b1717;
+    background: var(--danger-bg);
   }
   .gi-note {
     margin: 0;
     font-size: 12px;
-    color: #8f9e9d;
+    color: var(--text-muted);
   }
   code {
     font-size: 11px;
-    background: #101617;
+    background: var(--bg-input);
     border-radius: 5px;
     padding: 1px 5px;
     overflow-wrap: anywhere;

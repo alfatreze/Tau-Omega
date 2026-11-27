@@ -474,7 +474,7 @@
   .art-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(7, 11, 12, 0.72);
+    background: var(--bg-backdrop);
     backdrop-filter: blur(4px);
     z-index: 60;
   }
@@ -485,10 +485,10 @@
     transform: translate(-50%, -50%);
     width: min(760px, calc(100vw - 32px));
     max-height: min(86vh, 760px);
-    background: #141c1d;
-    border: 1px solid #304142;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-strong);
     border-radius: 16px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 24px 60px var(--shadow);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -508,24 +508,24 @@
   .art-sub {
     margin: 0;
     font-size: 12.5px;
-    color: #93a3a2;
+    color: var(--text-muted);
   }
   .art-tabs {
     display: flex;
     gap: 6px;
     padding: 0 24px;
-    border-bottom: 1px solid #283536;
+    border-bottom: 1px solid var(--border-subtle);
   }
   .art-tabs [role='tab'] {
     padding: 9px 14px;
     background: transparent;
-    color: #9cacab;
+    color: var(--text-muted);
     font-size: 13px;
     border-radius: 8px 8px 0 0;
   }
   .art-tabs [role='tab'].current {
-    color: #c1f0ad;
-    box-shadow: inset 0 -2px 0 #c1f0ad;
+    color: var(--accent);
+    box-shadow: inset 0 -2px 0 var(--accent-solid);
   }
   .art-body {
     flex: 1;
@@ -544,16 +544,16 @@
   .art-count {
     margin: 0;
     font-size: 12px;
-    color: #8f9e9d;
+    color: var(--text-muted);
   }
   .art-search input {
     flex: 1;
     min-width: 0;
     font: inherit;
     font-size: 13px;
-    color: #e8ecec;
-    background: #0e1415;
-    border: 1px solid #334345;
+    color: var(--text);
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
     border-radius: 9px;
     padding: 8px 12px;
   }
@@ -574,23 +574,23 @@
     gap: 8px;
     padding: 10px;
     text-align: left;
-    background: #182224;
-    border: 1.5px solid #2c393a;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
     border-radius: 11px;
     color: inherit;
     cursor: pointer;
   }
   .art-opt:hover {
-    border-color: #486062;
+    border-color: var(--border-strong);
   }
   .art-opt.selected {
-    border-color: #c1f0ad;
-    background: #1d2c22;
+    border-color: var(--accent);
+    background: var(--accent-soft-bg);
   }
   .art-frame {
     display: block;
     background: #000;
-    border: 1px solid #263334;
+    border: 1px solid var(--border-subtle);
     border-radius: 8px;
     overflow: hidden;
   }
@@ -617,14 +617,14 @@
   }
   .art-meta strong {
     font-size: 12.5px;
-    color: #eff5f4;
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .art-meta small {
     font-size: 11px;
-    color: #8f9e9d;
+    color: var(--text-muted);
     flex: none;
   }
   .art-local {
@@ -635,11 +635,11 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    flex-wrap:wrap;
   }
   .art-path {
     font-size: 11.5px;
-    color: #93a3a2;
+    color: var(--text-muted);
     overflow-wrap: anywhere;
   }
   .art-fit {
@@ -649,21 +649,21 @@
   }
   .art-fit span {
     font-size: 12px;
-    color: #8f9e9d;
+    color: var(--text-muted);
     margin-right: 4px;
   }
   .art-fit button {
     padding: 5px 11px;
     font-size: 12px;
-    background: #1a2325;
-    border: 1px solid #2c393a;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 7px;
-    color: #c7d1d0;
+    color: var(--text-secondary);
   }
   .art-fit button.active {
-    border-color: #c1f0ad;
-    color: #c1f0ad;
-    background: #1d2c22;
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft-bg);
   }
   .art-preview-box {
     display: grid;
@@ -672,7 +672,7 @@
   .art-preview-box p {
     margin: 0;
     font-size: 12px;
-    color: #8f9e9d;
+    color: var(--text-muted);
   }
   .art-state {
     display: grid;
@@ -680,31 +680,31 @@
     text-align: center;
     gap: 6px;
     padding: 32px 20px;
-    border: 1px dashed #304042;
+    border: 1px dashed var(--border-strong);
     border-radius: 12px;
-    background: #101718;
+    background: var(--bg-input);
   }
   .art-state strong {
     font-size: 14px;
-    color: #eff5f4;
+    color: var(--text);
   }
   .art-state p {
     margin: 0;
     max-width: 440px;
     font-size: 12.5px;
-    color: #93a3a2;
+    color: var(--text-muted);
     line-height: 1.5;
   }
   .art-state.err {
-    border-color: #6b3535;
-    background: #231515;
+    border-color: var(--danger-border);
+    background: var(--danger-bg);
   }
   .art-spinner {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 2px solid #344244;
-    border-top-color: #c1f0ad;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin {
@@ -719,27 +719,27 @@
     gap: 14px;
     padding: 12px 14px;
     border-radius: 11px;
-    border: 1px solid #3f6043;
-    background: #18261b;
+    border: 1px solid var(--accent-soft-border);
+    background: var(--accent-soft-bg);
   }
   .art-plan strong {
     display: block;
     font-size: 13px;
-    color: #e8ecec;
+    color: var(--text);
     margin-bottom: 3px;
   }
   .art-plan p {
     margin: 0;
     font-size: 12px;
-    color: #b7c9b9;
+    color: var(--text-secondary);
   }
   .art-err {
     margin: 0;
     padding: 9px 12px;
     border-radius: 9px;
-    border: 1px solid #6b3535;
-    background: #261616;
-    color: #f2b8b5;
+    border: 1px solid var(--danger-border);
+    background: var(--danger-bg);
+    color: var(--danger-text);
     font-size: 12.5px;
   }
   .art-foot {
@@ -748,7 +748,7 @@
     align-items: center;
     gap: 12px;
     padding: 14px 24px 18px;
-    border-top: 1px solid #283536;
+    border-top: 1px solid var(--border-subtle);
   }
   .art-foot-right {
     display: flex;

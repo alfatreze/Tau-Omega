@@ -181,8 +181,9 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
 
   // --- settings --------------------------------------------------------------
   await p.getByRole('button', { name: /Tools & settings/ }).click(); await p.getByRole('button', { name: 'Settings', exact: true }).click();
+  await p.getByRole('tab', { name: 'Music & Sync' }).click(); await p.waitForTimeout(200);
   await p.getByLabel(/Just remove/).check(); await p.waitForTimeout(300);
-  assert.match(await text(p.locator('main')), /Saved\./); ok('removal preference saves from Settings → Library');
+  assert.match(await text(p.locator('.app-toasts')), /Saved\./); ok('removal preference saves from Settings → Music & Sync');
 
   // --- P0 review fixes ---------------------------------------------------------
 
@@ -313,18 +314,19 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   // --- history settings (retention) ---------------------------------------------------
   await fresh('?history=seed');
   await p.getByRole('button', { name: /Tools & settings/ }).click(); await p.getByRole('button', { name: 'Settings', exact: true }).click();
+  await p.getByRole('tab', { name: 'Music & Sync' }).click(); await p.waitForTimeout(250);
   assert.match(await text(p.locator('main')), /3 syncs stored/); ok('Settings shows how many syncs are stored');
   assert.equal(await p.getByLabel('Number of syncs to keep').inputValue(), '100'); assert.equal(await p.getByLabel('How long to keep history').inputValue(), '365'); ok('retention has reasonable defaults (100 syncs, 1 year)');
   await p.evaluate(() => window.__tauMock.addOldEntries(2, 60)); await p.getByRole('button', { name: 'Browse sync history' }).click(); await p.waitForTimeout(300);
   assert.match(await text(p.locator('main')), /5 syncs stored/);
   await p.getByRole('button', { name: 'History settings' }).click();
   await p.getByLabel('How long to keep history').selectOption('30'); await p.waitForTimeout(400);
-  assert.match(await text(p.locator('main')), /Removed 2 older entries/); assert.match(await text(p.locator('main')), /3 syncs stored/); ok('shortening the retention time deletes older entries straight away');
+  assert.match(await text(p.locator('.app-toasts')), /Removed 2 older entries/); assert.match(await text(p.locator('main')), /3 syncs stored/); ok('shortening the retention time deletes older entries straight away');
   await p.getByLabel('Number of syncs to keep').selectOption('25'); await p.waitForTimeout(300);
   assert.equal(await p.getByLabel('Number of syncs to keep').inputValue(), '25'); ok('the number of syncs to keep can be changed');
   await p.getByRole('button', { name: 'Clear history…' }).click(); assert.match(await text(p.locator('.ls-confirm')), /Delete all 3/); ok('clearing the history asks first');
   await p.getByRole('button', { name: 'Delete', exact: true }).click(); await p.waitForTimeout(300);
-  assert.match(await text(p.locator('main')), /Deleted 3 entries/); assert.match(await text(p.locator('main')), /0 syncs stored/); ok('and then clears it');
+  assert.match(await text(p.locator('.app-toasts')), /Deleted 3 entries/); assert.match(await text(p.locator('main')), /0 syncs stored/); ok('and then clears it');
   await p.getByRole('button', { name: 'Browse sync history' }).click(); await p.waitForTimeout(300);
   assert.match(await text(p.locator('main')), /No syncs yet/); ok('an empty history says so and points back to Library');
 

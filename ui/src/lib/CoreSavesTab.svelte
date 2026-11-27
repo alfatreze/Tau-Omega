@@ -43,13 +43,13 @@
 </div>
 <style>
   .cs{display:grid;gap:18px}
-  .cs-sec{border:1px solid #2c393a;border-radius:12px;background:#161f20;padding:14px 16px}.cs-sec h3{margin:0 0 2px;font-size:15px}
-  .cs-sub{margin:0 0 8px;font-size:12px;color:#95a5a4}
-  .cs-list{list-style:none;margin:0;padding:0;border:1px solid #2c393a;border-radius:9px;background:#141c1d}
-  .cs-list li{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #222d2f;font-size:12.5px}.cs-list li:last-child{border:0}
-  .cs-fi{flex:none;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:#1d2a2b;color:#c1f0ad}
-  .cs-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e8ecec}.cs-size{width:70px;text-align:right;color:#a6b3b2}.cs-date{width:112px;text-align:right;color:#8f9e9d;font-size:11.5px}
-  .cs-note{font-size:12px;color:#95a5a4;line-height:1.55}
-  code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px}
+  .cs-sec{background:transparent;border:0;border-radius:0;padding:0}.cs-sec + .cs-sec{padding-top:18px;border-top:1px solid var(--border-subtle)}.cs-sec h3{margin:0 0 2px;font-size:15px}
+  .cs-sub{margin:0 0 10px;font-size:12px;color:var(--text-muted)}
+  .cs-list{list-style:none;margin:0;padding:0;border:1px solid var(--border-subtle);border-radius:10px;background:var(--bg-card)}
+  .cs-list li{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--bg-hover);font-size:12.5px}.cs-list li:last-child{border:0}
+  .cs-fi{flex:none;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--bg-card);color:var(--accent)}
+  .cs-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}.cs-size{width:70px;text-align:right;color:var(--text-secondary)}.cs-date{width:112px;text-align:right;color:var(--text-muted);font-size:11.5px}
+  .cs-note{font-size:12px;color:var(--text-muted);line-height:1.55}
+  code{font-size:11.5px;background:var(--bg-input);border-radius:5px;padding:1px 5px}
   @media(max-width:720px){.cs-date{display:none}}
 </style>

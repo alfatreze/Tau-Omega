@@ -57,16 +57,16 @@
 </section>
 <style>
   .backup-counts { max-width: 720px; }
-  .capacity-ok { color: #b9e9a5; }
-  .capacity-bad { color: #f29b83; font-weight: 600; }
+  .capacity-ok { color: var(--accent); }
+  .capacity-bad { color: var(--danger-text); font-weight: 600; }
   .difference-section { max-width: 720px; }
-  .difference-list { padding: 0; margin: 0; border: 1px solid #344244; border-radius: 9px; overflow: auto; max-height: 380px; }
-  .difference-list li { display: grid; grid-template-columns: 130px 1fr 90px; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #2c393a; font-size: 12px; color: #c7d1d0; }
+  .difference-list { padding: 0; margin: 0; border: 1px solid var(--border-strong); border-radius: 9px; overflow: auto; max-height: 380px; }
+  .difference-list li { display: grid; grid-template-columns: 130px 1fr 90px; gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
   .difference-list li:last-child { border-bottom: 0; }
-  .difference-list li > span:last-child { color: #8f9e9d; text-align: right; }
+  .difference-list li > span:last-child { color: var(--text-muted); text-align: right; }
   .difference { font-size: 11px; font-weight: 700; }
-  .difference.only_left { color: #b9e9a5; }
-  .difference.different { color: #d9c47e; }
-  .difference.identical { color: #8f9e9d; }
-  .difference.only_right { color: #f29b83; }
+  .difference.only_left { color: var(--accent); }
+  .difference.different { color: var(--warn-text); }
+  .difference.identical { color: var(--text-muted); }
+  .difference.only_right { color: var(--danger-text); }
 </style>

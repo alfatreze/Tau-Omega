@@ -49,15 +49,15 @@
   {/if}
 </div>
 <style>
-  .rs-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100}
-  .rs{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;background:#1a2325;border:1px solid #2c393a;border-radius:14px;padding:22px 24px;box-sizing:border-box}
+  .rs-backdrop{position:fixed;inset:0;background:var(--shadow);z-index:100}
+  .rs{position:fixed;z-index:101;top:50%;left:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:22px 24px;box-sizing:border-box}
   .rs-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}.rs-head h2{margin:0}
-  .rs-sum{font-size:13px;color:#dce6e4;margin:6px 0}.rs-note{font-size:12px;color:#c1d7d4;margin:8px 0}.rs-err{color:#ff9b9b;font-size:12.5px}
-  .rs-warn{border:1px solid #5c5030;background:#241f12;color:#e5d9a8;border-radius:9px;padding:8px 11px;font-size:12px;margin:8px 0}
-  .rs-list{list-style:none;margin:10px 0;padding:0;border:1px solid #2c393a;border-radius:9px;max-height:260px;overflow:auto}
-  .rs-list li{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid #2c393a;font-size:12.5px}.rs-list li:last-child{border:0}
-  .rs-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rs-size{color:#8f9e9d;font-size:12px;flex:none}.chip.warn{background:#3a2e14;color:#e5d9a8}
-.rs-actions .danger{background:#ff9b9b;color:#2a1212;font-weight:700;border-radius:9px;padding:10px 14px}.rs-actions .danger:disabled{opacity:.5}
-  .rs-safe{font-size:11.5px;color:#8f9e9d;line-height:1.5;margin:8px 0}.rs-actions{display:flex;justify-content:flex-end}.rs-ok{font-size:13.5px;line-height:1.6;color:#dce6e4}
-  code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
+  .rs-sum{font-size:13px;color:var(--text);margin:6px 0}.rs-note{font-size:12px;color:var(--text-secondary);margin:8px 0}.rs-err{color:var(--danger-text);font-size:12.5px}
+  .rs-warn{border:1px solid var(--warn-border);background:var(--warn-bg);color:var(--warn-text);border-radius:9px;padding:8px 11px;font-size:12px;margin:8px 0}
+  .rs-list{list-style:none;margin:10px 0;padding:0;border:1px solid var(--border);border-radius:9px;max-height:260px;overflow:auto}
+  .rs-list li{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12.5px}.rs-list li:last-child{border:0}
+  .rs-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rs-size{color:var(--text-muted);font-size:12px;flex:none}.chip.warn{background:var(--warn-bg);color:var(--warn-text)}
+.rs-actions .danger{background:var(--danger-text);color:var(--danger-bg);font-weight:700;border-radius:9px;padding:10px 14px}.rs-actions .danger:disabled{opacity:.5}
+  .rs-safe{font-size:11.5px;color:var(--text-muted);line-height:1.5;margin:8px 0}.rs-actions{display:flex;justify-content:flex-end}.rs-ok{font-size:13.5px;line-height:1.6;color:var(--text)}
+  code{font-size:11.5px;background:var(--bg-input);border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
 </style>
