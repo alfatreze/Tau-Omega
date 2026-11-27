@@ -8,6 +8,7 @@
 pub mod feedback;
 pub mod firmware;
 pub mod github_source;
+pub mod image_packs;
 pub mod marketplace;
 pub mod tau_source;
 

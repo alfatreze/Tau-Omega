@@ -1,6 +1,7 @@
 <script lang="ts">
   // The core's details (the right-hand panel). Facts come straight from the core's own files on the card; nothing here is a guess.
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher, onDestroy, onMount } from 'svelte';
+  import ArtworkPickerSheet from './ArtworkPickerSheet.svelte';
   import { readCoreIcon, readPlatformImage } from './tau-api';
   import { plural, size } from './coresFormat';
   import { platformFallbackArt } from './platformArt';
@@ -17,9 +18,17 @@
   onMount(() => { void loadIcon(detail.id); });
   // The core's picture: its platform's banner (Platforms/_images), shown above the facts.
   let banner: string | null = null;
-  $: bannerPlatform = detail.platforms.find((p) => p.has_image)?.id ?? '';
+  let showArtPicker = false;
+  $: primaryPlatform = detail.platforms[0];
+  $: bannerPlatform = detail.platforms.find((p) => p.has_image)?.id ?? primaryPlatform?.id ?? '';
   $: void loadBanner(bannerPlatform);
   async function loadBanner(id: string) { banner = null; if (!id) return; try { banner = await readPlatformImage(card, id); } catch { banner = null; } }
+  function onArtChanged(e: Event) {
+    const pid = (e as CustomEvent<{ platformId?: string; batch?: boolean }>).detail?.platformId;
+    if (bannerPlatform && (!pid || pid === bannerPlatform)) void loadBanner(bannerPlatform);
+  }
+  onMount(() => { window.addEventListener('tau-artwork-changed', onArtChanged); });
+  onDestroy(() => { window.removeEventListener('tau-artwork-changed', onArtChanged); });
 
   const yn = (v: boolean | null) => (v === true ? 'Yes' : v === false ? 'No' : 'Not stated');
   let copied = false;
@@ -30,7 +39,12 @@
   $: bytes = files ? files.folders.reduce((n, f) => n + f.total_bytes, 0) : 0;
 </script>
 <aside class="ci" aria-labelledby="ci-title">
-  <img class="ci-banner" src={banner || platformFallbackArt({ id: detail.platforms[0]?.id ?? detail.id, name: detail.platforms[0]?.name ?? detail.shortname, category: detail.platforms[0]?.category, manufacturer: detail.platforms[0]?.manufacturer })} alt={`${detail.platforms[0]?.name ?? detail.shortname} artwork`} />
+  <div class="art-wrap">
+    <img class="ci-banner" src={banner || platformFallbackArt({ id: detail.platforms[0]?.id ?? detail.id, name: detail.platforms[0]?.name ?? detail.shortname, category: detail.platforms[0]?.category, manufacturer: detail.platforms[0]?.manufacturer })} alt={`${detail.platforms[0]?.name ?? detail.shortname} artwork`} />
+    {#if primaryPlatform?.id}
+      <button type="button" class="art-edit" on:click={() => (showArtPicker = true)}>Change image</button>
+    {/if}
+  </div>
   <header>
     <span class="ci-icon" aria-hidden="true">{#if icon}<img src={icon} alt="" width="40" height="40" />{:else}{detail.shortname.slice(0, 2).toUpperCase()}{/if}</span>
     <div class="ci-head"><h2 id="ci-title">{detail.shortname || detail.id}</h2><p>{detail.author || detail.id}</p></div>
@@ -82,7 +96,20 @@
     <ul class="ci-folders" aria-label="Folders on the card">{#each files.folders as f}<li><code>{f.folder.rel_path}</code><span>{f.exists ? plural(f.total_files, 'file') : 'not created'}</span></li>{/each}</ul>
   {:else}<p class="ci-note" role="status">Reading the card…</p>{/if}
 </aside>
+{#if showArtPicker && primaryPlatform?.id}
+  <ArtworkPickerSheet
+    {card}
+    device="analogue_pocket"
+    title={`Artwork — ${primaryPlatform.name || primaryPlatform.id}`}
+    platformId={primaryPlatform.id}
+    targetId={primaryPlatform.id}
+    currentUrl={banner}
+    onApplied={(u) => { if (u) banner = u; }}
+    close={() => (showArtPicker = false)}
+  />
+{/if}
 <style>
+  .art-wrap{position:relative}.art-edit{position:absolute;right:8px;bottom:8px;padding:4px 10px;font-size:11.5px;background:rgba(16,22,23,.86);color:#eff5f4;border:1px solid #3c4d4e;border-radius:7px;opacity:0;transition:opacity .15s ease}.art-wrap:hover .art-edit,.art-wrap:focus-within .art-edit{opacity:1}.art-edit:hover{border-color:#c1f0ad;color:#c1f0ad}
   .ci{background:#161f20;border:1px solid #2c393a;border-radius:12px;padding:16px;display:grid;gap:10px;align-content:start}
   .ci header{display:flex;align-items:center;gap:12px}.ci-head{flex:1;min-width:0}.ci-head h2{margin:0;font-size:16px;overflow:hidden;text-overflow:ellipsis}.ci-head p{margin:2px 0 0;font-size:11.5px;color:#8f9e9d;overflow:hidden;text-overflow:ellipsis}
   .ci-icon{flex:none;width:44px;height:44px;display:grid;place-items:center;background:#273638;border-radius:10px;color:#c1f0ad;font-weight:700}.ci-icon img{width:36px;height:36px;image-rendering:pixelated}

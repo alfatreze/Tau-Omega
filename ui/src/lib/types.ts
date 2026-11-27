@@ -126,7 +126,7 @@ export type SkipDetail = { rate: number; frames: number; envelope: number[]; aut
 export type ConvertSettings = { enabled: boolean; mode: 'auto' | 'manual'; max_rate: number; flac_bits: number; reduce_playable: boolean; mp3: Mp3Quality; lame_path: string | null; lame_dir: string | null; analysis_cache: string | null; replaygain: 'off' | 'add_missing' | 'rebuild' };
 export type LameInstallOption = { method: string; label: string; command: string; runnable: boolean };
 export type LameStatus = { path: string | null; version: string | null; options: LameInstallOption[] };
-export type Prefs = { omega_channel: 'auto' | 'stable' | 'preview' | 'dev'; convert: ConvertSettings; trim: TrimSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; marketplace_default_source?: string; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; developer_tools: boolean; speeds: Record<string, number>; connections: Record<string, string> };
+export type Prefs = { omega_channel: 'auto' | 'stable' | 'preview' | 'dev'; convert: ConvertSettings; trim: TrimSettings; history_keep_last: number; history_keep_days: number; remove_mode: 'backup' | 'ask' | 'none'; backup_dir: string | null; remove_explained: boolean; slow_alert_suppressed: boolean; check_updates: boolean; update_notice_shown: boolean; marketplace_default_source?: string; enabled_image_packs?: string[]; card_marker: 'ask' | 'on' | 'off'; core_disable: 'ask' | 'auto' | 'never'; core_keep: Record<string, string[]>; developer_tools: boolean; speeds: Record<string, number>; connections: Record<string, string> };
 export type PrefsView = Prefs & { default_backup_dir: string; reports_dir: string };
 
 /** Extra fields the engine now records in a sync journal (see `tau_core::journal::JournalSummary`). */
@@ -466,3 +466,62 @@ export type PaletteInstallPlan = { id: string; new_files: string[]; updated_file
 export type PaletteInstallReport = { written: number; backup_dir: string | null };
 export type PaletteRemovePlan = { id: string; rel_path: string };
 export type PaletteRemoveReport = { rel_path: string; backup_dir: string | null };
+
+// ---- Alternative artwork & community image packs (tau_core::artwork / tau_net::image_packs) ----
+export type ArtworkSlot = 'banner' | 'icon';
+export type ArtworkFit = Fit;
+export type ImagePackEntry = {
+  id: string;
+  owner: string;
+  repository: string;
+  variant: string | null;
+  name: string;
+  cached: boolean;
+  cached_platforms: number;
+};
+export type ArtworkPacksState = { packs: ImagePackEntry[]; enabled_ids: string[] };
+export type ArtworkSample = {
+  platform_id: string;
+  name: string;
+  category: string;
+  manufacturer: string;
+  installed_platform_id: string | null;
+  replaces_existing: boolean;
+  data_url: string;
+};
+export type ArtworkAlternative = {
+  pack_id: string;
+  pack_name: string;
+  owner: string;
+  variant: string | null;
+  matched_platform: string;
+  data_url: string;
+};
+export type ArtworkApplyPlan = {
+  id: string;
+  target_rel: string;
+  target_exists: boolean;
+  existing_bytes: number;
+  new_bytes: number;
+  slot: ArtworkSlot;
+  preview_data_url: string;
+};
+export type ArtworkApplyReport = { target_rel: string; bytes_written: number; backup_path: string | null };
+export type PackApplyItem = {
+  platform_id: string;
+  platform_name: string;
+  category: string;
+  pack_entry: string;
+  target_rel: string;
+  replaces_existing: boolean;
+  preview_data_url: string;
+};
+export type PackApplyPlan = {
+  id: string;
+  pack_id: string;
+  items: PackApplyItem[];
+  will_replace: number;
+  will_add: number;
+  skipped_not_installed: number;
+};
+export type PackApplyReport = { pack_id: string; written: number; backed_up: number; backup_dir: string | null };

@@ -3,6 +3,7 @@
 //! This crate deliberately has no card-writing API in T0/T1. It can inspect a
 //! card and build, parse and verify the Tau v1 index from a folder or fixture.
 
+pub mod artwork;
 pub mod assets;
 pub mod backup;
 /// Test-only: a number no two calls in this process ever share, added to the

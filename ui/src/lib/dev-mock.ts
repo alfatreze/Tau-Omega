@@ -7,6 +7,7 @@
  * returns, and progress events are emitted like the real engine's. */
 import { mockIPC } from '@tauri-apps/api/mocks';
 import { emit } from '@tauri-apps/api/event';
+import { platformFallbackArt } from './platformArt';
 
 const CARD = '/Volumes/Pocket';
 const MEDIA = `${CARD}/Assets/tau/common`;
@@ -141,7 +142,18 @@ let cardAlbums: Album[] = ['Kind of Blue', 'Blue Train', 'Time Out', 'Maiden Voy
 });
 let mounted = true;
 let connection: 'direct_usb' | 'card_reader' | 'unknown' = 'direct_usb';
-let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', core_disable: (() => { try { return localStorage.getItem('tau.mock.coreDisable') ?? 'never'; } catch { return 'never'; } })(), core_keep: {} as Record<string, string[]>, developer_tools: (() => { try { return localStorage.getItem('tau.mock.devTools') === '1'; } catch { return false; } })(), speeds: {} as Record<string, number>, connections: {} as Record<string, string>, omega_channel: 'auto', marketplace_default_source: 'openfpga-library', trim: { enabled: true, threshold_db10: -600, lead_margin_ms: 200, tail_margin_ms: 500, min_ms: 2000 }, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
+let prefs = { history_keep_last: 100, history_keep_days: 365, remove_mode: 'backup', backup_dir: null as string | null, remove_explained: false, slow_alert_suppressed: false, check_updates: true, update_notice_shown: true, card_marker: 'ask', core_disable: (() => { try { return localStorage.getItem('tau.mock.coreDisable') ?? 'never'; } catch { return 'never'; } })(), core_keep: {} as Record<string, string[]>, developer_tools: (() => { try { return localStorage.getItem('tau.mock.devTools') === '1'; } catch { return false; } })(), speeds: {} as Record<string, number>, connections: {} as Record<string, string>, omega_channel: 'auto', marketplace_default_source: 'openfpga-library', enabled_image_packs: ['spiritualized1997/openFPGA-Platform-Art-Set', 'dyreschlock/pocket-platform-images#home'], trim: { enabled: true, threshold_db10: -600, lead_margin_ms: 200, tail_margin_ms: 500, min_ms: 2000 }, convert: { enabled: true, mode: 'auto', max_rate: 48000, flac_bits: 24, reduce_playable: false, mp3: { vbr: 0 }, lame_path: null as string | null, lame_dir: null as string | null, analysis_cache: null as string | null, replaygain: 'add_missing' } };
+const mockImagePacks = [
+  { id: 'spiritualized1997/openFPGA-Platform-Art-Set', owner: 'spiritualized1997', repository: 'openFPGA-Platform-Art-Set', variant: null, name: 'spiritualized1997 · openFPGA Platform Art Set', cached: true, cached_platforms: 64 },
+  { id: 'dyreschlock/pocket-platform-images#home', owner: 'dyreschlock', repository: 'pocket-platform-images', variant: 'home', name: 'dyreschlock · pocket platform images (home)', cached: true, cached_platforms: 78 },
+  { id: 'dyreschlock/pocket-platform-images#home_jp_alts', owner: 'dyreschlock', repository: 'pocket-platform-images', variant: 'home_jp_alts', name: 'dyreschlock · pocket platform images (home jp alts)', cached: false, cached_platforms: 0 },
+  { id: 'dyreschlock/pocket-platform-images#arcade', owner: 'dyreschlock', repository: 'pocket-platform-images', variant: 'arcade', name: 'dyreschlock · pocket platform images (arcade)', cached: false, cached_platforms: 0 },
+  { id: 'Shissa43/Analogue-Pocket-Platform-Art#Home_USA', owner: 'Shissa43', repository: 'Analogue-Pocket-Platform-Art', variant: 'Home_USA', name: 'Shissa43 · Analogue Pocket Platform Art (Home USA)', cached: true, cached_platforms: 33 },
+  { id: 'Shissa43/Analogue-Pocket-Platform-Art#Home_JP', owner: 'Shissa43', repository: 'Analogue-Pocket-Platform-Art', variant: 'Home_JP', name: 'Shissa43 · Analogue Pocket Platform Art (Home JP)', cached: true, cached_platforms: 33 },
+  { id: 'Shissa43/Analogue-Pocket-Platform-Art#Simple_USA', owner: 'Shissa43', repository: 'Analogue-Pocket-Platform-Art', variant: 'Simple_USA', name: 'Shissa43 · Analogue Pocket Platform Art (Simple USA)', cached: false, cached_platforms: 0 },
+];
+const mockArtworkOverrides: Record<string, string> = {};
+const mockCardBanners: Record<string, string> = {};
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
 
@@ -667,6 +679,55 @@ const handlers: Record<string, (args: any) => unknown> = {
   skip_tracks: () => mockSkip.map((t) => ({ rel: t.rel, dir: t.rel.split('/').slice(0, -1).join('/'), file: t.rel.split('/').pop(), secs: 200, rate: 44100, skip: t.edit?.never ? { lead_skip: 0, tail_skip: 0 } : { lead_skip: t.edit?.lead ?? t.auto[0], tail_skip: t.edit?.tail ?? t.auto[1] }, edit: t.edit })),
   skip_detail: (a) => { const t = mockSkip.find((x) => x.rel === a.rel)!; const frames = 200 * 44100; return { rate: 44100, frames, envelope: Array.from({ length: 400 }, (_, i) => (i < 40 || i > 360 ? 0 : 120 + ((i * 37) % 100))), auto: { lead_skip: t.auto[0], tail_skip: t.auto[1] }, skip: t.edit?.never ? { lead_skip: 0, tail_skip: 0 } : { lead_skip: t.edit?.lead ?? t.auto[0], tail_skip: t.edit?.tail ?? t.auto[1] }, edit: t.edit }; },
   skip_set_edit: (a) => { const t = mockSkip.find((x) => x.rel === a.rel)!; t.edit = a.edit ?? null; },
+  artwork_list_packs: () => ({ packs: mockImagePacks, enabled_ids: prefs.enabled_image_packs }),
+  artwork_set_enabled_packs: (a) => { prefs.enabled_image_packs = [...(a.enabledIds as string[])]; return prefs.enabled_image_packs; },
+  artwork_download_pack: (a) => { const p = mockImagePacks.find((x) => x.id === a.packId) ?? mockImagePacks[0]; p.cached = true; p.cached_platforms = p.cached_platforms || 42; return p; },
+  artwork_pack_samples: (a) => {
+    const base = [
+      { id: 'gb', name: 'Game Boy', category: 'Handheld', manufacturer: 'Nintendo', onCard: true, replaces: true },
+      { id: 'gbc', name: 'Game Boy Color', category: 'Handheld', manufacturer: 'Nintendo', onCard: false, replaces: false },
+      { id: 'gba', name: 'Game Boy Advance', category: 'Handheld', manufacturer: 'Nintendo', onCard: true, replaces: false },
+      { id: 'lynx', name: 'Atari Lynx', category: 'Handheld', manufacturer: 'Atari', onCard: false, replaces: false },
+      { id: 'gg', name: 'Game Gear', category: 'Handheld', manufacturer: 'Sega', onCard: false, replaces: false },
+      { id: 'nes', name: 'NES', category: 'Console', manufacturer: 'Nintendo', onCard: false, replaces: false },
+      { id: 'snes', name: 'SNES', category: 'Console', manufacturer: 'Nintendo', onCard: true, replaces: true },
+      { id: 'genesis', name: 'Genesis', category: 'Console', manufacturer: 'Sega', onCard: false, replaces: false },
+      { id: 'psx', name: 'PlayStation', category: 'Console', manufacturer: 'Sony', onCard: false, replaces: false },
+      { id: 'pce', name: 'PC Engine', category: 'Console', manufacturer: 'NEC', onCard: false, replaces: false },
+      { id: 'ng', name: 'Neo Geo', category: 'Arcade', manufacturer: 'SNK', onCard: false, replaces: false },
+      { id: 'arcade', name: 'Arcade', category: 'Arcade', manufacturer: 'Various', onCard: false, replaces: false },
+      { id: 'amiga', name: 'Commodore Amiga', category: 'Computer', manufacturer: 'Commodore', onCard: false, replaces: false },
+    ];
+    return base.slice(0, Math.min(Number(a.limit || base.length), base.length)).map((p) => ({
+      platform_id: p.id,
+      name: p.name,
+      category: p.category,
+      manufacturer: p.manufacturer,
+      installed_platform_id: a.card && p.onCard ? p.id : null,
+      replaces_existing: Boolean(a.card && p.onCard && p.replaces),
+      data_url: platformFallbackArt({ id: `${a.packId}:${p.id}`, name: `${p.name} (${String(a.packId).split('/')[0]})`, category: p.category, manufacturer: p.manufacturer }),
+    }));
+  },
+  artwork_alternatives: (a) => {
+    const list = a.packIds ? mockImagePacks.filter((p) => (a.packIds as string[]).includes(p.id)) : (a.includeAll !== false ? mockImagePacks : mockImagePacks.filter((p) => prefs.enabled_image_packs.includes(p.id)));
+    return list.map((p) => ({ pack_id: p.id, pack_name: p.name, owner: p.owner, variant: p.variant, matched_platform: String(a.platformId || 'gb'), data_url: platformFallbackArt({ id: `${p.id}:${String(a.platformId || 'gb')}`, name: `${String(a.platformId || 'Core').toUpperCase()}`, category: 'Handheld', manufacturer: p.owner }) }));
+  },
+  artwork_preview_local: (a) => platformFallbackArt({ id: 'custom', name: String(a.sourcePath || 'Custom').split('/').pop() || 'Custom', category: a.pocketMonochrome ? 'Pocket Monochrome' : 'Custom Image', manufacturer: String(a.fit || 'contain') }),
+  artwork_plan_apply: (a) => ({ id: 'mock-art-plan-1', target_rel: a.slot === 'icon' ? `Cores/${a.targetId}/icon.bin` : `Platforms/_images/${a.targetId}.bin`, target_exists: true, existing_bytes: 171930, new_bytes: 171930, slot: a.slot, preview_data_url: platformFallbackArt({ id: String(a.targetId), name: String(a.targetId).toUpperCase(), category: 'Pocket Banner', manufacturer: String(a.packId || 'Local File') }) }),
+  artwork_execute_apply: (a) => { const rel = a.slot === 'icon' ? `Cores/${a.targetId}/icon.bin` : `Platforms/_images/${a.targetId}.bin`; mockCardBanners[String(a.targetId)] = platformFallbackArt({ id: String(a.targetId), name: String(a.targetId).toUpperCase(), category: 'Applied', manufacturer: String(a.packId || 'Custom') }); return { target_rel: rel, bytes_written: 171930, backup_path: '/Backups/omega/artwork/Platforms/_images/backup.bin' }; },
+  artwork_plan_pack_apply: (a) => {
+    const all = [
+      { platform_id: 'gb', platform_name: 'Game Boy', category: 'Handheld', pack_entry: 'gb', target_rel: 'Platforms/_images/gb.bin', replaces_existing: true, preview_data_url: platformFallbackArt({ id: 'gb', name: 'GB', category: 'Handheld', manufacturer: String(a.packId) }) },
+      { platform_id: 'gba', platform_name: 'Game Boy Advance', category: 'Handheld', pack_entry: 'gba', target_rel: 'Platforms/_images/gba.bin', replaces_existing: false, preview_data_url: platformFallbackArt({ id: 'gba', name: 'GBA', category: 'Handheld', manufacturer: String(a.packId) }) },
+      { platform_id: 'snes', platform_name: 'SNES', category: 'Console', pack_entry: 'snes', target_rel: 'Platforms/_images/snes.bin', replaces_existing: true, preview_data_url: platformFallbackArt({ id: 'snes', name: 'SNES', category: 'Console', manufacturer: String(a.packId) }) },
+    ];
+    const items = Array.isArray(a.onlyPlatforms) && a.onlyPlatforms.length ? all.filter((i) => (a.onlyPlatforms as string[]).includes(i.platform_id)) : all;
+    return { id: 'mock-pack-plan-1', pack_id: String(a.packId), items, will_replace: items.filter((i) => i.replaces_existing).length, will_add: items.filter((i) => !i.replaces_existing).length, skipped_not_installed: 30 };
+  },
+  artwork_execute_pack_apply: (a) => ({ pack_id: String(a.packId), written: Array.isArray(a.onlyPlatforms) ? a.onlyPlatforms.length : 3, backed_up: 1, backup_dir: '/Backups/omega/artwork/pack-1' }),
+  artwork_read_override: (a) => mockArtworkOverrides[String(a.overrideKey)] ?? null,
+  artwork_set_override: (a) => { const url = platformFallbackArt({ id: String(a.platformId || a.overrideKey), name: String(a.platformId || 'Custom').toUpperCase(), category: 'Override', manufacturer: String(a.packId || 'Local') }); mockArtworkOverrides[String(a.overrideKey)] = url; return url; },
+  artwork_clear_override: (a) => { const had = String(a.overrideKey) in mockArtworkOverrides; delete mockArtworkOverrides[String(a.overrideKey)]; return had; },
   get_prefs: () => ({ ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }),
   set_prefs: (a) => { prefs = { ...a.prefs }; return { ...prefs, default_backup_dir: '~/Library/Application Support/Tau Omega/removed-backups', reports_dir: '~/Library/Application Support/Tau Omega/reports' }; },
   plan_sync: () => ({ id: 'mock-plan-1', new_files: 42, updates: 5, unchanged: 7133, bytes_to_write: 412_000_000, art_sidecars: 3, art_sidecar_previews: [], warnings: [] }),

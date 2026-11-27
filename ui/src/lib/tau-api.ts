@@ -209,3 +209,68 @@ export const builderNextName = (field: SchemeField, text: string) => invoke<Next
 
 export const builderTemplateView = (source: TemplateSource) => invoke<TemplateViewData>('builder_template_view', { source });
 export const builderPreviewImage = (path: string, kind: 'icon' | 'banner', fit: Fit) => invoke<string>('builder_preview_image', { path, kind, fit });
+
+export const artworkListPacks = (force = false) => invoke<import('./types').ArtworkPacksState>('artwork_list_packs', { force });
+export const artworkSetEnabledPacks = (enabledIds: string[]) => invoke<string[]>('artwork_set_enabled_packs', { enabledIds });
+export const artworkDownloadPack = (packId: string, force = false) => invoke<import('./types').ImagePackEntry>('artwork_download_pack', { packId, force });
+export const artworkPackSamples = (packId: string, limit = 500, card: string | null = null) => invoke<import('./types').ArtworkSample[]>('artwork_pack_samples', { packId, limit, card });
+export const artworkAlternatives = (
+  platformId: string,
+  options?: { packIds?: string[] | null; includeAll?: boolean },
+) => invoke<import('./types').ArtworkAlternative[]>('artwork_alternatives', {
+  platformId,
+  packIds: options?.packIds ?? null,
+  includeAll: options?.includeAll ?? true,
+});
+export const artworkPreviewLocal = (sourcePath: string, slot: import('./types').ArtworkSlot, fit: Fit, pocketMonochrome: boolean) => invoke<string>('artwork_preview_local', { sourcePath, slot, fit, pocketMonochrome });
+export const artworkPlanApply = (args: {
+  card: string;
+  slot: import('./types').ArtworkSlot;
+  targetId: string;
+  packId?: string | null;
+  packPlatformId?: string | null;
+  sourcePath?: string | null;
+  fit?: Fit | null;
+}) => invoke<import('./types').ArtworkApplyPlan>('artwork_plan_apply', {
+  card: args.card,
+  slot: args.slot,
+  targetId: args.targetId,
+  packId: args.packId ?? null,
+  packPlatformId: args.packPlatformId ?? null,
+  sourcePath: args.sourcePath ?? null,
+  fit: args.fit ?? null,
+});
+export const artworkExecuteApply = (args: {
+  card: string;
+  slot: import('./types').ArtworkSlot;
+  targetId: string;
+  packId?: string | null;
+  packPlatformId?: string | null;
+  sourcePath?: string | null;
+  fit?: Fit | null;
+  confirmation: string;
+}) => invoke<import('./types').ArtworkApplyReport>('artwork_execute_apply', {
+  card: args.card,
+  slot: args.slot,
+  targetId: args.targetId,
+  packId: args.packId ?? null,
+  packPlatformId: args.packPlatformId ?? null,
+  sourcePath: args.sourcePath ?? null,
+  fit: args.fit ?? null,
+  confirmation: args.confirmation,
+});
+export const artworkPlanPackApply = (card: string, packId: string, onlyPlatforms: string[] | null = null) => invoke<import('./types').PackApplyPlan>('artwork_plan_pack_apply', { card, packId, onlyPlatforms });
+export const artworkExecutePackApply = (card: string, packId: string, confirmation: string, onlyPlatforms: string[] | null = null) => invoke<import('./types').PackApplyReport>('artwork_execute_pack_apply', { card, packId, confirmation, onlyPlatforms });
+export const artworkReadOverride = (overrideKey: string) => invoke<string | null>('artwork_read_override', { overrideKey });
+export const artworkSetOverride = (args: {
+  overrideKey: string;
+  packId?: string | null;
+  platformId?: string | null;
+  sourcePath?: string | null;
+}) => invoke<string>('artwork_set_override', {
+  overrideKey: args.overrideKey,
+  packId: args.packId ?? null,
+  platformId: args.platformId ?? null,
+  sourcePath: args.sourcePath ?? null,
+});
+export const artworkClearOverride = (overrideKey: string) => invoke<boolean>('artwork_clear_override', { overrideKey });

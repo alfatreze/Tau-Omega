@@ -2,9 +2,16 @@
   // Dedicated core view for Game Bub cards (`/cores/<id>/core.json`, `files.json`, `settings.json`).
   // Only shows features that apply to Game Bub (no Pocket-only visibility switch, saves/screenshots tabs, or Dock/Link/Sleep fields).
   import { errorMessage } from './backend';
+  import ArtworkPickerSheet from './ArtworkPickerSheet.svelte';
   import { coresSelection, refreshCores } from './coresStore';
   import { platformFallbackArt } from './platformArt';
-  import { gamebubExecuteRemove, gamebubInspectCard, gamebubPlanRemove } from './tau-api';
+  import {
+    artworkReadOverride,
+    gamebubExecuteRemove,
+    gamebubInspectCard,
+    gamebubPlanRemove,
+    systemCoreProfile,
+  } from './tau-api';
   import type { GameBubInstalledCore, GameBubRemovePlan } from './types';
 
   export let card = '';
@@ -16,6 +23,9 @@
   let loading = true;
   let error = '';
   let loadedFor = '';
+  let overrideBanner: string | null = null;
+  let inferredPlatform = '';
+  let showArtPicker = false;
 
   let removePlan: GameBubRemovePlan | null = null;
   let removeBusy = false;
@@ -26,13 +36,21 @@
     loading = true;
     error = '';
     info = null;
+    overrideBanner = null;
+    inferredPlatform = '';
     removePlan = null;
     removeError = '';
     tab = 'overview';
     try {
-      const view = await gamebubInspectCard(c);
+      const [view, ov, profile] = await Promise.all([
+        gamebubInspectCard(c),
+        artworkReadOverride(`game_bub:core:${id}`).catch(() => null),
+        systemCoreProfile(c, 'game_bub', id).catch(() => null),
+      ]);
       if (loadedFor !== `${c}|${id}`) return;
       info = view.cores.find((x) => x.core.id.toLowerCase() === id.toLowerCase()) ?? null;
+      overrideBanner = ov;
+      inferredPlatform = profile?.platform_ids?.[0] ?? '';
       if (!info) error = `Core “${id}” was not found under /cores/ on this card.`;
     } catch (e) {
       if (loadedFor === `${c}|${id}`) error = errorMessage(e);
@@ -233,7 +251,10 @@
     </div>
 
     <aside class="gb-side" aria-label={info.core.name || info.core.id}>
-      <img class="gb-banner" src={platformFallbackArt({ id: info.core.id, name: info.core.name || info.core.id, category: 'Handheld', manufacturer: info.core.author || 'Game Bub' })} alt="" />
+      <div class="gb-art-wrap">
+        <img class="gb-banner" src={overrideBanner || platformFallbackArt({ id: inferredPlatform || info.core.id, name: info.core.name || info.core.id, category: 'Handheld', manufacturer: info.core.author || 'Game Bub' })} alt="" />
+        <button type="button" class="gb-art-edit" on:click={() => (showArtPicker = true)}>Change image</button>
+      </div>
       <div class="gb-side-title">
         <strong>{info.core.name || info.core.id}</strong>
         <small>{info.core.id}</small>
@@ -272,6 +293,19 @@
       {/if}
     </aside>
   </div>
+  {#if showArtPicker}
+    <ArtworkPickerSheet
+      {card}
+      device="game_bub"
+      title={`Artwork — ${info.core.name || info.core.id}`}
+      platformId={inferredPlatform || info.core.name || info.core.id}
+      overrideKey={`game_bub:core:${info.core.id}`}
+      hasOverride={!!overrideBanner}
+      currentUrl={overrideBanner}
+      onApplied={(u) => (overrideBanner = u)}
+      close={() => (showArtPicker = false)}
+    />
+  {/if}
 {/if}
 
 <style>
@@ -307,7 +341,11 @@
   .gb-empty strong{font-size:14px;color:#e8ecec}
   .gb-empty p{margin:0;max-width:420px;font-size:12.5px;color:#95a5a4;line-height:1.55}
   .gb-side{background:#161f20;border:1px solid #2c393a;border-radius:12px;padding:14px;display:grid;gap:12px}
+  .gb-art-wrap{position:relative}
   .gb-banner{display:block;width:100%;aspect-ratio:16/7;object-fit:cover;border-radius:9px;background:#0b1011}
+  .gb-art-edit{position:absolute;right:8px;bottom:8px;padding:4px 10px;font-size:11.5px;background:rgba(16,22,23,.86);color:#eff5f4;border:1px solid #3c4d4e;border-radius:7px;opacity:0;transition:opacity .15s ease}
+  .gb-art-wrap:hover .gb-art-edit,.gb-art-wrap:focus-within .gb-art-edit{opacity:1}
+  .gb-art-edit:hover{border-color:#c1f0ad;color:#c1f0ad}
   .gb-side-title strong{display:block;font-size:15px}.gb-side-title small{font-size:12px;color:#8f9e9d}
   .gb-desc{margin:0;font-size:12.5px;color:#c7d1d0;line-height:1.55}
   .gb-dl{display:grid;gap:8px;margin:0}.gb-dl>div{display:flex;justify-content:space-between;gap:12px;font-size:12.5px}

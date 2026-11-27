@@ -8,6 +8,7 @@
   import CoreScreenshotsTab from './CoreScreenshotsTab.svelte';
   import CoreSettingsTab from './CoreSettingsTab.svelte';
   import GameBubCoreView from './GameBubCoreView.svelte';
+  import ArtworkPickerSheet from './ArtworkPickerSheet.svelte';
   import { extensionsForCore, extensionsForPlatform } from './coreExtensions';
   import { errorMessage } from './backend';
   import { coreDetail, coreFiles, coreKeep, readPlatformImage } from './tau-api';
@@ -32,7 +33,7 @@
   let platTab = 'cores';
   let platTabFor = '';
   let detail: CoreDetail | null = null; let files: CoreFiles | null = null; let error = ''; let loadedFor = '';
-  let filesTab: CoreFilesTab | undefined; let banner: string | null = null; let bannerFor = '';
+  let filesTab: CoreFilesTab | undefined; let banner: string | null = null; let bannerFor = ''; let showPlatArtPicker = false;
 
   $: node = $coresTreeStore.find((n) => n.platform.id === $coresSelection.platform);
   $: platExts = node ? extensionsForPlatform('analogue_pocket', node.platform.id) : [];
@@ -43,7 +44,18 @@
   $: isGameBubCore = $coresSelection.platform === 'gamebub';
   $: if (card && $coresSelection.core && !isGameBubCore && `${card}|${$coresSelection.core}` !== loadedFor) void load($coresSelection.core);
   $: if (!$coresSelection.core || isGameBubCore) { detail = null; files = null; loadedFor = ''; }
-  $: if (card && node && node.platform.has_image && bannerFor !== `${card}|${node.platform.id}`) { bannerFor = `${card}|${node.platform.id}`; banner = null; readPlatformImage(card, node.platform.id).then((u) => (banner = u)).catch(() => (banner = null)); }
+  $: if (card && node && bannerFor !== `${card}|${node.platform.id}`) {
+    bannerFor = `${card}|${node.platform.id}`;
+    banner = null;
+    readPlatformImage(card, node.platform.id).then((u) => (banner = u)).catch(() => (banner = null));
+  } else if (!node && bannerFor) { bannerFor = ''; banner = null; }
+  function onArtworkChanged(e: Event) {
+    const pid = (e as CustomEvent<{ platformId?: string }>).detail?.platformId;
+    if (card && node && (!pid || pid === node.platform.id)) {
+      readPlatformImage(card, node.platform.id).then((u) => (banner = u)).catch(() => (banner = null));
+    }
+  }
+  if (typeof window !== 'undefined') window.addEventListener('tau-artwork-changed', onArtworkChanged);
 
   async function load(id: string) {
     loadedFor = `${card}|${id}`; error = ''; detail = null; files = null; tab = 'files';
@@ -99,7 +111,10 @@
   })();
   // A zip or folder dropped on the overview, a platform or a category page opens the manual-add sheet (the Files tab keeps its own drop target).
   const offDrop = onFileDrop((e) => { if (e.type === 'drop' && !$coresSelection.core && e.paths.length === 1) openManualAdd(e.paths[0]); });
-  onDestroy(offDrop);
+  onDestroy(() => {
+    offDrop();
+    if (typeof window !== 'undefined') window.removeEventListener('tau-artwork-changed', onArtworkChanged);
+  });
   // Search lives here, on the Cores page: cores, platforms, manufacturers and categories.
   let query = '';
   $: q = query.trim().toLowerCase();
@@ -181,7 +196,10 @@
       <nav class="crumbs" aria-label="Where you are"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '' })}>Cores</button></nav>
       <p class="eyebrow">{node.platform.category ? node.platform.category.toUpperCase() : 'PLATFORM'}</p><h1 id="cores-title">{node.platform.name}</h1>
       <p class="lede">{[node.platform.manufacturer, node.platform.year || ''].filter(Boolean).join(' · ')}{node.platform.manufacturer || node.platform.year ? ' · ' : ''}{plural(node.cores.length, 'core')} on this card</p></div></header>
-    <img class="plat-banner" src={banner || platformFallbackArt({ id: node.platform.id, name: node.platform.name, category: node.platform.category, manufacturer: node.platform.manufacturer })} alt="" />
+    <div class="plat-art-wrap">
+      <img class="plat-banner" src={banner || platformFallbackArt({ id: node.platform.id, name: node.platform.name, category: node.platform.category, manufacturer: node.platform.manufacturer })} alt="" />
+      <button type="button" class="plat-art-edit" on:click={() => (showPlatArtPicker = true)}>Change image</button>
+    </div>
     {#if platExts.length}
       <div class="tabs" role="tablist" aria-label="Platform sections">
         <button id="plat-tab-cores" role="tab" class:current={platTab === 'cores'} aria-selected={platTab === 'cores'} on:click={() => (platTab = 'cores')}>Cores</button>
@@ -273,6 +291,18 @@
     {/if}
   {/if}
 </section>
+{#if showPlatArtPicker && node}
+  <ArtworkPickerSheet
+    {card}
+    device="analogue_pocket"
+    title={`Artwork — ${node.platform.name}`}
+    platformId={node.platform.id}
+    targetId={node.platform.id}
+    currentUrl={banner}
+    onApplied={(u) => { if (u) banner = u; }}
+    close={() => (showPlatArtPicker = false)}
+  />
+{/if}
 <style>
   .cores-note{font-size:13px;color:#95a5a4}
   .cp-actions{display:flex;align-items:center;gap:10px;flex:none}
@@ -299,7 +329,11 @@
   .tabs [role=tab]:hover{color:#eff5f4;background:#1a2325}.tabs [role=tab].current{color:#c1f0ad;box-shadow:inset 0 -2px 0 #c1f0ad}
   .tabs [role=tab]:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
   .tab-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#e5c88a;margin-left:7px;vertical-align:middle}
-  .plat-banner{display:block;width:min(521px,100%);border-radius:10px;margin:0 0 18px;background:#000}
+  .plat-art-wrap{position:relative;width:min(521px,100%);margin:0 0 18px}
+  .plat-banner{display:block;width:100%;border-radius:10px;background:#000}
+  .plat-art-edit{position:absolute;right:10px;bottom:10px;padding:5px 11px;font-size:12px;background:rgba(16,22,23,.86);color:#eff5f4;border:1px solid #3c4d4e;border-radius:8px;opacity:0;transition:opacity .15s ease}
+  .plat-art-wrap:hover .plat-art-edit,.plat-art-wrap:focus-within .plat-art-edit{opacity:1}
+  .plat-art-edit:hover{border-color:#c1f0ad;color:#c1f0ad}
   .pv-list{list-style:none;margin:0;padding:0}.pv-list li{display:block;padding:0;border-bottom:1px solid #2c393a}.pv-list li:last-child{border:0}
   .pv-open{width:100%;display:flex;align-items:center;gap:13px;padding:13px 16px;background:transparent;color:inherit;text-align:left}.pv-open:hover{background:#1c282a}.pv-open:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
   .pv-main{flex:1;min-width:0;display:grid;gap:3px}.pv-main strong{font-size:14px}.pv-main small{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis}.pv-ver{font-size:12.5px;color:#c7d1d0}
