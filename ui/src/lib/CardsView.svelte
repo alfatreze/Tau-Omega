@@ -8,6 +8,8 @@
   import type { VolumeSpace } from './types';
   import { developerTools, confirmRealCard, roleOf, refreshRole, markTestCard, cardLabel } from './devStore';
   import { errorMessage } from './backend';
+  import FirmwarePanel from './FirmwarePanel.svelte';
+  import { cardDevice } from './systemStore';
   import type { Core } from './types';
   $: if ($developerTools && path) void refreshRole(path);
   $: disabledCount = $coresTreeStore.reduce((n, p) => n + p.cores.filter((c) => c.disabled).length, 0);
@@ -55,17 +57,18 @@
       <slot />
     {:else}
     <p class="notice" role="status">{notice}</p>
-    {#if cores.length}
+    {#if path && (cores.length || $coresTotal > 0 || $cardDevice?.device === 'game_bub')}
+      {@const isGameBub = $cardDevice?.device === 'game_bub'}
       <section class="card-sum" aria-labelledby="card-sum-title">
-        <div class="section-title"><div><p class="eyebrow">ON THIS CARD</p><h2 id="card-sum-title">{plural($coresTotal, 'core')} installed</h2></div><span class="sum-actions"><button class="quiet" aria-label="Refresh this card" title="Refresh" on:click={openFolder}>Refresh</button><button class="quiet" on:click={browseCores}>Browse cores</button></span></div>
+        <div class="section-title"><div><p class="eyebrow">{isGameBub ? 'ON THIS GAME BUB CARD' : 'ON THIS CARD'}</p><h2 id="card-sum-title">{plural($coresTotal, 'core')} installed</h2></div><span class="sum-actions"><button class="quiet" aria-label="Refresh this card" title="Refresh" on:click={openFolder}>Refresh</button><button class="quiet" on:click={browseCores}>Browse cores</button></span></div>
         <dl class="sum-stats" aria-label="Card totals">
           <div><dt>Cores</dt><dd>{$coresTotal}</dd></div>
-          <div><dt>Platforms</dt><dd>{platformCount}</dd></div>
+          {#if !isGameBub}<div><dt>Platforms</dt><dd>{platformCount}</dd></div>{/if}
           {#if disabledCount}<div><dt>Disabled</dt><dd><button class="sum-link" aria-label={`${disabledCount} cores disabled on the Pocket. Open the Cores page`} on:click={browseCores}>{disabledCount} <small>on the Pocket</small></button></dd></div>{/if}
-          <div><dt>Categories</dt><dd>{$coresGroups.filter((g) => g.name !== 'No platform').length}</dd></div>
+          {#if !isGameBub}<div><dt>Categories</dt><dd>{$coresGroups.filter((g) => g.name !== 'No platform').length}</dd></div>{/if}
           {#if libraries.length}<div><dt>Library tracks</dt><dd>{tracks}</dd></div>{/if}
           <div class:ok={$coreUpdateCount === 0}><dt>Updates</dt><dd>{#if $coreUpdateCount}<button class="sum-link" aria-label={`${$coreUpdateCount} core updates available. Open the updates`} on:click={openUpdates}>{$coreUpdateCount} <small>available</small></button>{:else}0{/if}</dd></div>
-          {#if shots !== null}<div><dt>Screenshots</dt><dd>{shots}</dd></div>{/if}
+          {#if !isGameBub && shots !== null}<div><dt>Screenshots</dt><dd>{shots}</dd></div>{/if}
         </dl>
         {#if space}
           <div class="sum-space"><div class="sum-bar" role="img" aria-label={`${size(usedBytes)} used of ${size(space.total_bytes)}, ${size(space.available_bytes)} free`}><span style={`width:${usedPct}%`}></span></div>
@@ -87,6 +90,7 @@
         {/if}
       </section>
     {:else}<section class="empty"><div class="empty-art">◒</div><h2>No card selected</h2><p>Open a card folder to see its cores and library health.</p></section>{/if}
+    <FirmwarePanel card={path} />
     {/if}
     </div>
 </section>

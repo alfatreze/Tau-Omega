@@ -12,7 +12,7 @@ const out = process.argv[2] || 'screenshots/workbench';
   await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.reload(); await p.waitForTimeout(900);
   const pk = p.getByRole('region', { name: 'On Pocket' }); const pc = p.getByRole('region', { name: 'This computer' });
   const shot = async (n) => { await p.waitForTimeout(300); await p.screenshot({ path: `${out}/${n}.png` }); };
-  await p.getByRole('button', { name: 'Library', exact: true }).click();
+  await p.getByRole('button', { name: 'Music', exact: true }).click();
   await shot('01-choose-folder');
   await p.getByRole('button', { name: 'Choose folder…' }).click(); await p.waitForTimeout(500); await shot('02-library-loaded');
   await pc.getByLabel('Select Mingus Ah Um').check(); await pc.getByLabel('Select Head Hunters').check();

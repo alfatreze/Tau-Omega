@@ -81,6 +81,7 @@ const detailFor = (id: string) => {
 };
 const fe = (rel: string, bytes: number, kind: string, slot: string | null, extra: Record<string, unknown> = {}) => ({ rel_path: rel, name: rel.split('/').pop()!, bytes, modified: 1767225600, kind, slot, game: null, taken: null, group: kind === 'Rom' ? 'Game data' : '', purpose: '', purpose_source: '', support: false, ...extra });
 const mockRoms: string[] = ['Advance Wars (USA).gba', 'Boktai 2 (USA).gba', 'Golden Sun (USA).gba', 'Metroid Fusion (USA).gba', 'Mother 3.gba', 'Zelda - Minish Cap (USA).gba'];
+let mockGbPalettes: string[] = ['Analogue Palettes/Analogue Green.pal'];
 let mockBios = false; const mockAdded: string[] = []; const mockGone: string[] = [];
 const filesFor = (id: string) => {
   const d = detailFor(id); const gba = id === 'Spiritualized.GBA';
@@ -492,7 +493,7 @@ const handlers: Record<string, (args: any) => unknown> = {
     { id: 'me.Homebrew', installed_version: '0.1', latest_version: '', release_date: '', status: 'NotInCatalog' },
     { id: 'alfatreze.TAU', installed_version: '0.6.0', latest_version: '', release_date: '', status: 'Excluded' },
   ], source: 'Cache', fetched: Math.floor(Date.now() / 1000) - 3600 }),
-  marketplace_download: (a) => ({ download: { path: `/cache/${a.coreId}.zip`, bytes: 3.2 * MB, sha256: 'b'.repeat(64), checksum: a.coreId === 'agg23.Arduboy' ? 'NotPublished' : 'Verified' }, vetted: { core_id: a.coreId as string, version: (a.version as string | null) ?? '1.4.0', date_release: '2026-09-02', platform_ids: ['snes'], firmware_required: '2.0', dock_supported: true, files: 14, uncompressed_bytes: 6 * MB, asset_files: 2 } }),
+  marketplace_download: (a) => ({ download: { path: `/cache/${a.coreId}.zip`, bytes: 3.2 * MB, sha256: 'b'.repeat(64), checksum: a.coreId === 'agg23.Arduboy' || a.coreId === 'pack.Amiga' ? 'NotPublished' : 'Verified' }, vetted: { core_id: a.coreId as string, version: (a.version as string | null) ?? '1.4.0', date_release: '2026-09-02', platform_ids: ['snes'], firmware_required: '2.0', dock_supported: true, files: 14, uncompressed_bytes: 6 * MB, asset_files: 2 } }),
   cores_tree: () => coresTreeMock(),
   core_suggestions: () => {
     const kept = prefs.core_keep.Pocket ?? []; const flagged: unknown[] = [];
@@ -598,6 +599,42 @@ const handlers: Record<string, (args: any) => unknown> = {
   manual_register: () => null,
   plan_core_add: (a) => addPlanFor(a),
   plan_core_remove: (a) => { const files = (a.files as string[]) ?? []; return { id: 'rm' + files.join('|'), core_id: a.coreId, items: files.map((f) => ({ rel_path: f, bytes: 8 * MB, shared_with: f.includes('/common/') ? ['other.GBAlt'] : [], needed_by: f.endsWith('gba_bios.bin') ? 'BIOS' : null })), total_bytes: files.length * 8 * MB, warnings: files.some((f) => f.endsWith('gba_bios.bin')) ? ['gba_bios.bin is a file this core needs to start.'] : [], blocked: files.length ? null : 'Nothing is selected.' }; },
+  gb_palettes_list: () => [...mockGbPalettes],
+  gamebub_inspect_card: () => ({ cores: [], bios: [] }),
+  gb_palettes_plan_install: (a) => {
+    const items = (a.items as { rel_path: string; hex: string }[]) ?? [];
+    const new_files: string[] = []; const updated_files: string[] = []; const backup_files: string[] = [];
+    for (const it of items) {
+      if (mockGbPalettes.includes(it.rel_path)) { updated_files.push(it.rel_path); backup_files.push(`Assets/gb/common/Palettes/${it.rel_path}`); }
+      else new_files.push(it.rel_path);
+    }
+    return { id: `mock-pal-${items.length}`, new_files, updated_files, unchanged: 0, backup_files };
+  },
+  gb_palettes_execute_install: (a) => {
+    const items = (a.items as { rel_path: string }[]) ?? [];
+    for (const it of items) if (!mockGbPalettes.includes(it.rel_path)) mockGbPalettes = [...mockGbPalettes, it.rel_path].sort();
+    return { written: items.length, backup_dir: null };
+  },
+  gb_palettes_plan_remove: (a) => ({ id: `mock-pal-rm-${a.relPath}`, rel_path: String(a.relPath) }),
+  gb_palettes_execute_remove: (a) => {
+    const rel = String(a.relPath);
+    mockGbPalettes = mockGbPalettes.filter((p) => p !== rel);
+    return { rel_path: rel, backup_dir: '/Backups/omega/gb-palettes-rm' };
+  },
+  systems_list: () => [
+    { id: 'analogue_pocket', name: 'Analogue Pocket', short_name: 'Pocket', beta: false, firmware_method: 'sd_card_root', supports_music_library: true },
+    { id: 'game_bub', name: 'Game Bub', short_name: 'Game Bub', beta: true, firmware_method: 'usb_uf2', supports_music_library: false },
+  ],
+  firmware_status: (a) => a.device === 'game_bub'
+    ? { device: 'game_bub', method: 'usb_uf2', card_files: [], required_min_firmware: '1.0.3', uf2_drives: [], warnings: [] }
+    : { device: 'analogue_pocket', method: 'sd_card_root', card_files: [{ file_name: 'pocket_firmware_2_6.bin', version: '2.6', bytes: 54 * MB }], required_min_firmware: null, uf2_drives: [], warnings: [] },
+  firmware_latest: (a) => a.device === 'game_bub'
+    ? { device: 'game_bub', version: '1.0.3', published_at: '2026-10-26T00:27:53Z', file_name: 'gamebub-rev4_v1.0.3.uf2', download_url: 'https://github.com/elipsitz/gamebub/releases/download/v1.0.3/gamebub-rev4_v1.0.3.uf2', bytes: 8298496, size_label: '7.9 MB', md5: null, page_url: 'https://github.com/elipsitz/gamebub/releases/tag/v1.0.3', release_notes: 'Added third-party core loader improvements and bug fixes.', fetched_at: nowSecs(), from_cache: false }
+    : { device: 'analogue_pocket', version: '2.7', published_at: '2026-09-04T09:17:08-07:00', file_name: 'pocket_firmware_2_7.bin', download_url: 'https://assets.analogue.co/firmware/ac5848b97fa8272b2257a45d9c41dbe6/pocket_firmware_2_7.bin', bytes: null, size_label: '54.5MB', md5: 'ac5848b97fa8272b2257a45d9c41dbe6', page_url: 'https://www.analogue.co/support/pocket/firmware/2.7', release_notes: '## General\n- Improved: USB connection speed\n## openFPGA\n- Improved: Pre-cached core lists load twice as fast', fetched_at: nowSecs(), from_cache: false },
+  firmware_download: (a) => ({ path: `/mock/cache/firmware/${a.release.file_name}`, file_name: a.release.file_name, bytes: a.release.bytes ?? 54 * MB, md5: a.release.md5 ?? '0'.repeat(32), verified: true }),
+  firmware_plan_install: (a) => ({ id: `mock-fw-${a.device}`, device: a.device, target_path: `${a.targetRoot}/${a.fileName}`, file_name: a.fileName, bytes: 54 * MB, md5: a.expectedMd5 ?? '0'.repeat(32), md5_verified: !!a.expectedMd5, replaces: a.device === 'analogue_pocket' ? ['pocket_firmware_2_6.bin'] : [], warnings: a.device === 'game_bub' ? ['Copying the .uf2 file to the GAME BUB drive will immediately flash the handheld and reboot it.'] : [] }),
+  firmware_execute_install: (a) => ({ device: a.device, destination: `${a.targetRoot}/${a.fileName}`, bytes_written: 54 * MB, removed_old: a.device === 'analogue_pocket' ? ['pocket_firmware_2_6.bin'] : [], backup_dir: a.device === 'analogue_pocket' ? '/Backups/omega/pocket-firmware' : null }),
+  firmware_save_copy: (a) => String(a.destPath),
   execute_core_remove: (a) => { const files = (a.files as string[]) ?? []; for (const f of files) { const nm = f.split('/').pop()!; if (nm === 'gba_bios.bin') mockBios = false; else mockGone.push(nm); } return { removed: files.length, bytes_removed: files.length * 8 * MB, backup_dir: '/Backups/omega/abc123' }; },
   execute_core_add: (a) => { const plan = addPlanFor(a); for (const i of plan.items) if (i.state === 'New') { const nm = i.source.split('/').pop()!; if (nm === 'gba_bios.bin') mockBios = true; else mockAdded.push(nm); } return { written: plan.new_files, replaced: 0, skipped_identical: plan.identical, skipped_different: plan.different, refused: plan.refused, bytes_written: plan.bytes_to_write, backup_dir: null }; },
   update_check: () => null,

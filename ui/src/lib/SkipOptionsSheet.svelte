@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import SkipSilenceSheet from './SkipSilenceSheet.svelte';
   import { modal } from './a11y';
+  import ToggleSwitch from './ToggleSwitch.svelte';
   import { errorMessage } from './backend';
   import { getPrefs, setPrefs } from './tau-api';
   import type { PrefsView, TrimSettings } from './types';
@@ -28,7 +29,7 @@
   {#if prefs}
     {@const t = prefs.trim}
           <div class="ss-row"><div><b>Skip silence</b><small>Measured when you sync and saved as a small <code>tau-skip.bin</code> file in each album folder; your music files are never changed. The player skips the silence when its own Skip silence switch is on (a player version that supports it, MP3 first).</small></div>
-        <div><button class="quiet" on:click={() => changeTrim({ enabled: !t.enabled }, t.enabled ? 'Silence will not be measured.' : 'Silence will be measured at the next sync.')}>{t.enabled ? 'Turn off' : 'Turn on'}</button></div></div>
+        <div><ToggleSwitch checked={t.enabled} label="Skip silence" on:click={() => changeTrim({ enabled: !t.enabled }, t.enabled ? 'Silence will not be measured.' : 'Silence will be measured at the next sync.')} /></div></div>
       {#if t.enabled}
         <div class="ss-row"><div><b>Counts as silence below</b><small>-60 dB is quiet enough to be inaudible on headphones in a normal room. Lower catches only digital silence; higher also trims soft room noise and fade tails.</small></div>
           <select aria-label="Silence level" value={t.threshold_db10} on:change={(e) => changeTrim({ threshold_db10: Number(e.currentTarget.value) })}>{#each DB_CHOICES as d}<option value={d * 10}>{d} dB{d === -60 ? ' (default)' : ''}</option>{/each}</select></div>

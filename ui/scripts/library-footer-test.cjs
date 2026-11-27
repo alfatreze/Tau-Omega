@@ -14,7 +14,7 @@ const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   p.on('console', (m) => m.text().startsWith('[dev-mock] unmocked') && errors.push(m.text()));
   const pc = () => p.getByRole('region', { name: 'This computer' });
   await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.goto(url); await p.waitForTimeout(900);
-  await p.getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(500);
+  await p.getByRole('button', { name: 'Music', exact: true }).click(); await p.waitForTimeout(500);
   await p.getByRole('button', { name: 'Choose folder…' }).click(); await p.waitForTimeout(800);
   const foot = pc().locator('.wb-pane-foot');
   const text = await foot.innerText();

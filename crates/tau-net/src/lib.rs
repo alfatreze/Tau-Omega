@@ -6,6 +6,7 @@
 //! `tau_core::release_check`, tested on real captured responses; this file only moves bytes.
 
 pub mod feedback;
+pub mod firmware;
 pub mod github_source;
 pub mod marketplace;
 pub mod tau_source;

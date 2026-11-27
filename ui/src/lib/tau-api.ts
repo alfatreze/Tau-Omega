@@ -108,11 +108,24 @@ export const installLame = (method: string) => invoke<LameStatus>('install_lame'
 
 export const marketplaceCatalog = (force = false) => invoke<CatalogResult>('marketplace_catalog', { force });
 export const cardDetectDevice = (card: string) => invoke<import('./types').CardDeviceInfo>('card_detect_device', { card });
+export const gamebubInspectCard = (card: string) => invoke<{ cores: unknown[]; bios: unknown[] }>('gamebub_inspect_card', { card });
 export const gamebubDownloadCore = (coreId: string) => invoke<import('./types').GameBubDownloaded>('gamebub_download_core', { coreId });
 export const gamebubPlanInstall = (card: string, zipPath: string, onlyCore: string | null = null, expectedSha256: string | null = null) => invoke<import('./types').GameBubInstallPlan>('gamebub_plan_install', { card, zipPath, onlyCore, expectedSha256 });
 export const gamebubExecuteInstall = (card: string, zipPath: string, onlyCore: string | null, expectedSha256: string | null, confirmation: string) => invoke<import('./types').GameBubInstallReport>('gamebub_execute_install', { card, zipPath, onlyCore, expectedSha256, confirmation });
 export const gamebubPlanRemove = (card: string, coreId: string) => invoke<import('./types').GameBubRemovePlan>('gamebub_plan_remove', { card, coreId });
 export const gamebubExecuteRemove = (card: string, coreId: string, confirmation: string) => invoke<import('./types').GameBubRemoveReport>('gamebub_execute_remove', { card, coreId, confirmation });
+export const gbPalettesList = (card: string) => invoke<string[]>('gb_palettes_list', { card });
+export const gbPalettesPlanInstall = (card: string, items: import('./types').PaletteItem[]) => invoke<import('./types').PaletteInstallPlan>('gb_palettes_plan_install', { card, items });
+export const gbPalettesExecuteInstall = (card: string, items: import('./types').PaletteItem[], confirmation: string) => invoke<import('./types').PaletteInstallReport>('gb_palettes_execute_install', { card, items, confirmation });
+export const gbPalettesPlanRemove = (card: string, relPath: string) => invoke<import('./types').PaletteRemovePlan>('gb_palettes_plan_remove', { card, relPath });
+export const gbPalettesExecuteRemove = (card: string, relPath: string, confirmation: string) => invoke<import('./types').PaletteRemoveReport>('gb_palettes_execute_remove', { card, relPath, confirmation });
+export const systemsList = () => invoke<import('./types').SystemProfile[]>('systems_list');
+export const firmwareStatus = (card: string | null, device: import('./types').DeviceKind) => invoke<import('./types').FirmwareCardStatus>('firmware_status', { card, device });
+export const firmwareLatest = (device: import('./types').DeviceKind, force = false) => invoke<import('./types').FirmwareRelease>('firmware_latest', { device, force });
+export const firmwareDownload = (device: import('./types').DeviceKind, release: import('./types').FirmwareRelease) => invoke<import('./types').FirmwareDownload>('firmware_download', { device, release });
+export const firmwarePlanInstall = (targetRoot: string, device: import('./types').DeviceKind, downloadedPath: string, fileName: string, expectedMd5: string | null = null) => invoke<import('./types').FirmwareInstallPlan>('firmware_plan_install', { targetRoot, device, downloadedPath, fileName, expectedMd5 });
+export const firmwareExecuteInstall = (targetRoot: string, device: import('./types').DeviceKind, downloadedPath: string, fileName: string, expectedMd5: string | null, confirmation: string) => invoke<import('./types').FirmwareInstallReport>('firmware_execute_install', { targetRoot, device, downloadedPath, fileName, expectedMd5, confirmation });
+export const firmwareSaveCopy = (downloadedPath: string, destPath: string) => invoke<string>('firmware_save_copy', { downloadedPath, destPath });
 export const marketplaceArt = (coreId: string, kind: ArtKind) => invoke<string | null>('marketplace_art', { coreId, kind });
 export const marketplaceRepoDetails = (coreId: string, force = false) => invoke<RepoDetails>('marketplace_repo_details', { coreId, force });
 /** Whether feedback can be sent from this build, and the few facts a sender may add (version, system). */

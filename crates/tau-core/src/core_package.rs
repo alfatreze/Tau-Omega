@@ -69,6 +69,48 @@ fn safe_path(name: &str) -> Option<String> {
     (!bad).then(|| trimmed.to_string())
 }
 
+/// Harmless top-level release notes/licence files (and macOS archive junk) that community openFPGA
+/// zips often ship alongside `Cores/`, `Assets/`, and `Platforms/`. They are ignored during vetting
+/// and never written to the card root.
+pub fn is_ignored_root_doc(path: &str) -> bool {
+    let p = path.trim_start_matches("./");
+    if p.starts_with("__MACOSX/") || p == "__MACOSX" {
+        return true;
+    }
+    if p.contains('/') {
+        return false;
+    }
+    let lower = p.to_ascii_lowercase();
+    if lower == ".ds_store" || lower.starts_with("._") {
+        return true;
+    }
+    matches!(
+        lower.as_str(),
+        "readme"
+            | "readme.md"
+            | "readme.txt"
+            | "install"
+            | "install.md"
+            | "install.txt"
+            | "license"
+            | "license.md"
+            | "license.txt"
+            | "licence"
+            | "licence.md"
+            | "licence.txt"
+            | "changelog"
+            | "changelog.md"
+            | "changelog.txt"
+            | "copying"
+            | "copying.txt"
+            | "notice"
+            | "notice.txt"
+            | "credits"
+            | "credits.md"
+            | "credits.txt"
+    )
+}
+
 /// Vets `zip_path` for the catalog core `expected_id`.
 pub fn vet_zip(zip_path: &Path, expected_id: &str, limits: Limits) -> Result<Vetted, TauError> {
     let len = fs::metadata(zip_path)?.len();
@@ -106,6 +148,9 @@ pub fn vet_zip(zip_path: &Path, expected_id: &str, limits: Limits) -> Result<Vet
         }
         let top = path.split('/').next().unwrap_or_default();
         if !matches!(top, "Cores" | "Assets" | "Platforms") {
+            if is_ignored_root_doc(&path) {
+                continue;
+            }
             return Err(refuse(format!(
                 "the zip contains {path:?}, which is outside Cores, Assets and Platforms"
             )));

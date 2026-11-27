@@ -16,13 +16,61 @@ pub enum DeviceKind {
     GameBub,
 }
 
+/// How a handheld receives system firmware updates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum FirmwareMethod {
+    /// Placed as `pocket_firmware_*.bin` on the microSD card root; installed on next boot.
+    SdCardRoot,
+    /// Flashed as a `.uf2` file over USB to the bootloader drive (`GAME BUB` / `GameBubDock`).
+    UsbUf2,
+}
+
+/// Global per-system descriptor shared by Marketplace, Firmware, and card inspection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SystemProfile {
+    pub id: DeviceKind,
+    pub name: &'static str,
+    pub short_name: &'static str,
+    pub beta: bool,
+    pub firmware_method: FirmwareMethod,
+    pub supports_music_library: bool,
+}
+
 impl DeviceKind {
+    pub const ALL: &'static [DeviceKind] = &[DeviceKind::AnaloguePocket, DeviceKind::GameBub];
+
     pub fn label(self) -> &'static str {
+        self.profile().name
+    }
+
+    pub fn profile(self) -> SystemProfile {
         match self {
-            DeviceKind::AnaloguePocket => "Analogue Pocket",
-            DeviceKind::GameBub => "Game Bub",
+            DeviceKind::AnaloguePocket => SystemProfile {
+                id: DeviceKind::AnaloguePocket,
+                name: "Analogue Pocket",
+                short_name: "Pocket",
+                beta: false,
+                firmware_method: FirmwareMethod::SdCardRoot,
+                supports_music_library: true,
+            },
+            DeviceKind::GameBub => SystemProfile {
+                id: DeviceKind::GameBub,
+                name: "Game Bub",
+                short_name: "Game Bub",
+                beta: true,
+                firmware_method: FirmwareMethod::UsbUf2,
+                supports_music_library: false,
+            },
         }
     }
+}
+
+/// Returns every handheld system supported by Tau Omega in display order.
+pub fn all_systems() -> Vec<SystemProfile> {
+    DeviceKind::ALL.iter().map(|d| d.profile()).collect()
 }
 
 /// Result of inspecting a card root to determine its target device.

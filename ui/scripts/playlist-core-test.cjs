@@ -11,7 +11,7 @@ const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   const errors = [];
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.goto(url); await p.waitForTimeout(800);
-  await p.getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(400);
+  await p.getByRole('button', { name: 'Music', exact: true }).click(); await p.waitForTimeout(400);
   assert.equal(await p.locator('.wb-info').count(), 0); ok('a library core shows no playlist note');
   await p.getByLabel('Target core').selectOption({ label: 'Mp3Player (playlist)' }); await p.waitForTimeout(500);
   const note = await p.locator('.wb-info').innerText();

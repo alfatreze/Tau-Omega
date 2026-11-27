@@ -237,6 +237,15 @@ export type OmegaUpdate = { current: string; version: string; notes: string | nu
 export type CatalogAsset = { platform: string; filename: string; extensions: string[]; core_specific: boolean };
 export type ReleaseSummary = { version: string; release_date: string; download_url: string };
 export type DeviceKind = 'analogue_pocket' | 'game_bub';
+export type FirmwareMethod = 'sd_card_root' | 'usb_uf2';
+export type SystemProfile = { id: DeviceKind; name: string; short_name: string; beta: boolean; firmware_method: FirmwareMethod; supports_music_library: boolean };
+export type CardFirmwareFile = { file_name: string; version: string | null; bytes: number };
+export type Uf2Drive = { label: string; path: string; info: string | null };
+export type FirmwareCardStatus = { device: DeviceKind; method: FirmwareMethod; card_files: CardFirmwareFile[]; required_min_firmware: string | null; uf2_drives: Uf2Drive[]; warnings: string[] };
+export type FirmwareRelease = { device: DeviceKind; version: string; published_at: string; file_name: string; download_url: string; bytes: number | null; size_label: string; md5: string | null; page_url: string; release_notes: string; fetched_at: number; from_cache: boolean };
+export type FirmwareDownload = { path: string; file_name: string; bytes: number; md5: string; verified: boolean };
+export type FirmwareInstallPlan = { id: string; device: DeviceKind; target_path: string; file_name: string; bytes: number; md5: string; md5_verified: boolean; replaces: string[]; warnings: string[] };
+export type FirmwareInstallReport = { device: DeviceKind; destination: string; bytes_written: number; removed_old: string[]; backup_dir: string | null };
 export type CardDeviceInfo = { device: DeviceKind | null; reason: string; pocket_cores: number; gamebub_cores: number };
 export type GameBubDownloaded = { path: string; sha256: string; bytes: number; bundled_core_ids: string[] };
 export type GameBubPlannedCore = { id: string; name: string; version: string; min_firmware: string; action: string; previous_version: string | null; file_count: number; total_bytes: number };
@@ -432,3 +441,10 @@ export type PresetInstallPlan = {
   backup: [number, string][]; unchanged: number; interrupted: boolean; warnings: string[];
 };
 export type PresetInstallReport = { written: number; removed: number; backup: string | null };
+
+// ---- Game Boy colour palettes (tau_core::gb_palettes) ----
+export type PaletteItem = { rel_path: string; hex: string };
+export type PaletteInstallPlan = { id: string; new_files: string[]; updated_files: string[]; unchanged: number; backup_files: string[] };
+export type PaletteInstallReport = { written: number; backup_dir: string | null };
+export type PaletteRemovePlan = { id: string; rel_path: string };
+export type PaletteRemoveReport = { rel_path: string; backup_dir: string | null };

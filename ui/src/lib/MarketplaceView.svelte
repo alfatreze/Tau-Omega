@@ -9,31 +9,31 @@
   import { modal } from './a11y';
   import { errorMessage } from './backend';
   import { platformFallbackArt } from './platformArt';
-  import { cardDetectDevice, gamebubDownloadCore, gamebubExecuteInstall, gamebubPlanInstall, getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceGallery, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
+  import { gamebubDownloadCore, gamebubExecuteInstall, gamebubPlanInstall, getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceGallery, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
+  import { activeSystem, setActiveSystem, syncSystemForCard, systemsStore } from './systemStore';
   import { categoryCounts, filterCores, listedBy, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
-  import type { CatalogCore, CatalogResult, CoreStatus, DeviceKind, GalleryItem, GameBubDownloaded, GameBubInstallPlan, MarketplaceDownload, RepoDetails } from './types';
+  import type { CatalogCore, CatalogResult, CoreStatus, DeviceKind, GalleryItem, GameBubDownloaded, GameBubInstallPlan, GameBubInstallReport, MarketplaceDownload, RepoDetails } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
   export let card = '';
+  /** Opens an installed core's page in Cores. */
+  export let openCore: (id: string) => void = () => {};
 
-  let activeDevice: DeviceKind = 'analogue_pocket';
   let gbDownload: GameBubDownloaded | null = null;
   let gbPlan: GameBubInstallPlan | null = null;
+  let gbReport: GameBubInstallReport | null = null;
   let gbError = '';
-  let gbDone = '';
   let gbBusy = false;
-  $: if (card) {
-    cardDetectDevice(card).then((info) => {
-      if (info.device) activeDevice = info.device;
-    }, () => {});
-  }
+  let gbPhase: '' | 'downloading' | 'installing' = '';
+  $: if (card) void syncSystemForCard(card);
   const coreDevice = (c: CatalogCore): DeviceKind => c.device ?? 'analogue_pocket';
+  const cardShortName = (p: string) => p.split('/').filter(Boolean).pop() ?? p;
   $: isGameBubCore = !!selected && coreDevice(selected) === 'game_bub';
-  $: { void selected?.id; gbDownload = null; gbPlan = null; gbError = ''; gbDone = ''; gbBusy = false; }
+  $: { void selected?.id; gbDownload = null; gbPlan = null; gbReport = null; gbError = ''; gbBusy = false; gbPhase = ''; }
 
   async function startGameBubInstall(installAll = false) {
     if (!selected || !card) return;
-    gbBusy = true; gbError = ''; gbDone = ''; gbPlan = null;
+    gbBusy = true; gbPhase = 'downloading'; gbError = ''; gbReport = null; gbPlan = null;
     try {
       const dl = await gamebubDownloadCore(selected.id);
       gbDownload = dl;
@@ -42,24 +42,25 @@
     } catch (e) {
       gbError = errorMessage(e);
     } finally {
-      gbBusy = false;
+      gbBusy = false; gbPhase = '';
     }
   }
 
   async function confirmGameBubInstall(installAll = false) {
     if (!selected || !card || !gbDownload || !gbPlan) return;
-    gbBusy = true; gbError = '';
+    gbBusy = true; gbPhase = 'installing'; gbError = '';
     try {
       const only = installAll ? null : selected.id;
       const rep = await gamebubExecuteInstall(card, gbDownload.path, only, selected.asset_sha256 || null, gbPlan.id);
-      gbDone = `Installed ${rep.cores_installed.join(', ')} (${rep.files_written} files).`;
+      gbReport = rep;
       gbPlan = null;
       gbDownload = null;
       void loadStatuses(card);
+      window.dispatchEvent(new CustomEvent('tau-cores-changed'));
     } catch (e) {
       gbError = errorMessage(e);
     } finally {
-      gbBusy = false;
+      gbBusy = false; gbPhase = '';
     }
   }
 
@@ -84,6 +85,14 @@
   /** A different core, channel or version starts the review over. */
   $: { void target?.id; void target?.version; review = null; installBusy = false; }
   $: installLabel = target?.version ? `Install version ${target.version}` : 'Install';
+  /** This core is on the open card: no Install button, just its version (or Update when a newer one is listed) and a link to it. */
+  $: have = selected && card ? statusOf(selected) : undefined;
+  $: haveInstalled = !!have && typeof have.status === 'string' && ['UpToDate', 'UpdateAvailable', 'NewerThanCatalog', 'Unknown'].includes(have.status);
+  $: haveUpdate = haveInstalled && have?.status === 'UpdateAvailable';
+  $: haveCurrent = haveInstalled && !haveUpdate;
+  $: haveVersion = have?.installed_version ? (/^v/i.test(have.installed_version) ? have.installed_version : `v${have.installed_version}`) : 'installed';
+  $: updateLabel = target?.version ? installLabel : have?.latest_version ? `Update to ${have.latest_version}` : 'Update';
+  function goToCore() { if (!have) return; const id = have.id; close(); openCore(id); }
   $: installNote = isDev ? 'Dev builds are made locally and never published: install one from its zip or folder.' : !card ? 'Open a card first (Cards page).' : !target ? 'The author has not published a download yet.' : '';
   $: metaLine = selected ? [selected.category, selected.manufacturer, selected.year ? String(selected.year) : ''].filter(Boolean).join(' · ') : '';
   const pickChannel = (c: string) => { optChannel = c; optDiag = false; optVersion = ''; };
@@ -98,7 +107,7 @@
 
   $: allCores = result?.catalog.cores ?? [];
   $: hasGameBub = allCores.some((c) => coreDevice(c) === 'game_bub');
-  $: cores = allCores.filter((c) => coreDevice(c) === activeDevice);
+  $: cores = allCores.filter((c) => coreDevice(c) === $activeSystem);
   $: installed = new Set([...statuses.keys()]);
   $: sources = sourcesOf(cores);
   $: shown = filterCores(cores, filters, installed);
@@ -197,7 +206,19 @@
   const chip = (c: CatalogCore) => statusLabel(statusOf(c)?.status);
   // A zip or folder dropped on this page opens the manual-add sheet with it.
   const offDrop = onFileDrop((e) => { if (e.type === 'drop' && e.paths.length === 1) openManualAdd(e.paths[0]); });
-  onDestroy(offDrop);
+  // Lock background page scroll while the details sheet is open so only the sheet's own scrollbar shows.
+  $: if (typeof document !== 'undefined') {
+    const lock = selected ? 'hidden' : '';
+    document.documentElement.style.overflow = lock;
+    document.body.style.overflow = lock;
+  }
+  onDestroy(() => {
+    offDrop();
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    }
+  });
 </script>
 <svelte:window on:keydown={onKey} />
 <section class="page" aria-labelledby="market-title">
@@ -206,7 +227,7 @@
       <p class="eyebrow">COMMUNITY CORES</p>
       <h1 id="market-title">Marketplace</h1>
       <p class="lede">
-        {#if activeDevice === 'game_bub'}
+        {#if $activeSystem === 'game_bub'}
           Community cores for Game Bub (Beta · community-tested, FAT32 microSD). Nothing is installed until you review it.
         {:else}
           Cores made by the community for the Analogue Pocket. Nothing is installed until you review it.
@@ -217,8 +238,14 @@
   </header>
 
   <div class="mk-tags" role="group" aria-label="Device" data-testid="mk-device-switch">
-    <button class="chip toggle" aria-pressed={activeDevice === 'analogue_pocket'} on:click={() => { activeDevice = 'analogue_pocket'; filters = { ...filters, category: '', source: '' }; }}>Analogue Pocket</button>
-    <button class="chip toggle" aria-pressed={activeDevice === 'game_bub'} on:click={() => { activeDevice = 'game_bub'; filters = { ...filters, category: '', source: '' }; }} data-testid="mk-device-gamebub">Game Bub {#if !hasGameBub && result}<span class="mk-count">0</span>{/if}</button>
+    {#each $systemsStore as sys (sys.id)}
+      <button
+        class="chip toggle"
+        aria-pressed={$activeSystem === sys.id}
+        data-testid={sys.id === 'game_bub' ? 'mk-device-gamebub' : `mk-device-${sys.id}`}
+        on:click={() => { setActiveSystem(sys.id); filters = { ...filters, category: '', source: '' }; }}
+      >{sys.name}{#if sys.id === 'game_bub' && !hasGameBub && result} <span class="mk-count">0</span>{/if}</button>
+    {/each}
   </div>
 
   <div class="mk-filters" role="search" aria-label="Filter cores">
@@ -295,7 +322,7 @@
   {/if}
 </section>
 
-{#if multi}<MultiInstall {card} device={activeDevice} cores={pickedCores} close={() => { multi = false; }} installed={() => { picked = new Set(); void loadStatuses(card); }} />{/if}
+{#if multi}<MultiInstall {card} device={$activeSystem} cores={pickedCores} close={() => { multi = false; }} installed={() => { picked = new Set(); void loadStatuses(card); }} />{/if}
 {#if selected}
   <div class="mk-backdrop" role="presentation" on:click={close}></div>
   <div class="mk-sheet" role="dialog" aria-modal="true" aria-labelledby="mk-title" use:modal>
@@ -319,10 +346,15 @@
       </div>
       {#if isDev}
         <button class="primary mk-go" on:click={() => { close(); openManualAdd(); }}>Install a local build…</button>
+      {:else if haveCurrent}
+        <div class="mk-have" data-testid="mk-have">
+          <span class="chip capable">Installed · {haveVersion}</span>
+          <button class="mk-have-link" on:click={goToCore}>View on card</button>
+        </div>
       {:else if isGameBubCore}
-        <button class="primary mk-go" disabled={!card || gbBusy || !!gbPlan} on:click={() => startGameBubInstall(false)} data-testid="gb-install-btn">{gbBusy ? 'Working…' : installLabel}</button>
+        <button class="primary mk-go" disabled={!card || gbBusy || !!gbPlan} on:click={() => startGameBubInstall(false)} data-testid="gb-install-btn">{gbBusy ? 'Working…' : haveUpdate ? updateLabel : installLabel}</button>
       {:else}
-        <button class="primary mk-go" disabled={!canInstall || installBusy || !!review} on:click={() => installer?.start()}>{installBusy ? 'Working…' : installLabel}</button>
+        <button class="primary mk-go" disabled={!canInstall || installBusy || !!review} on:click={() => installer?.start()}>{installBusy ? 'Working…' : haveUpdate ? updateLabel : installLabel}</button>
       {/if}
     </header>
 
@@ -331,17 +363,55 @@
         <p class="mk-callout soft" role="note">Game Bub support is community-tested beta. Requires a FAT32 (MBR) microSD card{#if selected.firmware_required}{' '}and firmware {selected.firmware_required}+{/if}.</p>
         {#if !card}<p class="mk-small">Open a Game Bub card first (Cards page).</p>{/if}
         {#if gbError}<p class="err" role="alert">{gbError}</p>{/if}
-        {#if gbDone}<p class="mk-small" role="status">{gbDone}</p>{/if}
+        {#if gbBusy && gbPhase === 'downloading'}
+          <div class="mk-loading-row" role="status" aria-busy="true"><span class="mk-spin" aria-hidden="true"></span><span>Downloading and verifying archive…</span></div>
+        {/if}
         {#if gbPlan}
-          <div class="mk-callout soft" data-testid="gb-plan">
-            <strong>Review before writing to card</strong>
-            <p class="mk-small">Writes {gbPlan.files_to_write.length} file(s) under <code>/cores/</code> ({gbPlan.cores.map((c) => `${c.id} ${c.version}`).join(', ')}).{#if gbPlan.backup_files.length} Backs up {gbPlan.backup_files.length} existing file(s) outside the card first.{/if}</p>
+          {@const pc = gbPlan.cores[0]}
+          <div class="gb-plan-card" data-testid="gb-plan">
+            <div class="gb-plan-head">
+              <div>
+                <strong>Install {selected.name} on {cardShortName(card)}</strong>
+                <p class="mk-small">
+                  {#if gbDownload}Downloaded {size(gbDownload.bytes)} · SHA-256 verified · {/if}
+                  {gbPlan.files_to_write.length} {gbPlan.files_to_write.length === 1 ? 'file' : 'files'} to write under <code>/cores/</code>
+                  {#if gbPlan.backup_files.length} · {gbPlan.backup_files.length} existing backed up first{/if}
+                </p>
+              </div>
+              {#if pc}
+                <span class="chip" class:capable={pc.action === 'new' || pc.action === 'update'}>
+                  {pc.previous_version ? `Update from ${pc.previous_version}` : pc.action === 'new' ? 'New' : pc.action}
+                </span>
+              {/if}
+            </div>
             {#if gbDownload && gbDownload.bundled_core_ids.length > 1}
               <p class="mk-small">This archive bundles {gbDownload.bundled_core_ids.length} cores: {gbDownload.bundled_core_ids.join(', ')}.</p>
             {/if}
-            {#each gbPlan.warnings as w}<p class="mk-small">{w}</p>{/each}
-            <p><button class="primary" disabled={gbBusy} on:click={() => confirmGameBubInstall(false)} data-testid="gb-confirm-btn">{gbBusy ? 'Installing…' : 'Install to card'}</button>
-              <button class="quiet" disabled={gbBusy} on:click={() => { gbPlan = null; gbDownload = null; }}>Cancel</button></p>
+            {#each gbPlan.warnings as w}<p class="gb-warn">{w}</p>{/each}
+            <details class="gb-details">
+              <summary>Details ({gbPlan.files_to_write.length} files)</summary>
+              <ul>
+                {#each gbPlan.files_to_write as f}<li><code>{f}</code></li>{/each}
+              </ul>
+            </details>
+            <div class="gb-plan-btns">
+              <button class="primary" disabled={gbBusy} on:click={() => confirmGameBubInstall(false)} data-testid="gb-confirm-btn">{gbBusy ? 'Installing…' : 'Install'}</button>
+              <button class="quiet" disabled={gbBusy} on:click={() => { gbPlan = null; gbDownload = null; }}>Cancel</button>
+            </div>
+          </div>
+        {/if}
+        {#if gbReport}
+          <div class="gb-done-card" role="status" data-testid="gb-done">
+            <div class="gb-plan-head">
+              <div>
+                <strong>Installed {selected.name}</strong>
+                <p class="mk-small">
+                  {gbReport.files_written} {gbReport.files_written === 1 ? 'file' : 'files'} written and verified ({gbReport.cores_installed.join(', ')})
+                  {#if gbReport.backup_dir} · previous files backed up{/if}
+                </p>
+              </div>
+              <span class="chip capable">Verified</span>
+            </div>
           </div>
         {/if}
       {:else}
@@ -394,7 +464,6 @@
       {#if selected.sponsor.links.length}
         <p class="mk-small">Support the author: {#each selected.sponsor.links as l, i}<code>{l.replace('https://', '')}</code>{i < selected.sponsor.links.length - 1 ? ', ' : ''}{/each}</p>
       {/if}
-      {#if selected.declares_ai.length}<p class="mk-callout soft" role="note">The author says they used AI tools to build this core: {selected.declares_ai.join(', ')}.</p>{/if}
     {:else}
       <h3>Requirements</h3>
       <dl class="mk-reqs">
@@ -489,13 +558,16 @@
   .mk-req-key{border:1px solid #5c5030;background:#241f12;border-radius:9px;padding:9px 11px}.mk-req-key dt{color:#e5d9a8;font-weight:700}
   .mk-history{margin:10px 0;font-size:12px;color:#a6b3b2}.mk-history summary{cursor:pointer}.mk-history ul{margin:8px 0;padding:0;list-style:none}.mk-history li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}
   .mk-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100}
-  .mk-sheet{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);overflow:auto;z-index:101;background:#1a2325;border-left:1px solid #2c393a;padding:26px 28px 40px;box-sizing:border-box}
+  .mk-sheet{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:none;z-index:101;background:#1a2325;border-left:1px solid #2c393a;padding:26px 28px 40px;box-sizing:border-box}
+  .mk-sheet::-webkit-scrollbar{display:none}
   .mk-sheet h3{font-size:14px;margin:22px 0 8px}
   .mk-x-wrap{position:sticky;top:0;height:0;z-index:4;display:flex;justify-content:flex-end;overflow:visible}
   .mk-x{width:34px;height:34px;margin:10px 10px 0 0;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(10,16,17,.78);color:#e8ecec;display:grid;place-items:center;padding:0;cursor:pointer;backdrop-filter:blur(4px)}
   .mk-x:hover,.mk-x:focus-visible{border-color:#c1f0ad;color:#fff}
   .mk-sheet-head{display:flex;flex-wrap:nowrap;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.mk-head-main{flex:1 1 auto;min-width:0}.mk-sheet-head h2{margin:0;line-height:1.2}
   .mk-go{flex:none;margin-top:-2px;white-space:nowrap}
+  .mk-have{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-top:2px}
+  .mk-have-link{background:none;border:0;padding:0;font:inherit;font-size:12px;color:#c5f7ad;text-decoration:underline;text-underline-offset:2px;cursor:pointer}.mk-have-link:hover{color:#e1ffd4}
   .mk-dev{display:flex;align-items:center;gap:8px;margin:8px 0 0;min-width:0}
   .mk-by{color:#95a5a4;font-size:12px;margin:8px 0 0}
   .mk-facts{display:grid;gap:10px;margin:0 0 14px}.mk-facts div{display:grid;gap:2px}.mk-facts dt{font-size:11px;letter-spacing:.08em;color:#9fb3aa;font-weight:700}.mk-facts dd{margin:0;font-size:13px;color:#dce6e4;overflow-wrap:anywhere}
@@ -513,6 +585,15 @@
   .mk-link{color:#c5f7ad;text-decoration:underline;text-underline-offset:2px;cursor:pointer}.mk-link:hover{color:#e1ffd4}
   .mk-small{font-size:12px;color:#a6b3b2;line-height:1.55;margin:6px 0}
   .mk-callout{border:1px solid #3b5a58;background:#16292a;border-radius:9px;padding:10px 12px;font-size:12px;line-height:1.5;color:#dce6e4;margin:10px 0}.mk-callout.soft{border-color:#5c5030;background:#241f12;color:#e5d9a8}
+  .gb-plan-card,.gb-done-card{margin:10px 0 6px;padding:14px 16px;border-radius:12px;border:1px solid #354749;background:#162022;display:grid;gap:8px}
+  .gb-done-card{border-color:#35523b;background:#152218}
+  .gb-plan-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .gb-plan-head strong{font-size:14px}
+  .gb-warn{margin:0;font-size:12px;color:#e5d9a8}
+  .gb-details{font-size:12px;color:#a6b3b2}
+  .gb-details summary{cursor:pointer;color:#c7d1d0}
+  .gb-details ul{margin:6px 0 0;padding-left:18px;max-height:140px;overflow:auto;display:grid;gap:2px}
+  .gb-plan-btns{display:flex;gap:8px;margin-top:2px}
   code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px}
   @media(max-width:720px){.mk-reqs>div{grid-template-columns:1fr;gap:2px}.mk-grid{grid-template-columns:1fr}.mk-sheet{padding:20px 16px 32px}}
 </style>

@@ -40,7 +40,7 @@ const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await p.mouse.move(700, 300); await p.waitForTimeout(1600);
   t = await th(); assert.equal(t.on, false); ok('it goes away when nothing is scrolling or pointed at');
   // a tall page: the thumb stays capped however long the page is
-  await p.getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(500);
+  await p.getByRole('button', { name: 'Music', exact: true }).click(); await p.waitForTimeout(500);
   await p.evaluate(() => { const d = document.createElement('div'); d.style.cssText = 'height:6000px'; d.id = 'tall'; document.querySelector('main').appendChild(d); window.scrollTo(0, 300); });
   await p.waitForTimeout(200);
   t = await th(); assert.ok(t.h <= 96.1 && t.h >= 28); ok('a very tall page still gets a capped thumb');

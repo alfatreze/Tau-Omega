@@ -3,6 +3,7 @@
   // the preferences every sync reads.
   import { onMount } from 'svelte';
   import { open } from '@tauri-apps/plugin-dialog';
+  import ToggleSwitch from './ToggleSwitch.svelte';
   import { checkLame, errorMessage, getPrefs, installLame, lameStatus, setPrefs } from './tau-api';
   import SkipOptionsSheet from './SkipOptionsSheet.svelte';
   import type { ConvertSettings, LameStatus, PrefsView } from './types';
@@ -41,7 +42,7 @@
     {@const c = prefs.convert}
     <p class="ss-lede">The Pocket plays MP3 and FLAC (FLAC up to 48 kHz, stereo). Files it can play are copied exactly as they are. Your originals are never changed.</p>
     <div class="ss-row"><div><b>Convert files the Pocket cannot play</b><small>Lossless files (WAV, AIFF, ALAC, hi-res FLAC) become FLAC; lossy ones (AAC, Ogg) become MP3. Off leaves them out and lists them.</small></div>
-      <div><button class="quiet" on:click={() => change({ enabled: !c.enabled }, c.enabled ? 'Unplayable files will be left out.' : 'Unplayable files will be converted.')}>{c.enabled ? 'Turn off' : 'Turn on'}</button></div></div>
+      <div><ToggleSwitch checked={c.enabled} label="Convert files the Pocket cannot play" on:click={() => change({ enabled: !c.enabled }, c.enabled ? 'Unplayable files will be left out.' : 'Unplayable files will be converted.')} /></div></div>
     {#if c.enabled}
       <fieldset>
         <legend>Quality</legend>
@@ -56,7 +57,7 @@
         <div class="ss-row"><div><b>MP3 quality</b><small>For lossy files that need converting.</small></div>
           <select aria-label="MP3 quality" value={mp3Value(c.mp3)} on:change={(e) => change({ mp3: mp3Parse(e.currentTarget.value) })}>{#each MP3_CHOICES as [v, l]}<option value={v}>{l}</option>{/each}</select></div>
         <div class="ss-row"><div><b>Also shrink playable FLAC files above these limits</b><small>Off by default: files the Pocket can already play are copied untouched.</small></div>
-          <div><button class="quiet" on:click={() => change({ reduce_playable: !c.reduce_playable })}>{c.reduce_playable ? 'Turn off' : 'Turn on'}</button></div></div>
+          <div><ToggleSwitch checked={c.reduce_playable} label="Also shrink playable FLAC files above these limits" on:click={() => change({ reduce_playable: !c.reduce_playable })} /></div></div>
       {/if}
       <div class="ss-row"><div><b>LAME (makes the MP3 files)</b><small>{#if lame?.path}{lame.version ?? 'Found'} · {lame.path}{:else}Not installed. It is a separate free program; this app runs it but never bundles it.{/if}</small></div>
         <div class="ss-btns">

@@ -38,6 +38,8 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   // ---- the developer tools have their own section in the menu, like Tools & settings
   const grp = p.locator('nav .nav-group', { hasText: 'Developer tools' });
   assert.equal(await grp.count(), 1); ok('with developer tools on the menu has a Developer tools section');
+  assert.equal(await p.locator('#dev-tools').count(), 0); assert.equal(await grp.getAttribute('aria-expanded'), 'false'); ok('the section starts collapsed by default');
+  await grp.click(); await p.waitForTimeout(200);
   assert.deepEqual(await p.locator('#dev-tools button').allInnerTexts(), ['Builds', 'Results', 'Check', 'Builder']); ok('holding Builds, Results, Check and Builder');
   assert.equal(await p.locator('nav > button', { hasText: /^Builds$/ }).count(), 0); ok('and none of them sit loose in the main menu');
   await grp.click(); await p.waitForTimeout(200);

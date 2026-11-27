@@ -18,7 +18,7 @@ const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   const lastRequest = () => p.evaluate(() => window.__tauMock.lastRequest());
   const startSync = async () => { await p.getByRole('button', { name: 'Start sync' }).click(); await p.waitForTimeout(700); const dlg = p.getByRole('dialog', { name: /Review|sync/i }); return dlg; };
   await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.goto(url); await p.waitForTimeout(900);
-  await p.getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(500);
+  await p.getByRole('button', { name: 'Music', exact: true }).click(); await p.waitForTimeout(500);
   await p.getByRole('button', { name: 'Choose folder…' }).click(); await p.waitForTimeout(800);
   // ---- the library core: a new playlist from two albums on this computer
   await pc().getByLabel('Select Mingus Ah Um').check(); await pc().getByLabel('Select Head Hunters').check();
@@ -44,7 +44,7 @@ const ok = (n) => { passed++; console.log(`ok - ${n}`); };
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   // ---- albums already on the card go into a playlist without being copied
   await p.evaluate(() => localStorage.clear()); await p.reload(); await p.waitForTimeout(900);
-  await p.getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(600);
+  await p.getByRole('button', { name: 'Music', exact: true }).click(); await p.waitForTimeout(600);
   await pk().getByLabel('Select Kind of Blue').check();
   await pk().getByRole('button', { name: 'Add to playlist…' }).click(); await p.waitForTimeout(300);
   await picker().getByRole('radio', { name: /Favourites/ }).check(); await picker().getByRole('button', { name: 'Add to Favourites' }).click(); await p.waitForTimeout(300);

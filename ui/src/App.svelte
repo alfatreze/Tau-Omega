@@ -3,7 +3,7 @@
   import { open, save } from '@tauri-apps/plugin-dialog';
   import type { ConnectionKind, BackupPlan, CapacityCheck, CheckSummary, Comparison, Core, MediaScan, PackageManifest, PackagePlan, PackageReport, Plan, PlaylistPlan, Problem, RemovePlan, RemoveReport, ScreenshotEntry, Setting, TaudReport, HistoryEntry, LayoutView } from './lib/types';
   import { invoke } from './lib/backend';
-  import { feedbackInfo, checkStorageCapacity, persistNames, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, describePersistedLayout, readPlatformImage, readQrReport, recordRecentCard, scanMedia, listHistory, pruneHistory } from './lib/tau-api';
+  import { feedbackInfo, cardDetectDevice, gamebubInspectCard, checkStorageCapacity, persistNames, compareMedia, detectConnection, errorMessage, executeCoreCopy, executeCoreMove, executePackageInstall, executePlaylistImport, executePlaylistRename, executePlaylistWrite, executeRemoveCore, exportPlaylist, findProblems, getRecentCards, getReportsDir, inspectCard, inspectPackage, listMountedCards, listScreenshots, newJobId, planBackup, planCoreCopy, planPackageInstall, planPlaylistImport, planPlaylistRename, planPlaylistWrite, planRemoveCore, readCheckSummary, readCoreIcon, readImageDataUrl, readPersistedSettings, describePersistedLayout, readPlatformImage, readQrReport, recordRecentCard, scanMedia, listHistory, pruneHistory } from './lib/tau-api';
   import SettingsView from './lib/SettingsView.svelte';
   import HistoryView from './lib/HistoryView.svelte';
   import PlaylistsView from './lib/PlaylistsView.svelte';
@@ -28,8 +28,10 @@
   import CoresView from './lib/CoresView.svelte';
   import ManualAddSheet from './lib/ManualAddSheet.svelte';
   import { manualAdd } from './lib/manualAddStore';
+  import { SHOW_LEGACY_TOOLS } from './lib/buildFlags';
   import { coreUpdateCount } from './lib/marketStore';
   import UpdateBanner from './lib/UpdateBanner.svelte';
+  import UpdatePlanView from './lib/UpdatePlanView.svelte';
   import SettingsFileWarning from './lib/SettingsFileWarning.svelte';
   import OmegaUpdate from './lib/OmegaUpdate.svelte';
   import CardMarkerPrompt from './lib/CardMarkerPrompt.svelte';
@@ -40,11 +42,12 @@
   import CheckView from './lib/CheckView.svelte';
   import BuilderView from './lib/BuilderView.svelte';
   import { coresSelection, coresTab, coresTreeStore, findCore, refreshCores } from './lib/coresStore';
+  import { cardDevice, loadSystems, syncSystemForCard } from './lib/systemStore';
   import { autoCheckUpdates } from './lib/updatesStore';
   import { get } from 'svelte/store';
   let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' | 'check' | 'builder' | 'feedback' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
-  let packageZipPath = ''; let packageCardPath = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
+  let packageZipPath = ''; let packageCardPath = ''; let tauUpdateZip = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
   async function inspectPackageZip() { packageManifest = null; packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packageManifest = await inspectPackage(packageZipPath); packageInspectNotice = `${packageManifest.entries.length} files found. Nothing was changed.`; } catch (error) { packageInspectNotice = `Could not read this package: ${errorMessage(error)}`; } }
   async function reviewPackageInstall() { packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packagePlan = await planPackageInstall(packageZipPath, packageCardPath); packagePlanNotice = `Plan ${packagePlan.id} is ready for review. Nothing has been written.`; } catch (error) { packagePlanNotice = `Could not plan this install: ${errorMessage(error)}`; } }
   async function confirmPackageInstall() { if (!packagePlan) return; try { packageReport = await executePackageInstall(packageZipPath, packageCardPath, packagePlan.id); packageConfirmNotice = 'Installed and verified. Nothing else was changed.'; packagePlan = null; } catch (error) { packageConfirmNotice = `Nothing was reported as complete: ${errorMessage(error)}`; } }
@@ -57,6 +60,7 @@
   /** The Send feedback page is only offered once the feedback service is connected (`feedback_info.enabled`); until then nothing in the menu leads to it. */
   let feedbackOn = false;
   onMount(async () => {
+    loadSystems();
     void feedbackInfo().then((i) => { feedbackOn = i.enabled; }, () => {});
     void loadDeveloperTools();
     try { reportsDir = (await getReportsDir()) ?? ''; } catch { /* Compare cores then asks for a report file */ }
@@ -88,12 +92,14 @@
   // stays open while one of its pages is showing and remembers the user's choice.
   const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'feedback', 'settings'];
   const devItems = ['builds', 'results', 'check', 'builder'];
-  let devOpen = true;
-  try { devOpen = localStorage.getItem('tau.nav.dev') !== '0'; } catch { /* per-viewer convenience */ }
+  let devOpen = false;
+  try { devOpen = localStorage.getItem('tau.nav.dev') === '1'; } catch { /* per-viewer convenience */ }
   function toggleDev() { devOpen = !devOpen; try { localStorage.setItem('tau.nav.dev', devOpen ? '1' : '0'); } catch { /* ignore */ } }
   let moreOpen = false;
   try { moreOpen = localStorage.getItem('tau.nav.more') === '1'; } catch { /* per-viewer convenience */ }
   function toggleMore() { moreOpen = !moreOpen; try { localStorage.setItem('tau.nav.more', moreOpen ? '1' : '0'); } catch { /* ignore */ } }
+  /** True when the open card carries a Tau core that supports Check diagnostics (later: per-core plugin capability). */
+  $: hasTauCore = cores.some((c) => /^(alfatreze\.)?tau($|[ ._])/i.test(c.id));
   // The selected core's media root: what the Library screen lists and writes.
   // What each opened card is plugged in as (the Pocket itself or a reader), for the sidebar icon.
   let connectionKinds: Record<string, ConnectionKind> = {};
@@ -102,6 +108,7 @@
     detectConnection(card).then((c) => (connectionKinds = { ...connectionKinds, [card]: c.kind })).catch(() => {});
   }
   $: ensureConnectionKind(path);
+  $: void syncSystemForCard(path);
   $: mediaRoot = path && activeCore?.media_platform ? `${path.replace(/\/+$/, '')}/Assets/${activeCore.media_platform}/common` : '';
   // Below 720 px the sidebar is a menu opened with the button at the top left (it used to disappear
   // completely, which at 200% zoom removed all navigation).
@@ -110,6 +117,7 @@
   $: if (navOpen) tick().then(() => document.querySelector<HTMLElement>('#sidebar nav button')?.focus());
   function onWindowKey(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
+    if (tauUpdateZip) { tauUpdateZip = ''; return; }
     if (showHelp) { showHelp = false; return; }
     if (navOpen) { navOpen = false; navToggleEl?.focus(); }
   }
@@ -226,7 +234,19 @@
   async function openFolder() {
     if (!path.trim()) { notice = 'Enter a staging-card folder path first.'; return; }
     const previousActiveId = activeCore?.id;
+    cardMounted = null;
+    ejectedSafely = '';
     try {
+      const dev = await cardDetectDevice(path).catch(() => null);
+      if (dev?.device === 'game_bub') {
+        const gb = await gamebubInspectCard(path);
+        cores = [];
+        activeCore = null;
+        cardMounted = true;
+        notice = `Game Bub card opened (${gb.cores.length} core${gb.cores.length === 1 ? '' : 's'} found). This is a read-only inspection.`;
+        recordRecentCard(path).then(() => refreshKnownCards()).catch(() => {});
+        return;
+      }
       cores = await inspectCard(path);
       notice = `${cores.length} core${cores.length === 1 ? '' : 's'} found. This is a read-only inspection.`;
       cardMounted = true;
@@ -327,7 +347,7 @@
       <span class="active-context-icon" aria-hidden="true"><CardIcon kind={connectionKinds[path]} /></span>
       <span class="active-context-text">
         <strong>{path ? cardName(path) : 'No card open'}</strong>
-        <small>{activeCore ? (activeCore.shortname || activeCore.id) : (cores.length ? 'Choose a core' : 'Open a card to begin')}</small>
+        <small>{activeCore ? (activeCore.shortname || activeCore.id) : ($cardDevice?.device === 'game_bub' ? 'Game Bub' : (cores.length ? 'Choose a core' : 'Open a card to begin'))}</small>
         {#if path && page !== 'workbench' && pendingFor(path, pendingTick)}<small class="ctx-pending">{pendingFor(path, pendingTick)} pending</small>{/if}
       </span>
       <svg class="active-context-chevron" class:open={showSwitcher} viewBox="0 0 24 24" fill="none" width="14" height="14" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -354,12 +374,12 @@
   <nav aria-label="Main">
     <button class:active={page === 'cards'} on:click={() => page = 'cards'}>Card</button>
     <NavTree card={path} active={page === 'cores'} show={() => (page = 'cores')} />
-    <button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Library</button>
+    <button class:active={page === 'marketplace'} on:click={() => page = 'marketplace'}>Marketplace{#if $coreUpdateCount > 0}<span class="nav-count" aria-label={`${$coreUpdateCount} core updates`}>{$coreUpdateCount}</span>{/if}</button>
+    <button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Music</button>
     <button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button>
     <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
     <button class:active={page === 'appearance'} on:click={() => page = 'appearance'}>Appearance</button>
     <button class:active={page === 'halcyon'} on:click={() => page = 'halcyon'}>Halcyon EQ</button>
-    <button class:active={page === 'marketplace'} on:click={() => page = 'marketplace'}>Marketplace{#if $coreUpdateCount > 0}<span class="nav-count" aria-label={`${$coreUpdateCount} core updates`}>{$coreUpdateCount}</span>{/if}</button>
     {#if $developerTools}
       <button class="nav-group" class:has-active={devItems.includes(page)} aria-expanded={devOpen || devItems.includes(page)} aria-controls="dev-tools" on:click={toggleDev}><span>Developer tools</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={devOpen || devItems.includes(page)}><path d="m6 9 6 6 6-6"/></svg></button>
       {#if devOpen || devItems.includes(page)}
@@ -374,11 +394,13 @@
     <button class="nav-group" class:has-active={moreItems.includes(page)} aria-expanded={moreOpen} aria-controls="more-tools" on:click={toggleMore}><span>Tools &amp; settings</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={moreOpen}><path d="m6 9 6 6 6-6"/></svg></button>
     {#if moreOpen || moreItems.includes(page)}
       <div class="nav-sub" id="more-tools">
-        <button class:active={page === 'compare'} on:click={() => page = 'compare'}>Compare cores</button>
-        <button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button>
-        <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
-        <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
-        <button class:active={page === 'diagnostics'} on:click={() => page = 'diagnostics'}>Send diagnostics</button>
+        {#if SHOW_LEGACY_TOOLS}
+          <button class:active={page === 'compare'} on:click={() => page = 'compare'}>Compare cores</button>
+          <button class:active={page === 'backup'} on:click={() => page = 'backup'}>Backup</button>
+          <button class:active={page === 'package'} on:click={() => page = 'package'}>Packages</button>
+          <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
+        {/if}
+        {#if hasTauCore}<button class:active={page === 'diagnostics'} on:click={() => page = 'diagnostics'}>Send diagnostics</button>{/if}
         {#if feedbackOn}<button class:active={page === 'feedback'} on:click={() => page = 'feedback'}>Send feedback</button>{/if}
         <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
       </div>
@@ -388,7 +410,7 @@
   <CardMarkerPrompt card={path} />
   <SettingsFileWarning card={path} />
   <DisableCoresDialog card={path} ready={cores.length > 0} changed={() => { void openFolder(); }} />
-  <UpdateBanner card={path} openPackage={(zip) => { packageZipPath = zip; if (!packageCardPath) packageCardPath = path; page = 'package'; void inspectPackageZip(); }} />
+  <UpdateBanner card={path} openPackage={(zip) => { tauUpdateZip = zip; }} />
   <OmegaUpdate />
   {#if page === 'cards'}
     <CardsView {cardMounted} {ejectedSafely} {path} {knownCards} {notice} {cores} {mountedCards} {cardName} {chooseFolder} {openFolder} {openKnownCard} {openCoreLibrary} {openCore} {browseCores} {openUpdates} bind:tab={cardTab}>
@@ -419,7 +441,7 @@
   {:else if page === 'builds'}
     <BuildsView card={path} />
   {:else if page === 'marketplace'}
-    <MarketplaceView card={path} />
+    <MarketplaceView card={path} {openCore} />
   {:else if page === 'feedback'}
     <FeedbackView />
   {:else if page === 'cores'}
@@ -440,6 +462,19 @@
 
 {#if $manualAdd.open}{#key $manualAdd.initial}<ManualAddSheet card={path} initial={$manualAdd.initial} close={() => { manualAdd.set({ open: false, initial: '' }); void openFolder(); }} />{/key}{/if}
 
+{#if tauUpdateZip}
+  <div class="tau-upd-backdrop" role="presentation" on:click={() => (tauUpdateZip = '')}></div>
+  <div class="tau-upd-sheet" role="dialog" aria-modal="true" aria-labelledby="tau-upd-title" use:modal>
+    <div class="tau-upd-head">
+      <h2 id="tau-upd-title">Update Tau</h2>
+      <button class="quiet" aria-label="Close update" on:click={() => (tauUpdateZip = '')}>✕</button>
+    </div>
+    <div class="tau-upd-body">
+      <UpdatePlanView zipPath={tauUpdateZip} cardPath={path} on:installed={() => { void openFolder(); }} />
+    </div>
+  </div>
+{/if}
+
 <button class="help-fab" aria-label="Help" title="Help" on:click={() => showHelp = !showHelp}>?</button>
 {#if showHelp}
   <div class="help-backdrop" role="presentation" on:click={() => showHelp = false}></div>
@@ -448,9 +483,9 @@
     <div class="help-panel-body">
       <p><strong>Open folder</strong> browses to a Pocket card or a plain staging folder (anything with <code>Cores</code> and <code>Assets</code>). A mounted Pocket and any card you've opened before show up under <strong>Known cards</strong> for one-click reopening.</p>
       <p>Cores that look like media players (Tau, or anything that can play your music files) get a large card here. Anything else can be shown with "Show other cores" and promoted with <strong>Set as player</strong>.</p>
-      <p><strong>Library</strong> shows the selected card's music on the right and a folder on this computer on the left. Tick albums (or drag them across) to add them, mark albums on the Pocket to remove, rename or change their cover, then press <strong>Start sync</strong>. Everything you stage sits in <strong>Pending changes</strong> and nothing is written until you confirm. The card is detected automatically; the refresh button at the top right re-reads it. Rarely used tools and settings are under <strong>Tools &amp; settings</strong> in the sidebar.</p>
+      <p><strong>Music</strong> shows the selected card's music on the right and a folder on this computer on the left. Tick albums (or drag them across) to add them, mark albums on the Pocket to remove, rename or change their cover, then press <strong>Start sync</strong>. Everything you stage sits in <strong>Pending changes</strong> and nothing is written until you confirm. The card is detected automatically; the refresh button at the top right re-reads it. Rarely used tools and settings are under <strong>Tools &amp; settings</strong> in the sidebar.</p>
       <p>Every write anywhere in the app goes through <strong>plan → review → confirm</strong> — nothing is copied, moved, or deleted until you've seen exactly what will change and confirmed it.</p>
-      <p>This is all read-only until you explicitly confirm a plan on Library, Compare cores, Backup, or Packages.</p>
+      <p>This is all read-only until you explicitly confirm a plan on Music, Compare cores, Backup, or Packages.</p>
     </div>
   </div>
 {/if}
@@ -485,6 +520,11 @@
      as an inert, unstyled, non-overlaying block until this moved. */
   @font-face { font-family: 'Space Grotesk'; src: url('/assets/SpaceGrotesk-VariableFont_wght.ttf') format('truetype'); font-style: normal; font-weight: 300 700; font-display: swap; }
   :global(:root), :global(body) { font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; }
+  .tau-upd-backdrop{position:fixed;inset:0;background:rgba(6,10,11,.68);z-index:60}
+  .tau-upd-sheet{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 48px);display:flex;flex-direction:column;background:#121a1b;border:1px solid #354749;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.55);z-index:61;overflow:hidden}
+  .tau-upd-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #263334}
+  .tau-upd-head h2{margin:0;font-size:16px}
+  .tau-upd-body{padding:16px 18px;overflow:auto}
   .move-review { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 24px; background: rgb(5 9 10 / 72%); }
   .move-review-card { width: min(560px, 100%); display: grid; gap: 14px; padding: 28px; border: 1px solid #455654; border-radius: 15px; background: #1a2325; box-shadow: 0 24px 80px rgb(0 0 0 / 40%); }
   .move-review-card > p:not(.eyebrow) { color: #aab8b7; margin: 0; }

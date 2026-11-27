@@ -73,7 +73,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   await q.addInitScript(() => { globalThis.__feedback = 'off'; });
   await q.goto(url); await q.evaluate(() => localStorage.clear()); await q.goto(url); await q.waitForTimeout(900);
   const more = q.locator('nav button', { hasText: 'Tools & settings' }); if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  assert.equal(await q.locator('nav button', { hasText: 'Send feedback' }).count(), 0); assert.equal(await q.locator('nav button', { hasText: 'Send diagnostics' }).count(), 1); ok('while sending is not connected, Send feedback is not in the menu');
+  assert.equal(await q.locator('nav button', { hasText: 'Send feedback' }).count(), 0); assert.equal(await q.locator('nav button', { hasText: /^Settings$/ }).count(), 1); ok('while sending is not connected, Send feedback is not in the menu');
   await q.close();
 
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');

@@ -259,6 +259,9 @@ fn read_entries(zip_path: &Path) -> Result<Vec<PackageEntry>, TauError> {
             continue;
         }
         let path = zip_entry.name().replace('\\', "/");
+        if crate::core_package::is_ignored_root_doc(&path) {
+            continue;
+        }
         let mut data = Vec::with_capacity(zip_entry.size() as usize);
         zip_entry.read_to_end(&mut data).map_err(TauError::from)?;
         entries.push(PackageEntry {

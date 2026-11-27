@@ -7,6 +7,7 @@
   import CoreSavesTab from './CoreSavesTab.svelte';
   import CoreScreenshotsTab from './CoreScreenshotsTab.svelte';
   import CoreSettingsTab from './CoreSettingsTab.svelte';
+  import GbPalettesTab from './GbPalettesTab.svelte';
   import { errorMessage } from './backend';
   import { coreDetail, coreFiles, coreKeep, readPlatformImage } from './tau-api';
   import { disabledList, refreshDisabled, setCoresEnabled } from './coreStateStore';
@@ -24,13 +25,19 @@
   /** The card-level core records (library facts) and what to do with them. */
   export let cores: Core[] = []; export let openLibrary: (c: Core) => void = () => {}; export let reloadCard: () => void = () => {};
 
-  type Tab = 'files' | 'saves' | 'screens' | 'settings';
-  const TABS: [Tab, string][] = [['files', 'Files'], ['saves', 'Saves'], ['screens', 'Screenshots'], ['settings', 'Settings']];
+  type Tab = 'files' | 'saves' | 'screens' | 'settings' | 'palettes';
+  const BASE_TABS: [Tab, string][] = [['files', 'Files'], ['saves', 'Saves'], ['screens', 'Screenshots'], ['settings', 'Settings']];
   let tab: Tab = 'files';
+  let platTab: 'cores' | 'palettes' = 'cores';
+  let platTabFor = '';
   let detail: CoreDetail | null = null; let files: CoreFiles | null = null; let error = ''; let loadedFor = '';
   let filesTab: CoreFilesTab | undefined; let banner: string | null = null; let bannerFor = '';
 
   $: node = $coresTreeStore.find((n) => n.platform.id === $coresSelection.platform);
+  $: isGbPlatform = node?.platform.id === 'gb';
+  $: isGbCore = !!detail?.platforms.some((p) => p.id === 'gb');
+  $: visibleTabs = isGbCore ? [...BASE_TABS, ['palettes', 'Palettes'] as [Tab, string]] : BASE_TABS;
+  $: if (node && platTabFor !== node.platform.id) { platTabFor = node.platform.id; platTab = 'cores'; }
   $: row = $coresSelection.core ? findCore($coresTreeStore, $coresSelection.core)?.core : undefined;
   $: if (card && $coresSelection.core && `${card}|${$coresSelection.core}` !== loadedFor) void load($coresSelection.core);
   $: if (!$coresSelection.core) { detail = null; files = null; loadedFor = ''; }
@@ -70,10 +77,10 @@
   async function addMissing(folderRel: string) { tab = 'files'; await tick(); await filesTab?.chooseFor(folderRel); }
 
   function tabKey(e: KeyboardEvent) {
-    const i = TABS.findIndex(([t]) => t === tab);
-    const next = e.key === 'ArrowRight' ? (i + 1) % TABS.length : e.key === 'ArrowLeft' ? (i + TABS.length - 1) % TABS.length : e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : -1;
+    const i = visibleTabs.findIndex(([t]) => t === tab);
+    const next = e.key === 'ArrowRight' ? (i + 1) % visibleTabs.length : e.key === 'ArrowLeft' ? (i + visibleTabs.length - 1) % visibleTabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? visibleTabs.length - 1 : -1;
     if (next < 0) return;
-    e.preventDefault(); tab = TABS[next][0];
+    e.preventDefault(); tab = visibleTabs[next][0];
     tick().then(() => document.getElementById(`cores-tab-${tab}`)?.focus());
   }
   function onKey(e: KeyboardEvent) {
@@ -97,7 +104,11 @@
   $: hits = q ? $coresGroups.flatMap((g) => g.makers.flatMap((m) => m.platforms.flatMap((n) => n.cores
     .filter((c) => `${c.id} ${c.shortname} ${c.author} ${n.platform.name} ${m.name} ${g.name}`.toLowerCase().includes(q) || n.platform.name.toLowerCase().includes(q))
     .map((c) => ({ core: c, platform: n.platform, category: g.name, maker: m.name }))))) : [];
-  const pickPlatform = (id: string) => coresSelection.set({ platform: id, core: '' });
+  const pickPlatform = (id: string) => {
+    const n = $coresTreeStore.find((x) => x.platform.id === id);
+    if (n && n.cores.length === 1) coresSelection.set({ platform: id, core: n.cores[0].id });
+    else coresSelection.set({ platform: id, core: '' });
+  };
   const pickCore = (platform: string, core: string) => coresSelection.set({ platform, core });
   onDestroy(() => {});
 </script>
@@ -108,7 +119,7 @@
   {:else if $coresSelection.core}
     <header class="cp-head">
       <div>
-        <nav class="crumbs" aria-label="Where you are"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '' })}>Cores</button><span aria-hidden="true">›</span><button class="quiet" on:click={() => pickPlatform($coresSelection.platform)}>{node?.platform.name ?? $coresSelection.platform}</button></nav>
+        <nav class="crumbs" aria-label="Where you are"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '' })}>Cores</button>{#if node && node.cores.length > 1}<span aria-hidden="true">›</span><button class="quiet" on:click={() => pickPlatform($coresSelection.platform)}>{node.platform.name}</button>{/if}</nav>
         <h1 id="cores-title">{row?.shortname ?? detail?.shortname ?? $coresSelection.core}</h1>
         <p class="lede">{$coresSelection.core}{detail?.version ? ` · version ${detail.version}` : ''}</p>
       </div>
@@ -126,7 +137,7 @@
       <div class="cores-grid" class:no-inspector={!$inspectorOpen}>
         <div class="cores-main">
           <div class="tabs" role="tablist" aria-label="Core sections" tabindex="-1" on:keydown={tabKey}>
-            {#each TABS as [id, label]}
+            {#each visibleTabs as [id, label]}
               <button id={`cores-tab-${id}`} role="tab" class:current={tab === id} aria-selected={tab === id} aria-controls={`cores-panel-${id}`} tabindex={tab === id ? 0 : -1} on:click={() => (tab = id)}>{label}{#if id === 'files' && files.missing.length}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</button>
             {/each}
           </div>
@@ -134,6 +145,7 @@
             {#if tab === 'files'}<CoreFilesTab bind:this={filesTab} {card} {detail} {files} changed={reload} />
             {:else if tab === 'saves'}<CoreSavesTab {files} />
             {:else if tab === 'screens'}{#key detail.id}<CoreScreenshotsTab {card} coreId={detail.id} />{/key}
+            {:else if tab === 'palettes'}<GbPalettesTab {card} />
             {:else}{#key detail.id}<CoreSettingsTab {card} {detail} {files} {addMissing} changed={reload} />{/key}{/if}
           </div>
         </div>
@@ -162,6 +174,15 @@
       <p class="eyebrow">{node.platform.category ? node.platform.category.toUpperCase() : 'PLATFORM'}</p><h1 id="cores-title">{node.platform.name}</h1>
       <p class="lede">{[node.platform.manufacturer, node.platform.year || ''].filter(Boolean).join(' · ')}{node.platform.manufacturer || node.platform.year ? ' · ' : ''}{plural(node.cores.length, 'core')} on this card</p></div></header>
     <img class="plat-banner" src={banner || platformFallbackArt({ id: node.platform.id, name: node.platform.name, category: node.platform.category, manufacturer: node.platform.manufacturer })} alt="" />
+    {#if isGbPlatform}
+      <div class="tabs" role="tablist" aria-label="Platform sections">
+        <button id="plat-tab-cores" role="tab" class:current={platTab === 'cores'} aria-selected={platTab === 'cores'} on:click={() => (platTab = 'cores')}>Cores</button>
+        <button id="plat-tab-palettes" role="tab" class:current={platTab === 'palettes'} aria-selected={platTab === 'palettes'} on:click={() => (platTab = 'palettes')}>Palettes</button>
+      </div>
+    {/if}
+    {#if isGbPlatform && platTab === 'palettes'}
+      <GbPalettesTab {card} />
+    {:else}
     <ul class="core-list pv-list" aria-label={`Cores for ${node.platform.name}`}>
       {#each node.cores as c (c.id)}
         <li class:has-en={c.disabled}>
@@ -176,6 +197,7 @@
         </li>
       {/each}
     </ul>
+    {/if}
   {:else}
     <header><div><p class="eyebrow">YOUR CARD</p><h1 id="cores-title">Cores</h1><p class="lede">Every core on this card, grouped like the openFPGA Library: category, manufacturer, platform. Pick a platform to see its cores, or a core to see its files, saves, screenshots and settings.</p></div></header>
     <div class="ov-bar"><label class="ov-search"><span class="sr">Search cores, platforms and manufacturers</span>

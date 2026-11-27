@@ -21,7 +21,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const pending = async () => { const t = await dp().count() ? await text(dp()) : await text(await openPending()); await closePending(); return t; };
   const pc = () => p.getByRole('region', { name: 'This computer' });
   const text = (loc) => loc.innerText();
-  const openLibrary = async () => { await p.getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(400); };
+  const openLibrary = async () => { await p.getByRole('button', { name: 'Music', exact: true }).click(); await p.waitForTimeout(400); };
   const chooseFolder = async () => { await p.getByRole('button', { name: 'Choose folder…' }).click(); await p.waitForTimeout(400); };
 
   // Start sync now only asks when there is a decision (removals, or the slow direct-USB warning); otherwise it just runs.
@@ -337,7 +337,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await p.evaluate(() => !!document.activeElement?.closest('#sidebar')), true); ok('Tab stays inside the open menu');
   await p.keyboard.press('Escape'); await p.waitForTimeout(200);
   assert.equal(await p.locator('#sidebar').isVisible(), false); assert.equal(await p.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Menu'); ok('Escape closes it and returns focus to the Menu button');
-  await p.getByRole('button', { name: 'Menu' }).click(); await p.locator('#sidebar').getByRole('button', { name: 'Library', exact: true }).click(); await p.waitForTimeout(400);
+  await p.getByRole('button', { name: 'Menu' }).click(); await p.locator('#sidebar').getByRole('button', { name: 'Music', exact: true }).click(); await p.waitForTimeout(400);
   assert.equal(await p.locator('#sidebar').isVisible(), false); assert.match(await text(p.locator('main')), /Choose your music folder|On Pocket/); ok('choosing a page closes the menu and shows it');
   await p.setViewportSize({ width: 1440, height: 900 });
 

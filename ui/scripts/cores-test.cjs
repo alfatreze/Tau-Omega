@@ -20,22 +20,17 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const tab = (name) => p.getByRole('tab', { name });
   const panel = () => p.getByRole('tabpanel');
 
-  // ---- the menu tree
+  // ---- the menu tree (simplified 2-level: single-core platforms go straight to the core; multi-core platforms expand)
   assert.match(await p.locator('nav .nav-group', { hasText: 'Cores' }).innerText(), /cores\s*8/i); ok('the Cores menu entry shows how many cores the card has');
   assert.ok(await p.locator('nav .nav-group .nt-dot').count() === 1); ok('it carries a dot when a core needs a file');
-  assert.deepEqual((await tree.locator('.nt-item[data-kind="category"] .nt-name').allInnerTexts()).map((t) => t.toLowerCase()), ['console', 'handheld', 'computer', 'media players', 'no platform']); ok('categories follow the Library order, with "No platform" last');
-  assert.deepEqual(await tree.locator('.nt-item[data-kind="maker"] .nt-name').allInnerTexts(), ['Nintendo', 'Nintendo', 'Commodore', 'alfatreze']); ok('each category lists its manufacturers');
-  assert.deepEqual(await tree.locator('.nt-item[data-kind="platform"] .nt-name').allInnerTexts(), ['SNES', 'Game Boy', 'Game Boy Advance', 'Amiga', 'TAU', 'No platform']); ok('platforms sit under their manufacturer (Console > Nintendo > SNES), Tau under Media Players');
-  assert.deepEqual(await tree.locator('[data-kind="platform"]').evaluateAll((els) => els.map((e) => e.closest('li[role=treeitem]').getAttribute('aria-level'))), ['3','3','3','3','3','3']); ok('the tree has four levels');
-  assert.equal(await tree.locator('.nt-core').count(), 0); ok('platforms start collapsed');
+  assert.deepEqual(await tree.locator('li[aria-level="1"] > .nt-row > .nt-item .nt-name').allInnerTexts(), ['SNES', 'Game Boy', 'Game Boy Advance', 'Amiga', 'TAU', 'No platform']); ok('the sidebar lists platforms cleanly in order');
+  assert.deepEqual(await tree.locator('[data-kind="platform"] .nt-name').allInnerTexts(), ['Game Boy Advance', 'TAU']); ok('only multi-core platforms have an expandable branch');
+  assert.equal(await tree.locator('.nt-core').count(), 0); ok('multi-core platforms start collapsed');
   await tree.getByRole('button', { name: 'Expand Game Boy Advance' }).click(); await p.waitForTimeout(150);
   assert.deepEqual(await tree.locator('.nt-core .nt-name').allInnerTexts(), ['GBA', 'GBAlt']); ok('expanding a platform lists its cores');
   await tree.getByRole('button', { name: 'Expand TAU' }).click(); await p.waitForTimeout(150);
   assert.deepEqual(await tree.locator('.nt-core .nt-name').allInnerTexts(), ['GBA', 'GBAlt', 'omega', 'player2']); ok('every Tau core is under the one TAU platform');
   await tree.getByRole('button', { name: 'Collapse TAU' }).click(); await p.waitForTimeout(100);
-  await tree.getByRole('button', { name: 'Collapse Handheld' }).click(); await p.waitForTimeout(100);
-  assert.equal(await tree.locator('[data-kind="platform"]').count(), 4); ok('a category can be collapsed with everything under it');
-  await tree.getByRole('button', { name: 'Expand Handheld' }).click(); await p.waitForTimeout(100);
   assert.ok(await core('GBA').locator('.nt-dot').count() === 1 && await core('GBAlt').locator('.nt-dot').count() === 0); ok('only the core that needs a file has the dot');
 
   // ---- platform page
@@ -151,33 +146,19 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await tree.locator('.nt-core').count(), 2); ok('arrow keys move through the tree, collapse and expand a platform');
 
   // ---- no card, core with no files, overview
-  await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(200); await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(300);
+  await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(300);
   assert.match(await p.locator('.cores').innerText(), /grouped like the openFPGA Library/); assert.equal(await p.locator('.ov-card').count(), 6); assert.deepEqual((await p.locator('.ov-cat h2').allInnerTexts()).map((t) => t.split('\n')[0].replace(/\s+\d+ cores?$/, '').toLowerCase()), ['console', 'handheld', 'computer', 'media players', 'no platform']); ok('the Cores entry itself opens an overview of every platform, in category sections');
   assert.equal(await p.locator('.nt input').count(), 0); ok('the menu has no search box');
-  // category and manufacturer rows open their own pages; only the arrow expands
-  const cat = (n) => tree.locator('.nt-item[data-kind="category"]', { hasText: n });
-  const nPlat = await tree.locator('[data-kind="platform"]').count();
-  await cat('Handheld').click(); await p.waitForTimeout(300);
-  assert.equal(await tree.locator('[data-kind="platform"]').count(), nPlat); assert.match(await p.locator('.cores').innerText(), /CATEGORY[\s\S]*Handheld[\s\S]*2 platforms, 3 cores[\s\S]*Game Boy Advance/i); ok('clicking a category opens its page and does not expand or collapse it');
-  assert.ok((await cat('Handheld').getAttribute('class')).includes('sel')); ok('the selected category is highlighted');
-  await tree.locator('.nt-item[data-kind="maker"]', { hasText: 'Nintendo' }).nth(1).click(); await p.waitForTimeout(300);
-  assert.match(await p.locator('.cores').innerText(), /MANUFACTURER[\s\S]*Nintendo[\s\S]*Handheld · 2 platforms, 3 cores/i); ok('a manufacturer has its own page too');
-  await tree.getByRole('button', { name: 'Collapse Handheld' }).click(); await p.waitForTimeout(150);
-  assert.ok((await tree.locator('[data-kind="platform"]').count()) < nPlat); await tree.getByRole('button', { name: 'Expand Handheld' }).click(); await p.waitForTimeout(150);
-  assert.equal(await tree.locator('[data-kind="platform"]').count(), nPlat); ok('only the arrow collapses and expands');
+  // platform rows open their own pages; only the arrow expands
   const hov = async (sel) => { await sel.hover(); await p.waitForTimeout(150); return sel.evaluate((e) => getComputedStyle(e).backgroundColor); };
-  const bodyHover = await hov(cat('Computer')); const arrowHover = await hov(tree.getByRole('button', { name: 'Collapse Computer' }));
+  const bodyHover = await hov(platform('TAU')); const arrowHover = await hov(tree.getByRole('button', { name: 'Expand TAU' }));
   assert.notEqual(bodyHover, arrowHover); ok('the row body and the arrow highlight differently on hover');
-  await p.locator('.cores .crumbs button', { hasText: 'Cores' }).first().click(); await p.waitForTimeout(300);
   await p.getByRole('searchbox', { name: /Search cores/ }).fill('snes'); await p.waitForTimeout(250);
   assert.match(await p.locator('.cores').innerText(), /SNES[\s\S]*Console[\s\S]*Nintendo[\s\S]*agg23\.SNES/i); assert.equal(await p.locator('.pv-list li').count(), 1); ok('searching on the Cores page lists matching cores with their category, manufacturer and platform');
   await p.locator('.pv-open').click(); await p.waitForTimeout(700);
   assert.match(await p.locator('.cores h1').innerText(), /SNES/); ok('picking a result opens that core');
-  await tree.locator('.nt-item[data-kind="platform"]').first().click(); await p.waitForTimeout(250);
-  await p.locator('nav .nav-group', { hasText: 'Cores' }).click().catch(() => {}); await p.waitForTimeout(150); await p.locator('nav .nav-group', { hasText: 'Cores' }).click().catch(() => {}); await p.waitForTimeout(400);
-  await platform('No platform').click(); await p.waitForTimeout(300);
-  await p.locator('.pv-open').first().click(); await p.waitForTimeout(700);
-  assert.match(await panel().innerText(), /No files yet/); ok('a core with no platform opens without errors');
+  await tree.locator('li[aria-level="1"] .nt-item', { hasText: 'No platform' }).click(); await p.waitForTimeout(700);
+  assert.match(await panel().innerText(), /No files yet/); ok('a single-core platform opens its core directly without an intermediate platform page');
 
   // ---- Tau's library facts live with the core
   await tree.getByRole('button', { name: 'Expand TAU' }).click().catch(() => {}); await p.waitForTimeout(150);
@@ -201,7 +182,7 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await p.locator('nav button', { hasText: /^Sync history$/ }).count(), 0); ok('and it is no longer a separate menu entry');
 
   // ---- the Library's target core is chosen from the cores that play mp3 and flac
-  await p.locator('nav button', { hasText: /^Library$/ }).click(); await p.waitForTimeout(700);
+  await p.locator('nav button', { hasText: /^Music$/ }).click(); await p.waitForTimeout(700);
   const target = p.getByRole('combobox', { name: 'Target core' });
   assert.equal(await target.count(), 1);
   const groupsText = await target.evaluate((el) => [...el.querySelectorAll('optgroup')].map((g) => g.label + ': ' + [...g.querySelectorAll('option')].map((o) => o.textContent.trim()).join(' | ')));

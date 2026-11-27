@@ -95,6 +95,42 @@ pub fn platform_info(card: &Path, id: &str) -> PlatformInfo {
 
 /// Installed cores grouped by main platform, platforms sorted by name, cores by shortname.
 pub fn platform_tree(card: &Path) -> Result<Vec<PlatformNode>, TauError> {
+    if crate::device::detect_card(card).device == Some(crate::device::DeviceKind::GameBub) {
+        let view = crate::gamebub::inspect_card(card);
+        if view.cores.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut rows: Vec<CoreRow> = view
+            .cores
+            .into_iter()
+            .map(|c| CoreRow {
+                id: c.core.id.clone(),
+                shortname: if c.core.name.is_empty() {
+                    c.core.id.clone()
+                } else {
+                    c.core.name
+                },
+                author: c.core.author,
+                version: c.core.version,
+                platform: "gamebub".into(),
+                platforms: vec!["gamebub".into()],
+                missing: c.missing_required_files.len() + c.missing_bitstreams.len(),
+                disabled: false,
+            })
+            .collect();
+        rows.sort_by_key(|c| c.shortname.to_lowercase());
+        return Ok(vec![PlatformNode {
+            platform: PlatformInfo {
+                id: "gamebub".into(),
+                name: "Game Bub".into(),
+                category: "Handheld".into(),
+                manufacturer: "Game Bub".into(),
+                year: 2026,
+                has_image: false,
+            },
+            cores: rows,
+        }]);
+    }
     let enabled = inspect_card(card)?.cores;
     let held: Vec<crate::card::Core> = crate::card::disabled_cores(card)
         .into_iter()

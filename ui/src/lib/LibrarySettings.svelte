@@ -7,6 +7,7 @@
   import { cardMarkerStatus, removeCardMarker, setCardMarker, clearHistory, errorMessage, getPrefs, listHistory, pruneHistory, setPrefs, setReportsDir } from './tau-api';
   import type { MarkerStatus, Prefs, PrefsView } from './types';
   import { developerTools, confirmRealCard } from './devStore';
+  import ToggleSwitch from './ToggleSwitch.svelte';
 
   /** Opens the sync history page. */
   export let openHistory: () => void = () => {};
@@ -106,20 +107,20 @@
       </div></div>
 
     <div class="ls-row"><div><b>Check for Tau updates</b><small>When the app starts, ask GitHub for the public release list (nothing about you or your card is sent). Installing is always your action.</small></div>
-      <div><button class="quiet" on:click={() => { const on = !prefs?.check_updates; void update({ check_updates: on, update_notice_shown: true }, on ? 'Update checks are on.' : 'Update checks are off.'); }}>{prefs.check_updates ? 'Turn off' : 'Turn on'}</button></div></div>
+      <div><ToggleSwitch checked={prefs.check_updates} label="Check for Tau updates" on:click={() => { const on = !prefs?.check_updates; void update({ check_updates: on, update_notice_shown: true }, on ? 'Update checks are on.' : 'Update checks are off.'); }} /></div></div>
 
     <div class="ls-row"><div><b>Keep Spotlight off Pocket cards</b><small>Adds an empty <code>.metadata_never_index</code> file at the card’s root when Tau Omega writes to a card, so macOS stops scanning it (faster writes, fewer “in use” errors). {prefs.card_marker === 'ask' ? 'Not decided yet.' : prefs.card_marker === 'on' ? 'On.' : 'Off.'}{#if marker?.is_card}{' '}This card: {marker.present ? 'has the marker' : 'no marker'}.{/if}</small></div>
-      <div class="ls-btns"><button class="quiet" on:click={toggleMarker}>{prefs.card_marker === 'on' ? 'Turn off' : 'Turn on'}</button>{#if marker?.present}<button class="quiet" on:click={dropMarker}>Remove from this card</button>{/if}</div></div>
+      <div class="ls-btns"><ToggleSwitch checked={prefs.card_marker === 'on'} label="Keep Spotlight off Pocket cards" on:click={toggleMarker} />{#if marker?.present}<button class="quiet" on:click={dropMarker}>Remove from this card</button>{/if}</div></div>
 
     <div class="ls-row"><div><b>Cores the Pocket cannot use</b><small>When a core is missing a file it needs, or is broken, it clutters the Pocket’s menu. Nothing is ever deleted: a hidden core is moved to <code>Disabled Cores</code> and can be enabled again from Cores.</small></div>
       <div><label class="ls-sel"><span class="sr">What to do about cores the Pocket cannot use</span><select value={prefs.core_disable} on:change={(e) => void update({ core_disable: e.currentTarget.value as 'ask' | 'auto' | 'never' }, 'Saved.')}>
         <option value="ask">Ask me when I open a card</option><option value="auto">Hide them automatically</option><option value="never">Never suggest hiding</option></select></label></div></div>
 
     <div class="ls-row"><div><b>Show developer tools</b><small>For people who build cores. Adds a card role (Real or Test) on the Card page and the Builds, Results, Check and Builder pages. Off by default; nothing changes for everyday use.</small></div>
-      <div><button class="quiet" role="switch" aria-checked={prefs.developer_tools} on:click={async () => { const on = !prefs?.developer_tools; await update({ developer_tools: on }, on ? 'Developer tools are on.' : 'Developer tools are off.'); developerTools.set(!!prefs?.developer_tools); }}>{prefs.developer_tools ? 'Turn off' : 'Turn on'}</button></div></div>
+      <div><ToggleSwitch checked={prefs.developer_tools} label="Show developer tools" on:click={async () => { const on = !prefs?.developer_tools; await update({ developer_tools: on }, on ? 'Developer tools are on.' : 'Developer tools are off.'); developerTools.set(!!prefs?.developer_tools); }} /></div></div>
     {#if prefs.developer_tools}
       <div class="ls-row"><div><b>Ask for the card’s name before installing</b><small>When installing onto a card marked as Real, type its name to confirm. Off by default: the reviewed plan and the Install button are the confirmation.</small></div>
-        <div><button class="quiet" role="switch" aria-checked={$confirmRealCard} on:click={() => confirmRealCard.update((v) => !v)}>{$confirmRealCard ? 'Turn off' : 'Turn on'}</button></div></div>
+        <div><ToggleSwitch checked={$confirmRealCard} label="Ask for the card’s name before installing" on:click={() => confirmRealCard.update((v) => !v)} /></div></div>
     {/if}
 
     <div class="ls-row"><div><b>Notices</b><small>Show the one-time messages again.</small></div>
