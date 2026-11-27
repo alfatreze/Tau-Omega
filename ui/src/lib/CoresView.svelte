@@ -7,6 +7,7 @@
   import CoreSavesTab from './CoreSavesTab.svelte';
   import CoreScreenshotsTab from './CoreScreenshotsTab.svelte';
   import CoreSettingsTab from './CoreSettingsTab.svelte';
+  import GameBubCoreView from './GameBubCoreView.svelte';
   import GbPalettesTab from './GbPalettesTab.svelte';
   import { errorMessage } from './backend';
   import { coreDetail, coreFiles, coreKeep, readPlatformImage } from './tau-api';
@@ -39,8 +40,9 @@
   $: visibleTabs = isGbCore ? [...BASE_TABS, ['palettes', 'Palettes'] as [Tab, string]] : BASE_TABS;
   $: if (node && platTabFor !== node.platform.id) { platTabFor = node.platform.id; platTab = 'cores'; }
   $: row = $coresSelection.core ? findCore($coresTreeStore, $coresSelection.core)?.core : undefined;
-  $: if (card && $coresSelection.core && `${card}|${$coresSelection.core}` !== loadedFor) void load($coresSelection.core);
-  $: if (!$coresSelection.core) { detail = null; files = null; loadedFor = ''; }
+  $: isGameBubCore = $coresSelection.platform === 'gamebub';
+  $: if (card && $coresSelection.core && !isGameBubCore && `${card}|${$coresSelection.core}` !== loadedFor) void load($coresSelection.core);
+  $: if (!$coresSelection.core || isGameBubCore) { detail = null; files = null; loadedFor = ''; }
   $: if (card && node && node.platform.has_image && bannerFor !== `${card}|${node.platform.id}`) { bannerFor = `${card}|${node.platform.id}`; banner = null; readPlatformImage(card, node.platform.id).then((u) => (banner = u)).catch(() => (banner = null)); }
 
   async function load(id: string) {
@@ -116,6 +118,8 @@
 <section class="page cores" class:has-core={!!$coresSelection.core && !!card} aria-labelledby="cores-title">
   {#if !card}
     <header><div><p class="eyebrow">CORES</p><h1 id="cores-title">Cores</h1><p class="lede">Open a card to see the cores on it, organised by platform.</p></div></header>
+  {:else if $coresSelection.core && isGameBubCore}
+    <GameBubCoreView {card} coreId={$coresSelection.core} {reloadCard} />
   {:else if $coresSelection.core}
     <header class="cp-head">
       <div>

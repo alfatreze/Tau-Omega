@@ -253,6 +253,14 @@ export type GameBubInstallPlan = { id: string; zip_sha256: string; cores: GameBu
 export type GameBubInstallReport = { cores_installed: string[]; files_written: number; backup_dir: string | null };
 export type GameBubRemovePlan = { id: string; core_id: string; name: string; files_to_remove: string[] };
 export type GameBubRemoveReport = { core_id: string; files_removed: number; backup_dir: string | null };
+export type GameBubBitstream = { target: string; filename: string };
+export type GameBubHardware = { cartridge_enable: string; cartridge_selectable: boolean };
+export type GameBubCoreJson = { id: string; name: string; author: string; description: string; version: string; release_date: string; url: string; license: string; min_firmware: string; bitstreams: GameBubBitstream[]; hardware: GameBubHardware };
+export type GameBubFileEntry = { id: number; label: string; filename: string | null; user_selected: boolean; dependent_on_0: boolean; extensions: string[]; optional: boolean; read_only: boolean };
+export type GameBubSettingEntry = { id: number; label: string; kind: string };
+export type GameBubBiosStatus = { filename: string; label: string; expected_bytes: number; present: boolean; actual_bytes: number | null; size_ok: boolean };
+export type GameBubInstalledCore = { folder: string; core: GameBubCoreJson; missing_bitstreams: string[]; files: GameBubFileEntry[]; missing_required_files: string[]; settings: GameBubSettingEntry[] };
+export type GameBubCardView = { cores: GameBubInstalledCore[]; bios: GameBubBiosStatus[] };
 export type CatalogCore = {
   id: string; author: string; name: string; repository: { owner: string; name: string }; sponsor: { links: string[] };
   category: string; manufacturer: string; year: number; platform_id: string;

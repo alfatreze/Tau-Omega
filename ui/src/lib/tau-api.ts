@@ -108,7 +108,7 @@ export const installLame = (method: string) => invoke<LameStatus>('install_lame'
 
 export const marketplaceCatalog = (force = false) => invoke<CatalogResult>('marketplace_catalog', { force });
 export const cardDetectDevice = (card: string) => invoke<import('./types').CardDeviceInfo>('card_detect_device', { card });
-export const gamebubInspectCard = (card: string) => invoke<{ cores: unknown[]; bios: unknown[] }>('gamebub_inspect_card', { card });
+export const gamebubInspectCard = (card: string) => invoke<import('./types').GameBubCardView>('gamebub_inspect_card', { card });
 export const gamebubDownloadCore = (coreId: string) => invoke<import('./types').GameBubDownloaded>('gamebub_download_core', { coreId });
 export const gamebubPlanInstall = (card: string, zipPath: string, onlyCore: string | null = null, expectedSha256: string | null = null) => invoke<import('./types').GameBubInstallPlan>('gamebub_plan_install', { card, zipPath, onlyCore, expectedSha256 });
 export const gamebubExecuteInstall = (card: string, zipPath: string, onlyCore: string | null, expectedSha256: string | null, confirmation: string) => invoke<import('./types').GameBubInstallReport>('gamebub_execute_install', { card, zipPath, onlyCore, expectedSha256, confirmation });
