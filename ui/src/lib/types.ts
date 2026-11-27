@@ -525,3 +525,14 @@ export type PackApplyPlan = {
   skipped_not_installed: number;
 };
 export type PackApplyReport = { pack_id: string; written: number; backed_up: number; backup_dir: string | null };
+
+// ---- Game Bub per-core ROM & save management (tau_core::gamebub_files) ----
+export type GameBubRomEntry = { rel_path: string; folder_rel: string; name: string; stem: string; ext: string; bytes: number; modified: number };
+export type GameBubSaveKind = 'save' | 'save_state' | 'companion';
+export type GameBubSaveEntry = { rel_path: string; folder_rel: string; name: string; game_stem: string; slot_label: string; kind: GameBubSaveKind; bytes: number; modified: number; matched_rom: string | null };
+export type GameBubCoreFilesView = { core_id: string; pinned_folder: string | null; rom_extensions: string[]; save_extensions: string[]; roms: GameBubRomEntry[]; saves: GameBubSaveEntry[]; unmatched_saves: GameBubSaveEntry[]; total_rom_bytes: number; total_save_bytes: number };
+export type GameBubAddItem = { source: string; dest_rel: string; bytes: number; replaces_existing: boolean };
+export type GameBubAddPlan = { id: string; core_id: string; dest_folder: string; items: GameBubAddItem[]; new_files: number; replaced_files: number; skipped: string[]; bytes_to_write: number };
+export type GameBubAddReport = { written: number; replaced: number; bytes_written: number; backup_dir: string | null };
+export type GameBubDeletePlan = { id: string; core_id: string; rel_paths: string[]; total_bytes: number };
+export type GameBubDeleteReport = { removed: number; bytes_removed: number; backup_dir: string };

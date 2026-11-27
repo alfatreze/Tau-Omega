@@ -274,3 +274,10 @@ export const artworkSetOverride = (args: {
   sourcePath: args.sourcePath ?? null,
 });
 export const artworkClearOverride = (overrideKey: string) => invoke<boolean>('artwork_clear_override', { overrideKey });
+
+export const gamebubCoreFiles = (card: string, coreId: string) => invoke<import('./types').GameBubCoreFilesView>('gamebub_core_files', { card, coreId });
+export const gamebubSetRomFolder = (card: string, coreId: string, folder: string | null) => invoke<string | null>('gamebub_set_rom_folder', { card, coreId, folder });
+export const gamebubPlanAddFiles = (card: string, coreId: string, destFolder: string, sources: string[], replace: boolean) => invoke<import('./types').GameBubAddPlan>('gamebub_plan_add_files', { card, coreId, destFolder, sources, replace });
+export const gamebubExecuteAddFiles = (card: string, coreId: string, destFolder: string, sources: string[], replace: boolean, confirmation: string) => invoke<import('./types').GameBubAddReport>('gamebub_execute_add_files', { card, coreId, destFolder, sources, replace, confirmation });
+export const gamebubPlanDeleteFiles = (card: string, coreId: string, relPaths: string[]) => invoke<import('./types').GameBubDeletePlan>('gamebub_plan_delete_files', { card, coreId, relPaths });
+export const gamebubExecuteDeleteFiles = (card: string, coreId: string, relPaths: string[], confirmation: string) => invoke<import('./types').GameBubDeleteReport>('gamebub_execute_delete_files', { card, coreId, relPaths, confirmation });

@@ -54,6 +54,7 @@ pub mod duplicates;
 pub mod file_purpose;
 pub mod firmware;
 pub mod gamebub;
+pub mod gamebub_files;
 pub mod gamebub_install;
 pub mod gb_palettes;
 pub mod github_release;

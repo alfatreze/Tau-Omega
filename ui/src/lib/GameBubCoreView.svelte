@@ -1,25 +1,43 @@
 <script lang="ts">
   // Dedicated core view for Game Bub cards (`/cores/<id>/core.json`, `files.json`, `settings.json`).
-  // Only shows features that apply to Game Bub (no Pocket-only visibility switch, saves/screenshots tabs, or Dock/Link/Sleep fields).
-  import { errorMessage } from './backend';
+  // Supports extension-filtered ROM scanning, stem-matched companion saves/save states,
+  // optional per-core pinned folder, reviewed Add/Remove, and Plex-style banner artwork.
+  import { open } from '@tauri-apps/plugin-dialog';
   import ArtworkPickerSheet from './ArtworkPickerSheet.svelte';
+  import { errorMessage } from './backend';
+  import { day, plural, size } from './coresFormat';
   import { coresSelection, refreshCores } from './coresStore';
+  import Icon from './Icon.svelte';
   import { platformFallbackArt } from './platformArt';
   import {
     artworkReadOverride,
+    gamebubCoreFiles,
+    gamebubExecuteAddFiles,
+    gamebubExecuteDeleteFiles,
     gamebubExecuteRemove,
     gamebubInspectCard,
+    gamebubPlanAddFiles,
+    gamebubPlanDeleteFiles,
     gamebubPlanRemove,
+    gamebubSetRomFolder,
     systemCoreProfile,
   } from './tau-api';
-  import type { GameBubInstalledCore, GameBubRemovePlan } from './types';
+  import type {
+    GameBubAddPlan,
+    GameBubCoreFilesView,
+    GameBubDeletePlan,
+    GameBubInstalledCore,
+    GameBubRemovePlan,
+    GameBubRomEntry,
+  } from './types';
 
   export let card = '';
   export let coreId = '';
   export let reloadCard: () => void = () => {};
 
-  let tab: 'overview' | 'settings' = 'overview';
+  let tab: 'files' | 'saves' | 'settings' = 'files';
   let info: GameBubInstalledCore | null = null;
+  let filesView: GameBubCoreFilesView | null = null;
   let loading = true;
   let error = '';
   let loadedFor = '';
@@ -27,30 +45,61 @@
   let inferredPlatform = '';
   let showArtPicker = false;
 
+  // ROM search, folder pinning, and reviewed add/remove state
+  let romQuery = '';
+  let selectedRoms: string[] = [];
+  let showUnmatched = false;
+  let fileNotice = '';
+  let fileError = '';
+  let fileBusy = false;
+
+  let addSources: string[] = [];
+  let addDestFolder = '';
+  let addReplace = false;
+  let addPlan: GameBubAddPlan | null = null;
+  let deletePlan: GameBubDeletePlan | null = null;
+
   let removePlan: GameBubRemovePlan | null = null;
   let removeBusy = false;
   let removeError = '';
+
+  async function refreshFiles(c: string, id: string) {
+    try {
+      filesView = await gamebubCoreFiles(c, id);
+    } catch {
+      filesView = null;
+    }
+  }
 
   async function load(c: string, id: string) {
     loadedFor = `${c}|${id}`;
     loading = true;
     error = '';
     info = null;
+    filesView = null;
     overrideBanner = null;
     inferredPlatform = '';
     removePlan = null;
     removeError = '';
-    tab = 'overview';
+    selectedRoms = [];
+    addPlan = null;
+    deletePlan = null;
+    fileNotice = '';
+    fileError = '';
+    showUnmatched = false;
+    tab = 'files';
     try {
-      const [view, ov, profile] = await Promise.all([
+      const [view, ov, profile, fv] = await Promise.all([
         gamebubInspectCard(c),
         artworkReadOverride(`game_bub:core:${id}`).catch(() => null),
         systemCoreProfile(c, 'game_bub', id).catch(() => null),
+        gamebubCoreFiles(c, id).catch(() => null),
       ]);
       if (loadedFor !== `${c}|${id}`) return;
       info = view.cores.find((x) => x.core.id.toLowerCase() === id.toLowerCase()) ?? null;
       overrideBanner = ov;
       inferredPlatform = profile?.platform_ids?.[0] ?? '';
+      filesView = fv;
       if (!info) error = `Core “${id}” was not found under /cores/ on this card.`;
     } catch (e) {
       if (loadedFor === `${c}|${id}`) error = errorMessage(e);
@@ -65,6 +114,174 @@
   $: fixedFiles = info?.files.filter((f) => !!f.filename) ?? [];
   $: romSlots = info?.files.filter((f) => f.user_selected) ?? [];
   $: dependentFiles = info?.files.filter((f) => f.dependent_on_0 && !f.filename && !f.user_selected) ?? [];
+
+  $: q = romQuery.trim().toLowerCase();
+  $: filteredRoms = (filesView?.roms ?? []).filter((r) =>
+    !q ? true : `${r.name} ${r.folder_rel}`.toLowerCase().includes(q),
+  );
+  $: romFolders = (() => {
+    const map = new Map<string, GameBubRomEntry[]>();
+    for (const r of filteredRoms) {
+      const key = r.folder_rel || '';
+      const arr = map.get(key) ?? [];
+      arr.push(r);
+      map.set(key, arr);
+    }
+    return [...map.entries()];
+  })();
+
+  $: realSaves = (filesView?.saves ?? []).filter((s) => s.kind === 'save');
+  $: saveStates = (filesView?.saves ?? []).filter((s) => s.kind !== 'save');
+  $: unmatched = filesView?.unmatched_saves ?? [];
+
+  $: defaultAddFolder = (() => {
+    if (filesView?.pinned_folder) return filesView.pinned_folder;
+    const first = filesView?.roms[0]?.folder_rel;
+    if (first) return first;
+    const label = (info?.core.name || coreId).replace(/[/\\:]/g, ' ').trim();
+    return label ? `ROMs/${label}` : 'ROMs';
+  })();
+
+  function toggleRom(rel: string) {
+    deletePlan = null;
+    selectedRoms = selectedRoms.includes(rel)
+      ? selectedRoms.filter((p) => p !== rel)
+      : [...selectedRoms, rel];
+  }
+
+  async function pinFolder() {
+    if (!card || !info) return;
+    fileError = '';
+    fileNotice = '';
+    const picked = await open({ directory: true, defaultPath: card });
+    if (!picked || Array.isArray(picked)) return;
+    const normCard = card.replace(/\/+$/, '');
+    const normPicked = picked.replace(/\/+$/, '');
+    if (normPicked !== normCard && !normPicked.startsWith(`${normCard}/`)) {
+      fileError = 'Choose a folder inside the open Game Bub card.';
+      return;
+    }
+    const rel = normPicked === normCard ? null : normPicked.slice(normCard.length + 1);
+    fileBusy = true;
+    try {
+      await gamebubSetRomFolder(card, info.core.id, rel);
+      await refreshFiles(card, info.core.id);
+      fileNotice = rel ? `Pinned ROM scan to /${rel}.` : 'Scanning entire card.';
+    } catch (e) {
+      fileError = errorMessage(e);
+    } finally {
+      fileBusy = false;
+    }
+  }
+
+  async function clearPin() {
+    if (!card || !info) return;
+    fileError = '';
+    fileBusy = true;
+    try {
+      await gamebubSetRomFolder(card, info.core.id, null);
+      await refreshFiles(card, info.core.id);
+      fileNotice = 'Scanning entire card by file extension.';
+    } catch (e) {
+      fileError = errorMessage(e);
+    } finally {
+      fileBusy = false;
+    }
+  }
+
+  async function chooseAddRoms() {
+    if (!card || !info) return;
+    fileError = '';
+    fileNotice = '';
+    deletePlan = null;
+    const exts = filesView?.rom_extensions ?? [];
+    const picked = await open({
+      multiple: true,
+      filters: exts.length ? [{ name: 'Compatible ROMs', extensions: exts }] : undefined,
+    });
+    if (!picked) return;
+    const paths = Array.isArray(picked) ? picked : [picked];
+    if (!paths.length) return;
+    addSources = paths;
+    addDestFolder = defaultAddFolder;
+    addReplace = false;
+    await planAdd();
+  }
+
+  async function planAdd() {
+    if (!card || !info || !addSources.length) return;
+    fileBusy = true;
+    fileError = '';
+    try {
+      addPlan = await gamebubPlanAddFiles(card, info.core.id, addDestFolder, addSources, addReplace);
+    } catch (e) {
+      fileError = errorMessage(e);
+      addPlan = null;
+    } finally {
+      fileBusy = false;
+    }
+  }
+
+  async function confirmAdd() {
+    if (!card || !info || !addPlan) return;
+    fileBusy = true;
+    fileError = '';
+    try {
+      const rep = await gamebubExecuteAddFiles(
+        card,
+        info.core.id,
+        addDestFolder,
+        addSources,
+        addReplace,
+        addPlan.id,
+      );
+      fileNotice = `Added ${plural(rep.written, 'ROM')} (${size(rep.bytes_written)}) to /${addPlan.dest_folder || ''}.`;
+      addPlan = null;
+      addSources = [];
+      await refreshFiles(card, info.core.id);
+    } catch (e) {
+      fileError = errorMessage(e);
+    } finally {
+      fileBusy = false;
+    }
+  }
+
+  async function startDeleteRoms() {
+    if (!card || !info || !selectedRoms.length) return;
+    fileBusy = true;
+    fileError = '';
+    addPlan = null;
+    try {
+      deletePlan = await gamebubPlanDeleteFiles(card, info.core.id, selectedRoms);
+    } catch (e) {
+      fileError = errorMessage(e);
+      deletePlan = null;
+    } finally {
+      fileBusy = false;
+    }
+  }
+
+  async function confirmDeleteRoms() {
+    if (!card || !info || !deletePlan) return;
+    fileBusy = true;
+    fileError = '';
+    try {
+      const rep = await gamebubExecuteDeleteFiles(
+        card,
+        info.core.id,
+        deletePlan.rel_paths,
+        deletePlan.id,
+      );
+      fileNotice = `Removed ${plural(rep.removed, 'file')}. Backed up outside the card.`;
+      deletePlan = null;
+      selectedRoms = [];
+      await refreshFiles(card, info.core.id);
+    } catch (e) {
+      fileError = errorMessage(e);
+    } finally {
+      fileBusy = false;
+    }
+  }
 
   async function startRemove() {
     if (!card || !info) return;
@@ -144,8 +361,12 @@
   <div class="gb-grid">
     <div class="gb-main">
       <div class="tabs" role="tablist" aria-label="Core sections">
-        <button id="gb-tab-overview" role="tab" class:current={tab === 'overview'} aria-selected={tab === 'overview'} on:click={() => (tab = 'overview')}>
-          Files &amp; overview{#if missingCount}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}
+        <button id="gb-tab-files" role="tab" class:current={tab === 'files'} aria-selected={tab === 'files'} on:click={() => (tab = 'files')}>
+          Files{#if filesView?.roms.length}<span class="gb-tab-n">{filesView.roms.length}</span>{/if}
+          {#if missingCount}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}
+        </button>
+        <button id="gb-tab-saves" role="tab" class:current={tab === 'saves'} aria-selected={tab === 'saves'} on:click={() => (tab = 'saves')}>
+          Saves{#if filesView?.saves.length}<span class="gb-tab-n">{filesView.saves.length}</span>{/if}
         </button>
         <button id="gb-tab-settings" role="tab" class:current={tab === 'settings'} aria-selected={tab === 'settings'} on:click={() => (tab = 'settings')}>
           Settings{#if info.settings.length}<span class="gb-tab-n">{info.settings.length}</span>{/if}
@@ -153,31 +374,274 @@
       </div>
 
       <div class="gb-scroll" role="tabpanel">
-        {#if tab === 'overview'}
-          <section class="gb-card" class:warn={missingCount > 0} class:ok={missingCount === 0}>
-            <h3>Needs attention</h3>
-            {#if missingCount === 0}
-              <p class="gb-ok-text">All required bitstreams and fixed files for this core are present in <code>/cores/{info.folder}/</code>.</p>
-            {:else}
+        {#if tab === 'files'}
+          {#if missingCount > 0}
+            <section class="gb-card warn">
+              <h3>Needs attention</h3>
               {#if info.missing_bitstreams.length}
                 <p class="gb-warn-text">Missing bitstream{info.missing_bitstreams.length === 1 ? '' : 's'}: <code>{info.missing_bitstreams.join(', ')}</code></p>
               {/if}
               {#if info.missing_required_files.length}
                 <p class="gb-warn-text">Missing required file{info.missing_required_files.length === 1 ? '' : 's'}: <code>{info.missing_required_files.join(', ')}</code> (place in <code>/cores/{info.folder}/</code>)</p>
               {/if}
+            </section>
+          {/if}
+
+          <div class="gb-pin-bar">
+            <div class="gb-pin-info">
+              <strong>
+                {filesView?.pinned_folder ? `Pinned to /${filesView.pinned_folder}` : 'Scanning entire card'}
+              </strong>
+              <small>
+                {filesView?.rom_extensions.length
+                  ? `Showing ${filesView.rom_extensions.map((e) => `.${e}`).join(' ')}`
+                  : 'Pin a folder to list files for this core'}
+              </small>
+            </div>
+            <div class="gb-pin-btns">
+              <button class="quiet" type="button" disabled={fileBusy} on:click={pinFolder}>Pin folder…</button>
+              {#if filesView?.pinned_folder}
+                <button class="quiet" type="button" disabled={fileBusy} on:click={clearPin}>Clear pin</button>
+              {/if}
+            </div>
+          </div>
+
+          <div class="gb-file-bar">
+            <label class="sr" for="gb-rom-search">Search ROMs</label>
+            <input
+              id="gb-rom-search"
+              type="search"
+              bind:value={romQuery}
+              placeholder="Search ROMs or folders…"
+            />
+            {#if selectedRoms.length}
+              <button class="quiet danger" type="button" disabled={fileBusy} on:click={startDeleteRoms}>
+                Remove ({selectedRoms.length})
+              </button>
+            {/if}
+            <button class="picker" type="button" disabled={fileBusy} on:click={chooseAddRoms}>
+              Add ROMs…
+            </button>
+          </div>
+
+          {#if fileError}<p class="gb-err" role="alert">{fileError}</p>{/if}
+          {#if fileNotice}<p class="gb-ok-bar" role="status">{fileNotice}</p>{/if}
+
+          {#if addPlan}
+            <div class="gb-plan" role="region" aria-label="Add ROMs review">
+              <strong>Add {plural(addPlan.items.length, 'ROM')} to <code>/{addPlan.dest_folder || ''}</code></strong>
+              <div class="gb-plan-dest">
+                <label>
+                  <span>Destination folder (relative to card)</span>
+                  <input type="text" bind:value={addDestFolder} on:change={planAdd} />
+                </label>
+                <label class="gb-check">
+                  <input type="checkbox" bind:checked={addReplace} on:change={planAdd} />
+                  <span>Overwrite existing files</span>
+                </label>
+              </div>
+              {#if addPlan.items.length}
+                <p>
+                  {addPlan.new_files} new{addPlan.replaced_files ? `, ${addPlan.replaced_files} replacing existing (backed up first)` : ''} · {size(addPlan.bytes_to_write)}
+                </p>
+              {:else}
+                <p>No eligible files to add.</p>
+              {/if}
+              {#if addPlan.skipped.length}
+                <p class="gb-warn-text">Skipped: {addPlan.skipped.join('; ')}</p>
+              {/if}
+              <div class="gb-rm-btns">
+                {#if addPlan.items.length}
+                  <button class="primary" type="button" disabled={fileBusy} on:click={confirmAdd}>
+                    {fileBusy ? 'Copying…' : `Copy ${plural(addPlan.items.length, 'file')}`}
+                  </button>
+                {/if}
+                <button class="quiet" type="button" disabled={fileBusy} on:click={() => { addPlan = null; addSources = []; }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          {#if deletePlan}
+            <div class="gb-rm-plan" role="region" aria-label="Remove ROMs review">
+              <strong>Remove {plural(deletePlan.rel_paths.length, 'selected file')}?</strong>
+              <p>
+                Frees {size(deletePlan.total_bytes)}. Each file is backed up outside the card and verified before removal.
+              </p>
+              <div class="gb-rm-btns">
+                <button class="primary danger" type="button" disabled={fileBusy} on:click={confirmDeleteRoms}>
+                  {fileBusy ? 'Removing…' : 'Remove files'}
+                </button>
+                <button class="quiet" type="button" disabled={fileBusy} on:click={() => (deletePlan = null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          {#if !filesView?.roms.length}
+            <div class="gb-empty">
+              <div class="gb-empty-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <strong>No matching ROMs on this card</strong>
+              <p>
+                {filesView?.rom_extensions.length
+                  ? `No files matching ${filesView.rom_extensions.map((e) => `.${e}`).join(', ')} were found${filesView?.pinned_folder ? ` under /${filesView.pinned_folder}` : ' anywhere on this card'}.`
+                  : 'Pin a folder containing ROMs for this core, or add ROM files directly.'}
+              </p>
+              <button class="primary" type="button" on:click={chooseAddRoms}>Add ROMs…</button>
+            </div>
+          {:else if !romFolders.length}
+            <div class="gb-empty compact">
+              <strong>Nothing matches “{romQuery}”</strong>
+              <p>Try a different filename or folder name.</p>
+            </div>
+          {:else}
+            {#each romFolders as [folder, items] (folder)}
+              <section class="gb-card">
+                <div class="gb-folder-head">
+                  <h3><code>/{folder || '(card root)'}</code></h3>
+                  <small>{plural(items.length, 'file')} · {size(items.reduce((a, b) => a + b.bytes, 0))}</small>
+                </div>
+                <ul class="gb-rom-list">
+                  {#each items as rom (rom.rel_path)}
+                    <li>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedRoms.includes(rom.rel_path)}
+                          on:change={() => toggleRom(rom.rel_path)}
+                        />
+                        <span class="gb-fi" aria-hidden="true"><Icon name="game-controller" size={16} /></span>
+                        <span class="gb-rom-name" title={rom.rel_path}>{rom.name}</span>
+                        <span class="gb-rom-size">{size(rom.bytes)}</span>
+                        <span class="gb-rom-date">{day(rom.modified)}</span>
+                      </label>
+                    </li>
+                  {/each}
+                </ul>
+              </section>
+            {/each}
+          {/if}
+        {:else if tab === 'saves'}
+          {#if !filesView?.saves.length}
+            <div class="gb-empty">
+              <div class="gb-empty-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              </div>
+              <strong>No saves for this core yet</strong>
+              <p>
+                {#if filesView?.save_extensions.length}
+                  Saves and save states ({filesView.save_extensions.map((e) => `.${e}`).join(', ')}) placed beside a matching ROM in the same folder appear here automatically.
+                {:else}
+                  This core does not declare companion save extensions in <code>files.json</code>.
+                {/if}
+              </p>
+            </div>
+          {:else}
+            {#if realSaves.length}
+              <section class="gb-card">
+                <div class="gb-folder-head">
+                  <h3>Saves</h3>
+                  <small>{plural(realSaves.length, 'save')} · {size(realSaves.reduce((a, b) => a + b.bytes, 0))}</small>
+                </div>
+                <ul class="gb-save-list">
+                  {#each realSaves as s (s.rel_path)}
+                    <li>
+                      <span class="gb-fi" aria-hidden="true"><Icon name="memory" size={16} /></span>
+                      <div class="gb-save-main">
+                        <strong>{s.game_stem}</strong>
+                        <small><code>/{s.rel_path}</code></small>
+                      </div>
+                      <span class="chip">{s.slot_label}</span>
+                      <span class="gb-rom-size">{size(s.bytes)}</span>
+                      <span class="gb-rom-date">{day(s.modified)}</span>
+                    </li>
+                  {/each}
+                </ul>
+              </section>
+            {/if}
+            {#if saveStates.length}
+              <section class="gb-card">
+                <div class="gb-folder-head">
+                  <h3>Save states</h3>
+                  <small>{plural(saveStates.length, 'save state')} · {size(saveStates.reduce((a, b) => a + b.bytes, 0))}</small>
+                </div>
+                <ul class="gb-save-list">
+                  {#each saveStates as s (s.rel_path)}
+                    <li>
+                      <span class="gb-fi" aria-hidden="true"><Icon name="clock-counter-clockwise" size={16} /></span>
+                      <div class="gb-save-main">
+                        <strong>{s.game_stem}</strong>
+                        <small><code>/{s.rel_path}</code></small>
+                      </div>
+                      <span class="chip">{s.slot_label}</span>
+                      <span class="gb-rom-size">{size(s.bytes)}</span>
+                      <span class="gb-rom-date">{day(s.modified)}</span>
+                    </li>
+                  {/each}
+                </ul>
+              </section>
+            {/if}
+          {/if}
+
+          {#if unmatched.length}
+            <div class="gb-unmatched-bar">
+              <button class="quiet" type="button" on:click={() => (showUnmatched = !showUnmatched)}>
+                {showUnmatched ? 'Hide' : 'Show'} {plural(unmatched.length, 'unmatched save file')} without a matching ROM beside {unmatched.length === 1 ? 'it' : 'them'}
+              </button>
+              {#if showUnmatched}
+                <section class="gb-card">
+                  <p class="gb-sub">
+                    These files match {info.core.name || info.core.id}’s save extensions, so they could belong to this core or another core using the same folder.
+                  </p>
+                  <ul class="gb-save-list">
+                    {#each unmatched as s (s.rel_path)}
+                      <li>
+                        <span class="gb-fi" aria-hidden="true"><Icon name="memory" size={16} /></span>
+                        <div class="gb-save-main">
+                          <strong>{s.name}</strong>
+                          <small><code>/{s.rel_path}</code></small>
+                        </div>
+                        <span class="gb-rom-size">{size(s.bytes)}</span>
+                        <span class="gb-rom-date">{day(s.modified)}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                </section>
+              {/if}
+            </div>
+          {/if}
+        {:else}
+          <section class="gb-card">
+            <h3>Core settings</h3>
+            {#if !info.settings.length}
+              <div class="gb-empty compact">
+                <div class="gb-empty-ic" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </div>
+                <strong>No configurable settings</strong>
+                <p>This core doesn’t declare a <code>settings.json</code> file, so it runs with its built-in defaults on Game Bub.</p>
+              </div>
+            {:else}
+              <p class="gb-sub">Declared in <code>/cores/{info.folder}/settings.json</code>. Change these in the core’s menu on your Game Bub.</p>
+              <ul class="gb-list">
+                {#each info.settings as s}
+                  <li>
+                    <strong>{s.label}</strong>
+                    <span class="chip">{s.kind || 'option'}</span>
+                  </li>
+                {/each}
+              </ul>
             {/if}
           </section>
 
           <section class="gb-card">
             <h3>Declared files</h3>
             {#if !info.files.length}
-              <div class="gb-empty compact">
-                <div class="gb-empty-ic" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                </div>
-                <strong>No fixed files declared</strong>
-                <p>This core doesn’t include a <code>files.json</code> manifest. Game Bub lets you browse and load compatible ROMs from any folder on your microSD card.</p>
-              </div>
+              <p class="gb-sub">This core does not include a <code>files.json</code> manifest.</p>
             {:else}
               {#if fixedFiles.length}
                 <h4 class="gb-subh">Fixed files in <code>/cores/{info.folder}/</code></h4>
@@ -195,7 +659,7 @@
                 </ul>
               {/if}
               {#if romSlots.length}
-                <h4 class="gb-subh">User-selected files (loaded from anywhere on the SD card)</h4>
+                <h4 class="gb-subh">User-selected files (loaded from SD card)</h4>
                 <ul class="gb-list">
                   {#each romSlots as f}
                     <li>
@@ -223,29 +687,6 @@
               {/if}
             {/if}
           </section>
-        {:else}
-          <section class="gb-card">
-            <h3>Core settings</h3>
-            {#if !info.settings.length}
-              <div class="gb-empty compact">
-                <div class="gb-empty-ic" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                </div>
-                <strong>No configurable settings</strong>
-                <p>This core doesn’t declare a <code>settings.json</code> file, so it runs with its built-in defaults on Game Bub.</p>
-              </div>
-            {:else}
-              <p class="gb-sub">Declared in <code>/cores/{info.folder}/settings.json</code>. Change these in the core’s menu on your Game Bub.</p>
-              <ul class="gb-list">
-                {#each info.settings as s}
-                  <li>
-                    <strong>{s.label}</strong>
-                    <span class="chip">{s.kind || 'option'}</span>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </section>
         {/if}
       </div>
     </div>
@@ -268,6 +709,17 @@
         <div><dt>Min firmware</dt><dd>{info.core.min_firmware || 'Not stated'}</dd></div>
         <div><dt>Folder</dt><dd><code>/cores/{info.folder}</code></dd></div>
       </dl>
+
+      <h4>On this card</h4>
+      {#if filesView}
+        <dl class="gb-dl">
+          <div><dt>Games</dt><dd>{plural(filesView.roms.length, 'file')}</dd></div>
+          <div><dt>Saves</dt><dd>{plural(realSaves.length, 'save')} · {plural(saveStates.length, 'save state')}</dd></div>
+          <div><dt>Disk used</dt><dd>{size(filesView.total_rom_bytes + filesView.total_save_bytes)}</dd></div>
+        </dl>
+      {:else}
+        <p class="gb-sub">Reading files…</p>
+      {/if}
 
       <h4>Hardware targets</h4>
       {#if info.core.bitstreams.length}
@@ -313,9 +765,15 @@
   .crumbs{display:flex;align-items:center;gap:2px;font-size:12px;color:#8f9e9d;margin:0 0 8px -8px}.crumbs .quiet{padding:4px 8px;font-size:12px}
   .gb-actions{display:flex;gap:8px;flex:none}
   .gb-err{margin:0 0 12px;padding:10px 14px;border-radius:10px;border:1px solid #6b3535;background:#261616;color:#f2b8b5;font-size:13px}
+  .gb-ok-bar{margin:0 0 12px;padding:10px 14px;border-radius:10px;border:1px solid #3c5d41;background:#162419;color:#c5f7ad;font-size:13px}
   .gb-note{font-size:13px;color:#95a5a4}
-  .gb-rm-plan{margin:0 0 14px;padding:13px 16px;border-radius:12px;border:1px solid #6b3535;background:#261616;display:grid;gap:6px}
-  .gb-rm-plan p{margin:0;font-size:12.5px;color:#e6c4c2;line-height:1.5}
+  .gb-rm-plan,.gb-plan{margin:0 0 14px;padding:13px 16px;border-radius:12px;border:1px solid #6b3535;background:#261616;display:grid;gap:8px}
+  .gb-plan{border-color:#3c5d41;background:#152118}
+  .gb-rm-plan p,.gb-plan p{margin:0;font-size:12.5px;color:#d6e0d8;line-height:1.5}
+  .gb-plan-dest{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+  .gb-plan-dest label{display:grid;gap:4px;font-size:12px;color:#9fb3aa}
+  .gb-plan-dest input[type=text]{font:inherit;font-size:12.5px;color:#e8ecec;background:#0e1415;border:1px solid #314436;border-radius:7px;padding:6px 10px;min-width:220px}
+  .gb-check{display:flex !important;flex-direction:row !important;align-items:center;gap:6px;cursor:pointer}
   .gb-rm-btns{display:flex;gap:8px;margin-top:4px}
   .gb-grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}
   .gb-main{display:flex;flex-direction:column;min-height:0;min-width:0}
@@ -325,16 +783,38 @@
   .gb-tab-n{font-size:11px;padding:1px 6px;border-radius:999px;background:#1f2c2e;color:#a6b3b2}
   .tab-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#e5c88a}
   .gb-scroll{display:grid;gap:14px;padding-bottom:28px}
+  .gb-pin-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:10px;background:#131b1c;border:1px solid #283536}
+  .gb-pin-info{display:grid;gap:2px}
+  .gb-pin-info strong{font-size:13px;color:#eff5f4}
+  .gb-pin-info small{font-size:11.5px;color:#8f9e9d}
+  .gb-pin-btns{display:flex;gap:6px}
+  .gb-file-bar{display:flex;gap:8px;align-items:center}
+  .gb-file-bar input[type=search]{flex:1;min-width:0;font:inherit;font-size:13px;color:#e8ecec;background:#101617;border:1px solid #314041;border-radius:9px;padding:8px 12px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .gb-card{background:#161f20;border:1px solid #2c393a;border-radius:12px;padding:16px 18px;display:grid;gap:10px}
   .gb-card.warn{border-color:#5c5030;background:#1f1c13}
   .gb-card h3{margin:0;font-size:14.5px}
+  .gb-folder-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .gb-folder-head small{font-size:12px;color:#8f9e9d}
   .gb-subh{margin:6px 0 0;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:#9fb3aa}
-  .gb-ok-text{margin:0;font-size:13px;color:#c5f7ad;line-height:1.5}
   .gb-warn-text{margin:0;font-size:13px;color:#e5d9a8;line-height:1.5}
   .gb-sub{margin:0;font-size:12.5px;color:#95a5a4;line-height:1.5}
-  .gb-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  .gb-list,.gb-rom-list,.gb-save-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+  .gb-rom-list,.gb-save-list{border:1px solid #2c393a;border-radius:9px;background:#141c1d;gap:0}
   .gb-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 12px;border-radius:9px;background:#121a1b;border:1px solid #232f31;font-size:13px}
   .gb-list small{display:block;font-size:11.5px;color:#8f9e9d;margin-top:2px}
+  .gb-rom-list li,.gb-save-list li{border-bottom:1px solid #222d2f}
+  .gb-rom-list li:last-child,.gb-save-list li:last-child{border:0}
+  .gb-rom-list label,.gb-save-list li{display:flex;align-items:center;gap:9px;padding:9px 12px;font-size:12.5px;cursor:pointer}
+  .gb-save-list li{cursor:default}
+  .gb-fi{flex:none;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:#1d2a2b;color:#c1f0ad}
+  .gb-rom-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e8ecec}
+  .gb-save-main{flex:1;min-width:0;display:grid;gap:2px}
+  .gb-save-main strong{font-size:13px;color:#eff5f4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gb-save-main small{font-size:11px;color:#8f9e9d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gb-rom-size{width:68px;text-align:right;color:#a6b3b2;flex:none}
+  .gb-rom-date{width:92px;text-align:right;color:#8f9e9d;font-size:11.5px;flex:none}
+  .gb-unmatched-bar{display:grid;gap:8px;justify-items:start}
   .gb-empty{display:grid;justify-items:center;text-align:center;gap:8px;padding:28px 20px;border:1px dashed #334345;border-radius:12px;background:#121a1b}
   .gb-empty.compact{padding:22px 18px}
   .gb-empty-ic{width:40px;height:40px;border-radius:12px;background:#1b2729;border:1px solid #2c3b3d;color:#c1f0ad;display:grid;place-items:center;font-weight:700}
@@ -355,4 +835,5 @@
   .gb-targets li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:#121a1b;border:1px solid #232f31;font-size:12.5px}
   .gb-targets small{display:block;font-size:11px;color:#8f9e9d}
   @media(max-width:1100px){.gb-grid{grid-template-columns:minmax(0,1fr)}}
+  @media(max-width:720px){.gb-rom-date{display:none}}
 </style>

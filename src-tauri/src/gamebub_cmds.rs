@@ -1,7 +1,7 @@
 //! Tauri commands for Game Bub multi-device support (`D-026`, G0–G3): device detection, read-only card/core/BIOS
 //! inspection, verified zip download, and reviewed plan/execute for install, update, and removal.
 
-use crate::{ErrorCode, TauError, begin_card_write, install_backup_root};
+use crate::{ErrorCode, PREFS_FILE, TauError, begin_card_write, config_dir, install_backup_root, read_prefs};
 use serde::Serialize;
 use std::{
     fs,
@@ -11,6 +11,10 @@ use std::{
 use tau_core::{
     device::{self, CardDeviceInfo, DeviceKind},
     gamebub::{self, GameBubCardView},
+    gamebub_files::{
+        self, GameBubAddPlan, GameBubAddReport, GameBubCoreFilesView, GameBubDeletePlan,
+        GameBubDeleteReport,
+    },
     gamebub_install::{
         self, GameBubInstallPlan, GameBubInstallReport, GameBubRemovePlan, GameBubRemoveReport,
     },
@@ -163,4 +167,124 @@ pub fn gamebub_execute_remove(
     let _write = begin_card_write(&app, &card)?;
     let backup = install_backup_root(&app)?;
     gamebub_install::execute_remove(Path::new(&card), &core_id, &confirmation, &backup)
+}
+
+fn rom_folder_key(card: &str, core_id: &str) -> String {
+    format!(
+        "{}::{}",
+        card.trim_end_matches(['/', '\\']),
+        core_id.to_ascii_lowercase()
+    )
+}
+
+/// Scans ROMs (filtered by declared extensions) and stem-matched companion saves/save states for one Game Bub core.
+#[tauri::command(async)]
+pub fn gamebub_core_files(
+    app: tauri::AppHandle,
+    card: String,
+    core_id: String,
+) -> Result<GameBubCoreFilesView, TauError> {
+    let key = rom_folder_key(&card, &core_id);
+    let pinned = read_prefs(&app)?.gamebub_rom_folders.get(&key).cloned();
+    gamebub_files::scan_core_files(Path::new(&card), &core_id, pinned.as_deref())
+}
+
+/// Pins (or clears) a card-relative folder for one Game Bub core's ROM & save scanning.
+#[tauri::command(async)]
+pub fn gamebub_set_rom_folder(
+    app: tauri::AppHandle,
+    card: String,
+    core_id: String,
+    folder: Option<String>,
+) -> Result<Option<String>, TauError> {
+    let clean = match folder.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(raw) => {
+            let norm = gamebub_files::normalize_rel_folder(raw)?;
+            if norm.is_empty() { None } else { Some(norm) }
+        }
+        None => None,
+    };
+    let key = rom_folder_key(&card, &core_id);
+    let mut prefs = read_prefs(&app)?;
+    if let Some(ref f) = clean {
+        prefs.gamebub_rom_folders.insert(key, f.clone());
+    } else {
+        prefs.gamebub_rom_folders.remove(&key);
+    }
+    let dir = config_dir(&app)?;
+    fs::create_dir_all(&dir)?;
+    fs::write(
+        dir.join(PREFS_FILE),
+        serde_json::to_vec_pretty(&prefs).map_err(|e| TauError {
+            code: ErrorCode::Json,
+            message: e.to_string(),
+        })?,
+    )?;
+    Ok(clean)
+}
+
+/// Plans adding ROM files to a destination folder on a Game Bub card. Read-only.
+#[tauri::command(async)]
+pub fn gamebub_plan_add_files(
+    card: String,
+    core_id: String,
+    dest_folder: String,
+    sources: Vec<String>,
+    replace: bool,
+) -> Result<GameBubAddPlan, TauError> {
+    gamebub_files::plan_add_files(Path::new(&card), &core_id, &dest_folder, &sources, replace)
+}
+
+/// Executes a reviewed ROM copy plan onto a Game Bub card with atomic + read-back verification.
+#[tauri::command(async)]
+pub fn gamebub_execute_add_files(
+    app: tauri::AppHandle,
+    card: String,
+    core_id: String,
+    dest_folder: String,
+    sources: Vec<String>,
+    replace: bool,
+    confirmation: String,
+) -> Result<GameBubAddReport, TauError> {
+    let _write = begin_card_write(&app, &card)?;
+    let backup = install_backup_root(&app)?;
+    gamebub_files::execute_add_files(
+        Path::new(&card),
+        &core_id,
+        &dest_folder,
+        &sources,
+        replace,
+        &confirmation,
+        &backup,
+    )
+}
+
+/// Plans removing selected ROM/save files from a Game Bub card. Read-only.
+#[tauri::command(async)]
+pub fn gamebub_plan_delete_files(
+    card: String,
+    core_id: String,
+    rel_paths: Vec<String>,
+) -> Result<GameBubDeletePlan, TauError> {
+    gamebub_files::plan_delete_files(Path::new(&card), &core_id, &rel_paths)
+}
+
+/// Executes a reviewed file removal on a Game Bub card after verified external backup.
+#[tauri::command(async)]
+pub fn gamebub_execute_delete_files(
+    app: tauri::AppHandle,
+    card: String,
+    core_id: String,
+    rel_paths: Vec<String>,
+    confirmation: String,
+) -> Result<GameBubDeleteReport, TauError> {
+    let _write = begin_card_write(&app, &card)?;
+    let backup = install_backup_root(&app)?;
+    gamebub_files::execute_delete_files(
+        Path::new(&card),
+        &core_id,
+        &rel_paths,
+        &confirmation,
+        &backup,
+    )
 }
