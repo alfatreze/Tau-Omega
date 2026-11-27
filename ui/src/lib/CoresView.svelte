@@ -8,7 +8,7 @@
   import CoreScreenshotsTab from './CoreScreenshotsTab.svelte';
   import CoreSettingsTab from './CoreSettingsTab.svelte';
   import GameBubCoreView from './GameBubCoreView.svelte';
-  import GbPalettesTab from './GbPalettesTab.svelte';
+  import { extensionsForCore, extensionsForPlatform } from './coreExtensions';
   import { errorMessage } from './backend';
   import { coreDetail, coreFiles, coreKeep, readPlatformImage } from './tau-api';
   import { disabledList, refreshDisabled, setCoresEnabled } from './coreStateStore';
@@ -26,18 +26,18 @@
   /** The card-level core records (library facts) and what to do with them. */
   export let cores: Core[] = []; export let openLibrary: (c: Core) => void = () => {}; export let reloadCard: () => void = () => {};
 
-  type Tab = 'files' | 'saves' | 'screens' | 'settings' | 'palettes';
-  const BASE_TABS: [Tab, string][] = [['files', 'Files'], ['saves', 'Saves'], ['screens', 'Screenshots'], ['settings', 'Settings']];
-  let tab: Tab = 'files';
-  let platTab: 'cores' | 'palettes' = 'cores';
+  type BaseTab = 'files' | 'saves' | 'screens' | 'settings';
+  const BASE_TABS: [string, string][] = [['files', 'Files'], ['saves', 'Saves'], ['screens', 'Screenshots'], ['settings', 'Settings']];
+  let tab = 'files';
+  let platTab = 'cores';
   let platTabFor = '';
   let detail: CoreDetail | null = null; let files: CoreFiles | null = null; let error = ''; let loadedFor = '';
   let filesTab: CoreFilesTab | undefined; let banner: string | null = null; let bannerFor = '';
 
   $: node = $coresTreeStore.find((n) => n.platform.id === $coresSelection.platform);
-  $: isGbPlatform = node?.platform.id === 'gb';
-  $: isGbCore = !!detail?.platforms.some((p) => p.id === 'gb');
-  $: visibleTabs = isGbCore ? [...BASE_TABS, ['palettes', 'Palettes'] as [Tab, string]] : BASE_TABS;
+  $: platExts = node ? extensionsForPlatform('analogue_pocket', node.platform.id) : [];
+  $: coreExts = detail ? extensionsForCore({ device: 'analogue_pocket', coreId: detail.id, platformIds: detail.platforms.map((p) => p.id) }) : [];
+  $: visibleTabs = [...BASE_TABS, ...coreExts.map((ext): [string, string] => [ext.id, ext.label])];
   $: if (node && platTabFor !== node.platform.id) { platTabFor = node.platform.id; platTab = 'cores'; }
   $: row = $coresSelection.core ? findCore($coresTreeStore, $coresSelection.core)?.core : undefined;
   $: isGameBubCore = $coresSelection.platform === 'gamebub';
@@ -149,8 +149,12 @@
             {#if tab === 'files'}<CoreFilesTab bind:this={filesTab} {card} {detail} {files} changed={reload} />
             {:else if tab === 'saves'}<CoreSavesTab {files} />
             {:else if tab === 'screens'}{#key detail.id}<CoreScreenshotsTab {card} coreId={detail.id} />{/key}
-            {:else if tab === 'palettes'}<GbPalettesTab {card} />
-            {:else}{#key detail.id}<CoreSettingsTab {card} {detail} {files} {addMissing} changed={reload} />{/key}{/if}
+            {:else if tab === 'settings'}{#key detail.id}<CoreSettingsTab {card} {detail} {files} {addMissing} changed={reload} />{/key}
+            {:else}
+              {#each coreExts as ext (ext.id)}
+                {#if tab === ext.id}<svelte:component this={ext.component} {card} />{/if}
+              {/each}
+            {/if}
           </div>
         </div>
         {#if $inspectorOpen}<div id="core-details" class="cores-side"><CoreInspector {card} {detail} {files} lib={cores.find((c) => c.id === detail?.id) ?? null} {openLibrary} libraryChanged={reloadCard} on:close={() => inspectorOpen.set(false)} /></div>{/if}
@@ -178,14 +182,18 @@
       <p class="eyebrow">{node.platform.category ? node.platform.category.toUpperCase() : 'PLATFORM'}</p><h1 id="cores-title">{node.platform.name}</h1>
       <p class="lede">{[node.platform.manufacturer, node.platform.year || ''].filter(Boolean).join(' · ')}{node.platform.manufacturer || node.platform.year ? ' · ' : ''}{plural(node.cores.length, 'core')} on this card</p></div></header>
     <img class="plat-banner" src={banner || platformFallbackArt({ id: node.platform.id, name: node.platform.name, category: node.platform.category, manufacturer: node.platform.manufacturer })} alt="" />
-    {#if isGbPlatform}
+    {#if platExts.length}
       <div class="tabs" role="tablist" aria-label="Platform sections">
         <button id="plat-tab-cores" role="tab" class:current={platTab === 'cores'} aria-selected={platTab === 'cores'} on:click={() => (platTab = 'cores')}>Cores</button>
-        <button id="plat-tab-palettes" role="tab" class:current={platTab === 'palettes'} aria-selected={platTab === 'palettes'} on:click={() => (platTab = 'palettes')}>Palettes</button>
+        {#each platExts as ext (ext.id)}
+          <button id={`plat-tab-${ext.id}`} role="tab" class:current={platTab === ext.id} aria-selected={platTab === ext.id} on:click={() => (platTab = ext.id)}>{ext.label}</button>
+        {/each}
       </div>
     {/if}
-    {#if isGbPlatform && platTab === 'palettes'}
-      <GbPalettesTab {card} />
+    {#if platTab !== 'cores' && platExts.some((e) => e.id === platTab)}
+      {#each platExts as ext (ext.id)}
+        {#if platTab === ext.id}<svelte:component this={ext.component} {card} />{/if}
+      {/each}
     {:else}
     <ul class="core-list pv-list" aria-label={`Cores for ${node.platform.name}`}>
       {#each node.cores as c (c.id)}

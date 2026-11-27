@@ -126,6 +126,9 @@ export const firmwareDownload = (device: import('./types').DeviceKind, release: 
 export const firmwarePlanInstall = (targetRoot: string, device: import('./types').DeviceKind, downloadedPath: string, fileName: string, expectedMd5: string | null = null) => invoke<import('./types').FirmwareInstallPlan>('firmware_plan_install', { targetRoot, device, downloadedPath, fileName, expectedMd5 });
 export const firmwareExecuteInstall = (targetRoot: string, device: import('./types').DeviceKind, downloadedPath: string, fileName: string, expectedMd5: string | null, confirmation: string) => invoke<import('./types').FirmwareInstallReport>('firmware_execute_install', { targetRoot, device, downloadedPath, fileName, expectedMd5, confirmation });
 export const firmwareSaveCopy = (downloadedPath: string, destPath: string) => invoke<string>('firmware_save_copy', { downloadedPath, destPath });
+export const platformsCatalog = () => invoke<import('./types').PlatformSpec[]>('platforms_catalog');
+export const systemListCores = (card: string, device: import('./types').DeviceKind) => invoke<import('./types').CoreSummary[]>('system_list_cores', { card, device });
+export const systemCoreProfile = (card: string, device: import('./types').DeviceKind, coreId: string) => invoke<import('./types').CoreProfile>('system_core_profile', { card, device, coreId });
 export const marketplaceArt = (coreId: string, kind: ArtKind) => invoke<string | null>('marketplace_art', { coreId, kind });
 export const marketplaceRepoDetails = (coreId: string, force = false) => invoke<RepoDetails>('marketplace_repo_details', { coreId, force });
 /** Whether feedback can be sent from this build, and the few facts a sender may add (version, system). */

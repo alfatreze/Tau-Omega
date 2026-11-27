@@ -261,6 +261,16 @@ export type GameBubSettingEntry = { id: number; label: string; kind: string };
 export type GameBubBiosStatus = { filename: string; label: string; expected_bytes: number; present: boolean; actual_bytes: number | null; size_ok: boolean };
 export type GameBubInstalledCore = { folder: string; core: GameBubCoreJson; missing_bitstreams: string[]; files: GameBubFileEntry[]; missing_required_files: string[]; settings: GameBubSettingEntry[] };
 export type GameBubCardView = { cores: GameBubInstalledCore[]; bios: GameBubBiosStatus[] };
+export type PlatformSpec = { id: string; name: string; category: string; manufacturer: string; year: number; extensions: string[]; libretro_systems: string[]; homebrew_hub: boolean; mister_games_dir: string | null };
+export type RomTransferMode = 'fixed_platform_dir' | 'user_chosen_dir' | 'core_specific_dir';
+export type ArtworkMode = 'pocket_platform_bin' | 'app_override_only';
+export type CoreCapabilities = { can_toggle_visibility: boolean; has_managed_saves: boolean; has_screenshots: boolean; has_settings_files: boolean; has_declared_settings: boolean; can_remove: boolean; rom_transfer_mode: RomTransferMode; artwork_mode: ArtworkMode };
+export type RomDestination = { base_rel: string; label: string; user_chooses_folder: boolean; extensions: string[] };
+export type ArtworkTarget = { mode: ArtworkMode; banner_rel: string | null; icon_rel: string | null; override_key: string };
+export type CoreFact = { label: string; value: string };
+export type CoreTarget = { label: string; filename: string; present: boolean };
+export type CoreSummary = { device: DeviceKind; id: string; name: string; author: string; version: string; platform_ids: string[]; missing: number; disabled: boolean; capabilities: CoreCapabilities };
+export type CoreProfile = { device: DeviceKind; id: string; name: string; author: string; description: string; version: string; release_date: string; url: string; license: string; platform_ids: string[]; capabilities: CoreCapabilities; facts: CoreFact[]; targets: CoreTarget[]; rom_destination: RomDestination | null; artwork_target: ArtworkTarget; missing_items: string[] };
 export type CatalogCore = {
   id: string; author: string; name: string; repository: { owner: string; name: string }; sponsor: { links: string[] };
   category: string; manufacturer: string; year: number; platform_id: string;
