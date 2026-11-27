@@ -317,3 +317,9 @@ export const gameArtSetOverride = (args: {
 
 export const gameArtClearOverride = (platformId: string, romName: string) =>
   invoke<boolean>('game_art_clear_override', { platformId, romName });
+
+export const gameMetaResolveBatch = (platformId: string, romNames: string[]) =>
+  invoke<import('./types').GameMeta[]>('game_meta_resolve_batch', { platformId, romNames });
+
+export const gameDetailsRead = (platformId: string, romName: string) =>
+  invoke<import('./types').GameDetailsView>('game_details_read', { platformId, romName });

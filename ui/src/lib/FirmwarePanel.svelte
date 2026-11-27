@@ -3,6 +3,7 @@
   // Follows the global `activeSystem` store so switching systems here stays synced with Marketplace.
   import { save } from '@tauri-apps/plugin-dialog';
   import { errorMessage } from './backend';
+  import { showToast } from './toastStore';
   import {
     firmwareDownload,
     firmwareExecuteInstall,
@@ -28,7 +29,6 @@
   let downloading = false;
   let installing = false;
   let error = '';
-  let note = '';
   let showNotes = false;
   let cachedDownload: FirmwareDownload | null = null;
   let plan: FirmwareInstallPlan | null = null;
@@ -58,7 +58,7 @@
     loadedKey = key;
     loading = true;
     error = '';
-    if (force) { note = ''; plan = null; cachedDownload = null; }
+    if (force) { plan = null; cachedDownload = null; }
     try {
       const [st, rel] = await Promise.all([
         firmwareStatus(cardPath || null, device),
@@ -79,7 +79,6 @@
     release = null;
     plan = null;
     cachedDownload = null;
-    note = '';
     error = '';
     showNotes = false;
     void refresh($activeSystem, card, false);
@@ -108,7 +107,6 @@
 
   async function startInstall(targetRoot: string) {
     if (!release || !targetRoot) return;
-    note = '';
     plan = null;
     const dl = await ensureDownloaded();
     if (!dl) return;
@@ -134,9 +132,10 @@
         plan.id,
       );
       plan = null;
-      note = $activeSystem === 'analogue_pocket'
+      const msg = $activeSystem === 'analogue_pocket'
         ? `Installed ${release.file_name} to the card root${rep.removed_old.length ? ` (backed up and removed ${rep.removed_old.join(', ')})` : ''}. Put the card in your Pocket and power it on to update.`
         : `Copied ${release.file_name} to ${targetForPlan}. Your Game Bub will flash and reboot automatically.`;
+      showToast(msg, 'success', 7000);
       await refresh($activeSystem, card, false);
     } catch (e) {
       error = errorMessage(e);
@@ -147,14 +146,13 @@
 
   async function downloadAndSave() {
     if (!release) return;
-    note = '';
     const dl = await ensureDownloaded();
     if (!dl) return;
     try {
       const picked = await save({ defaultPath: release.file_name });
       if (!picked || typeof picked !== 'string') return;
       const saved = await firmwareSaveCopy(dl.path, picked);
-      note = `Saved verified firmware to ${saved}.`;
+      showToast(`Saved verified firmware to ${saved}.`);
     } catch (e) {
       error = errorMessage(e);
     }
@@ -190,7 +188,6 @@
   </div>
 
   {#if error}<p class="fw-err" role="alert">{error}</p>{/if}
-  {#if note}<p class="fw-note" role="status">{note}</p>{/if}
 
   <div class="fw-grid">
     <div class="fw-col">
@@ -317,7 +314,6 @@
   .fw-sub code{font-size:11.5px;color:#c7d1d0}
   .fw-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
   .fw-err{margin:0;padding:9px 12px;border-radius:9px;border:1px solid #6b3535;background:#261616;color:#f2b8b5;font-size:12.5px}
-  .fw-note{margin:0;padding:9px 12px;border-radius:9px;border:1px solid #35523b;background:#152218;color:#c1f0ad;font-size:12.5px}
   .fw-warn{margin:2px 0 0;font-size:12px;color:#e5d9a8}
   .fw-notes{margin:0;padding:11px 13px;border-radius:9px;background:#101617;border:1px solid #2c393a;font-size:12px;color:#c7d1d0;white-space:pre-wrap;max-height:180px;overflow:auto;font-family:inherit;line-height:1.5}
   .fw-plan{padding:12px 14px;border-radius:10px;border:1px solid #3d5254;background:#182426;display:grid;gap:6px}

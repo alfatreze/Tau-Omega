@@ -9,15 +9,15 @@
 
 use crate::{ErrorCode, TauError};
 use std::{
-    collections::{BTreeSet, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
     time::{Duration, SystemTime},
 };
 use tau_core::game_art::{
-    self, GameArtCandidate, GameArtKind, GameArtResult, GameArtSourceKind, LIBRETRO_API_BASE_URL,
-    LIBRETRO_RAW_BASE_URL,
+    self, GameArtCandidate, GameArtKind, GameArtResult, GameArtSourceKind, GameDetailsView,
+    GameMeta, LIBRETRO_API_BASE_URL, LIBRETRO_DB_BASE_URL, LIBRETRO_RAW_BASE_URL,
 };
 
 const INDEX_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
@@ -38,10 +38,11 @@ fn ensure_allowed_url(url: &str) -> Result<(), TauError> {
         url == LIBRETRO_RAW_BASE_URL || url.starts_with(&format!("{LIBRETRO_RAW_BASE_URL}/"));
     let api_ok =
         url == LIBRETRO_API_BASE_URL || url.starts_with(&format!("{LIBRETRO_API_BASE_URL}/"));
-    if !raw_ok && !api_ok {
+    let db_ok = url == LIBRETRO_DB_BASE_URL || url.starts_with(&format!("{LIBRETRO_DB_BASE_URL}/"));
+    if !raw_ok && !api_ok && !db_ok {
         return Err(err(
             ErrorCode::InvalidPathReference,
-            "Game artwork lookup only allows official libretro-thumbnails GitHub hosts.",
+            "Game artwork lookup only allows official Libretro GitHub hosts.",
         ));
     }
     Ok(())
@@ -641,6 +642,268 @@ pub fn search_candidates(
     Ok(out)
 }
 
+fn metadata_cache_path(cache_dir: &Path, system: &str, field: &str) -> PathBuf {
+    cache_dir
+        .join("metadat")
+        .join(format!("{}__{field}.tsv", safe_segment(system)))
+}
+
+fn metadata_none_path(cache_dir: &Path, system: &str, field: &str) -> PathBuf {
+    cache_dir
+        .join("metadat")
+        .join(format!("{}__{field}.none", safe_segment(system)))
+}
+
+/// Fetches (or reads from 30-day TSV cache) one `libretro-database` metadata table (`genre`, `developer`, `publisher`, `releaseyear`).
+pub fn fetch_metadata_map(
+    cache_dir: &Path,
+    system: &str,
+    field: &str,
+) -> Result<BTreeMap<String, String>, TauError> {
+    let tsv_path = metadata_cache_path(cache_dir, system, field);
+    if is_fresh_nonempty(&tsv_path, INDEX_TTL) {
+        let text = fs::read_to_string(&tsv_path)?;
+        let mut map = BTreeMap::new();
+        for line in text.lines() {
+            if let Some((k, v)) = line.split_once('\t')
+                && !k.is_empty()
+                && !v.is_empty()
+            {
+                map.insert(k.to_string(), v.to_string());
+            }
+        }
+        return Ok(map);
+    }
+
+    let none_path = metadata_none_path(cache_dir, system, field);
+    if is_fresh(&none_path, INDEX_TTL) {
+        return Ok(BTreeMap::new());
+    }
+
+    let agent = build_agent();
+    let url = game_art::libretro_db_dat_url(field, system);
+    let Some(bytes) = http_get_optional(&agent, &url, INDEX_LIMIT)? else {
+        let _ = write_atomic(&none_path, b"none");
+        return Ok(BTreeMap::new());
+    };
+
+    let text = String::from_utf8_lossy(&bytes);
+    let map = game_art::parse_libretro_dat(&text, field);
+    if map.is_empty() {
+        let _ = write_atomic(&none_path, b"empty");
+        return Ok(map);
+    }
+
+    let mut tsv = String::new();
+    for (k, v) in &map {
+        let clean_v = v.replace(['\t', '\r', '\n'], " ");
+        tsv.push_str(k);
+        tsv.push('\t');
+        tsv.push_str(&clean_v);
+        tsv.push('\n');
+    }
+    let _ = fs::remove_file(&none_path);
+    let _ = write_atomic(&tsv_path, tsv.as_bytes());
+    Ok(map)
+}
+
+/// Resolves genre & region metadata for a list of ROMs on a platform (1 cached DAT per system).
+pub fn resolve_genres_batch(
+    cache_dir: &Path,
+    platform_id: &str,
+    rom_names: &[String],
+) -> Vec<GameMeta> {
+    if rom_names.is_empty() {
+        return Vec::new();
+    }
+    let canon_plat = game_art::canonical_platform_id(platform_id);
+    let systems = game_art::libretro_systems_for_platform(&canon_plat);
+    let mut genre_maps = Vec::new();
+    for system in &systems {
+        if let Ok(m) = fetch_metadata_map(cache_dir, system, "genre")
+            && !m.is_empty()
+        {
+            genre_maps.push(m);
+        }
+    }
+
+    rom_names
+        .iter()
+        .map(|rom_name| {
+            let norm = game_art::normalize_title(rom_name);
+            let genre = genre_maps.iter().find_map(|m| m.get(&norm).cloned());
+            GameMeta {
+                rom_name: rom_name.clone(),
+                platform_id: canon_plat.clone(),
+                genre,
+                developer: None,
+                publisher: None,
+                release_year: None,
+                region: game_art::extract_display_region(rom_name),
+                matched_name: None,
+            }
+        })
+        .collect()
+}
+
+/// Resolves full metadata (genre, developer, publisher, release year, region) and all available
+/// Libretro image types (Boxart, Title screen, Screenshot) plus any custom override for one ROM.
+pub fn resolve_game_details(
+    cache_dir: &Path,
+    overrides_dir: &Path,
+    platform_id: &str,
+    rom_name: &str,
+) -> Result<GameDetailsView, TauError> {
+    let canon_plat = game_art::canonical_platform_id(platform_id);
+    let systems = game_art::libretro_systems_for_platform(&canon_plat);
+    let norm = game_art::normalize_title(rom_name);
+
+    let ovr = game_art::read_override(overrides_dir, &canon_plat, rom_name)?;
+
+    // Fetch metadata maps & the 3 thumbnail types concurrently.
+    let (genre_res, dev_res, pub_res, year_res) = std::thread::scope(|scope| {
+        let g = scope.spawn(|| {
+            for s in &systems {
+                if let Ok(m) = fetch_metadata_map(cache_dir, s, "genre")
+                    && let Some(v) = m.get(&norm)
+                {
+                    return Some(v.clone());
+                }
+            }
+            None
+        });
+        let d = scope.spawn(|| {
+            for s in &systems {
+                if let Ok(m) = fetch_metadata_map(cache_dir, s, "developer")
+                    && let Some(v) = m.get(&norm)
+                {
+                    return Some(v.clone());
+                }
+            }
+            None
+        });
+        let p = scope.spawn(|| {
+            for s in &systems {
+                if let Ok(m) = fetch_metadata_map(cache_dir, s, "publisher")
+                    && let Some(v) = m.get(&norm)
+                {
+                    return Some(v.clone());
+                }
+            }
+            None
+        });
+        let y = scope.spawn(|| {
+            for s in &systems {
+                if let Ok(m) = fetch_metadata_map(cache_dir, s, "releaseyear")
+                    && let Some(v) = m.get(&norm)
+                {
+                    return Some(v.clone());
+                }
+            }
+            None
+        });
+        (
+            g.join().unwrap_or(None),
+            d.join().unwrap_or(None),
+            p.join().unwrap_or(None),
+            y.join().unwrap_or(None),
+        )
+    });
+
+    let kinds = [GameArtKind::Boxart, GameArtKind::Title, GameArtKind::Snap];
+    let resolved_kinds: Vec<Option<GameArtResult>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = kinds
+            .iter()
+            .map(|&kind| {
+                let systems = &systems;
+                let canon_plat = &canon_plat;
+                scope.spawn(move || {
+                    for &sys in systems {
+                        if let Ok(Some((matched, bytes))) =
+                            try_direct_stem_for_system(cache_dir, sys, rom_name, kind)
+                            && let Some(res) =
+                                make_auto_result(canon_plat, rom_name, sys, kind, matched, &bytes)
+                        {
+                            return Some(res);
+                        }
+                    }
+                    for &sys in systems {
+                        if let Ok(Some((matched, bytes))) =
+                            try_index_match_for_system(cache_dir, sys, rom_name, kind)
+                            && let Some(res) =
+                                make_auto_result(canon_plat, rom_name, sys, kind, matched, &bytes)
+                        {
+                            return Some(res);
+                        }
+                    }
+                    None
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().unwrap_or(None))
+            .collect()
+    });
+
+    let mut images: Vec<GameArtCandidate> = Vec::new();
+    let mut matched_name = ovr.as_ref().and_then(|o| o.matched_name.clone());
+
+    if let Some(o) = &ovr {
+        images.push(GameArtCandidate {
+            system: o
+                .libretro_system
+                .clone()
+                .unwrap_or_else(|| "Custom image".into()),
+            kind: o.kind,
+            name: o
+                .matched_name
+                .clone()
+                .unwrap_or_else(|| game_art::display_title(rom_name)),
+            data_url: o.data_url.clone(),
+        });
+    }
+
+    for res in resolved_kinds.into_iter().flatten() {
+        if matched_name.is_none() {
+            matched_name = res.matched_name.clone();
+        }
+        let dup = ovr.as_ref().is_some_and(|o| {
+            o.kind == res.kind
+                && o.matched_name.as_deref() == res.matched_name.as_deref()
+                && o.libretro_system.as_deref() == res.libretro_system.as_deref()
+        });
+        if !dup {
+            images.push(GameArtCandidate {
+                system: res.libretro_system.unwrap_or_else(|| canon_plat.clone()),
+                kind: res.kind,
+                name: res
+                    .matched_name
+                    .unwrap_or_else(|| game_art::display_title(rom_name)),
+                data_url: res.data_url,
+            });
+        }
+    }
+
+    Ok(GameDetailsView {
+        rom_name: rom_name.to_string(),
+        platform_id: canon_plat.clone(),
+        display_title: game_art::display_title(rom_name),
+        meta: GameMeta {
+            rom_name: rom_name.to_string(),
+            platform_id: canon_plat,
+            genre: genre_res,
+            developer: dev_res,
+            publisher: pub_res,
+            release_year: year_res,
+            region: game_art::extract_display_region(rom_name),
+            matched_name,
+        },
+        images,
+        has_override: ovr.is_some(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -755,6 +1018,14 @@ mod tests {
         let search = search_candidates(&cache, "gba", "Mother", GameArtKind::Boxart, 5).unwrap();
         assert_eq!(search.len(), 1);
         assert_eq!(search[0].name, "Mother 3 (Japan)");
+
+        // Cached metadata TSV resolves genres & details offline too.
+        let genre_tsv = metadata_cache_path(&cache, "Nintendo - Game Boy Advance", "genre");
+        write_atomic(&genre_tsv, b"mother 3\tRole Playing\n").unwrap();
+        let meta = resolve_genres_batch(&cache, "gba", &["Mother 3 (Japan).gba".into()]);
+        assert_eq!(meta.len(), 1);
+        assert_eq!(meta[0].genre.as_deref(), Some("Role Playing"));
+        assert_eq!(meta[0].region.as_deref(), Some("Japan"));
 
         let _ = fs::remove_dir_all(&root);
     }

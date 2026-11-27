@@ -3,6 +3,7 @@
   // 4-layer previews, see what is on the card, and install or remove palettes via the reviewed plan/execute flow.
   import { onMount } from 'svelte';
   import { errorMessage } from './backend';
+  import { showToast } from './toastStore';
   import {
     FAMILIES,
     PALETTE_DIR,
@@ -54,7 +55,6 @@
   let installPlan: PaletteInstallPlan | null = null;
   let removePlan: PaletteRemovePlan | null = null;
   let busy = false;
-  let statusNote = '';
   let error = '';
   let loadedCard = '';
 
@@ -127,7 +127,6 @@
     else next.add(path);
     selected = next;
     installPlan = null;
-    statusNote = '';
   }
 
   function clearSelection() {
@@ -143,7 +142,7 @@
 
   async function reviewInstall() {
     if (!card || !selected.size) return;
-    busy = true; error = ''; statusNote = ''; removePlan = null;
+    busy = true; error = ''; removePlan = null;
     try {
       installPlan = await gbPalettesPlanInstall(card, selectedItems());
     } catch (e) {
@@ -161,9 +160,10 @@
       installPlan = null;
       selected = new Set();
       await refreshCard(card);
-      statusNote = report.written === 0
+      const msg = report.written === 0
         ? 'Those palettes were already on this card.'
         : `Installed ${report.written} ${report.written === 1 ? 'palette' : 'palettes'} to ${PALETTE_DIR}.`;
+      showToast(msg, report.written === 0 ? 'info' : 'success');
     } catch (e) {
       error = errorMessage(e);
     } finally {
@@ -173,7 +173,7 @@
 
   async function reviewRemove(relPath: string) {
     if (!card) return;
-    busy = true; error = ''; statusNote = ''; installPlan = null;
+    busy = true; error = ''; installPlan = null;
     try {
       removePlan = await gbPalettesPlanRemove(card, relPath);
     } catch (e) {
@@ -191,7 +191,7 @@
       await gbPalettesExecuteRemove(card, rel, removePlan.id);
       removePlan = null;
       await refreshCard(card);
-      statusNote = `Removed ${nameOf(rel)} from this card (a backup was saved first).`;
+      showToast(`Removed ${nameOf(rel)} from this card (a backup was saved first).`);
     } catch (e) {
       error = errorMessage(e);
     } finally {
@@ -218,7 +218,6 @@
   </div>
 
   {#if error}<p class="pal-err" role="alert">{error}</p>{/if}
-  {#if statusNote}<p class="pal-note" role="status">{statusNote}</p>{/if}
 
   {#if installPlan}
     <div class="pal-plan" role="region" aria-label="Install plan">
@@ -359,7 +358,6 @@
   .scene-btn{padding:5px 10px;font-size:12px;border-radius:6px;background:transparent;color:#95a5a4}
   .scene-btn:hover{color:#eff5f4}.scene-btn.on{background:#1f2e30;color:#c1f0ad}
   .pal-err{margin:0;padding:10px 14px;border-radius:10px;border:1px solid #6b3535;background:#261616;color:#f2b8b5;font-size:13px}
-  .pal-note{margin:0;padding:10px 14px;border-radius:10px;border:1px solid #35523b;background:#152218;color:#c1f0ad;font-size:13px}
   .pal-plan{padding:13px 16px;border-radius:12px;border:1px solid #3d5254;background:#162022;display:grid;gap:6px}
   .pal-plan.warn{border-color:#5c5030;background:#241f12;color:#e5d9a8}
   .pal-plan p{margin:0;font-size:12.5px;color:#c7d1d0}.pal-plan.warn p{color:#e5d9a8}

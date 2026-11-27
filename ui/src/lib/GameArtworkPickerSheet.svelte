@@ -5,6 +5,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
+  import { showToast } from './toastStore';
   import {
     clearGameArtEntry,
     displayGameTitle,
@@ -124,6 +125,7 @@
         sourcePath: tab === 'local' ? localPath : null,
       });
       setGameArtEntry(plat, romName, saved);
+      showToast(`Saved artwork for ${displayGameTitle(romName) || romName}.`);
       onChanged(saved);
       close();
     } catch (e) {
@@ -142,6 +144,7 @@
       await gameArtClearOverride(plat, romName);
       clearGameArtEntry(plat, romName);
       requestGameArt(plat, romName, true);
+      showToast(`Reset artwork for ${displayGameTitle(romName) || romName} to automatic.`, 'info');
       onChanged(null);
       close();
     } catch (e) {

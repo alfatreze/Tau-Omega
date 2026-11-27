@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
-import { gameArtResolveBatch } from './tau-api';
-import type { GameArtResult } from './types';
+import { gameArtResolveBatch, gameMetaResolveBatch } from './tau-api';
+import type { GameArtResult, GameMeta } from './types';
 
 export type CoreFilesViewMode = 'list' | 'grid';
 
@@ -38,6 +38,55 @@ export function gameArtCacheKey(platformId: string, romName: string): string {
 
 /** Resolved per-game artwork keyed by `gameArtCacheKey(platformId, romName)`. `null` means looked up and not found. */
 export const gameArtMap = writable<Record<string, GameArtResult | null>>({});
+
+/** Resolved per-game metadata/genres keyed by `gameArtCacheKey(platformId, romName)`. */
+export const gameMetaMap = writable<Record<string, GameMeta>>({});
+const metaInFlight = new Set<string>();
+
+/** Fetches genre/region metadata for all ROMs in a folder in one batched call. */
+export async function requestGameGenres(platformId: string, romNames: string[]) {
+  const plat = platformId.trim().toLowerCase();
+  if (!plat || plat === 'tau' || plat === 'gamebub' || !romNames.length) return;
+  const cur = get(gameMetaMap);
+  const missing: string[] = [];
+  for (const raw of romNames) {
+    const rom = raw.trim();
+    if (!rom) continue;
+    const key = gameArtCacheKey(plat, rom);
+    if (key in cur || metaInFlight.has(key)) continue;
+    metaInFlight.add(key);
+    missing.push(rom);
+  }
+  if (!missing.length) return;
+  try {
+    const items = await gameMetaResolveBatch(plat, missing);
+    const byRom = new Map<string, GameMeta>();
+    for (const item of items) byRom.set(item.rom_name, item);
+    gameMetaMap.update((state) => {
+      const next = { ...state };
+      for (const rom of missing) {
+        const key = gameArtCacheKey(plat, rom);
+        next[key] = byRom.get(rom) ?? {
+          rom_name: rom,
+          platform_id: plat,
+          genre: null,
+          developer: null,
+          publisher: null,
+          release_year: null,
+          region: null,
+          matched_name: null,
+        };
+      }
+      return next;
+    });
+  } catch {
+    // Ignore transient network errors; next view can retry.
+  } finally {
+    for (const rom of missing) {
+      metaInFlight.delete(gameArtCacheKey(plat, rom));
+    }
+  }
+}
 
 const inFlight = new Set<string>();
 const pendingByPlatform = new Map<string, Set<string>>();

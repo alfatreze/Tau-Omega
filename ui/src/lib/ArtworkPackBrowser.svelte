@@ -6,6 +6,7 @@
   import { modal } from './a11y';
   import { errorMessage } from './backend';
   import { cardDevice } from './systemStore';
+  import { showToast } from './toastStore';
   import {
     getCachedPackSamples,
     invalidatePackSamples,
@@ -205,7 +206,9 @@
         plan.id,
         pendingOnlyPlatforms,
       );
-      statusNotice = `Applied ${report.written} ${report.written === 1 ? 'banner' : 'banners'}${report.backed_up ? ` (${report.backed_up} backed up)` : ''}.`;
+      const msg = `Applied ${report.written} ${report.written === 1 ? 'banner' : 'banners'}${report.backed_up ? ` (${report.backed_up} backed up)` : ''}.`;
+      showToast(msg, 'success');
+      statusNotice = '';
       plan = null;
       pendingLabel = '';
       window.dispatchEvent(new CustomEvent('tau-artwork-changed', { detail: { batch: true } }));
@@ -213,6 +216,7 @@
       await loadPack(activePack.id, true);
     } catch (e) {
       statusNotice = `Could not apply: ${errorMessage(e)}`;
+      showToast(statusNotice, 'error');
     } finally {
       applyBusy = false;
     }
@@ -489,7 +493,7 @@
           </div>
         </div>
       {:else if statusNotice}
-        <p class="pb-status" role="status">{statusNotice}</p>
+        <p class="pb-status" role="alert">{statusNotice}</p>
       {/if}
     </footer>
   {/if}

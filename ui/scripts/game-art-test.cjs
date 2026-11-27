@@ -39,6 +39,20 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.ok(thumbSrc && thumbSrc.startsWith('data:image/'), 'Expected data URL thumbnail on ROM row');
   ok('List rows load lazy Libretro thumbnail previews');
 
+  assert.equal(await panel().locator('input[type=checkbox]').count(), 0);
+  ok('ROM selection checkboxes are hidden by default');
+
+  // Category filter dropdown narrows games by Libretro genre
+  const catSel = panel().getByLabel('Filter by category');
+  await catSel.waitFor({ state: 'visible', timeout: 3000 });
+  await catSel.selectOption('RPG');
+  await p.waitForTimeout(200);
+  assert.equal(await panel().locator('.cf-row').count(), 2);
+  await catSel.selectOption('');
+  await p.waitForTimeout(200);
+  assert.equal(await panel().locator('.cf-row').count(), 6);
+  ok('Category filter narrows games and resets cleanly');
+
   // 2. Switch to Grid view and verify cards + persisted preference
   await toggle.getByRole('button', { name: 'Grid' }).click();
   await p.waitForTimeout(250);
@@ -47,12 +61,16 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await p.evaluate(() => localStorage.getItem('tau.coreFiles.viewMode')), 'grid');
   ok('Grid toggle switches to boxart cover cards and persists preference');
 
-  // Selection works in Grid view too
+  // Opt-in Select button enables selection checkboxes in Grid view
+  await panel().getByRole('button', { name: 'Select', exact: true }).click();
+  await p.waitForTimeout(150);
   await panel().getByRole('checkbox', { name: 'Select Boktai 2 (USA).gba' }).check();
   await p.waitForTimeout(150);
   assert.match(await panel().innerText(), /Remove 1 selected/);
   await panel().getByRole('checkbox', { name: 'Select Boktai 2 (USA).gba' }).uncheck();
-  ok('ROM selection checkboxes work in Grid view');
+  await panel().getByRole('button', { name: 'Done', exact: true }).click();
+  await p.waitForTimeout(150);
+  ok('Opt-in Select button enables ROM selection checkboxes in Grid view');
 
   // Switch back to List view and verify preference updates
   await toggle.getByRole('button', { name: 'List' }).click();
@@ -60,6 +78,17 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await panel().locator('.cf-row').count(), 6);
   assert.equal(await p.evaluate(() => localStorage.getItem('tau.coreFiles.viewMode')), 'list');
   ok('List toggle restores compact rows and persists preference');
+
+  // Clicking a game opens Game Details in the right sidebar
+  await panel().locator('.cf-row', { hasText: 'Boktai 2' }).locator('.cf-row-main').click();
+  await p.waitForTimeout(400);
+  const side = p.locator('#core-details');
+  assert.match(await side.innerText(), /About this game[\s\S]*Developer[\s\S]*Images \(3\)/i);
+  ok('Clicking a game opens Game Details with metadata and 3 gallery images in the right sidebar');
+  await side.getByRole('button', { name: 'Core details' }).click();
+  await p.waitForTimeout(200);
+  assert.equal(await side.getByRole('button', { name: /Remove core/ }).count(), 1);
+  ok('Sidebar switches cleanly back to Core details with Remove core');
 
   // 3. Open GameArtworkPickerSheet on Boktai 2
   await panel().getByRole('button', { name: 'Change artwork for Boktai 2 (USA).gba' }).click();

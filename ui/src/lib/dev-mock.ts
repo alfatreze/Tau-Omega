@@ -61,7 +61,8 @@ const crow = (id: string, platform: string, version: string, missing = 0) => ({ 
 let mockRole = 'real'; const mockNotes: { id: string; card: string; stamp: string; core_id: string; shortname: string; version: string; package: string; package_sha256: string; bitstreams: [string, string][]; backup_dir: string; files_written: number; text: string; lint_overrides: string[]; results: unknown[]; results_at: string | null }[] = [{ id: '20261014100500-0', card: 'Pocket', stamp: '2026-10-14T10:05:00', core_id: 'alfatreze.TAU DEV 112', shortname: 'TAU DEV 112', version: '0.6.0', package: 'TAU_DEV_112.zip', package_sha256: 'a'.repeat(64), bitstreams: [['Cores/alfatreze.TAU DEV 112/bitstream.rbf_r', 'b'.repeat(64)]], backup_dir: '/backups/omega/20261014-1005', files_written: 12, lint_overrides: [] as string[], text: '', results: [], results_at: null }]; let mockSince: string | null = '2026-10-14T19:30:00'; let mockBuildsDir: string | null = null; let mockSchemes: { name: string; field: string; template: string }[] = [];
 const mockValidate = (t: string): string | null => { if (!t.trim()) return 'The template is empty.'; const toks = [...t.matchAll(/\{(\w+)\}/g)].map((m) => m[1]); if (toks.some((x) => !['series', 'n', 'major', 'minor', 'patch', 'pre', 'any'].includes(x))) return 'A token is not known.'; if (/\}\{/.test(t)) return 'Two tokens touch. Put some text between them so Omega knows where one ends.'; if (!toks.some((x) => ['n', 'major', 'minor', 'patch', 'pre'].includes(x))) return 'Nothing here orders the builds. Add {n}, a SemVer token or {pre}.'; return null; };
 const mockDisabled: { id: string; shortname: string; version: string; disabled_at: number; reasons: string[] }[] = [];
-const coresTreeMock = () => coresTreeAll().map((n) => ({ ...n, cores: n.cores.map((c) => ({ ...c, disabled: mockDisabled.some((d) => d.id === c.id) })) }));
+const mockRemovedCores = new Set<string>();
+const coresTreeMock = () => coresTreeAll().map((n) => ({ ...n, cores: n.cores.filter((c) => !mockRemovedCores.has(c.id)).map((c) => ({ ...c, disabled: mockDisabled.some((d) => d.id === c.id) })) }));
 let mockNewCores: ReturnType<typeof crow>[] = [];
 const coresTreeAll = () => [
   { platform: PLAT.snes, cores: [crow('agg23.SNES', 'snes', '0.4.4'), ...mockNewCores] },
@@ -536,8 +537,30 @@ const handlers: Record<string, (args: any) => unknown> = {
       { entry: { ...e('broken.zip', '', '', 0), core_id: '', placement: null, bytes: 0, error: 'This zip has no core.json.' }, relation: 'not_installed', older: [] },
     ] }; },
   build_zip: (a) => a.path as string,
-  plan_remove_core: (a) => ({ id: `rmc-${a.coreId}`, card_root: '/Volumes/Pocket', core_id: a.coreId, platform: 'tau', platform_shared: true, paths: [`Cores/${a.coreId}`], files_to_remove: 6, bytes_to_remove: 4 * MB, media_kept: true }),
-  execute_remove_core: () => ({ removed_files: 6, bytes_removed: 4 * MB }),
+  plan_remove_core: (a) => {
+    const id = String(a.coreId || '');
+    const live = coresTreeMock().flatMap((n) => n.cores);
+    const match = live.find((c) => c.id === id);
+    const plat = match?.platform || 'tau';
+    const shared = live.filter((c) => c.id !== id && (c.platform === plat || c.platforms.includes(plat))).length > 0;
+    const keep = a.keepMedia !== false;
+    return {
+      id: `rmc-${id}`,
+      card_root: '/Volumes/Pocket',
+      core_id: id,
+      platform: plat,
+      platform_shared: shared,
+      paths: shared || keep ? [`Cores/${id}`] : [`Cores/${id}`, `Assets/${plat}`, `Platforms/${plat}.json`],
+      files_to_remove: shared || keep ? 6 : 18,
+      bytes_to_remove: (shared || keep ? 4 : 42) * MB,
+      media_kept: keep,
+    };
+  },
+  execute_remove_core: (a) => {
+    const id = String(a.coreId || '');
+    mockRemovedCores.add(id);
+    return { removed_files: a.keepMedia === false ? 18 : 6, bytes_removed: (a.keepMedia === false ? 42 : 4) * MB };
+  },
   results_scan: () => { const t = (id: number, name: string, result: string, value = 0) => ({ id, name, result, value, busy_permille: null, audio_full: null });
     const rep = (profile: string, tests: ReturnType<typeof t>[], fw: string, underruns: number) => ({ format: 1, profile, tests, unknown: [], verdict: tests.some((x) => x.result === 'FAIL') ? 'some checks failed' : 'all checks passed', entries: { build: { firmware: fw, bitstream: 'bs-5', flags: 0, heap_gap: 9000 }, audio: { late_underruns: underruns, audio_full: true, stall_ms: 0, window_s: 30 } } });
     const shot = (name: string, at: string, report: unknown, _since: boolean, problem: string | null = null) => ({ filename: name, path: `/Volumes/Pocket/Memories/Screenshots/${name}`, captured_at: at, bytes: 40000, since_install: !mockSince || at >= mockSince, report, problem });
@@ -804,6 +827,67 @@ const handlers: Record<string, (args: any) => unknown> = {
     const had = key in mockGameArtOverrides;
     delete mockGameArtOverrides[key];
     return had;
+  },
+  game_meta_resolve_batch: (a) => {
+    const plat = String(a.platformId || '').trim().toLowerCase();
+    const roms = (Array.isArray(a.romNames) ? a.romNames : []) as string[];
+    const genreFor = (rom: string): string | null => {
+      const l = rom.toLowerCase();
+      if (l.includes('advance wars')) return 'Strategy';
+      if (l.includes('golden sun') || l.includes('mother')) return 'RPG';
+      if (l.includes('zelda')) return 'Adventure';
+      if (l.includes('metroid') || l.includes('boktai')) return 'Action';
+      if (/bios|\.xyz|bad:/i.test(rom)) return null;
+      return 'Action';
+    };
+    return roms.map((rom) => ({
+      rom_name: rom,
+      platform_id: plat,
+      genre: genreFor(rom),
+      developer: null,
+      publisher: null,
+      release_year: null,
+      region: /\(USA\)/i.test(rom) ? 'USA' : /\(Europe\)/i.test(rom) ? 'Europe' : /\(Japan\)/i.test(rom) ? 'Japan' : null,
+      matched_name: `${stripExt(rom)} (USA)`,
+    }));
+  },
+  game_details_read: (a) => {
+    const plat = String(a.platformId || 'gba').trim().toLowerCase();
+    const rom = String(a.romName || '').trim();
+    const key = mockGameKey(plat, rom);
+    const title = stripExt(rom);
+    const l = rom.toLowerCase();
+    const genre = l.includes('advance wars') ? 'Strategy' : (l.includes('golden sun') || l.includes('mother')) ? 'RPG' : l.includes('zelda') ? 'Adventure' : 'Action';
+    const developer = l.includes('advance wars') ? 'Intelligent Systems' : l.includes('golden sun') ? 'Camelot' : l.includes('boktai') ? 'Kojima Productions' : 'Nintendo R&D1';
+    const publisher = 'Nintendo';
+    const year = l.includes('boktai') ? '2004' : l.includes('mother 3') ? '2006' : '2002';
+    const ovr = mockGameArtOverrides[key];
+    const images: import('./types').GameArtCandidate[] = [];
+    if (ovr) {
+      images.push({ system: ovr.libretro_system || 'Custom image', kind: ovr.kind, name: ovr.matched_name || title, data_url: ovr.data_url });
+    }
+    images.push(
+      { system: 'Nintendo - Game Boy Advance', kind: 'boxart', name: `${title} (Boxart)`, data_url: mockGameCoverSvg(title, `${plat} · boxart`, '#c1f0ad') },
+      { system: 'Nintendo - Game Boy Advance', kind: 'title', name: `${title} (Title)`, data_url: mockGameCoverSvg(title, `${plat} · title`, '#8ecae6') },
+      { system: 'Nintendo - Game Boy Advance', kind: 'snap', name: `${title} (Snap)`, data_url: mockGameCoverSvg(title, `${plat} · snap`, '#ffb703') },
+    );
+    return {
+      rom_name: rom,
+      platform_id: plat,
+      display_title: title,
+      meta: {
+        rom_name: rom,
+        platform_id: plat,
+        genre,
+        developer,
+        publisher,
+        release_year: year,
+        region: /\(USA\)/i.test(rom) ? 'USA' : 'Japan',
+        matched_name: `${title} (USA)`,
+      },
+      images,
+      has_override: !!ovr,
+    };
   },
   gamebub_core_files: (a) => ({
     core_id: String(a.coreId),

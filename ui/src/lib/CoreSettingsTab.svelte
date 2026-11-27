@@ -14,6 +14,11 @@
   export let addMissing: (folderRel: string) => void;
   /** Called after files were removed so the page reloads the listing. */
   export let changed: () => void = () => {};
+  export let isDisabled = false;
+  export let stateBusy = false;
+  export let confirmEnable = false;
+  export let setVisible: (on: boolean) => void = () => {};
+  export let cancelEnable: () => void = () => {};
 
   // The necessary files of the core: BIOS and configuration files (what the Files tab leaves out). Each row is a card-relative path.
   $: support = files.folders.filter((f) => f.folder.role === 'AssetsShared' || f.folder.role === 'AssetsCore')
@@ -33,6 +38,34 @@
   const where = (s: { core_specific: boolean; platform: string }) => (s.core_specific ? `Only this core (Assets/${s.platform}/${detail.id})` : `Shared (Assets/${s.platform}/common)`);
 </script>
 <div class="cg">
+  <section class="cg-sec cg-vis-sec" aria-labelledby="cg-vis">
+    <div class="cg-vis-row">
+      <div>
+        <h3 id="cg-vis">Pocket visibility</h3>
+        <p class="cg-note">Turn off to hide this core from the Pocket’s menu. Its files stay on the card so you can fix or enable it again anytime.</p>
+      </div>
+      <button
+        type="button"
+        class="cg-vis"
+        class:off={isDisabled}
+        role="switch"
+        aria-checked={!isDisabled}
+        disabled={stateBusy}
+        on:click={() => setVisible(isDisabled)}
+      >
+        <span class="cg-vis-knob" aria-hidden="true"></span>
+        <span>Visible on the Pocket</span>
+      </button>
+    </div>
+    {#if confirmEnable && files.missing.length}
+      <p class="cg-warn" role="alert">
+        It still lacks {files.missing.map((m) => m.filename).join(', ')}, so it may not start. Enable it anyway?
+        <button type="button" class="quiet" on:click={() => setVisible(true)}>Enable anyway</button>
+        <button type="button" class="quiet" on:click={cancelEnable}>Cancel</button>
+      </p>
+    {/if}
+  </section>
+
   <section class="cg-sec" aria-labelledby="cg-need">
     <h3 id="cg-need">Needs attention</h3>
     {#if files.missing.length}
@@ -104,6 +137,12 @@
   .cg-files li{align-items:flex-start}.cg-fmain{flex:1;min-width:0;display:grid;gap:3px}.cg-fmain strong{font-size:13px;font-weight:600;overflow-wrap:anywhere}.cg-fmain>small{font-size:12px;color:#a6b3b2;line-height:1.5}.cg-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px}.cg-where{font-size:11.5px;color:#8f9e9d}
   .cg-def{margin-left:6px}
   .cg-note{font-size:12px;color:#95a5a4;margin:8px 0 0;line-height:1.55}.cg-ok{font-size:13px;color:#c5f7ad;margin:0}.cg-err{color:#ff9b9b;font-size:12.5px}
+  .cg-vis-row{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}.cg-vis-row h3{margin:0}.cg-vis-row .cg-note{margin:4px 0 0}
+  .cg-vis{display:inline-flex;align-items:center;gap:9px;padding:7px 12px 7px 9px;font-size:12.5px;color:#dce6e4;background:#1a2325;border:1px solid #2c393a;border-radius:999px;flex:none}
+  .cg-vis:hover{border-color:#3d5254}.cg-vis:disabled{opacity:.55}
+  .cg-vis.off{color:#a6b3b2}.cg-vis.off .cg-vis-knob{background:#4b5a5b}.cg-vis.off .cg-vis-knob::after{left:2px}
+  .cg-vis-knob{position:relative;width:28px;height:16px;border-radius:999px;background:#6fa35a;flex:none}.cg-vis-knob::after{content:'';position:absolute;top:2px;left:14px;width:12px;height:12px;border-radius:50%;background:#101617}
+  .cg-warn{margin:10px 0 0;padding:10px 12px;border:1px solid #5c5030;background:#241f12;color:#e5d9a8;border-radius:9px;font-size:12.5px}.cg-warn button{margin-left:8px}
   code{font-size:11.5px;background:#101617;border-radius:5px;padding:1px 5px}
   @media(max-width:720px){.cg-k{width:110px}}
 </style>

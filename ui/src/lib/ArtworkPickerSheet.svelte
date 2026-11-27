@@ -5,6 +5,7 @@
   import { modal } from './a11y';
   import { errorMessage } from './backend';
   import { getCachedAlternatives, setCachedAlternatives } from './artworkCache';
+  import { showToast } from './toastStore';
   import {
     artworkAlternatives,
     artworkClearOverride,
@@ -169,6 +170,7 @@
         confirmation: plan.id,
       });
       onApplied(appliedPreview);
+      showToast(`Updated banner (${plan.target_rel}).`);
       window.dispatchEvent(
         new CustomEvent('tau-artwork-changed', {
           detail: { platformId: effectiveTarget, packId: selectedAlt?.pack_id ?? null },
@@ -194,6 +196,7 @@
         sourcePath: tab === 'local' ? localPath : null,
       });
       onApplied(url);
+      showToast('Saved custom artwork banner.');
       window.dispatchEvent(
         new CustomEvent('tau-artwork-changed', {
           detail: { overrideKey, platformId: lookupQuery.trim() },
@@ -214,6 +217,7 @@
     try {
       await artworkClearOverride(overrideKey);
       onApplied(null);
+      showToast('Restored default banner artwork.', 'info');
       window.dispatchEvent(
         new CustomEvent('tau-artwork-changed', { detail: { overrideKey, reset: true } }),
       );

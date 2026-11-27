@@ -341,12 +341,12 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   assert.equal(await p.locator('#sidebar').isVisible(), false); assert.match(await text(p.locator('main')), /Choose your music folder|On Pocket/); ok('choosing a page closes the menu and shows it');
   await p.setViewportSize({ width: 1440, height: 900 });
 
-  // --- Help panel is a proper dialog -----------------------------------------------------
-  await p.getByRole('button', { name: 'Help' }).click();
-  assert.equal(await p.getByRole('dialog', { name: 'Using Tau Omega' }).count(), 1); ok('Help opens as a dialog');
-  for (let i = 0; i < 12; i++) await p.keyboard.press('Tab');
-  assert.equal(await p.evaluate(() => !!document.activeElement?.closest('.help-panel')), true); ok('and keeps focus inside it');
-  await p.keyboard.press('Escape'); assert.equal(await p.getByRole('dialog', { name: 'Using Tau Omega' }).count(), 0); ok('Escape closes it');
+  // --- Help view in sidebar -----------------------------------------------------
+  const helpNav = p.locator('nav button', { hasText: /^Help$/ });
+  if ((await helpNav.getAttribute('aria-expanded')) !== 'true') await helpNav.click();
+  await p.locator('nav button', { hasText: 'Using Tau Omega' }).click();
+  assert.equal(await p.getByRole('heading', { name: 'Using Tau Omega' }).count(), 1); ok('Help opens Using Tau Omega view in sidebar');
+  await p.locator('nav button', { hasText: /^Music$/ }).click();
 
   // --- selection: whole-row click, ranges, select all, filters, sort ------------------------
   await fresh('?connection=card_reader'); await openLibrary(); await chooseFolder();

@@ -557,3 +557,21 @@ export type GameArtCandidate = {
   name: string;
   data_url: string;
 };
+export type GameMeta = {
+  rom_name: string;
+  platform_id: string;
+  genre: string | null;
+  developer: string | null;
+  publisher: string | null;
+  release_year: string | null;
+  region: string | null;
+  matched_name: string | null;
+};
+export type GameDetailsView = {
+  rom_name: string;
+  platform_id: string;
+  display_title: string;
+  meta: GameMeta;
+  images: GameArtCandidate[];
+  has_override: boolean;
+};

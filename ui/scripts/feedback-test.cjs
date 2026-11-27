@@ -12,14 +12,14 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   p.on('pageerror', (e) => errors.push(e.message));
   p.on('console', (m) => m.text().startsWith('[dev-mock] unmocked') && errors.push(m.text()));
   const fresh = async () => { await p.goto(url); await p.evaluate(() => localStorage.clear()); await p.goto(url); await p.waitForTimeout(900); };
-  const openPage = async () => { const more = p.locator('nav button', { hasText: 'Tools & settings' }); if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click(); await p.locator('nav button', { hasText: 'Send feedback' }).click(); await p.waitForTimeout(400); };
+  const openPage = async () => { const help = p.locator('nav button', { hasText: /^Help$/ }); if ((await help.getAttribute('aria-expanded')) !== 'true') await help.click(); await p.locator('nav button', { hasText: 'Send feedback' }).click(); await p.waitForTimeout(400); };
   const send = () => p.locator('form').getByRole('button', { name: /Send feedback|Sending/ });
   const title = () => p.getByLabel('Title'); const text = () => p.getByLabel('Description');
   const attach = (files) => p.locator('input[type=file]').setInputFiles(files);
   const fill = async () => { await title().fill('Marketplace crash'); await text().fill('It closes when I open a core.'); };
 
   await fresh(); await openPage();
-  assert.equal(await p.getByRole('heading', { name: 'Send feedback' }).count(), 1); ok('Send feedback is in Tools & settings');
+  assert.equal(await p.getByRole('heading', { name: 'Send feedback' }).count(), 1); ok('Send feedback is in Help');
   assert.equal(await send().isDisabled(), true); ok('an empty message cannot be sent');
   await fill(); assert.equal(await send().isDisabled(), false); assert.equal(await p.locator('form input[type=checkbox]').count(), 1); assert.match(await p.locator('.fb-callout').last().innerText(), /This will be public/); ok('a titled and described message can be sent at once; the public notice is plain text beside Send, with no box to tick');
   await text().fill('short'); assert.equal(await send().isDisabled(), true); assert.match(await p.locator('.fb-todo').innerText(), /a little more/); await text().fill('It closes when I open a core.'); ok('a too-short description is held back with a plain reason');
@@ -72,8 +72,10 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   const q = await b.newPage({ viewport: { width: 1440, height: 900 } });
   await q.addInitScript(() => { globalThis.__feedback = 'off'; });
   await q.goto(url); await q.evaluate(() => localStorage.clear()); await q.goto(url); await q.waitForTimeout(900);
+  const helpBtn = q.locator('nav button', { hasText: /^Help$/ }); if ((await helpBtn.getAttribute('aria-expanded')) !== 'true') await helpBtn.click();
+  assert.equal(await q.locator('nav button', { hasText: 'Send feedback' }).count(), 0); assert.equal(await q.locator('nav button', { hasText: 'Using Tau Omega' }).count(), 1);
   const more = q.locator('nav button', { hasText: 'Tools & settings' }); if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  assert.equal(await q.locator('nav button', { hasText: 'Send feedback' }).count(), 0); assert.equal(await q.locator('nav button', { hasText: /^Settings$/ }).count(), 1); ok('while sending is not connected, Send feedback is not in the menu');
+  assert.equal(await q.locator('nav button', { hasText: /^Settings$/ }).count(), 1); ok('while sending is not connected, Send feedback is not in Help');
   await q.close();
 
   assert.deepEqual(errors, []); ok('no page errors and no unmocked commands');

@@ -25,6 +25,8 @@
   import PackageView from './lib/PackageView.svelte';
   import MarketplaceView from './lib/MarketplaceView.svelte';
   import FeedbackView from './lib/FeedbackView.svelte';
+  import HelpView from './lib/HelpView.svelte';
+  import AppToasts from './lib/AppToasts.svelte';
   import NavTree from './lib/NavTree.svelte';
   import CoresView from './lib/CoresView.svelte';
   import ManualAddSheet from './lib/ManualAddSheet.svelte';
@@ -46,7 +48,7 @@
   import { cardDevice, loadSystems, syncSystemForCard } from './lib/systemStore';
   import { autoCheckUpdates } from './lib/updatesStore';
   import { get } from 'svelte/store';
-  let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' | 'check' | 'builder' | 'feedback' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
+  let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' | 'check' | 'builder' | 'feedback' | 'help' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
   let packageZipPath = ''; let packageCardPath = ''; let tauUpdateZip = ''; let packageManifest: PackageManifest | null = null; let packageInspectNotice = ''; let packagePlan: PackagePlan | null = null; let packagePlanNotice = ''; let packageReport: PackageReport | null = null; let packageConfirmNotice = '';
   async function inspectPackageZip() { packageManifest = null; packagePlan = null; packageReport = null; packagePlanNotice = ''; packageConfirmNotice = ''; try { packageManifest = await inspectPackage(packageZipPath); packageInspectNotice = `${packageManifest.entries.length} files found. Nothing was changed.`; } catch (error) { packageInspectNotice = `Could not read this package: ${errorMessage(error)}`; } }
@@ -91,7 +93,8 @@
   });
   // Rarely-used tools and settings live in a collapsible sidebar section; it
   // stays open while one of its pages is showing and remembers the user's choice.
-  const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'feedback', 'settings'];
+  const moreItems = ['compare', 'backup', 'package', 'problems', 'diagnostics', 'settings'];
+  const helpItems = ['help', 'feedback'];
   const devItems = ['builds', 'results', 'check', 'builder'];
   let devOpen = false;
   try { devOpen = localStorage.getItem('tau.nav.dev') === '1'; } catch { /* per-viewer convenience */ }
@@ -99,6 +102,9 @@
   let moreOpen = false;
   try { moreOpen = localStorage.getItem('tau.nav.more') === '1'; } catch { /* per-viewer convenience */ }
   function toggleMore() { moreOpen = !moreOpen; try { localStorage.setItem('tau.nav.more', moreOpen ? '1' : '0'); } catch { /* ignore */ } }
+  let helpOpen = false;
+  try { helpOpen = localStorage.getItem('tau.nav.help') === '1'; } catch { /* per-viewer convenience */ }
+  function toggleHelp() { helpOpen = !helpOpen; try { localStorage.setItem('tau.nav.help', helpOpen ? '1' : '0'); } catch { /* ignore */ } }
   /** True when the open card carries a Tau core that supports Check diagnostics (later: per-core plugin capability). */
   $: hasTauCore = cores.some((c) => /^(alfatreze\.)?tau($|[ ._])/i.test(c.id));
   // The selected core's media root: what the Library screen lists and writes.
@@ -119,7 +125,6 @@
   function onWindowKey(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
     if (tauUpdateZip) { tauUpdateZip = ''; return; }
-    if (showHelp) { showHelp = false; return; }
     if (navOpen) { navOpen = false; navToggleEl?.focus(); }
   }
   let cardRevision = 0;
@@ -329,7 +334,6 @@
     page = 'workbench';
   }
 
-  let showHelp = false;
   async function compareCores() { comparison = null; compareNotice = ''; try { comparison = await compareMedia(leftCore, rightCore); compareNotice = `${comparison.differences.length} supported files compared. Nothing was changed.`; } catch (error) { compareNotice = `Could not compare these media roots: ${errorMessage(error)}`; } }
   let coreCopyCapacity: CapacityCheck | null = null;
   async function reviewCoreCopy() { coreCopyPlan = null; coreCopyCapacity = null; moveSource = false; approveDeletion = false; try { coreCopyPlan = await planCoreCopy(leftCore, rightCore); compareNotice = `Copy plan ${coreCopyPlan.id} is ready for review. The first core remains untouched.`; try { coreCopyCapacity = await checkStorageCapacity(rightCore, coreCopyPlan.bytes_to_write); } catch { /* capacity check is informational; a plan still reviews without it */ } } catch (error) { compareNotice = `Could not make a copy plan: ${errorMessage(error)}`; } }
@@ -402,8 +406,14 @@
           <button class:active={page === 'problems'} on:click={() => page = 'problems'}>Problems</button>
         {/if}
         {#if hasTauCore}<button class:active={page === 'diagnostics'} on:click={() => page = 'diagnostics'}>Send diagnostics</button>{/if}
-        {#if feedbackOn}<button class:active={page === 'feedback'} on:click={() => page = 'feedback'}>Send feedback</button>{/if}
         <button class:active={page === 'settings'} on:click={() => page = 'settings'}>Settings</button>
+      </div>
+    {/if}
+    <button class="nav-group" class:has-active={helpItems.includes(page)} aria-expanded={helpOpen || helpItems.includes(page)} aria-controls="help-nav" on:click={toggleHelp}><span>Help</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={helpOpen || helpItems.includes(page)}><path d="m6 9 6 6 6-6"/></svg></button>
+    {#if helpOpen || helpItems.includes(page)}
+      <div class="nav-sub" id="help-nav">
+        <button class:active={page === 'help'} on:click={() => page = 'help'}>Using Tau Omega</button>
+        {#if feedbackOn}<button class:active={page === 'feedback'} on:click={() => page = 'feedback'}>Send feedback</button>{/if}
       </div>
     {/if}
   </nav><p class="offline">Local only<br/><span>No card writes without a reviewed plan.</span></p></aside>
@@ -445,6 +455,8 @@
     <MarketplaceView card={path} {openCore} />
   {:else if page === 'feedback'}
     <FeedbackView />
+  {:else if page === 'help'}
+    <HelpView {feedbackOn} openFeedback={() => { helpOpen = true; page = 'feedback'; }} />
   {:else if page === 'cores'}
     <CoresView card={path} {cores} openLibrary={openCoreLibrary} reloadCard={() => { void openFolder(); }} />
   {:else if page === 'meters'}
@@ -460,6 +472,7 @@
   {/if}
   </div>
 </main>
+<AppToasts />
 
 {#if $manualAdd.open}{#key $manualAdd.initial}<ManualAddSheet card={path} initial={$manualAdd.initial} close={() => { manualAdd.set({ open: false, initial: '' }); void openFolder(); }} />{/key}{/if}
 
@@ -472,21 +485,6 @@
     </div>
     <div class="tau-upd-body">
       <UpdatePlanView zipPath={tauUpdateZip} cardPath={path} on:installed={() => { void openFolder(); }} />
-    </div>
-  </div>
-{/if}
-
-<button class="help-fab" aria-label="Help" title="Help" on:click={() => showHelp = !showHelp}>?</button>
-{#if showHelp}
-  <div class="help-backdrop" role="presentation" on:click={() => showHelp = false}></div>
-  <div class="help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title" use:modal>
-    <div class="help-panel-header"><h2 id="help-title">Using Tau Omega</h2><button class="quiet" aria-label="Close help" on:click={() => showHelp = false}>✕</button></div>
-    <div class="help-panel-body">
-      <p><strong>Open folder</strong> browses to a Pocket card or a plain staging folder (anything with <code>Cores</code> and <code>Assets</code>). A mounted Pocket and any card you've opened before show up under <strong>Known cards</strong> for one-click reopening.</p>
-      <p>Cores that look like media players (Tau, or anything that can play your music files) get a large card here. Anything else can be shown with "Show other cores" and promoted with <strong>Set as player</strong>.</p>
-      <p><strong>Music</strong> shows the selected card's music on the right and a folder on this computer on the left. Tick albums (or drag them across) to add them, mark albums on the Pocket to remove, rename or change their cover, then press <strong>Start sync</strong>. Everything you stage sits in <strong>Pending changes</strong> and nothing is written until you confirm. The card is detected automatically; the refresh button at the top right re-reads it. Rarely used tools and settings are under <strong>Tools &amp; settings</strong> in the sidebar.</p>
-      <p>Every write anywhere in the app goes through <strong>plan → review → confirm</strong> — nothing is copied, moved, or deleted until you've seen exactly what will change and confirmed it.</p>
-      <p>This is all read-only until you explicitly confirm a plan on Music, Compare cores, Backup, or Packages.</p>
     </div>
   </div>
 {/if}

@@ -3,13 +3,15 @@ use std::path::{Path, PathBuf};
 use tau_core::{
     ErrorCode, TauError,
     game_art::{
-        self, GameArtCandidate, GameArtKind, GameArtResult, GameArtSourceKind,
+        self, GameArtCandidate, GameArtKind, GameArtResult, GameArtSourceKind, GameDetailsView,
+        GameMeta,
     },
 };
 use tau_net::libretro_thumbs;
 use tauri::Manager;
 
 const MAX_BATCH_ROMS: usize = 48;
+const MAX_META_ROMS: usize = 2000;
 
 fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
     Ok(app
@@ -148,4 +150,40 @@ pub fn game_art_clear_override(
     let overrides = overrides_dir(&app)?;
     libretro_thumbs::clear_miss_marker(&cache, platform_id.trim(), rom_name.trim());
     game_art::clear_override(&overrides, platform_id.trim(), rom_name.trim())
+}
+
+/// Resolves game genres and display regions from cached `libretro-database` metadata.
+#[tauri::command(async)]
+pub fn game_meta_resolve_batch(
+    app: tauri::AppHandle,
+    platform_id: String,
+    rom_names: Vec<String>,
+) -> Result<Vec<GameMeta>, TauError> {
+    let cache = cache_dir(&app)?;
+    let trimmed: Vec<String> = rom_names
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .take(MAX_META_ROMS)
+        .collect();
+    if trimmed.is_empty() || platform_id.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(libretro_thumbs::resolve_genres_batch(
+        &cache,
+        platform_id.trim(),
+        &trimmed,
+    ))
+}
+
+/// Resolves detailed game metadata and available images (Boxart, Title screen, Screenshot) for one game.
+#[tauri::command(async)]
+pub fn game_details_read(
+    app: tauri::AppHandle,
+    platform_id: String,
+    rom_name: String,
+) -> Result<GameDetailsView, TauError> {
+    let cache = cache_dir(&app)?;
+    let overrides = overrides_dir(&app)?;
+    libretro_thumbs::resolve_game_details(&cache, &overrides, platform_id.trim(), rom_name.trim())
 }

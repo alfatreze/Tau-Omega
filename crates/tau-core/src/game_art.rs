@@ -15,9 +15,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Base URLs for official `libretro-thumbnails` repositories on GitHub.
+/// Base URLs for official `libretro-thumbnails` and `libretro-database` repositories on GitHub.
 pub const LIBRETRO_RAW_BASE_URL: &str = "https://raw.githubusercontent.com/libretro-thumbnails";
 pub const LIBRETRO_API_BASE_URL: &str = "https://api.github.com/repos/libretro-thumbnails";
+pub const LIBRETRO_DB_BASE_URL: &str =
+    "https://raw.githubusercontent.com/libretro/libretro-database/master/metadat";
 
 /// Maximum local custom image file size accepted for game artwork overrides (16 MiB).
 pub const MAX_LOCAL_IMAGE_BYTES: usize = 16 * 1024 * 1024;
@@ -115,6 +117,30 @@ pub struct GameArtCandidate {
     pub kind: GameArtKind,
     pub name: String,
     pub data_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GameMeta {
+    pub rom_name: String,
+    pub platform_id: String,
+    pub genre: Option<String>,
+    pub developer: Option<String>,
+    pub publisher: Option<String>,
+    pub release_year: Option<String>,
+    pub region: Option<String>,
+    pub matched_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GameDetailsView {
+    pub rom_name: String,
+    pub platform_id: String,
+    pub display_title: String,
+    pub meta: GameMeta,
+    pub images: Vec<GameArtCandidate>,
+    pub has_override: bool,
 }
 
 /// Resolves any platform alias to its canonical platform ID (or lowercased input if custom).
@@ -980,6 +1006,139 @@ pub fn group_roms_by_key<'a>(
     map
 }
 
+/// URL for one ClrMamePro metadata `.dat` file in `libretro-database` (`genre`, `developer`, `publisher`, `releaseyear`).
+pub fn libretro_db_dat_url(field: &str, system: &str) -> String {
+    format!(
+        "{LIBRETRO_DB_BASE_URL}/{field}/{}.dat",
+        percent_encode_segment(system)
+    )
+}
+
+fn parse_dat_value(rest: &str) -> Option<String> {
+    let trimmed = rest.trim();
+    if let Some(after) = trimmed.strip_prefix('"') {
+        let mut out = String::new();
+        let mut chars = after.chars();
+        while let Some(ch) = chars.next() {
+            match ch {
+                '\\' => {
+                    if let Some(esc) = chars.next() {
+                        out.push(esc);
+                    }
+                }
+                '"' => return Some(out.trim().to_string()),
+                other => out.push(other),
+            }
+        }
+        return Some(out.trim().to_string());
+    }
+    let val = trimmed.split_whitespace().next().unwrap_or("").trim();
+    if val.is_empty() {
+        None
+    } else {
+        Some(val.to_string())
+    }
+}
+
+/// Parses a `libretro-database` ClrMamePro `.dat` file into `normalize_title(title) -> value`.
+pub fn parse_libretro_dat(text: &str, field: &str) -> BTreeMap<String, String> {
+    let mut scored: BTreeMap<String, (i32, String)> = BTreeMap::new();
+    let mut in_game = false;
+    let mut comment: Option<String> = None;
+    let mut name: Option<String> = None;
+    let mut field_val: Option<String> = None;
+
+    let flush = |scored: &mut BTreeMap<String, (i32, String)>,
+                 comment: &mut Option<String>,
+                 name: &mut Option<String>,
+                 field_val: &mut Option<String>| {
+        if let Some(title) = comment.take().or_else(|| name.take())
+            && let Some(val) = field_val.take().filter(|v| !v.is_empty())
+        {
+            let norm = normalize_title(&title);
+            if !norm.is_empty() {
+                let s = score_candidate(&[], &title);
+                let replace = scored.get(&norm).is_none_or(|(prev, _)| s > *prev);
+                if replace {
+                    scored.insert(norm, (s, val));
+                }
+            }
+        } else {
+            *comment = None;
+            *name = None;
+            *field_val = None;
+        }
+    };
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed == "game (" || trimmed.starts_with("game (") {
+            if in_game {
+                flush(&mut scored, &mut comment, &mut name, &mut field_val);
+            }
+            in_game = true;
+            continue;
+        }
+        if !in_game {
+            continue;
+        }
+        if trimmed == ")" {
+            flush(&mut scored, &mut comment, &mut name, &mut field_val);
+            in_game = false;
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("comment ") {
+            if comment.is_none() {
+                comment = parse_dat_value(rest);
+            }
+        } else if let Some(rest) = trimmed.strip_prefix("name ") {
+            if name.is_none() {
+                name = parse_dat_value(rest);
+            }
+        } else if let Some(rest) = trimmed.strip_prefix(field)
+            && rest.starts_with(char::is_whitespace)
+        {
+            field_val = parse_dat_value(rest);
+        }
+    }
+    if in_game {
+        flush(&mut scored, &mut comment, &mut name, &mut field_val);
+    }
+
+    scored.into_iter().map(|(k, (_, v))| (k, v)).collect()
+}
+
+/// Extracts clean display region string (e.g. `"USA, Europe"`, `"Japan"`) from ROM filename tags.
+pub fn extract_display_region(rom_name: &str) -> Option<String> {
+    let mut regions: Vec<&'static str> = Vec::new();
+    for tag in extract_region_tags(rom_name) {
+        let mapped = match tag.as_str() {
+            "usa" => Some("USA"),
+            "europe" => Some("Europe"),
+            "japan" => Some("Japan"),
+            "world" => Some("World"),
+            "australia" => Some("Australia"),
+            "france" => Some("France"),
+            "germany" => Some("Germany"),
+            "spain" => Some("Spain"),
+            "italy" => Some("Italy"),
+            "korea" => Some("Korea"),
+            "brazil" => Some("Brazil"),
+            _ => None,
+        };
+        if let Some(label) = mapped
+            && !regions.contains(&label)
+        {
+            regions.push(label);
+        }
+    }
+    if regions.is_empty() {
+        None
+    } else {
+        Some(regions.join(", "))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1215,5 +1374,54 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn parses_libretro_dat_and_display_region() {
+        let genre_dat = r#"
+clrmamepro (
+	name "Nintendo - Game Boy Advance"
+)
+
+game (
+	comment "Advance Wars (USA) (Rev 1)"
+	genre "Strategy"
+	rom ( crc 12345678 )
+)
+
+game (
+	name "Boktai 2 - Solar Boy Django (Europe)"
+	genre "Role Playing"
+)
+"#;
+        let genres = parse_libretro_dat(genre_dat, "genre");
+        assert_eq!(
+            genres.get("advance wars").map(String::as_str),
+            Some("Strategy")
+        );
+        assert_eq!(
+            genres.get("boktai 2 solar boy django").map(String::as_str),
+            Some("Role Playing")
+        );
+
+        let year_dat = r#"
+game (
+	comment "Advance Wars (USA)"
+	releaseyear 2001
+)
+game (
+	comment "Mother 3 (Japan)"
+	releaseyear "2006"
+)
+"#;
+        let years = parse_libretro_dat(year_dat, "releaseyear");
+        assert_eq!(years.get("advance wars").map(String::as_str), Some("2001"));
+        assert_eq!(years.get("mother 3").map(String::as_str), Some("2006"));
+
+        assert_eq!(
+            extract_display_region("Advance Wars (USA, Europe) (Rev 1).gba").as_deref(),
+            Some("USA, Europe")
+        );
+        assert_eq!(extract_display_region("Mother 3.gba"), None);
     }
 }

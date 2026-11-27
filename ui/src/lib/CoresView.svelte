@@ -7,10 +7,14 @@
   import CoreSavesTab from './CoreSavesTab.svelte';
   import CoreScreenshotsTab from './CoreScreenshotsTab.svelte';
   import CoreSettingsTab from './CoreSettingsTab.svelte';
+  import GameArtworkPickerSheet from './GameArtworkPickerSheet.svelte';
   import GameBubCoreView from './GameBubCoreView.svelte';
+  import GameDetailsInspector from './GameDetailsInspector.svelte';
   import ArtworkPickerSheet from './ArtworkPickerSheet.svelte';
+  import RemoveFilesSheet from './RemoveFilesSheet.svelte';
   import { extensionsForCore, extensionsForPlatform } from './coreExtensions';
   import { errorMessage } from './backend';
+  import { displayGameTitle, gameArtCacheKey, gameArtMap } from './gameArtStore';
   import { coreDetail, coreFiles, coreKeep, readPlatformImage } from './tau-api';
   import { disabledList, refreshDisabled, setCoresEnabled } from './coreStateStore';
   import CoreUpdates from './CoreUpdates.svelte';
@@ -22,7 +26,8 @@
   import { coresGroups, coresSelection, coresTab, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
   import { plural } from './coresFormat';
   import { platformFallbackArt } from './platformArt';
-  import type { Core, CoreDetail, CoreFiles } from './types';
+  import { showToast } from './toastStore';
+  import type { Core, CoreDetail, CoreFiles, FileEntry, FolderListing } from './types';
   export let card = '';
   /** The card-level core records (library facts) and what to do with them. */
   export let cores: Core[] = []; export let openLibrary: (c: Core) => void = () => {}; export let reloadCard: () => void = () => {};
@@ -34,6 +39,47 @@
   let platTabFor = '';
   let detail: CoreDetail | null = null; let files: CoreFiles | null = null; let error = ''; let loadedFor = '';
   let filesTab: CoreFilesTab | undefined; let banner: string | null = null; let bannerFor = ''; let showPlatArtPicker = false;
+  type SelectedGame = { platformId: string; platformName: string; romName: string; relPath: string; bytes: number; modified: number };
+  let selectedGame: SelectedGame | null = null;
+  let sideMode: 'core' | 'game' = 'core';
+  let gameArtTarget: { platformId: string; platformName: string; romName: string } | null = null;
+  let removeSingleGame: string[] | null = null;
+
+  function openGameDetails(item: FileEntry, folder: FolderListing) {
+    const platName = detail?.platforms.find((p) => p.id === folder.folder.platform)?.name ?? folder.folder.platform;
+    selectedGame = {
+      platformId: folder.folder.platform,
+      platformName: platName,
+      romName: item.name,
+      relPath: `${folder.folder.rel_path}/${item.rel_path}`,
+      bytes: item.bytes,
+      modified: item.modified,
+    };
+    sideMode = 'game';
+    inspectorOpen.set(true);
+  }
+
+  $: selectedGameSaves = (() => {
+    if (!selectedGame || !files) return [];
+    const targetTitle = displayGameTitle(selectedGame.romName).toLowerCase();
+    const out: { name: string; label: string; kind: 'save' | 'state'; bytes: number; modified: number }[] = [];
+    for (const f of files.folders) {
+      if (f.folder.role !== 'SavesShared' && f.folder.role !== 'SavesCore' && f.folder.role !== 'SaveStates') continue;
+      for (const e of f.entries) {
+        const gStem = (e.game || displayGameTitle(e.name)).trim().toLowerCase();
+        if (gStem === targetTitle || (targetTitle && gStem.includes(targetTitle))) {
+          out.push({
+            name: e.name,
+            label: f.folder.role === 'SaveStates' ? (e.taken ? `Save state · ${e.taken}` : 'Save state') : (e.slot || 'Save RAM'),
+            kind: f.folder.role === 'SaveStates' ? 'state' : 'save',
+            bytes: e.bytes,
+            modified: e.modified,
+          });
+        }
+      }
+    }
+    return out;
+  })();
 
   $: node = $coresTreeStore.find((n) => n.platform.id === $coresSelection.platform);
   $: platExts = node ? extensionsForPlatform('analogue_pocket', node.platform.id) : [];
@@ -58,32 +104,32 @@
   if (typeof window !== 'undefined') window.addEventListener('tau-artwork-changed', onArtworkChanged);
 
   async function load(id: string) {
-    loadedFor = `${card}|${id}`; error = ''; detail = null; files = null; tab = 'files';
+    loadedFor = `${card}|${id}`; error = ''; detail = null; files = null; tab = 'files'; selectedGame = null; sideMode = 'core';
     try { [detail, files] = await Promise.all([coreDetail(card, id), coreFiles(card, id)]); }
     catch (e) { error = errorMessage(e); }
   }
-  // Hiding from the Pocket: the switch in a core's header, and the Disabled section on the overview.
+  // Hiding from the Pocket: the switch in Settings, and the Disabled section on the overview.
   $: if (card) void refreshDisabled(card);
-  let stateBusy = false; let stateNote = '';
+  let stateBusy = false;
   /** The open core is in Disabled Cores: still here, still fixable, just not listed by the Pocket. */
   $: isDisabled = !!row?.disabled;
   let confirmEnable = false;
   async function setVisible(id: string, on: boolean) {
     if (on && files?.missing.length && !confirmEnable) { confirmEnable = true; return; }
-    confirmEnable = false; stateBusy = true; stateNote = '';
+    confirmEnable = false; stateBusy = true;
     try {
       const why: [string, string[]][] = on ? [] : [[id, (files?.missing ?? []).map((m) => `It needs ${m.filename} (${m.slot}).`)]];
       await setCoresEnabled(card, [id], on, why);
       if (on) await coreKeep(card, [id], true);
       await reload(); reloadCard();
-      stateNote = on ? 'This core is visible on the Pocket again.' : 'This core is now hidden from the Pocket. It stays here so you can fix what it needs.';
-    } catch (e) { stateNote = `Nothing was changed. ${errorMessage(e)}`; }
+      showToast(on ? 'This core is visible on the Pocket again.' : 'This core is now hidden from the Pocket. It stays here so you can fix what it needs.', on ? 'success' : 'info');
+    } catch (e) { showToast(`Nothing was changed. ${errorMessage(e)}`, 'error'); }
     finally { stateBusy = false; }
   }
   async function showCores(ids: string[]) {
-    stateBusy = true; stateNote = '';
-    try { await setCoresEnabled(card, ids, true); await coreKeep(card, ids, true); reloadCard(); stateNote = `${plural(ids.length, 'core')} enabled again. ${ids.length === 1 ? 'It' : 'They'} will not be suggested for hiding again.`; }
-    catch (e) { stateNote = `Nothing was changed. ${errorMessage(e)}`; }
+    stateBusy = true;
+    try { await setCoresEnabled(card, ids, true); await coreKeep(card, ids, true); reloadCard(); showToast(`${plural(ids.length, 'core')} enabled again. ${ids.length === 1 ? 'It' : 'They'} will not be suggested for hiding again.`); }
+    catch (e) { showToast(`Nothing was changed. ${errorMessage(e)}`, 'error'); }
     finally { stateBusy = false; }
   }
   const when = (t: number) => (t ? new Date(t * 1000).toLocaleDateString() : 'unknown date');
@@ -143,13 +189,27 @@
         <p class="lede">{$coresSelection.core}{detail?.version ? ` · version ${detail.version}` : ''}</p>
       </div>
       <div class="cp-actions">
-      {#if detail}<button class="vis" class:off={isDisabled} role="switch" aria-checked={!isDisabled} disabled={stateBusy} on:click={() => setVisible(detail?.id ?? '', isDisabled)} title={isDisabled ? 'Turn on to show this core in the Pocket’s menu again' : 'Turn off to hide this core from the Pocket’s menu (nothing is deleted; it stays here)'}><span class="vis-knob" aria-hidden="true"></span>Visible on the Pocket</button>{/if}
-      {#if detail}<button class="quiet" aria-expanded={$inspectorOpen} aria-controls="core-details" on:click={() => inspectorOpen.update((v) => !v)} title="Show or hide the details (I)">{$inspectorOpen ? 'Hide details' : 'Show details'}</button>{/if}
+      {#if detail}
+        <button
+          type="button"
+          class="cp-side-btn"
+          class:active={$inspectorOpen}
+          aria-label={$inspectorOpen ? 'Hide details' : 'Show details'}
+          aria-expanded={$inspectorOpen}
+          aria-controls="core-details"
+          on:click={() => inspectorOpen.update((v) => !v)}
+          title={$inspectorOpen ? 'Hide details (I)' : 'Show details (I)'}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <line x1="15" y1="4" x2="15" y2="20" />
+          </svg>
+        </button>
+      {/if}
       </div>
     </header>
-    {#if isDisabled && detail}<p class="dis-banner" role="status"><button class="primary dis-on" disabled={stateBusy} on:click={() => setVisible(detail?.id ?? '', true)}>Enable on the Pocket</button><span><strong>Disabled on the Pocket.</strong> The Pocket does not list this core. {files && files.missing.length ? `It still needs ${files.missing.map((m) => m.filename).join(', ')}: add ${files.missing.length === 1 ? 'it' : 'them'} in Files, then switch “Visible on the Pocket” on.` : 'Switch “Visible on the Pocket” on to bring it back.'}</span></p>{/if}
-    {#if confirmEnable && files}<p class="dis-warn" role="alert">It still lacks {files.missing.map((m) => m.filename).join(', ')}, so it may not start. Enable it anyway? <button class="quiet" on:click={() => setVisible(detail?.id ?? '', true)}>Enable anyway</button><button class="quiet" on:click={() => (confirmEnable = false)}>Cancel</button></p>{/if}
-    {#if stateNote}<p class="cores-note" role="status">{stateNote}</p>{/if}
+    {#if isDisabled && detail}<p class="dis-banner" role="status"><button class="primary dis-on" disabled={stateBusy} on:click={() => setVisible(detail?.id ?? '', true)}>Enable on the Pocket</button><span><strong>Disabled on the Pocket.</strong> The Pocket does not list this core. {files && files.missing.length ? `It still needs ${files.missing.map((m) => m.filename).join(', ')}: add ${files.missing.length === 1 ? 'it' : 'them'} in Files, then open Settings and switch “Visible on the Pocket” on.` : 'Open Settings and switch “Visible on the Pocket” on to bring it back.'}</span></p>{/if}
+    {#if confirmEnable && files && tab !== 'settings'}<p class="dis-warn" role="alert">It still lacks {files.missing.map((m) => m.filename).join(', ')}, so it may not start. Enable it anyway? <button class="quiet" on:click={() => setVisible(detail?.id ?? '', true)}>Enable anyway</button><button class="quiet" on:click={() => (confirmEnable = false)}>Cancel</button></p>{/if}
     {#if error}<div class="empty"><h2>This core could not be read</h2><p>{error}</p><button class="primary" on:click={() => load($coresSelection.core)}>Try again</button></div>
     {:else if !detail || !files}<p class="cores-note" role="status">Reading the card…</p>
     {:else}
@@ -161,10 +221,10 @@
             {/each}
           </div>
           <div class="cores-scroll" id={`cores-panel-${tab}`} role="tabpanel" aria-labelledby={`cores-tab-${tab}`} tabindex="-1">
-            {#if tab === 'files'}<CoreFilesTab bind:this={filesTab} {card} {detail} {files} changed={reload} />
+            {#if tab === 'files'}<CoreFilesTab bind:this={filesTab} {card} {detail} {files} selectedGameRel={selectedGame?.relPath ?? ''} onSelectGame={openGameDetails} changed={reload} />
             {:else if tab === 'saves'}<CoreSavesTab {files} />
             {:else if tab === 'screens'}{#key detail.id}<CoreScreenshotsTab {card} coreId={detail.id} />{/key}
-            {:else if tab === 'settings'}{#key detail.id}<CoreSettingsTab {card} {detail} {files} {addMissing} changed={reload} />{/key}
+            {:else if tab === 'settings'}{#key detail.id}<CoreSettingsTab {card} {detail} {files} {isDisabled} {stateBusy} {confirmEnable} setVisible={(on) => setVisible(detail?.id ?? '', on)} cancelEnable={() => (confirmEnable = false)} {addMissing} changed={reload} />{/key}
             {:else}
               {#each coreExts as ext (ext.id)}
                 {#if tab === ext.id}<svelte:component this={ext.component} {card} />{/if}
@@ -172,7 +232,51 @@
             {/if}
           </div>
         </div>
-        {#if $inspectorOpen}<div id="core-details" class="cores-side"><CoreInspector {card} {detail} {files} lib={cores.find((c) => c.id === detail?.id) ?? null} {openLibrary} libraryChanged={reloadCard} on:close={() => inspectorOpen.set(false)} /></div>{/if}
+        {#if $inspectorOpen}
+          <div id="core-details" class="cores-side">
+            {#if selectedGame}
+              <div class="side-mode-bar" role="group" aria-label="Details view">
+                <button type="button" class:active={sideMode === 'core'} aria-pressed={sideMode === 'core'} on:click={() => (sideMode = 'core')}>Core details</button>
+                <button type="button" class:active={sideMode === 'game'} aria-pressed={sideMode === 'game'} on:click={() => (sideMode = 'game')}>Game details</button>
+                <button type="button" class="side-mode-clear" aria-label="Clear selected game" title="Back to core details" on:click={() => { selectedGame = null; sideMode = 'core'; }}>✕</button>
+              </div>
+            {/if}
+            {#if sideMode === 'game' && selectedGame}
+              <GameDetailsInspector
+                platformId={selectedGame.platformId}
+                platformName={selectedGame.platformName}
+                romName={selectedGame.romName}
+                relPath={selectedGame.relPath}
+                bytes={selectedGame.bytes}
+                modified={selectedGame.modified}
+                saves={selectedGameSaves}
+                onOpenArtwork={() => {
+                  if (selectedGame) gameArtTarget = { platformId: selectedGame.platformId, platformName: selectedGame.platformName, romName: selectedGame.romName };
+                }}
+                onRemove={() => {
+                  if (selectedGame) removeSingleGame = [selectedGame.relPath];
+                }}
+              />
+            {:else}
+              <CoreInspector
+                {card}
+                {detail}
+                {files}
+                lib={cores.find((c) => c.id === detail?.id) ?? null}
+                {openLibrary}
+                libraryChanged={reloadCard}
+                onCoreRemoved={() => {
+                  reloadCard();
+                  coresSelection.set({ platform: '', core: '' });
+                }}
+                onCoreUpdated={() => {
+                  reloadCard();
+                  void load(detail?.id ?? $coresSelection.core);
+                }}
+              />
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
   {:else if grp}
@@ -285,12 +389,35 @@
         </ul>
       </section>
     {/if}
-    {#if stateNote}<p class="cores-note" role="status">{stateNote}</p>{/if}
     {/if}
     </div>
     {/if}
   {/if}
 </section>
+{#if removeSingleGame && detail}
+  <RemoveFilesSheet
+    {card}
+    coreId={detail.id}
+    coreName={detail.shortname}
+    files={removeSingleGame}
+    on:close={() => (removeSingleGame = null)}
+    on:done={() => {
+      removeSingleGame = null;
+      selectedGame = null;
+      sideMode = 'core';
+      void reload();
+    }}
+  />
+{/if}
+{#if gameArtTarget}
+  <GameArtworkPickerSheet
+    platformId={gameArtTarget.platformId}
+    platformName={gameArtTarget.platformName}
+    romName={gameArtTarget.romName}
+    current={$gameArtMap[gameArtCacheKey(gameArtTarget.platformId, gameArtTarget.romName)] ?? null}
+    close={() => (gameArtTarget = null)}
+  />
+{/if}
 {#if showPlatArtPicker && node}
   <ArtworkPickerSheet
     {card}
@@ -306,22 +433,26 @@
 <style>
   .cores-note{font-size:13px;color:#95a5a4}
   .cp-actions{display:flex;align-items:center;gap:10px;flex:none}
-  .vis{display:inline-flex;align-items:center;gap:9px;padding:7px 12px 7px 9px;font-size:12.5px;color:#dce6e4;background:#1a2325;border:1px solid #2c393a;border-radius:999px}
-  .vis:hover{border-color:#3d5254}.vis:focus-visible{outline:2px solid #c1f0ad;outline-offset:2px}.vis:disabled{opacity:.55}
-  .vis.off{color:#a6b3b2}.vis.off .vis-knob{background:#4b5a5b}.vis.off .vis-knob::after{left:2px}
+  .cp-side-btn{display:inline-grid;place-items:center;width:34px;height:34px;padding:0;border-radius:9px;background:#161f20;border:1px solid #2c393a;color:#95a5a4;cursor:pointer}
+  .cp-side-btn:hover{color:#eff5f4;border-color:#3d5254}
+  .cp-side-btn.active{color:#c1f0ad;border-color:#446649;background:#1a2820}
+  .side-mode-bar{display:flex;align-items:center;gap:4px;margin:0 0 8px;padding:3px;background:#101617;border:1px solid #2c393a;border-radius:9px}
+  .side-mode-bar button:not(.side-mode-clear){flex:1;padding:5px 8px;font-size:12px;border-radius:7px;background:transparent;color:#95a5a4}
+  .side-mode-bar button:not(.side-mode-clear).active{background:#1f2e30;color:#c1f0ad}
+  .side-mode-clear{padding:4px 8px;font-size:11.5px;background:transparent;color:#8f9e9d;border-radius:6px}
+  .side-mode-clear:hover{color:#eff5f4;background:#1c2627}
   .dis-bar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 16px;padding:12px 16px;border:1px solid #5c5030;background:#241f12;color:#e5d9a8;border-radius:10px;font-size:13px;line-height:1.5}.dis-bar-btns{display:flex;gap:8px}
   .dis-banner{display:flex;gap:14px;align-items:center}.dis-banner .dis-on{flex:none}
   .pv-list li.has-en{display:flex;align-items:center;gap:10px;padding-right:14px}.pv-list li.has-en .pv-open{flex:1;min-width:0}.pv-en{flex:none;white-space:nowrap}
   .dis-banner,.dis-warn{margin:0 0 12px;padding:10px 14px;border:1px solid #5c5030;background:#241f12;color:#e5d9a8;border-radius:10px;font-size:12.5px;line-height:1.55}.dis-warn button{margin-left:8px}
-  .vis-knob{position:relative;width:28px;height:16px;border-radius:999px;background:#6fa35a;flex:none}.vis-knob::after{content:'';position:absolute;top:2px;left:14px;width:12px;height:12px;border-radius:50%;background:#101617}
   .dis .dis-lede{font-size:12.5px;color:#95a5a4;margin:0 0 10px}.dis-row{display:flex;align-items:center;gap:13px;padding:11px 16px}.dis-row .core-icon{opacity:.6}
   .dis :global(code){font-size:11.5px}
   /* A core's page is one screen tall: the header and tabs stay put, the content and the details column each scroll on their own. */
   .cores.has-core{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
-  .cp-head{flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-right:52px}
+  .cp-head{flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
   .cores-main{display:flex;flex-direction:column;min-height:0;min-width:0}.cores-main .tabs{flex:none}
   .cores-scroll{flex:1;min-height:0;overflow:auto;padding:2px 6px 32px 0}
-  .cores-side{min-height:0;overflow:auto;padding:2px 2px 24px 0}.cores-side :global(.ci){min-height:100%}
+  .cores-side{min-height:0;overflow:auto;padding:2px 2px 24px 0}
   .crumbs{display:flex;align-items:center;gap:2px;font-size:12px;color:#8f9e9d;margin:0 0 8px -8px}.crumbs .quiet{padding:4px 8px;font-size:12px}
   .cores-grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;align-items:stretch}.cores-grid.no-inspector{grid-template-columns:minmax(0,1fr)}
   .tabs{display:flex;gap:4px;border-bottom:1px solid #2c393a;margin:0 0 16px}
