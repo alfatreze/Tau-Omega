@@ -153,6 +153,15 @@ const mockImagePacks = [
   { id: 'Shissa43/Analogue-Pocket-Platform-Art#Simple_USA', owner: 'Shissa43', repository: 'Analogue-Pocket-Platform-Art', variant: 'Simple_USA', name: 'Shissa43 · Analogue Pocket Platform Art (Simple USA)', cached: false, cached_platforms: 0 },
 ];
 const mockArtworkOverrides: Record<string, string> = {};
+const mockGameArtOverrides: Record<string, import('./types').GameArtResult> = {};
+const stripExt = (n: string) => n.replace(/\.[^.\/\\]{1,8}$/, '');
+const mockGameKey = (plat: string, rom: string) => `${(plat || '').trim().toLowerCase()}:${stripExt(rom).trim().toLowerCase()}`;
+function mockGameCoverSvg(title: string, badge: string, accent = '#c1f0ad'): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const short = title.length > 26 ? `${title.slice(0, 24)}…` : title;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1a292b"/><stop offset="100%" stop-color="#0f1718"/></linearGradient></defs><rect width="240" height="240" rx="14" fill="url(#g)"/><rect x="14" y="14" width="212" height="212" rx="10" fill="none" stroke="${accent}" stroke-opacity="0.35" stroke-width="2"/><text x="24" y="46" fill="${accent}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" font-weight="700" letter-spacing="1.2">${esc(badge.toUpperCase())}</text><text x="24" y="132" fill="#eff5f4" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="700">${esc(short)}</text><text x="24" y="206" fill="#8f9e9d" font-family="ui-sans-serif,system-ui,sans-serif" font-size="11">Libretro Thumbnails (mock)</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
 const mockCardBanners: Record<string, string> = {};
 const CAPACITY = 8 * GB;
 const OTHER_USED = 3.1 * GB;
@@ -728,6 +737,74 @@ const handlers: Record<string, (args: any) => unknown> = {
   artwork_read_override: (a) => mockArtworkOverrides[String(a.overrideKey)] ?? null,
   artwork_set_override: (a) => { const url = platformFallbackArt({ id: String(a.platformId || a.overrideKey), name: String(a.platformId || 'Custom').toUpperCase(), category: 'Override', manufacturer: String(a.packId || 'Local') }); mockArtworkOverrides[String(a.overrideKey)] = url; return url; },
   artwork_clear_override: (a) => { const had = String(a.overrideKey) in mockArtworkOverrides; delete mockArtworkOverrides[String(a.overrideKey)]; return had; },
+  game_art_resolve_batch: (a) => {
+    const plat = String(a.platformId || '').trim().toLowerCase();
+    const kind = (a.kind || 'boxart') as import('./types').GameArtKind;
+    const roms = (Array.isArray(a.romNames) ? a.romNames : []) as string[];
+    const sys = plat === 'gba' ? 'Nintendo - Game Boy Advance' : plat === 'snes' ? 'Nintendo - Super Nintendo Entertainment System' : plat === 'gb' ? 'Nintendo - Game Boy' : 'Nintendo - Game Boy Advance';
+    return roms.flatMap((rom) => {
+      const key = mockGameKey(plat, rom);
+      if (mockGameArtOverrides[key]) return [{ ...mockGameArtOverrides[key], rom_name: rom }];
+      const title = stripExt(rom);
+      if (!title || /bios|\.xyz|bad:/i.test(rom)) return [];
+      return [{
+        rom_name: rom,
+        platform_id: plat,
+        game_key: key,
+        data_url: mockGameCoverSvg(title, `${plat || 'ROM'} · ${kind}`),
+        kind,
+        source: 'libretro_auto' as const,
+        matched_name: `${title} (USA)`,
+        libretro_system: sys,
+        has_override: false,
+      }];
+    });
+  },
+  game_art_search: (a) => {
+    const plat = String(a.platformId || 'gba').trim().toLowerCase();
+    const q = String(a.query || '').trim() || 'Super Game';
+    const kind = (a.kind || 'boxart') as import('./types').GameArtKind;
+    const sys = plat === 'snes' ? 'Nintendo - Super Nintendo Entertainment System' : plat === 'gb' ? 'Nintendo - Game Boy' : 'Nintendo - Game Boy Advance';
+    const accents = ['#c1f0ad', '#8ecae6', '#ffb703'];
+    const regions = ['USA', 'Europe', 'Japan'];
+    return regions.map((reg, idx) => {
+      const name = `${q} (${reg})`;
+      return {
+        system: sys,
+        kind,
+        name,
+        data_url: mockGameCoverSvg(name, `${kind} · ${reg}`, accents[idx % accents.length]),
+      };
+    });
+  },
+  game_art_preview_local: (a) => mockGameCoverSvg(String(a.sourcePath || 'Custom').split('/').pop() || 'Custom', 'local image', '#f4a261'),
+  game_art_set_override: (a) => {
+    const plat = String(a.platformId || '').trim().toLowerCase();
+    const rom = String(a.romName || '').trim();
+    const key = mockGameKey(plat, rom);
+    const isLocal = !!a.sourcePath;
+    const kind = (a.libretroKind || 'boxart') as import('./types').GameArtKind;
+    const label = isLocal ? (String(a.sourcePath).split('/').pop() || stripExt(rom)) : String(a.libretroName || stripExt(rom));
+    const res: import('./types').GameArtResult = {
+      rom_name: rom,
+      platform_id: plat,
+      game_key: key,
+      data_url: mockGameCoverSvg(label, isLocal ? 'custom file' : `${kind} override`, isLocal ? '#f4a261' : '#8ecae6'),
+      kind,
+      source: isLocal ? 'override_local' : 'override_libretro',
+      matched_name: label,
+      libretro_system: a.libretroSystem ? String(a.libretroSystem) : null,
+      has_override: true,
+    };
+    mockGameArtOverrides[key] = res;
+    return res;
+  },
+  game_art_clear_override: (a) => {
+    const key = mockGameKey(String(a.platformId || ''), String(a.romName || ''));
+    const had = key in mockGameArtOverrides;
+    delete mockGameArtOverrides[key];
+    return had;
+  },
   gamebub_core_files: (a) => ({
     core_id: String(a.coreId),
     pinned_folder: null,

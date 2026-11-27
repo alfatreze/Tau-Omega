@@ -4,9 +4,11 @@
   // optional per-core pinned folder, reviewed Add/Remove, and Plex-style banner artwork.
   import { open } from '@tauri-apps/plugin-dialog';
   import ArtworkPickerSheet from './ArtworkPickerSheet.svelte';
+  import GameArtworkPickerSheet from './GameArtworkPickerSheet.svelte';
   import { errorMessage } from './backend';
   import { day, plural, size } from './coresFormat';
   import { coresSelection, refreshCores } from './coresStore';
+  import { coreFilesViewMode, displayGameTitle, gameArtCacheKey, gameArtMap, lazyGameArt } from './gameArtStore';
   import Icon from './Icon.svelte';
   import { platformFallbackArt } from './platformArt';
   import {
@@ -44,6 +46,7 @@
   let overrideBanner: string | null = null;
   let inferredPlatform = '';
   let showArtPicker = false;
+  let gameArtTarget: { platformId: string; platformName: string; romName: string } | null = null;
 
   // ROM search, folder pinning, and reviewed add/remove state
   let romQuery = '';
@@ -414,6 +417,10 @@
               bind:value={romQuery}
               placeholder="Search ROMs or folders…"
             />
+            <div class="gb-view-toggle" role="group" aria-label="View mode">
+              <button type="button" class:active={$coreFilesViewMode === 'list'} aria-pressed={$coreFilesViewMode === 'list'} on:click={() => coreFilesViewMode.set('list')}>List</button>
+              <button type="button" class:active={$coreFilesViewMode === 'grid'} aria-pressed={$coreFilesViewMode === 'grid'} on:click={() => coreFilesViewMode.set('grid')}>Grid</button>
+            </div>
             {#if selectedRoms.length}
               <button class="quiet danger" type="button" disabled={fileBusy} on:click={startDeleteRoms}>
                 Remove ({selectedRoms.length})
@@ -505,23 +512,71 @@
                   <h3><code>/{folder || '(card root)'}</code></h3>
                   <small>{plural(items.length, 'file')} · {size(items.reduce((a, b) => a + b.bytes, 0))}</small>
                 </div>
-                <ul class="gb-rom-list">
-                  {#each items as rom (rom.rel_path)}
-                    <li>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={selectedRoms.includes(rom.rel_path)}
-                          on:change={() => toggleRom(rom.rel_path)}
-                        />
-                        <span class="gb-fi" aria-hidden="true"><Icon name="game-controller" size={16} /></span>
-                        <span class="gb-rom-name" title={rom.rel_path}>{rom.name}</span>
+                {#if $coreFilesViewMode === 'grid'}
+                  <div class="gb-rom-grid" role="list" aria-label={`ROMs in /${folder || 'root'}`}>
+                    {#each items as rom (rom.rel_path)}
+                      {@const art = inferredPlatform ? $gameArtMap[gameArtCacheKey(inferredPlatform, rom.name)] : null}
+                      <article class="gb-rom-card" class:selected={selectedRoms.includes(rom.rel_path)} role="listitem" use:lazyGameArt={{ platformId: inferredPlatform, romName: rom.name }}>
+                        <div class="gb-rom-cover">
+                          {#if art?.data_url}
+                            <img src={art.data_url} alt={displayGameTitle(rom.name)} />
+                          {:else}
+                            <span class="gb-cover-fallback" aria-hidden="true"><Icon name="game-controller" size={32} /></span>
+                          {/if}
+                          <input
+                            type="checkbox"
+                            class="gb-card-pick"
+                            aria-label={`Select ${rom.rel_path}`}
+                            checked={selectedRoms.includes(rom.rel_path)}
+                            on:change={() => toggleRom(rom.rel_path)}
+                          />
+                          <button
+                            type="button"
+                            class="gb-card-art"
+                            aria-label={`Change artwork for ${rom.name}`}
+                            title="Change artwork"
+                            on:click={() => (gameArtTarget = { platformId: inferredPlatform, platformName: info?.core.name || '', romName: rom.name })}
+                          >
+                            Art
+                          </button>
+                        </div>
+                        <div class="gb-rom-card-meta">
+                          <strong title={rom.rel_path}>{displayGameTitle(rom.name)}</strong>
+                          <small>{size(rom.bytes)} · {day(rom.modified)}</small>
+                        </div>
+                      </article>
+                    {/each}
+                  </div>
+                {:else}
+                  <ul class="gb-rom-list">
+                    {#each items as rom (rom.rel_path)}
+                      {@const art = inferredPlatform ? $gameArtMap[gameArtCacheKey(inferredPlatform, rom.name)] : null}
+                      <li class="gb-rom-row" use:lazyGameArt={{ platformId: inferredPlatform, romName: rom.name }}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${rom.rel_path}`}
+                            checked={selectedRoms.includes(rom.rel_path)}
+                            on:change={() => toggleRom(rom.rel_path)}
+                          />
+                          <span class="gb-fi" aria-hidden="true">{#if art?.data_url}<img class="gb-thumb" src={art.data_url} alt="" />{:else}<Icon name="game-controller" size={16} />{/if}</span>
+                          <span class="gb-rom-name" title={rom.rel_path}>{rom.name}</span>
+                        </label>
+                        <button
+                          type="button"
+                          class="gb-art-btn"
+                          aria-label={`Change artwork for ${rom.name}`}
+                          title="Change artwork"
+                          on:click={() => (gameArtTarget = { platformId: inferredPlatform, platformName: info?.core.name || '', romName: rom.name })}
+                        >
+                          Art
+                        </button>
                         <span class="gb-rom-size">{size(rom.bytes)}</span>
                         <span class="gb-rom-date">{day(rom.modified)}</span>
-                      </label>
-                    </li>
-                  {/each}
-                </ul>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
               </section>
             {/each}
           {/if}
@@ -758,6 +813,15 @@
       close={() => (showArtPicker = false)}
     />
   {/if}
+  {#if gameArtTarget}
+    <GameArtworkPickerSheet
+      platformId={gameArtTarget.platformId}
+      platformName={gameArtTarget.platformName}
+      romName={gameArtTarget.romName}
+      current={gameArtTarget.platformId ? ($gameArtMap[gameArtCacheKey(gameArtTarget.platformId, gameArtTarget.romName)] ?? null) : null}
+      close={() => (gameArtTarget = null)}
+    />
+  {/if}
 {/if}
 
 <style>
@@ -805,9 +869,29 @@
   .gb-list small{display:block;font-size:11.5px;color:#8f9e9d;margin-top:2px}
   .gb-rom-list li,.gb-save-list li{border-bottom:1px solid #222d2f}
   .gb-rom-list li:last-child,.gb-save-list li:last-child{border:0}
-  .gb-rom-list label,.gb-save-list li{display:flex;align-items:center;gap:9px;padding:9px 12px;font-size:12.5px;cursor:pointer}
-  .gb-save-list li{cursor:default}
-  .gb-fi{flex:none;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:#1d2a2b;color:#c1f0ad}
+  .gb-rom-row{display:flex;align-items:center;gap:9px;padding:9px 12px;font-size:12.5px}
+  .gb-rom-row label{flex:1;min-width:0;display:flex;align-items:center;gap:9px;cursor:pointer}
+  .gb-save-list li{display:flex;align-items:center;gap:9px;padding:9px 12px;font-size:12.5px;cursor:default}
+  .gb-view-toggle{display:inline-flex;background:#101617;border:1px solid #314041;border-radius:8px;padding:2px;gap:2px;flex:none}
+  .gb-view-toggle button{background:transparent;color:#95a5a4;border-radius:6px;padding:5px 10px;font-size:12px}
+  .gb-view-toggle button.active{background:#243335;color:#c1f0ad}
+  .gb-fi{flex:none;display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#1d2a2b;color:#c1f0ad;overflow:hidden}
+  .gb-thumb{width:100%;height:100%;object-fit:cover;display:block}
+  .gb-art-btn{flex:none;padding:2px 8px;font-size:11px;background:#1a2526;color:#9fb3aa;border:1px solid #304142;border-radius:6px;opacity:0;transition:opacity .12s ease}
+  .gb-rom-row:hover .gb-art-btn,.gb-art-btn:focus-visible{opacity:1;color:#c1f0ad;border-color:#c1f0ad}
+  .gb-rom-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
+  .gb-rom-card{background:#111819;border:1px solid #2a3738;border-radius:10px;padding:8px;display:grid;gap:7px;transition:border-color .14s ease}
+  .gb-rom-card.selected{border-color:#c1f0ad;background:#17251d}
+  .gb-rom-cover{position:relative;aspect-ratio:1/1;border-radius:7px;background:#0a0f10;overflow:hidden;display:grid;place-items:center;padding:4px;box-sizing:border-box}
+  .gb-rom-cover img{width:100%;height:100%;object-fit:contain;display:block}
+  .gb-cover-fallback{color:#6d807f}
+  .gb-card-pick{position:absolute;top:6px;left:6px;width:16px;height:16px;accent-color:#c1f0ad;cursor:pointer}
+  .gb-card-art{position:absolute;top:6px;right:6px;padding:2px 8px;font-size:11px;background:rgba(16,22,23,.88);color:#eff5f4;border:1px solid #3c4d4e;border-radius:6px;opacity:0;transition:opacity .12s ease}
+  .gb-rom-card:hover .gb-card-art,.gb-rom-card:focus-within .gb-card-art{opacity:1}
+  .gb-card-art:hover{border-color:#c1f0ad;color:#c1f0ad}
+  .gb-rom-card-meta{display:grid;gap:2px;min-width:0}
+  .gb-rom-card-meta strong{font-size:12.5px;color:#eff5f4;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3}
+  .gb-rom-card-meta small{font-size:11px;color:#8f9e9d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .gb-rom-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e8ecec}
   .gb-save-main{flex:1;min-width:0;display:grid;gap:2px}
   .gb-save-main strong{font-size:13px;color:#eff5f4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

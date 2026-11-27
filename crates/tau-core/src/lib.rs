@@ -53,6 +53,7 @@ pub mod diagnostics;
 pub mod duplicates;
 pub mod file_purpose;
 pub mod firmware;
+pub mod game_art;
 pub mod gamebub;
 pub mod gamebub_files;
 pub mod gamebub_install;

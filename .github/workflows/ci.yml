@@ -79,3 +79,4 @@ jobs:
           NODE_PATH=$(npm root -g) node scripts/check-test.cjs
           NODE_PATH=$(npm root -g) node scripts/builder-test.cjs
           NODE_PATH=$(npm root -g) node scripts/install-review-test.cjs
+          NODE_PATH=$(npm root -g) node scripts/game-art-test.cjs

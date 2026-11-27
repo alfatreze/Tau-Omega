@@ -281,3 +281,39 @@ export const gamebubPlanAddFiles = (card: string, coreId: string, destFolder: st
 export const gamebubExecuteAddFiles = (card: string, coreId: string, destFolder: string, sources: string[], replace: boolean, confirmation: string) => invoke<import('./types').GameBubAddReport>('gamebub_execute_add_files', { card, coreId, destFolder, sources, replace, confirmation });
 export const gamebubPlanDeleteFiles = (card: string, coreId: string, relPaths: string[]) => invoke<import('./types').GameBubDeletePlan>('gamebub_plan_delete_files', { card, coreId, relPaths });
 export const gamebubExecuteDeleteFiles = (card: string, coreId: string, relPaths: string[], confirmation: string) => invoke<import('./types').GameBubDeleteReport>('gamebub_execute_delete_files', { card, coreId, relPaths, confirmation });
+
+export const gameArtResolveBatch = (
+  platformId: string,
+  romNames: string[],
+  kind: import('./types').GameArtKind = 'boxart',
+  force = false,
+) => invoke<import('./types').GameArtResult[]>('game_art_resolve_batch', { platformId, romNames, kind, force });
+
+export const gameArtSearch = (
+  platformId: string,
+  query: string,
+  kind: import('./types').GameArtKind = 'boxart',
+  limit = 18,
+) => invoke<import('./types').GameArtCandidate[]>('game_art_search', { platformId, query, kind, limit });
+
+export const gameArtPreviewLocal = (sourcePath: string) =>
+  invoke<string>('game_art_preview_local', { sourcePath });
+
+export const gameArtSetOverride = (args: {
+  platformId: string;
+  romName: string;
+  libretroSystem?: string | null;
+  libretroKind?: import('./types').GameArtKind | null;
+  libretroName?: string | null;
+  sourcePath?: string | null;
+}) => invoke<import('./types').GameArtResult>('game_art_set_override', {
+  platformId: args.platformId,
+  romName: args.romName,
+  libretroSystem: args.libretroSystem ?? null,
+  libretroKind: args.libretroKind ?? null,
+  libretroName: args.libretroName ?? null,
+  sourcePath: args.sourcePath ?? null,
+});
+
+export const gameArtClearOverride = (platformId: string, romName: string) =>
+  invoke<boolean>('game_art_clear_override', { platformId, romName });

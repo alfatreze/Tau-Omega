@@ -899,6 +899,10 @@ pub const PLATFORMS: &[PlatformSpec] = &[
 pub fn find(id: &str) -> Option<&'static PlatformSpec> {
     let lower = id.trim().to_ascii_lowercase();
     let canonical = match lower.as_str() {
+        "gameboy" => "gb",
+        "gameboycolor" => "gbc",
+        "gameboyadvance" => "gba",
+        "supernintendo" => "snes",
         "playstation" => "psx",
         "atari2600" => "2600",
         "atari5200" => "5200",

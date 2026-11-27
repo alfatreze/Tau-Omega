@@ -536,3 +536,24 @@ export type GameBubAddPlan = { id: string; core_id: string; dest_folder: string;
 export type GameBubAddReport = { written: number; replaced: number; bytes_written: number; backup_dir: string | null };
 export type GameBubDeletePlan = { id: string; core_id: string; rel_paths: string[]; total_bytes: number };
 export type GameBubDeleteReport = { removed: number; bytes_removed: number; backup_dir: string };
+
+// ---- Per-game artwork & Libretro Thumbnails (tau_core::game_art / tau_net::libretro_thumbs) ----
+export type GameArtKind = 'boxart' | 'title' | 'snap';
+export type GameArtSourceKind = 'override_local' | 'override_libretro' | 'libretro_auto';
+export type GameArtResult = {
+  rom_name: string;
+  platform_id: string;
+  game_key: string;
+  data_url: string;
+  kind: GameArtKind;
+  source: GameArtSourceKind;
+  matched_name: string | null;
+  libretro_system: string | null;
+  has_override: boolean;
+};
+export type GameArtCandidate = {
+  system: string;
+  kind: GameArtKind;
+  name: string;
+  data_url: string;
+};
