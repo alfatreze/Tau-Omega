@@ -15,8 +15,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Base URL for Libretro's public CDN thumbnail repository.
-pub const LIBRETRO_BASE_URL: &str = "https://thumbnails.libretro.com";
+/// Base URLs for official `libretro-thumbnails` repositories on GitHub.
+pub const LIBRETRO_RAW_BASE_URL: &str = "https://raw.githubusercontent.com/libretro-thumbnails";
+pub const LIBRETRO_API_BASE_URL: &str = "https://api.github.com/repos/libretro-thumbnails";
 
 /// Maximum local custom image file size accepted for game artwork overrides (16 MiB).
 pub const MAX_LOCAL_IMAGE_BYTES: usize = 16 * 1024 * 1024;
@@ -231,24 +232,134 @@ fn hex_val(b: u8) -> Option<u8> {
     }
 }
 
-/// Directory listing URL on `thumbnails.libretro.com` for one system & artwork kind.
-pub fn libretro_index_url(system: &str, kind: GameArtKind) -> String {
+/// Converts a Libretro system name (e.g. `"Nintendo - Game Boy Advance"`) into its GitHub
+/// `libretro-thumbnails` repository slug (e.g. `"Nintendo_-_Game_Boy_Advance"`).
+pub fn libretro_repo_name(system: &str) -> String {
+    system
+        .trim()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// GitHub recursive tree URL covering all artwork categories (`Named_Boxarts`, `Named_Titles`, `Named_Snaps`).
+pub fn libretro_tree_url(system: &str) -> String {
     format!(
-        "{LIBRETRO_BASE_URL}/{}/{}/",
-        percent_encode_segment(system),
+        "{LIBRETRO_API_BASE_URL}/{}/git/trees/master?recursive=1",
+        libretro_repo_name(system)
+    )
+}
+
+/// GitHub single-directory tree URL fallback when a recursive repo tree is truncated.
+pub fn libretro_dir_tree_url(system: &str, kind: GameArtKind) -> String {
+    format!(
+        "{LIBRETRO_API_BASE_URL}/{}/git/trees/master:{}",
+        libretro_repo_name(system),
         kind.libretro_dir()
     )
 }
 
-/// Direct PNG thumbnail URL on `thumbnails.libretro.com` for an entry name.
+/// Directory listing URL (legacy HTML helper).
+pub fn libretro_index_url(system: &str, kind: GameArtKind) -> String {
+    format!(
+        "{LIBRETRO_RAW_BASE_URL}/{}/master/{}/",
+        libretro_repo_name(system),
+        kind.libretro_dir()
+    )
+}
+
+/// Direct PNG thumbnail URL via `raw.githubusercontent.com/libretro-thumbnails`.
 pub fn libretro_image_url(system: &str, kind: GameArtKind, entry_name: &str) -> String {
     let clean = libretro_sanitize(entry_name);
     format!(
-        "{LIBRETRO_BASE_URL}/{}/{}/{}.png",
-        percent_encode_segment(system),
+        "{LIBRETRO_RAW_BASE_URL}/{}/master/{}/{}.png",
+        libretro_repo_name(system),
         kind.libretro_dir(),
         percent_encode_segment(&clean)
     )
+}
+
+/// Parses a GitHub recursive git tree JSON payload into sorted, deduplicated entry names per kind.
+pub fn parse_github_tree_json(
+    bytes: &[u8],
+) -> Result<(bool, BTreeMap<GameArtKind, Vec<String>>), TauError> {
+    let root: Value = serde_json::from_slice(bytes)
+        .map_err(|e| TauError::e(ErrorCode::Json, format!("Invalid GitHub tree JSON: {e}")))?;
+    let truncated = root
+        .get("truncated")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let mut sets: BTreeMap<GameArtKind, BTreeSet<String>> = BTreeMap::new();
+    sets.insert(GameArtKind::Boxart, BTreeSet::new());
+    sets.insert(GameArtKind::Title, BTreeSet::new());
+    sets.insert(GameArtKind::Snap, BTreeSet::new());
+
+    if let Some(items) = root.get("tree").and_then(Value::as_array) {
+        for item in items {
+            if item.get("type").and_then(Value::as_str) != Some("blob") {
+                continue;
+            }
+            let Some(path) = item.get("path").and_then(Value::as_str) else {
+                continue;
+            };
+            if path.len() <= 4 || !path[path.len() - 4..].eq_ignore_ascii_case(".png") {
+                continue;
+            }
+            let no_ext = &path[..path.len() - 4];
+            let parsed = if let Some(rest) = no_ext.strip_prefix("Named_Boxarts/") {
+                Some((GameArtKind::Boxart, rest))
+            } else if let Some(rest) = no_ext.strip_prefix("Named_Titles/") {
+                Some((GameArtKind::Title, rest))
+            } else {
+                no_ext
+                    .strip_prefix("Named_Snaps/")
+                    .map(|rest| (GameArtKind::Snap, rest))
+            };
+            if let Some((kind, name)) = parsed
+                && !name.is_empty()
+                && let Some(set) = sets.get_mut(&kind)
+            {
+                set.insert(name.to_string());
+            }
+        }
+    }
+
+    let out = sets
+        .into_iter()
+        .map(|(k, s)| (k, s.into_iter().collect()))
+        .collect();
+    Ok((truncated, out))
+}
+
+/// Parses a single-directory GitHub git tree JSON response into sorted, deduplicated entry names.
+pub fn parse_github_dir_tree_json(bytes: &[u8]) -> Result<Vec<String>, TauError> {
+    let root: Value = serde_json::from_slice(bytes)
+        .map_err(|e| TauError::e(ErrorCode::Json, format!("Invalid GitHub tree JSON: {e}")))?;
+    let mut set = BTreeSet::new();
+    if let Some(items) = root.get("tree").and_then(Value::as_array) {
+        for item in items {
+            if item.get("type").and_then(Value::as_str) != Some("blob") {
+                continue;
+            }
+            let Some(path) = item.get("path").and_then(Value::as_str) else {
+                continue;
+            };
+            if path.len() <= 4 || !path[path.len() - 4..].eq_ignore_ascii_case(".png") {
+                continue;
+            }
+            let name = &path[..path.len() - 4];
+            if !name.is_empty() {
+                set.insert(name.to_string());
+            }
+        }
+    }
+    Ok(set.into_iter().collect())
 }
 
 fn unescape_basic_html(s: &str) -> String {
@@ -905,6 +1016,14 @@ mod tests {
     #[test]
     fn sanitize_and_urls_match_libretro_rules() {
         assert_eq!(
+            libretro_repo_name("Nintendo - Game Boy Advance"),
+            "Nintendo_-_Game_Boy_Advance"
+        );
+        assert_eq!(
+            libretro_repo_name("Texas Instruments - TI-99/4A"),
+            "Texas_Instruments_-_TI-99_4A"
+        );
+        assert_eq!(
             libretro_sanitize("Mario & Luigi: Superstar Saga (USA)"),
             "Mario _ Luigi_ Superstar Saga (USA)"
         );
@@ -914,7 +1033,58 @@ mod tests {
                 GameArtKind::Boxart,
                 "Mario & Luigi: Superstar Saga (USA)"
             ),
-            "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/Mario%20_%20Luigi_%20Superstar%20Saga%20%28USA%29.png"
+            "https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance/master/Named_Boxarts/Mario%20_%20Luigi_%20Superstar%20Saga%20%28USA%29.png"
+        );
+        assert_eq!(
+            libretro_tree_url("Nintendo - Game Boy Advance"),
+            "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Game_Boy_Advance/git/trees/master?recursive=1"
+        );
+        assert_eq!(
+            libretro_dir_tree_url("Nintendo - Game Boy Advance", GameArtKind::Title),
+            "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Game_Boy_Advance/git/trees/master:Named_Titles"
+        );
+    }
+
+    #[test]
+    fn github_tree_json_parses_all_kinds() {
+        let payload = br#"{
+            "truncated": false,
+            "tree": [
+                {"path": "Named_Boxarts", "type": "tree"},
+                {"path": "Named_Boxarts/Boktai 2 (USA).png", "type": "blob"},
+                {"path": "Named_Boxarts/Advance Wars (USA).png", "type": "blob"},
+                {"path": "Named_Titles/Advance Wars (USA).png", "type": "blob"},
+                {"path": "Named_Snaps/Mother 3 (Japan).png", "type": "blob"},
+                {"path": "Named_Logos/Ignore.png", "type": "blob"},
+                {"path": "README.md", "type": "blob"}
+            ]
+        }"#;
+        let (truncated, map) = parse_github_tree_json(payload).unwrap();
+        assert!(!truncated);
+        assert_eq!(
+            map.get(&GameArtKind::Boxart).unwrap(),
+            &vec!["Advance Wars (USA)", "Boktai 2 (USA)"]
+        );
+        assert_eq!(
+            map.get(&GameArtKind::Title).unwrap(),
+            &vec!["Advance Wars (USA)"]
+        );
+        assert_eq!(
+            map.get(&GameArtKind::Snap).unwrap(),
+            &vec!["Mother 3 (Japan)"]
+        );
+
+        let dir_payload = br#"{
+            "truncated": false,
+            "tree": [
+                {"path": "Mother 3 (Japan).png", "type": "blob"},
+                {"path": "Advance Wars (USA).PNG", "type": "blob"},
+                {"path": "notes.txt", "type": "blob"}
+            ]
+        }"#;
+        assert_eq!(
+            parse_github_dir_tree_json(dir_payload).unwrap(),
+            vec!["Advance Wars (USA)", "Mother 3 (Japan)"]
         );
     }
 

@@ -1,25 +1,28 @@
-//! Libretro Thumbnails fetcher and local disk cache (`thumbnails.libretro.com`).
+//! Libretro Thumbnails fetcher and local disk cache via official `libretro-thumbnails`
+//! GitHub repositories (`raw.githubusercontent.com` + `api.github.com`).
 //!
-//! Only `https://thumbnails.libretro.com/` is ever queried. Directory indexes,
-//! decoded PNG images, and genuine negative-lookup markers are cached locally so
-//! repeat visits are instant and offline-safe. Network failures never write a
-//! negative miss marker.
+//! Only `https://raw.githubusercontent.com/libretro-thumbnails` and
+//! `https://api.github.com/repos/libretro-thumbnails` are ever requested.
+//! Directory indexes, decoded PNG images, and genuine negative-lookup markers are cached
+//! locally so repeat visits are instant and offline-safe. Transient / rate-limit errors
+//! never write a negative miss marker or overwrite a valid index cache.
 
 use crate::{ErrorCode, TauError};
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, VecDeque},
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
     time::{Duration, SystemTime},
 };
 use tau_core::game_art::{
-    self, GameArtCandidate, GameArtKind, GameArtResult, GameArtSourceKind, LIBRETRO_BASE_URL,
+    self, GameArtCandidate, GameArtKind, GameArtResult, GameArtSourceKind, LIBRETRO_API_BASE_URL,
+    LIBRETRO_RAW_BASE_URL,
 };
 
-const INDEX_TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+const INDEX_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 const MISS_TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
-const INDEX_LIMIT: u64 = 12 * 1024 * 1024;
+const INDEX_LIMIT: u64 = 24 * 1024 * 1024;
 const IMAGE_LIMIT: u64 = 4 * 1024 * 1024;
 const MAX_SEARCH_LIMIT: usize = 30;
 
@@ -31,13 +34,33 @@ fn err(code: ErrorCode, message: impl Into<String>) -> TauError {
 }
 
 fn ensure_allowed_url(url: &str) -> Result<(), TauError> {
-    if !url.starts_with(LIBRETRO_BASE_URL) {
+    let raw_ok =
+        url == LIBRETRO_RAW_BASE_URL || url.starts_with(&format!("{LIBRETRO_RAW_BASE_URL}/"));
+    let api_ok =
+        url == LIBRETRO_API_BASE_URL || url.starts_with(&format!("{LIBRETRO_API_BASE_URL}/"));
+    if !raw_ok && !api_ok {
         return Err(err(
             ErrorCode::InvalidPathReference,
-            "Game artwork lookup only allows thumbnails.libretro.com.",
+            "Game artwork lookup only allows official libretro-thumbnails GitHub hosts.",
         ));
     }
     Ok(())
+}
+
+fn is_fresh_nonempty(path: &Path, ttl: Duration) -> bool {
+    let Ok(meta) = fs::metadata(path) else {
+        return false;
+    };
+    if !meta.is_file() || meta.len() == 0 {
+        return false;
+    }
+    let Ok(modified) = meta.modified() else {
+        return false;
+    };
+    SystemTime::now()
+        .duration_since(modified)
+        .map(|age| age < ttl)
+        .unwrap_or(false)
 }
 
 fn is_fresh(path: &Path, ttl: Duration) -> bool {
@@ -132,7 +155,11 @@ fn http_get_optional(
     limit: u64,
 ) -> Result<Option<Vec<u8>>, TauError> {
     ensure_allowed_url(url)?;
-    match agent.get(url).call() {
+    let mut req = agent.get(url);
+    if url.starts_with(LIBRETRO_API_BASE_URL) {
+        req = req.header("Accept", "application/vnd.github+json");
+    }
+    match req.call() {
         Ok(mut resp) => {
             let bytes = resp
                 .body_mut()
@@ -148,18 +175,24 @@ fn http_get_optional(
             Ok(Some(bytes))
         }
         Err(ureq::Error::StatusCode(404 | 410)) => Ok(None),
+        Err(ureq::Error::StatusCode(403 | 429)) => Err(err(
+            ErrorCode::Io,
+            "GitHub is temporarily rate limiting Libretro index lookups. Exact-named ROMs still load directly; try again in a few minutes.",
+        )),
         Err(ureq::Error::StatusCode(code)) => Err(err(
             ErrorCode::Io,
-            format!("thumbnails.libretro.com returned HTTP {code}."),
+            format!("libretro-thumbnails returned HTTP {code}."),
         )),
         Err(e) => Err(err(
             ErrorCode::Io,
-            format!("Could not reach thumbnails.libretro.com: {e}"),
+            format!("Could not reach GitHub libretro-thumbnails: {e}"),
         )),
     }
 }
 
 /// Fetches (or reads from disk cache) the sorted list of artwork entry names for one system/kind.
+/// Uses the GitHub recursive tree endpoint so one API call populates Boxarts, Titles, and Snaps
+/// on disk for 30 days.
 pub fn fetch_system_index(
     cache_dir: &Path,
     system: &str,
@@ -167,7 +200,7 @@ pub fn fetch_system_index(
     force: bool,
 ) -> Result<Vec<String>, TauError> {
     let path = index_cache_path(cache_dir, system, kind);
-    if !force && is_fresh(&path, INDEX_TTL) {
+    if !force && is_fresh_nonempty(&path, INDEX_TTL) {
         let text = fs::read_to_string(&path)?;
         return Ok(text
             .lines()
@@ -178,20 +211,37 @@ pub fn fetch_system_index(
     }
 
     let agent = build_agent();
-    let url = game_art::libretro_index_url(system, kind);
-    let entries = match http_get_optional(&agent, &url, INDEX_LIMIT)? {
-        Some(bytes) => {
-            let html = String::from_utf8_lossy(&bytes);
-            game_art::parse_directory_index_html(&html)
-        }
-        None => Vec::new(),
+    let tree_url = game_art::libretro_tree_url(system);
+    let Some(bytes) = http_get_optional(&agent, &tree_url, INDEX_LIMIT)? else {
+        return Ok(Vec::new());
     };
-    let joined = entries.join("\n");
-    write_atomic(&path, joined.as_bytes())?;
+
+    let (truncated, mut map) = game_art::parse_github_tree_json(&bytes)?;
+    if !truncated {
+        let any_entries = map.values().any(|v| !v.is_empty());
+        if any_entries {
+            for (k, list) in &map {
+                let dest = index_cache_path(cache_dir, system, *k);
+                let _ = write_atomic(&dest, list.join("\n").as_bytes());
+            }
+        }
+        return Ok(map.remove(&kind).unwrap_or_default());
+    }
+
+    // Repo tree exceeded GitHub's recursive cap: fetch just the requested directory tree.
+    let dir_url = game_art::libretro_dir_tree_url(system, kind);
+    let Some(dir_bytes) = http_get_optional(&agent, &dir_url, INDEX_LIMIT)? else {
+        return Ok(Vec::new());
+    };
+    let entries = game_art::parse_github_dir_tree_json(&dir_bytes)?;
+    if !entries.is_empty() {
+        let _ = write_atomic(&path, entries.join("\n").as_bytes());
+    }
     Ok(entries)
 }
 
-/// Fetches (or reads from disk cache) raw image bytes for a specific Libretro thumbnail entry.
+/// Fetches (or reads from disk cache) raw image bytes for a specific Libretro thumbnail entry
+/// from `raw.githubusercontent.com/libretro-thumbnails`.
 pub fn fetch_thumbnail_bytes(
     cache_dir: &Path,
     system: &str,
@@ -235,20 +285,28 @@ fn write_miss_marker(cache_dir: &Path, platform_id: &str, rom_name: &str) {
     let _ = write_atomic(&path, b"miss");
 }
 
-fn try_resolve_kind_for_system(
+fn try_direct_stem_for_system(
     cache_dir: &Path,
     system: &str,
     rom_name: &str,
     kind: GameArtKind,
 ) -> Result<Option<(String, Vec<u8>)>, TauError> {
-    // Fast path for exact No-Intro filename stems (especially if already cached on disk).
     let stem = game_art::display_title(rom_name);
-    if !stem.is_empty()
-        && let Some(bytes) = fetch_thumbnail_bytes(cache_dir, system, kind, &stem)?
-    {
+    if stem.is_empty() {
+        return Ok(None);
+    }
+    if let Some(bytes) = fetch_thumbnail_bytes(cache_dir, system, kind, &stem)? {
         return Ok(Some((stem, bytes)));
     }
+    Ok(None)
+}
 
+fn try_index_match_for_system(
+    cache_dir: &Path,
+    system: &str,
+    rom_name: &str,
+    kind: GameArtKind,
+) -> Result<Option<(String, Vec<u8>)>, TauError> {
     let index = fetch_system_index(cache_dir, system, kind, false)?;
     if let Some(matched) = game_art::match_in_index(rom_name, &index)
         && let Some(bytes) = fetch_thumbnail_bytes(cache_dir, system, kind, &matched)?
@@ -258,7 +316,30 @@ fn try_resolve_kind_for_system(
     Ok(None)
 }
 
-/// Resolves automatic artwork (override -> miss cache -> Libretro Thumbnails) for one ROM.
+fn make_auto_result(
+    canon_plat: &str,
+    rom_name: &str,
+    system: &str,
+    kind: GameArtKind,
+    matched_name: String,
+    bytes: &[u8],
+) -> Option<GameArtResult> {
+    let data_url = game_art::image_data_url(bytes).ok()?;
+    Some(GameArtResult {
+        rom_name: rom_name.to_string(),
+        platform_id: canon_plat.to_string(),
+        game_key: game_art::canonical_game_key(canon_plat, rom_name),
+        data_url,
+        kind,
+        source: GameArtSourceKind::LibretroAuto,
+        matched_name: Some(matched_name),
+        libretro_system: Some(system.to_string()),
+        has_override: false,
+    })
+}
+
+/// Resolves automatic artwork (override -> miss cache -> direct raw PNG -> cached/fetched index)
+/// for one ROM.
 pub fn resolve_one(
     cache_dir: &Path,
     overrides_dir: &Path,
@@ -287,30 +368,38 @@ pub fn resolve_one(
     }
 
     let mut had_network_error = false;
-    for kind in kinds_to_try {
-        for system in &systems {
-            match try_resolve_kind_for_system(cache_dir, system, rom_name, kind) {
+    // Pass 1: zero-API-call direct exact-stem fetch on raw.githubusercontent.com.
+    for &kind in &kinds_to_try {
+        for &system in &systems {
+            match try_direct_stem_for_system(cache_dir, system, rom_name, kind) {
                 Ok(Some((matched_name, bytes))) => {
-                    if let Ok(data_url) = game_art::image_data_url(&bytes) {
+                    if let Some(res) =
+                        make_auto_result(&canon_plat, rom_name, system, kind, matched_name, &bytes)
+                    {
                         clear_miss_marker(cache_dir, &canon_plat, rom_name);
-                        return Ok(Some(GameArtResult {
-                            rom_name: rom_name.to_string(),
-                            game_key: game_art::canonical_game_key(&canon_plat, rom_name),
-                            platform_id: canon_plat,
-                            data_url,
-                            kind,
-                            source: GameArtSourceKind::LibretroAuto,
-                            matched_name: Some(matched_name),
-                            libretro_system: Some((*system).to_string()),
-                            has_override: false,
-                        }));
+                        return Ok(Some(res));
                     }
                 }
                 Ok(None) => {}
-                Err(_) => {
-                    // Track transient errors so we don't poison the miss cache when offline.
-                    had_network_error = true;
+                Err(_) => had_network_error = true,
+            }
+        }
+    }
+
+    // Pass 2: fuzzy/normalized matching against cached GitHub directory tree.
+    for &kind in &kinds_to_try {
+        for &system in &systems {
+            match try_index_match_for_system(cache_dir, system, rom_name, kind) {
+                Ok(Some((matched_name, bytes))) => {
+                    if let Some(res) =
+                        make_auto_result(&canon_plat, rom_name, system, kind, matched_name, &bytes)
+                    {
+                        clear_miss_marker(cache_dir, &canon_plat, rom_name);
+                        return Ok(Some(res));
+                    }
                 }
+                Ok(None) => {}
+                Err(_) => had_network_error = true,
             }
         }
     }
@@ -321,8 +410,10 @@ pub fn resolve_one(
     Ok(None)
 }
 
-/// Resolves artwork for a batch of ROMs on one platform, pre-warming the system index once and
-/// fetching remaining artwork concurrently across up to 4 threads.
+/// Resolves artwork for a batch of ROMs on one platform.
+/// First attempts direct exact-stem PNG fetches on `raw.githubusercontent.com` across up to 6
+/// threads (zero GitHub API quota cost), then warms the primary system tree once and resolves any
+/// remaining non-exact ROMs via normalized title/region matching.
 pub fn resolve_batch(
     cache_dir: &Path,
     overrides_dir: &Path,
@@ -354,47 +445,96 @@ pub fn resolve_batch(
         }
     }
 
-    // Warm the primary system index sequentially before fanning out across worker threads so
-    // multiple threads do not race to download the same directory listing HTML.
-    if !pending.is_empty()
-        && let Some(first_sys) = systems.first()
-    {
-        let _ = fetch_system_index(cache_dir, first_sys, preferred_kind, false);
-    }
-
     let results_mutex: Mutex<HashMap<usize, GameArtResult>> = Mutex::new(immediate);
-    let queue_mutex: Mutex<std::collections::VecDeque<(usize, String)>> =
-        Mutex::new(pending.into());
-    let worker_count = 4usize;
 
-    std::thread::scope(|scope| {
-        for _ in 0..worker_count {
-            scope.spawn(|| {
-                loop {
-                    let next = {
-                        let Ok(mut q) = queue_mutex.lock() else {
+    // Phase B: parallel direct raw.githubusercontent.com lookup for preferred_kind (zero API calls).
+    let direct_queue: Mutex<VecDeque<(usize, String)>> = Mutex::new(pending.clone().into());
+    let unresolved_mutex: Mutex<Vec<(usize, String)>> = Mutex::new(Vec::new());
+    if !pending.is_empty() {
+        let workers = 6usize.min(pending.len());
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                scope.spawn(|| {
+                    loop {
+                        let next = {
+                            let Ok(mut q) = direct_queue.lock() else {
+                                return;
+                            };
+                            q.pop_front()
+                        };
+                        let Some((idx, rom_name)) = next else {
                             return;
                         };
-                        q.pop_front()
-                    };
-                    let Some((idx, rom_name)) = next else {
-                        return;
-                    };
-                    if let Ok(Some(res)) = resolve_one(
-                        cache_dir,
-                        overrides_dir,
-                        &canon_plat,
-                        &rom_name,
-                        preferred_kind,
-                        force,
-                    ) && let Ok(mut map) = results_mutex.lock()
-                    {
-                        map.insert(idx, res);
+                        let mut hit: Option<GameArtResult> = None;
+                        for &system in &systems {
+                            if let Ok(Some((matched, bytes))) = try_direct_stem_for_system(
+                                cache_dir,
+                                system,
+                                &rom_name,
+                                preferred_kind,
+                            ) && let Some(res) = make_auto_result(
+                                &canon_plat,
+                                &rom_name,
+                                system,
+                                preferred_kind,
+                                matched,
+                                &bytes,
+                            ) {
+                                clear_miss_marker(cache_dir, &canon_plat, &rom_name);
+                                hit = Some(res);
+                                break;
+                            }
+                        }
+                        if let Some(res) = hit {
+                            if let Ok(mut map) = results_mutex.lock() {
+                                map.insert(idx, res);
+                            }
+                        } else if let Ok(mut missed) = unresolved_mutex.lock() {
+                            missed.push((idx, rom_name));
+                        }
                     }
-                }
-            });
+                });
+            }
+        });
+    }
+
+    // Phase C: warm the primary system tree ONCE, then fuzzy-match remaining ROMs.
+    let remaining = unresolved_mutex.into_inner().unwrap_or_default();
+    if !remaining.is_empty() {
+        if let Some(first_sys) = systems.first() {
+            let _ = fetch_system_index(cache_dir, first_sys, preferred_kind, false);
         }
-    });
+        let fuzzy_queue: Mutex<VecDeque<(usize, String)>> = Mutex::new(remaining.clone().into());
+        let workers = 4usize.min(remaining.len());
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                scope.spawn(|| {
+                    loop {
+                        let next = {
+                            let Ok(mut q) = fuzzy_queue.lock() else {
+                                return;
+                            };
+                            q.pop_front()
+                        };
+                        let Some((idx, rom_name)) = next else {
+                            return;
+                        };
+                        if let Ok(Some(res)) = resolve_one(
+                            cache_dir,
+                            overrides_dir,
+                            &canon_plat,
+                            &rom_name,
+                            preferred_kind,
+                            force,
+                        ) && let Ok(mut map) = results_mutex.lock()
+                        {
+                            map.insert(idx, res);
+                        }
+                    }
+                });
+            }
+        });
+    }
 
     let map = results_mutex.into_inner().unwrap_or_default();
     let mut ordered = Vec::with_capacity(map.len());
@@ -456,8 +596,7 @@ pub fn search_candidates(
         .map(|(i, (s, n))| (i, s, n))
         .collect();
     let total = indexed_targets.len();
-    let queue_mutex: Mutex<std::collections::VecDeque<(usize, String, String)>> =
-        Mutex::new(indexed_targets.into());
+    let queue_mutex: Mutex<VecDeque<(usize, String, String)>> = Mutex::new(indexed_targets.into());
     let results_mutex: Mutex<HashMap<usize, GameArtCandidate>> = Mutex::new(HashMap::new());
 
     std::thread::scope(|scope| {
@@ -531,13 +670,20 @@ mod tests {
     }
 
     #[test]
-    fn url_allowlist_rejects_external_hosts() {
+    fn url_allowlist_accepts_github_and_rejects_external_hosts() {
         assert!(
             ensure_allowed_url(
-                "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/"
+                "https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy/master/Named_Boxarts/a.png"
             )
             .is_ok()
         );
+        assert!(
+            ensure_allowed_url(
+                "https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Game_Boy/git/trees/master?recursive=1"
+            )
+            .is_ok()
+        );
+        assert!(ensure_allowed_url("https://thumbnails.libretro.com/a.png").is_err());
         assert!(ensure_allowed_url("https://evil.example.com/a.png").is_err());
     }
 

@@ -19,7 +19,7 @@ fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
             code: ErrorCode::Io,
             message: e.to_string(),
         })?
-        .join("game-art"))
+        .join("game-art-v2"))
 }
 
 fn overrides_dir(app: &tauri::AppHandle) -> Result<PathBuf, TauError> {
