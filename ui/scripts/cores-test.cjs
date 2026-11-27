@@ -152,6 +152,19 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   // ---- no card, core with no files, overview
   await p.locator('nav .nav-group', { hasText: 'Cores' }).click(); await p.waitForTimeout(300);
   assert.match(await p.locator('.cores').innerText(), /grouped like the openFPGA Library/); assert.equal(await p.locator('.ov-card').count(), 6); assert.deepEqual((await p.locator('.ov-cat h2').allInnerTexts()).map((t) => t.split('\n')[0].replace(/\s+\d+ cores?$/, '').toLowerCase()), ['console', 'handheld', 'computer', 'media players', 'no platform']); ok('the Cores entry itself opens an overview of every platform, in category sections');
+  const artSrcs = await p.locator('.ov-card .ov-art img').evaluateAll((imgs) => imgs.map((img) => img.getAttribute('src') || ''));
+  assert.equal(artSrcs.length, 6); assert.ok(artSrcs.every((s) => s.startsWith('data:image/'))); ok('every platform overview card renders platform artwork');
+  const catGroup = p.getByRole('group', { name: 'Category' });
+  await catGroup.getByRole('button', { name: /^Console\b/ }).click(); await p.waitForTimeout(150);
+  assert.ok((await p.locator('.ov-card').count()) < 6 && (await p.locator('.ov-card').count()) >= 1);
+  assert.deepEqual((await p.locator('.ov-cat h2').allInnerTexts()).map((t) => t.split('\n')[0].replace(/\s+\d+ cores?$/, '').toLowerCase()), ['console']);
+  await catGroup.getByRole('button', { name: /^All\b/ }).click(); await p.waitForTimeout(150);
+  assert.equal(await p.locator('.ov-card').count(), 6); ok('the Category filter chips narrow the Cores overview and All restores all platforms');
+  const makerSelect = p.getByRole('combobox', { name: 'Manufacturer' });
+  await makerSelect.selectOption('Nintendo'); await p.waitForTimeout(150);
+  assert.ok((await p.locator('.ov-card').count()) >= 1 && (await p.locator('.ov-card').count()) < 6);
+  await makerSelect.selectOption(''); await p.waitForTimeout(150);
+  assert.equal(await p.locator('.ov-card').count(), 6); ok('the Manufacturer filter narrows the Cores overview and resets cleanly');
   assert.equal(await p.locator('.nt input').count(), 0); ok('the menu has no search box');
   // platform rows open their own pages; only the arrow expands
   const hov = async (sel) => { await sel.hover(); await p.waitForTimeout(150); return sel.evaluate((e) => getComputedStyle(e).backgroundColor); };

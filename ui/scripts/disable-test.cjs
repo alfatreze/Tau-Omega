@@ -49,6 +49,15 @@ const ok = (name) => { passed++; console.log(`ok - ${name}`); };
   const bar = p.locator('.dis-bar');
   assert.match(await bar.innerText(), /1 core is disabled on the Pocket[\s\S]*hidden from its menu but still listed here, tagged/i); ok('the overview opens with a bar saying how many cores are disabled');
   assert.equal(await bar.getByRole('button', { name: 'Show them' }).count(), 1); assert.equal(await bar.getByRole('button', { name: 'Enable all' }).count(), 1); ok('with Show them and Enable all');
+  const gbaCard = p.locator('.ov-card', { hasText: 'Game Boy Advance' });
+  assert.match(await gbaCard.getAttribute('class'), /has-disabled/);
+  assert.match(await gbaCard.locator('.ov-badge').innerText(), /1\/2 disabled/); ok('a platform card with disabled cores carries a disabled badge and visual state');
+  const statusSelect = p.getByRole('combobox', { name: 'Status' });
+  await statusSelect.selectOption('disabled'); await p.waitForTimeout(150);
+  assert.equal(await p.locator('.ov-card').count(), 1);
+  assert.match(await p.locator('.ov-card').first().innerText(), /Game Boy Advance/);
+  await statusSelect.selectOption('all'); await p.waitForTimeout(150);
+  assert.ok((await p.locator('.ov-card').count()) > 1); ok('the Status filter narrows to platforms with disabled cores and resets cleanly');
   await p.locator('nav .nav-group', { hasText: /^Card/ }).count();
   // ---- a disabled core stays in its place, tagged, and can still be fixed
   const tree = p.getByRole('tree', { name: 'Cores by platform' });

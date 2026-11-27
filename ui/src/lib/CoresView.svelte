@@ -27,7 +27,7 @@
   import { plural } from './coresFormat';
   import { platformFallbackArt } from './platformArt';
   import { showToast } from './toastStore';
-  import type { Core, CoreDetail, CoreFiles, FileEntry, FolderListing } from './types';
+  import type { Core, CoreDetail, CoreFiles, FileEntry, FolderListing, PlatformNode } from './types';
   export let card = '';
   /** The card-level core records (library facts) and what to do with them. */
   export let cores: Core[] = []; export let openLibrary: (c: Core) => void = () => {}; export let reloadCard: () => void = () => {};
@@ -100,6 +100,11 @@
     if (card && node && (!pid || pid === node.platform.id)) {
       readPlatformImage(card, node.platform.id).then((u) => (banner = u)).catch(() => (banner = null));
     }
+    if (pid) {
+      if (ovBannerRequested.has(pid)) loadOvBanner(pid, true);
+    } else {
+      for (const id of ovBannerRequested) loadOvBanner(id, true);
+    }
   }
   if (typeof window !== 'undefined') window.addEventListener('tau-artwork-changed', onArtworkChanged);
 
@@ -161,12 +166,139 @@
     offDrop();
     if (typeof window !== 'undefined') window.removeEventListener('tau-artwork-changed', onArtworkChanged);
   });
-  // Search lives here, on the Cores page: cores, platforms, manufacturers and categories.
+  // Search and overview filters live here, on the Cores page: cores, platforms, manufacturers and categories.
   let query = '';
+  let catFilter = '';
+  let makerFilter = '';
+  let statusFilter: 'all' | 'enabled' | 'disabled' | 'needs' = 'all';
+  let filtersForCard = '';
+  $: if (card !== filtersForCard) {
+    filtersForCard = card;
+    catFilter = '';
+    makerFilter = '';
+    statusFilter = 'all';
+  }
+  function clearFilters() {
+    catFilter = '';
+    makerFilter = '';
+    statusFilter = 'all';
+    query = '';
+  }
+
+  $: allCoresCount = $coresGroups.reduce((n, g) => n + g.cores, 0);
+  $: totalDisabled = $coresTreeStore.reduce((n, p) => n + p.cores.filter((c) => c.disabled).length, 0);
+  $: totalNeeds = $coresTreeStore.reduce((n, p) => n + p.cores.filter((c) => c.missing > 0).length, 0);
+  $: availableMakers = [...new Set($coresGroups.flatMap((g) => g.makers.map((m) => m.name).filter(Boolean)))].sort((a, b) => a.localeCompare(b));
+  $: hasActiveFilters = !!(catFilter || makerFilter || statusFilter !== 'all');
+
+  function matchesStatus(n: PlatformNode): boolean {
+    if (statusFilter === 'enabled') return n.cores.some((c) => !c.disabled);
+    if (statusFilter === 'disabled') return n.cores.some((c) => c.disabled);
+    if (statusFilter === 'needs') return n.cores.some((c) => c.missing > 0);
+    return true;
+  }
+  function coreMatchesStatus(c: { disabled?: boolean; missing: number }): boolean {
+    if (statusFilter === 'enabled') return !c.disabled;
+    if (statusFilter === 'disabled') return !!c.disabled;
+    if (statusFilter === 'needs') return c.missing > 0;
+    return true;
+  }
+  function cardMeta(n: PlatformNode) {
+    const disabled = n.cores.filter((c) => c.disabled).length;
+    const missing = n.cores.filter((c) => c.missing > 0).length;
+    const allDisabled = n.cores.length > 0 && disabled === n.cores.length;
+    return { disabled, missing, allDisabled };
+  }
+
+  $: filteredGroups = !hasActiveFilters
+    ? $coresGroups
+    : $coresGroups
+        .filter((g) => !catFilter || g.name === catFilter)
+        .map((g) => {
+          const makers = g.makers
+            .filter((m) => !makerFilter || m.name === makerFilter)
+            .map((m) => {
+              const platforms = m.platforms.filter(matchesStatus);
+              return { ...m, platforms, cores: platforms.reduce((n, p) => n + p.cores.length, 0) };
+            })
+            .filter((m) => m.platforms.length > 0);
+          return {
+            ...g,
+            makers,
+            platforms: makers.reduce((n, m) => n + m.platforms.length, 0),
+            cores: makers.reduce((n, m) => n + m.cores, 0),
+          };
+        })
+        .filter((g) => g.makers.length > 0);
+
+  $: filteredTotals = {
+    platforms: filteredGroups.reduce((n, g) => n + g.platforms, 0),
+    cores: filteredGroups.reduce((n, g) => n + g.cores, 0),
+  };
+
+  let ovBanners: Record<string, string | null> = {};
+  let ovBannersCard = '';
+  const ovBannerRequested = new Set<string>();
+  $: if (card !== ovBannersCard) {
+    ovBannersCard = card;
+    ovBanners = {};
+    ovBannerRequested.clear();
+  }
+  function loadOvBanner(platformId: string, force = false) {
+    if (!card || !platformId || platformId === '_none') return;
+    if (!force && ovBannerRequested.has(platformId)) return;
+    ovBannerRequested.add(platformId);
+    const forCard = card;
+    readPlatformImage(forCard, platformId)
+      .then((u) => { if (card === forCard) ovBanners = { ...ovBanners, [platformId]: u }; })
+      .catch(() => { if (card === forCard) ovBanners = { ...ovBanners, [platformId]: null }; });
+  }
+  function observeBanner(el: HTMLElement, platformId: string) {
+    let pid = platformId;
+    let observer: IntersectionObserver | null = null;
+    const attach = () => {
+      observer?.disconnect();
+      observer = null;
+      if (!pid || pid === '_none') return;
+      if (typeof IntersectionObserver === 'undefined') {
+        loadOvBanner(pid);
+        return;
+      }
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            loadOvBanner(pid);
+            observer?.disconnect();
+            observer = null;
+          }
+        },
+        { rootMargin: '200px' },
+      );
+      observer.observe(el);
+    };
+    attach();
+    return {
+      update(nextPid: string) {
+        if (nextPid !== pid) {
+          pid = nextPid;
+          attach();
+        }
+      },
+      destroy() {
+        observer?.disconnect();
+        observer = null;
+      },
+    };
+  }
+
   $: q = query.trim().toLowerCase();
-  $: hits = q ? $coresGroups.flatMap((g) => g.makers.flatMap((m) => m.platforms.flatMap((n) => n.cores
-    .filter((c) => `${c.id} ${c.shortname} ${c.author} ${n.platform.name} ${m.name} ${g.name}`.toLowerCase().includes(q) || n.platform.name.toLowerCase().includes(q))
-    .map((c) => ({ core: c, platform: n.platform, category: g.name, maker: m.name }))))) : [];
+  $: hits = q ? $coresGroups
+    .filter((g) => !catFilter || g.name === catFilter)
+    .flatMap((g) => g.makers
+      .filter((m) => !makerFilter || m.name === makerFilter)
+      .flatMap((m) => m.platforms.flatMap((n) => n.cores
+        .filter((c) => coreMatchesStatus(c) && (`${c.id} ${c.shortname} ${c.author} ${n.platform.name} ${m.name} ${g.name}`.toLowerCase().includes(q) || n.platform.name.toLowerCase().includes(q)))
+        .map((c) => ({ core: c, platform: n.platform, category: g.name, maker: m.name }))))) : [];
   const pickPlatform = (id: string) => {
     const n = $coresTreeStore.find((x) => x.platform.id === id);
     if (n && n.cores.length === 1) coresSelection.set({ platform: id, core: n.cores[0].id });
@@ -288,9 +420,21 @@
       {#if !grp.maker && m.name}<h3 class="ov-maker"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '', group: `m:${grp.cat}/${m.name}` })}>{m.name}</button></h3>{/if}
       <ul class="ov-grid" aria-label={`${grp.cat}${m.name ? ', ' + m.name : ''}`}>
         {#each m.platforms as n (n.platform.id)}
-          <li><button class="ov-card" on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}. Open`}>
-            <span class="ov-pi"><Icon name={categoryIcon(grp.cat)} size={24} /></span><strong>{n.platform.name}</strong><small>{n.platform.year || ''}</small>
-            <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.disabled)}{' '}· {n.cores.filter((c) => c.disabled).length} disabled{/if}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
+          {@const st = cardMeta(n)}
+          <li use:observeBanner={n.platform.id}><button class="ov-card" class:has-disabled={st.disabled > 0} class:all-disabled={st.allDisabled} on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}${st.disabled ? `, ${st.disabled} disabled` : ''}. Open`}>
+            <span class="ov-art" aria-hidden="true">
+              <img src={ovBanners[n.platform.id] || platformFallbackArt({ id: n.platform.id, name: n.platform.name, category: grp.cat, manufacturer: n.platform.manufacturer })} alt="" />
+              {#if st.disabled > 0}
+                <span class="ov-badge" class:ov-badge-all={st.allDisabled}>
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6" /><path d="M3.8 12.2L12.2 3.8" /></svg>
+                  {st.allDisabled ? 'Disabled' : `${st.disabled}/${n.cores.length} disabled`}
+                </span>
+              {/if}
+            </span>
+            <span class="ov-body">
+              <span class="ov-title-row"><strong>{n.platform.name}</strong>{#if n.platform.year}<small class="ov-year">{n.platform.year}</small>{/if}</span>
+              <span class="ov-n">{plural(n.cores.length, 'core')}{#if st.disabled}{' '}· <span class="ov-dis-txt">{st.disabled} disabled</span>{/if}{#if st.missing}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
+            </span>
           </button></li>
         {/each}
       </ul>
@@ -319,7 +463,7 @@
     {:else}
     <ul class="core-list pv-list" aria-label={`Cores for ${node.platform.name}`}>
       {#each node.cores as c (c.id)}
-        <li class:has-en={c.disabled}>
+        <li class:has-en={c.disabled} class:pv-disabled={c.disabled}>
           <button class="pv-open" aria-label={`${c.shortname}, version ${c.version}. Open`} on:click={() => pickCore(node.platform.id, c.id)}>
             <span class="core-icon" aria-hidden="true">{c.shortname.slice(0, 2).toUpperCase()}</span>
             <span class="pv-main"><strong>{c.shortname}</strong><small>{c.id}</small></span>
@@ -334,9 +478,27 @@
     {/if}
   {:else}
     <header><div><p class="eyebrow">YOUR CARD</p><h1 id="cores-title">Cores</h1><p class="lede">Every core on this card, grouped like the openFPGA Library: category, manufacturer, platform. Pick a platform to see its cores, or a core to see its files, saves, screenshots and settings.</p></div></header>
-    <div class="ov-bar"><label class="ov-search"><span class="sr">Search cores, platforms and manufacturers</span>
-      <input type="search" placeholder="Search cores, platforms, manufacturers" bind:value={query} /></label>
-      <button class="quiet" on:click={() => openManualAdd()}>Add a core…</button></div>
+    <div class="ov-bar">
+      <label class="ov-search"><span class="sr">Search cores, platforms and manufacturers</span>
+        <input type="search" placeholder="Search cores, platforms, manufacturers" bind:value={query} /></label>
+      <label class="ov-select"><span class="sr">Status</span>
+        <select aria-label="Status" bind:value={statusFilter} on:change={() => coresTab.set('browse')}>
+          <option value="all">All statuses</option>
+          <option value="enabled">Enabled only</option>
+          <option value="disabled">{totalDisabled ? `Disabled only (${totalDisabled})` : 'Disabled only'}</option>
+          <option value="needs">{totalNeeds ? `Needs files (${totalNeeds})` : 'Needs files'}</option>
+        </select>
+      </label>
+      {#if availableMakers.length > 1}
+        <label class="ov-select"><span class="sr">Manufacturer</span>
+          <select aria-label="Manufacturer" bind:value={makerFilter} on:change={() => coresTab.set('browse')}>
+            <option value="">All manufacturers</option>
+            {#each availableMakers as mk}<option value={mk}>{mk}</option>{/each}
+          </select>
+        </label>
+      {/if}
+      <button class="quiet" on:click={() => openManualAdd()}>Add a core…</button>
+    </div>
     {#if $disabledList.length && !q}
       <div class="dis-bar" role="status"><span><strong>{plural($disabledList.length, 'core')} {$disabledList.length === 1 ? 'is' : 'are'} disabled on the Pocket.</strong> {$disabledList.length === 1 ? 'It is' : 'They are'} hidden from its menu but still listed here, tagged “disabled”.</span>
         <span class="dis-bar-btns"><button class="quiet" on:click={() => { coresTab.set('browse'); tick().then(() => document.getElementById('ov-disabled')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }}>Show them</button><button class="primary" disabled={stateBusy} on:click={() => showCores($disabledList.map((d) => d.id))}>Enable all</button></span></div>
@@ -344,12 +506,12 @@
     {#if q}
       {#if hits.length}
         <ul class="core-list pv-list" aria-label="Search results">{#each hits as h (h.core.id)}
-          <li><button class="pv-open" aria-label={`${h.core.shortname}, ${h.platform.name}. Open`} on:click={() => { query = ''; pickCore(h.platform.id, h.core.id); }}>
+          <li class:pv-disabled={h.core.disabled}><button class="pv-open" aria-label={`${h.core.shortname}, ${h.platform.name}. Open`} on:click={() => { query = ''; pickCore(h.platform.id, h.core.id); }}>
             <span class="core-icon" aria-hidden="true"><Icon name={categoryIcon(h.category)} size={20} /></span>
             <span class="pv-main"><strong>{h.core.shortname}</strong><small>{h.category} › {h.maker} › {h.platform.name} · {h.core.id}</small></span>
             <span class="pv-ver">{h.core.version}</span>{#if h.core.disabled}<span class="chip warn">Disabled on the Pocket</span>{/if}{#if h.core.missing}<span class="chip warn">Needs {plural(h.core.missing, 'file')}</span>{/if}
           </button></li>{/each}</ul>
-      {:else}<div class="empty"><h2>Nothing matches “{query}”</h2><p>Try a core name, a platform or a manufacturer.</p></div>{/if}
+      {:else}<div class="empty"><h2>Nothing matches “{query}”</h2><p>Try a core name, a platform or a manufacturer.</p>{#if hasActiveFilters}<button class="quiet" on:click={clearFilters}>Clear filters</button>{/if}</div>{/if}
     {:else}
     <div class="tabs ov-tabs" role="tablist" aria-label="Cores sections" tabindex="-1">
       <button id="cores-ov-tab-browse" role="tab" class:current={$coresTab === 'browse'} aria-selected={$coresTab === 'browse'} aria-controls="cores-ov-panel" tabindex={$coresTab === 'browse' ? 0 : -1} on:click={() => coresTab.set('browse')}>Platforms</button>
@@ -360,29 +522,59 @@
     {:else}
     {#if !$coresTreeStore.length}<div class="empty"><h2>No cores on this card</h2><p>Install some from the Marketplace.</p></div>
     {:else}
-      {#each $coresGroups as g (g.name)}
-        <section class="ov-cat" aria-labelledby={`ov-cat-${g.name.replace(/\W+/g, '-')}`}>
-          <h2 id={`ov-cat-${g.name.replace(/\W+/g, '-')}`}><span class="ov-ic"><Icon name={categoryIcon(g.name)} size={20} /></span>{g.name} <small>{plural(g.cores, 'core')}</small></h2>
-          {#each g.makers as m (m.name)}
-            {#if m.name}<h3 class="ov-maker">{m.name}</h3>{/if}
-            <ul class="ov-grid" aria-label={`${g.name}${m.name ? ', ' + m.name : ''}`}>
-              {#each m.platforms as n (n.platform.id)}
-                <li><button class="ov-card" on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}. Open`}>
-                  <span class="ov-pi"><Icon name={categoryIcon(g.name)} size={24} /></span><strong>{n.platform.name}</strong><small>{n.platform.year || ''}</small>
-                  <span class="ov-n">{plural(n.cores.length, 'core')}{#if n.cores.some((c) => c.disabled)}{' '}· {n.cores.filter((c) => c.disabled).length} disabled{/if}{#if n.cores.some((c) => c.missing)}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
-                </button></li>
-              {/each}
-            </ul>
+      {#if $coresGroups.length}
+        <div class="ov-tags" role="group" aria-label="Category">
+          <button class="chip toggle" aria-pressed={!catFilter} on:click={() => (catFilter = '')}>All <span class="ov-count">{allCoresCount}</span></button>
+          {#each $coresGroups as g (g.name)}
+            <button class="chip toggle" aria-pressed={catFilter === g.name} on:click={() => (catFilter = catFilter === g.name ? '' : g.name)}>{g.name} <span class="ov-count">{g.cores}</span></button>
           {/each}
-        </section>
-      {/each}
+        </div>
+      {/if}
+      {#if hasActiveFilters}
+        <div class="ov-filter-note" role="status" aria-live="polite">
+          <span>Showing {plural(filteredTotals.platforms, 'platform')}, {plural(filteredTotals.cores, 'core')}</span>
+          <button class="quiet ov-clear" on:click={clearFilters}>Clear filters</button>
+        </div>
+      {/if}
+      {#if !filteredGroups.length}
+        <div class="empty"><h2>No platforms match</h2><p>Nothing matches the current filters.</p><button class="quiet" on:click={clearFilters}>Clear filters</button></div>
+      {:else}
+        {#each filteredGroups as g (g.name)}
+          <section class="ov-cat" aria-labelledby={`ov-cat-${g.name.replace(/\W+/g, '-')}`}>
+            <h2 id={`ov-cat-${g.name.replace(/\W+/g, '-')}`}><span class="ov-ic"><Icon name={categoryIcon(g.name)} size={20} /></span>{g.name} <small>{plural(g.cores, 'core')}</small></h2>
+            {#each g.makers as m (m.name)}
+              {#if m.name}<h3 class="ov-maker">{m.name}</h3>{/if}
+              <ul class="ov-grid" aria-label={`${g.name}${m.name ? ', ' + m.name : ''}`}>
+                {#each m.platforms as n (n.platform.id)}
+                  {@const st = cardMeta(n)}
+                  <li use:observeBanner={n.platform.id}><button class="ov-card" class:has-disabled={st.disabled > 0} class:all-disabled={st.allDisabled} on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}${st.disabled ? `, ${st.disabled} disabled` : ''}. Open`}>
+                    <span class="ov-art" aria-hidden="true">
+                      <img src={ovBanners[n.platform.id] || platformFallbackArt({ id: n.platform.id, name: n.platform.name, category: g.name, manufacturer: n.platform.manufacturer })} alt="" />
+                      {#if st.disabled > 0}
+                        <span class="ov-badge" class:ov-badge-all={st.allDisabled}>
+                          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6" /><path d="M3.8 12.2L12.2 3.8" /></svg>
+                          {st.allDisabled ? 'Disabled' : `${st.disabled}/${n.cores.length} disabled`}
+                        </span>
+                      {/if}
+                    </span>
+                    <span class="ov-body">
+                      <span class="ov-title-row"><strong>{n.platform.name}</strong>{#if n.platform.year}<small class="ov-year">{n.platform.year}</small>{/if}</span>
+                      <span class="ov-n">{plural(n.cores.length, 'core')}{#if st.disabled}{' '}· <span class="ov-dis-txt">{st.disabled} disabled</span>{/if}{#if st.missing}<span class="tab-dot" role="img" aria-label="Needs attention"></span>{/if}</span>
+                    </span>
+                  </button></li>
+                {/each}
+              </ul>
+            {/each}
+          </section>
+        {/each}
+      {/if}
     {/if}
-    {#if $disabledList.length}
+    {#if $disabledList.length && (!hasActiveFilters || statusFilter === 'disabled')}
       <section class="ov-cat dis" aria-labelledby="ov-disabled"><h2 id="ov-disabled"><span class="ov-ic"><Icon name="folder" size={20} /></span>Disabled <small>{plural($disabledList.length, 'core')} hidden from the Pocket</small></h2>
         <p class="dis-lede">Hidden from the Pocket, but still listed with their platform above, tagged “disabled”: open one to add what it needs. Nothing was deleted; saves and settings are where they were.</p>
         <ul class="core-list pv-list" aria-label="Disabled cores">
           {#each $disabledList as d (d.id)}
-            <li class="dis-row"><span class="core-icon" aria-hidden="true">{(d.shortname || d.id).slice(0, 2).toUpperCase()}</span>
+            <li class="dis-row pv-disabled"><span class="core-icon" aria-hidden="true">{(d.shortname || d.id).slice(0, 2).toUpperCase()}</span>
               <span class="pv-main"><strong>{d.shortname || d.id}</strong><small>{d.id}{d.version ? ` · ${d.version}` : ''} · {d.disabled_at ? `disabled ${when(d.disabled_at)}` : 'disabled by hand'}{d.reasons.length ? ` · ${d.reasons.join(' ')}` : ''}</small></span>
               <button class="quiet" aria-label={`Open ${d.shortname || d.id}`} on:click={() => { const h = findCore($coresTreeStore, d.id); if (h) pickCore(h.node.platform.id, d.id); }}>Open</button><button class="quiet" disabled={stateBusy} aria-label={`Enable ${d.shortname || d.id}`} on:click={() => showCores([d.id])}>Enable</button></li>
           {/each}
@@ -468,14 +660,36 @@
   .pv-list{list-style:none;margin:0;padding:0}.pv-list li{display:block;padding:0;border-bottom:1px solid var(--border)}.pv-list li:last-child{border:0}
   .pv-open{width:100%;display:flex;align-items:center;gap:13px;padding:13px 16px;background:transparent;color:inherit;text-align:left}.pv-open:hover{background:var(--bg-card)}.pv-open:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   .pv-main{flex:1;min-width:0;display:grid;gap:3px}.pv-main strong{font-size:14px}.pv-main small{font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis}.pv-ver{font-size:12.5px;color:var(--text-secondary)}
-  .chip.warn{background:var(--warn-bg);color:var(--warn-text)}
-  .ov-bar{display:flex;gap:10px;align-items:center;margin:0 0 16px}.ov-bar .quiet{flex:none;white-space:nowrap}.ov-search{display:block;flex:1}.ov-search input{width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:var(--text);background:var(--bg-input);border:1px solid var(--border-strong);border-radius:10px;padding:10px 14px}
+  .chip.warn{background:var(--warn-bg);color:var(--warn-text);border:1px solid var(--warn-border);font-weight:600}
+  .pv-list li.pv-disabled{background:color-mix(in srgb,var(--warn-bg) 40%,transparent);box-shadow:inset 3px 0 0 var(--warn-border)}
+  .pv-list li.pv-disabled .core-icon{opacity:.55;filter:grayscale(.6)}
+  .pv-list li.pv-disabled .pv-main strong{color:var(--text-secondary)}
+  .ov-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px}.ov-bar .quiet{flex:none;white-space:nowrap}.ov-search{display:block;flex:1 1 260px;min-width:0}.ov-search input{width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;color:var(--text);background:var(--bg-input);border:1px solid var(--border-strong);border-radius:10px;padding:10px 14px}
+  .ov-select{display:block;flex:0 1 auto;max-width:100%}.ov-select select{font:inherit;font-size:13px;color:var(--text);background:var(--bg-input);border:1px solid var(--border-strong);border-radius:10px;padding:10px 12px;max-width:100%}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .ov-tabs{margin-bottom:18px}.ov-n-chip{margin-left:7px;padding:1px 7px;font-size:11px}
-  .ov-ic{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--bg-card);color:var(--accent);margin-right:10px;vertical-align:middle}.ov-pi{color:var(--accent);margin-bottom:2px}
+  .ov-tabs{margin-bottom:14px}.ov-n-chip{margin-left:7px;padding:1px 7px;font-size:11px}
+  .ov-tags{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+  .chip.toggle{cursor:pointer;border:1px solid transparent;padding:7px 12px;font-size:12px}
+  .chip.toggle[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-soft-text);background:var(--info-bg)}
+  .ov-count{opacity:.65;font-weight:500;margin-left:4px}
+  .ov-filter-note{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--text-muted);margin:-4px 0 14px}
+  .ov-clear{padding:4px 10px;font-size:12px}
+  .ov-ic{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--bg-card);color:var(--accent);margin-right:10px;vertical-align:middle}
   .ov-cat{margin:0 0 26px}.ov-cat h2{font-size:15px;margin:0 0 10px}.ov-cat h2 small{font-size:12px;font-weight:400;color:var(--text-muted);margin-left:6px}.ov-maker{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 8px}
-  .ov-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
-  .ov-card{width:100%;display:grid;gap:4px;padding:14px 16px;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:12px;color:inherit;text-align:left}.ov-card:hover{border-color:var(--border-strong)}.ov-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-  .ov-card strong{font-size:14.5px}.ov-card small{font-size:12px;color:var(--text-muted);min-height:16px}.ov-n{font-size:12px;color:var(--text-secondary);margin-top:6px}
+  .ov-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(236px,100%),1fr));gap:14px}
+  .ov-card{width:100%;display:flex;flex-direction:column;padding:0;overflow:hidden;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:12px;color:inherit;text-align:left;transition:border-color .14s ease}.ov-card:hover{border-color:var(--border-strong)}.ov-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .ov-art{position:relative;display:block;width:100%;aspect-ratio:521/165;background:#000;overflow:hidden;border-bottom:1px solid var(--border-subtle)}
+  .ov-art img{display:block;width:100%;height:100%;object-fit:cover;transition:opacity .15s ease,filter .15s ease}
+  .ov-body{display:grid;gap:4px;padding:12px 14px 13px}
+  .ov-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
+  .ov-title-row strong{font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ov-year{font-size:12px;color:var(--text-muted);flex:none}
+  .ov-n{font-size:12px;color:var(--text-secondary);margin-top:2px}
+  .ov-badge{position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700;line-height:1.2;background:color-mix(in srgb,var(--warn-bg) 94%,#000);color:var(--warn-text);border:1px solid var(--warn-border);box-shadow:0 2px 6px rgba(0,0,0,.35)}
+  .ov-card.has-disabled{border-color:color-mix(in srgb,var(--warn-border) 75%,var(--border))}
+  .ov-card.all-disabled{border-style:dashed;border-color:var(--warn-border);background:color-mix(in srgb,var(--bg-card) 88%,var(--warn-bg))}
+  .ov-card.all-disabled .ov-art img{opacity:.45;filter:grayscale(.8)}
+  .ov-card.all-disabled .ov-title-row strong{color:var(--text-secondary)}
+  .ov-dis-txt{color:var(--warn-text);font-weight:600}
   @media(max-width:1100px){.cores.has-core{overflow:visible}.cores-grid{grid-template-columns:minmax(0,1fr)}.cores-scroll,.cores-side{overflow:visible}}
 </style>
