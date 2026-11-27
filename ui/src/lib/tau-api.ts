@@ -107,6 +107,12 @@ export const checkLame = (path: string) => invoke<string>('check_lame', { path }
 export const installLame = (method: string) => invoke<LameStatus>('install_lame', { method });
 
 export const marketplaceCatalog = (force = false) => invoke<CatalogResult>('marketplace_catalog', { force });
+export const cardDetectDevice = (card: string) => invoke<import('./types').CardDeviceInfo>('card_detect_device', { card });
+export const gamebubDownloadCore = (coreId: string) => invoke<import('./types').GameBubDownloaded>('gamebub_download_core', { coreId });
+export const gamebubPlanInstall = (card: string, zipPath: string, onlyCore: string | null = null, expectedSha256: string | null = null) => invoke<import('./types').GameBubInstallPlan>('gamebub_plan_install', { card, zipPath, onlyCore, expectedSha256 });
+export const gamebubExecuteInstall = (card: string, zipPath: string, onlyCore: string | null, expectedSha256: string | null, confirmation: string) => invoke<import('./types').GameBubInstallReport>('gamebub_execute_install', { card, zipPath, onlyCore, expectedSha256, confirmation });
+export const gamebubPlanRemove = (card: string, coreId: string) => invoke<import('./types').GameBubRemovePlan>('gamebub_plan_remove', { card, coreId });
+export const gamebubExecuteRemove = (card: string, coreId: string, confirmation: string) => invoke<import('./types').GameBubRemoveReport>('gamebub_execute_remove', { card, coreId, confirmation });
 export const marketplaceArt = (coreId: string, kind: ArtKind) => invoke<string | null>('marketplace_art', { coreId, kind });
 export const marketplaceRepoDetails = (coreId: string, force = false) => invoke<RepoDetails>('marketplace_repo_details', { coreId, force });
 /** Whether feedback can be sent from this build, and the few facts a sender may add (version, system). */

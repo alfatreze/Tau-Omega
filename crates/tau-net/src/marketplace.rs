@@ -66,6 +66,7 @@ pub struct Http;
 
 fn host_allowed(url: &str) -> bool {
     url.starts_with("https://openfpga-library.github.io/analogue-pocket/")
+        || url.starts_with("https://cores.gamebub.net/")
         || url.starts_with("https://api.github.com/repos/")
         || url.starts_with("https://github.com/")
         || url.starts_with("https://raw.githubusercontent.com/")
@@ -334,6 +335,38 @@ pub struct CatalogResult {
     /// Plain-words notes about other marketplace sources that could not be added to the list (the Library list is still shown).
     #[serde(default)]
     pub notes: Vec<String>,
+}
+
+/// The Game Bub Core Directory catalog (`https://cores.gamebub.net/cores.json`, `schema_version: 1`):
+/// cached for [`CATALOG_TTL`], revalidated with ETags, and the saved copy when offline.
+pub fn fetch_gamebub_catalog(
+    t: &dyn Transport,
+    cache: &Path,
+    now: u64,
+    force: bool,
+) -> Result<CatalogResult, TauError> {
+    let dir = root(cache);
+    let f = fetch_cached(
+        t,
+        &dir.join("gamebub-cores.json"),
+        tau_core::gamebub::GAMEBUB_CATALOG_URL,
+        CATALOG_LIMIT,
+        CATALOG_TTL,
+        now,
+        force,
+        &|b| {
+            tau_core::gamebub::parse_catalog(b)
+                .map(|_| ())
+                .map_err(|e| e.message)
+        },
+    )?;
+    let catalog = tau_core::gamebub::parse_catalog(&f.body)?;
+    Ok(CatalogResult {
+        catalog,
+        source: f.source,
+        fetched: f.fetched,
+        notes: Vec::new(),
+    })
 }
 
 /// The catalog (v3 core list plus platform list): cached for [`CATALOG_TTL`], revalidated with ETags, and the saved

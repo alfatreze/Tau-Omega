@@ -236,18 +236,34 @@ export type OmegaUpdate = { current: string; version: string; notes: string | nu
 /** Mirrors `tau_core::catalog` / `catalog_release` / `core_update` / `core_package` and `tau_net::marketplace` (serde output). */
 export type CatalogAsset = { platform: string; filename: string; extensions: string[]; core_specific: boolean };
 export type ReleaseSummary = { version: string; release_date: string; download_url: string };
+export type DeviceKind = 'analogue_pocket' | 'game_bub';
+export type CardDeviceInfo = { device: DeviceKind | null; reason: string; pocket_cores: number; gamebub_cores: number };
+export type GameBubDownloaded = { path: string; sha256: string; bytes: number; bundled_core_ids: string[] };
+export type GameBubPlannedCore = { id: string; name: string; version: string; min_firmware: string; action: string; previous_version: string | null; file_count: number; total_bytes: number };
+export type GameBubInstallPlan = { id: string; zip_sha256: string; cores: GameBubPlannedCore[]; files_to_write: string[]; backup_files: string[]; warnings: string[] };
+export type GameBubInstallReport = { cores_installed: string[]; files_written: number; backup_dir: string | null };
+export type GameBubRemovePlan = { id: string; core_id: string; name: string; files_to_remove: string[] };
+export type GameBubRemoveReport = { core_id: string; files_removed: number; backup_dir: string | null };
 export type CatalogCore = {
   id: string; author: string; name: string; repository: { owner: string; name: string }; sponsor: { links: string[] };
   category: string; manufacturer: string; year: number; platform_id: string;
   version: string; release_date: string; download_url: string; requires_license: boolean; license_filename: string;
   replaces: string[]; declares_ai: string[]; firmware_required: string; dock_supported: boolean | null; link_port: boolean | null; sleep_supported: boolean | null;
   assets: CatalogAsset[]; history: ReleaseSummary[];
-  /** Which marketplace source lists it (`openfpga-library`, `tau-alpha`) and, for sources with channels, `Stable` | `Preview` | `Dev`. */
+  /** Which marketplace source lists it (`openfpga-library`, `tau-alpha`, `gamebub-directory`) and, for sources with channels, `Stable` | `Preview` | `Dev`. */
   source: string; channel: string;
   /** Installable choices when one card offers several (Tau: Stable / Preview / Dev, standard or Diagnostics). */
   options?: InstallOption[];
   /** Every marketplace that distributes it (one card per core id, one listing per source). */
   listings?: Listing[];
+  /** Target handheld device (defaults to Analogue Pocket when omitted). */
+  device?: DeviceKind;
+  description?: string;
+  license?: string;
+  targets?: string[];
+  asset_sha256?: string;
+  asset_size?: number;
+  zip_layout?: string;
 };
 export type Listing = { source: string; version: string; release_date: string; download_url: string };
 export type InstallOption = { core_id: string; channel: string; diagnostics: boolean; history: ReleaseSummary[] };

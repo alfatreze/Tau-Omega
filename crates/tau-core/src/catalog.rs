@@ -102,6 +102,27 @@ pub struct CatalogCore {
     /// core offered by two sources is one card with two listings).
     #[cfg_attr(feature = "serde", serde(default))]
     pub listings: Vec<Listing>,
+    /// Target handheld device (`AnaloguePocket` by default; `GameBub` for `cores.gamebub.net`).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub device: crate::device::DeviceKind,
+    /// Optional short description supplied by the catalog (used by Game Bub Core Directory).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub description: String,
+    /// Optional SPDX licence supplied by the catalog.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub license: String,
+    /// Hardware targets supported by the release (e.g. `["gamebub_rev4"]` for Game Bub).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub targets: Vec<String>,
+    /// Expected SHA-256 of the download zip when supplied by the catalog (Game Bub `cores.json`).
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub asset_sha256: String,
+    /// Expected byte size of the download zip when supplied by the catalog.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub asset_size: u64,
+    /// Zip layout hint (`"cores/<id>"` or `"<id>"`) when supplied by the catalog.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub zip_layout: String,
 }
 
 /// What one marketplace lists for a core.
@@ -343,6 +364,7 @@ pub fn parse(cores_json: &[u8], platforms_json: &[u8]) -> Result<Catalog, TauErr
             options: Vec::new(),
             listings: Vec::new(),
             history,
+            ..CatalogCore::default()
         });
     }
     Ok(Catalog { cores })

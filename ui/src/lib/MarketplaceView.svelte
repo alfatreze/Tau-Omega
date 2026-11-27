@@ -8,12 +8,59 @@
   import MultiInstall from './MultiInstall.svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
-  import { getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceGallery, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
+  import { cardDetectDevice, gamebubDownloadCore, gamebubExecuteInstall, gamebubPlanInstall, getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceGallery, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
   import { categoryCounts, filterCores, listedBy, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
-  import type { CatalogCore, CatalogResult, CoreStatus, GalleryItem, MarketplaceDownload, RepoDetails } from './types';
+  import type { CatalogCore, CatalogResult, CoreStatus, DeviceKind, GalleryItem, GameBubDownloaded, GameBubInstallPlan, MarketplaceDownload, RepoDetails } from './types';
   /** The card folder currently open (empty when none): used for the installed/update chips and for installing. */
   export let card = '';
+
+  let activeDevice: DeviceKind = 'analogue_pocket';
+  let gbDownload: GameBubDownloaded | null = null;
+  let gbPlan: GameBubInstallPlan | null = null;
+  let gbError = '';
+  let gbDone = '';
+  let gbBusy = false;
+  $: if (card) {
+    cardDetectDevice(card).then((info) => {
+      if (info.device) activeDevice = info.device;
+    }, () => {});
+  }
+  const coreDevice = (c: CatalogCore): DeviceKind => c.device ?? 'analogue_pocket';
+  $: isGameBubCore = !!selected && coreDevice(selected) === 'game_bub';
+  $: { void selected?.id; gbDownload = null; gbPlan = null; gbError = ''; gbDone = ''; gbBusy = false; }
+
+  async function startGameBubInstall(installAll = false) {
+    if (!selected || !card) return;
+    gbBusy = true; gbError = ''; gbDone = ''; gbPlan = null;
+    try {
+      const dl = await gamebubDownloadCore(selected.id);
+      gbDownload = dl;
+      const only = installAll ? null : selected.id;
+      gbPlan = await gamebubPlanInstall(card, dl.path, only, selected.asset_sha256 || null);
+    } catch (e) {
+      gbError = errorMessage(e);
+    } finally {
+      gbBusy = false;
+    }
+  }
+
+  async function confirmGameBubInstall(installAll = false) {
+    if (!selected || !card || !gbDownload || !gbPlan) return;
+    gbBusy = true; gbError = '';
+    try {
+      const only = installAll ? null : selected.id;
+      const rep = await gamebubExecuteInstall(card, gbDownload.path, only, selected.asset_sha256 || null, gbPlan.id);
+      gbDone = `Installed ${rep.cores_installed.join(', ')} (${rep.files_written} files).`;
+      gbPlan = null;
+      gbDownload = null;
+      void loadStatuses(card);
+    } catch (e) {
+      gbError = errorMessage(e);
+    } finally {
+      gbBusy = false;
+    }
+  }
 
   let result: CatalogResult | null = null; let loading = false; let error = '';
   let filters: Filters = { query: '', category: '', installedOnly: false, sort: 'newest', source: '' };
@@ -48,7 +95,9 @@
   $: if (!card) picked = new Set();
   $: pickedCores = cores.filter((c) => picked.has(c.id)).map((c) => ({ id: c.id, name: c.name }));
 
-  $: cores = result?.catalog.cores ?? [];
+  $: allCores = result?.catalog.cores ?? [];
+  $: hasGameBub = allCores.some((c) => coreDevice(c) === 'game_bub');
+  $: cores = allCores.filter((c) => coreDevice(c) === activeDevice);
   $: installed = new Set([...statuses.keys()]);
   $: sources = sourcesOf(cores);
   $: shown = filterCores(cores, filters, installed);
@@ -153,10 +202,21 @@
     <div>
       <p class="eyebrow">COMMUNITY CORES</p>
       <h1 id="market-title">Marketplace</h1>
-      <p class="lede">Cores made by the community for the Analogue Pocket. Nothing is installed until you review it.</p>
+      <p class="lede">
+        {#if activeDevice === 'game_bub'}
+          Community cores for Game Bub (Beta · community-tested, FAT32 microSD). Nothing is installed until you review it.
+        {:else}
+          Cores made by the community for the Analogue Pocket. Nothing is installed until you review it.
+        {/if}
+      </p>
     </div>
     <span class="mk-head-actions"><button class="quiet" on:click={() => openManualAdd()}>Add a core manually…</button><button class="quiet" disabled={loading} on:click={() => load(true)}>{loading ? 'Checking…' : 'Refresh'}</button></span>
   </header>
+
+  <div class="mk-tags" role="group" aria-label="Device" data-testid="mk-device-switch">
+    <button class="chip toggle" aria-pressed={activeDevice === 'analogue_pocket'} on:click={() => { activeDevice = 'analogue_pocket'; filters = { ...filters, category: '', source: '' }; }}>Analogue Pocket</button>
+    <button class="chip toggle" aria-pressed={activeDevice === 'game_bub'} on:click={() => { activeDevice = 'game_bub'; filters = { ...filters, category: '', source: '' }; }} data-testid="mk-device-gamebub">Game Bub {#if !hasGameBub && result}<span class="mk-count">0</span>{/if}</button>
+  </div>
 
   <div class="mk-filters" role="search" aria-label="Filter cores">
     <label class="mk-search"><span class="sr">Search cores</span>
@@ -251,22 +311,43 @@
       </div>
       {#if isDev}
         <button class="primary mk-go" on:click={() => { close(); openManualAdd(); }}>Install a local build…</button>
+      {:else if isGameBubCore}
+        <button class="primary mk-go" disabled={!card || gbBusy || !!gbPlan} on:click={() => startGameBubInstall(false)} data-testid="gb-install-btn">{gbBusy ? 'Working…' : installLabel}</button>
       {:else}
         <button class="primary mk-go" disabled={!canInstall || installBusy || !!review} on:click={() => installer?.start()}>{installBusy ? 'Working…' : installLabel}</button>
       {/if}
     </header>
 
     <div class="mk-install">
-      {#if opts.length}
-        <div class="mk-opts">
-          <label>Channel<select value={optChannel} on:change={(e) => pickChannel(e.currentTarget.value)}>{#each channels as c}<option value={c}>{c}</option>{/each}</select></label>
-          {#if builds.length > 1}<label>Build<select value={optDiag ? 'diag' : 'std'} on:change={(e) => { optDiag = e.currentTarget.value === 'diag'; optVersion = ''; }}><option value="std">Standard</option><option value="diag">Diagnostics</option></select></label>{/if}
-          {#if option && option.history.length}<label>Version<select bind:value={optVersion}>{#each option.history as h, i}<option value={i === 0 ? '' : h.version}>{h.version} · {h.release_date}{i === 0 ? ' (newest)' : ''}</option>{/each}</select></label>{/if}
-        </div>
+      {#if isGameBubCore}
+        <p class="mk-callout soft" role="note">Game Bub support is community-tested beta. Requires a FAT32 (MBR) microSD card{#if selected.firmware_required}{' '}and firmware {selected.firmware_required}+{/if}.</p>
+        {#if !card}<p class="mk-small">Open a Game Bub card first (Cards page).</p>{/if}
+        {#if gbError}<p class="err" role="alert">{gbError}</p>{/if}
+        {#if gbDone}<p class="mk-small" role="status">{gbDone}</p>{/if}
+        {#if gbPlan}
+          <div class="mk-callout soft" data-testid="gb-plan">
+            <strong>Review before writing to card</strong>
+            <p class="mk-small">Writes {gbPlan.files_to_write.length} file(s) under <code>/cores/</code> ({gbPlan.cores.map((c) => `${c.id} ${c.version}`).join(', ')}).{#if gbPlan.backup_files.length} Backs up {gbPlan.backup_files.length} existing file(s) outside the card first.{/if}</p>
+            {#if gbDownload && gbDownload.bundled_core_ids.length > 1}
+              <p class="mk-small">This archive bundles {gbDownload.bundled_core_ids.length} cores: {gbDownload.bundled_core_ids.join(', ')}.</p>
+            {/if}
+            {#each gbPlan.warnings as w}<p class="mk-small">{w}</p>{/each}
+            <p><button class="primary" disabled={gbBusy} on:click={() => confirmGameBubInstall(false)} data-testid="gb-confirm-btn">{gbBusy ? 'Installing…' : 'Install to card'}</button>
+              <button class="quiet" disabled={gbBusy} on:click={() => { gbPlan = null; gbDownload = null; }}>Cancel</button></p>
+          </div>
+        {/if}
+      {:else}
+        {#if opts.length}
+          <div class="mk-opts">
+            <label>Channel<select value={optChannel} on:change={(e) => pickChannel(e.currentTarget.value)}>{#each channels as c}<option value={c}>{c}</option>{/each}</select></label>
+            {#if builds.length > 1}<label>Build<select value={optDiag ? 'diag' : 'std'} on:change={(e) => { optDiag = e.currentTarget.value === 'diag'; optVersion = ''; }}><option value="std">Standard</option><option value="diag">Diagnostics</option></select></label>{/if}
+            {#if option && option.history.length}<label>Version<select bind:value={optVersion}>{#each option.history as h, i}<option value={i === 0 ? '' : h.version}>{h.version} · {h.release_date}{i === 0 ? ' (newest)' : ''}</option>{/each}</select></label>{/if}
+          </div>
+        {/if}
+        {#if installNote}<p class="mk-small">{installNote}</p>{/if}
+        {#if canInstall}{#key `${target?.id}|${target?.version}`}<CoreInstall bind:this={installer} bind:busy={installBusy} bind:download={review} coreId={target?.id ?? ''} {card} version={target?.version ?? ''} buttonless on:installed={() => loadStatuses(card)} />{/key}{/if}
+        {#if selected.requires_license}<p class="mk-callout soft" role="note">This core needs a key file from its author, or it will not run. See Details.</p>{/if}
       {/if}
-      {#if installNote}<p class="mk-small">{installNote}</p>{/if}
-      {#if canInstall}{#key `${target?.id}|${target?.version}`}<CoreInstall bind:this={installer} bind:busy={installBusy} bind:download={review} coreId={target?.id ?? ''} {card} version={target?.version ?? ''} buttonless on:installed={() => loadStatuses(card)} />{/key}{/if}
-      {#if selected.requires_license}<p class="mk-callout soft" role="note">This core needs a key file from its author, or it will not run. See Details.</p>{/if}
     </div>
 
     <div class="mk-tabs" role="tablist" aria-label="About this core" tabindex="-1" on:keydown={tabKey}>

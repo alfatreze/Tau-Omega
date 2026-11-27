@@ -411,6 +411,20 @@ const handlers: Record<string, (args: any) => unknown> = {
     return { info: { description: 'A mock description of ' + a.coreId + '. It shows what the core is, in the author\'s words.', homepage: 'https://example.com/core', license: 'MIT', stars: 12, topics: ['analogue-pocket', 'openfpga'], pushed: '2026-11-14' },
       downloads: { total: 12345, newest: 678, newest_tag: 'v1.0.0', releases: 4, complete: true, notes: 'Fixed the menu.\nAdded a new option.' }, fetched: 1 };
   },
+  card_detect_device: () => {
+    const mode = (globalThis as { __device?: string }).__device;
+    if (mode === 'game_bub') return { device: 'game_bub', reason: 'Found 2 Game Bub core(s) under /cores/.', pocket_cores: 0, gamebub_cores: 2 };
+    return { device: 'analogue_pocket', reason: 'Found Analogue Pocket cores under /Cores/.', pocket_cores: 3, gamebub_cores: 0 };
+  },
+  gamebub_download_core: (a) => ({ path: `/tmp/${a.coreId}.zip`, sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', bytes: 123456, bundled_core_ids: [a.coreId as string] }),
+  gamebub_plan_install: (a) => ({
+    id: 'gb-plan-1', zip_sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    cores: [{ id: (a.onlyCore as string) || 'elipsitz.N64', name: 'Nintendo 64 (MIRLO64)', version: '0.3.0', min_firmware: '1.1.0-beta.5', action: 'install', previous_version: null, file_count: 3, total_bytes: 123456 }],
+    files_to_write: ['cores/elipsitz.N64/core.json', 'cores/elipsitz.N64/n64-gamebub_rev4.bit'], backup_files: [], warnings: []
+  }),
+  gamebub_execute_install: (a) => ({ cores_installed: [(a.onlyCore as string) || 'elipsitz.N64'], files_written: 2, backup_dir: null }),
+  gamebub_plan_remove: (a) => ({ id: 'gb-rm-1', core_id: a.coreId as string, name: a.coreId as string, files_to_remove: [`cores/${a.coreId}/core.json`] }),
+  gamebub_execute_remove: (a) => ({ core_id: a.coreId as string, files_removed: 1, backup_dir: '/backups/gb-rm' }),
   // The meters on the card: window.__meters = 'none' (no meter files) | 'old' (v0.7.1: ignores the user file) | 'refused' (a file the Pocket will not use); default is v0.7.5 with a user file.
   meters_on_card: () => {
     const mode = (globalThis as { __meters?: string }).__meters;

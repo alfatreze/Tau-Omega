@@ -5,7 +5,7 @@ export type Sort = 'newest' | 'name';
 export type Filters = { query: string; category: string; installedOnly: boolean; sort: Sort; source: string };
 
 /** The marketplace sources, in the order they are offered, with the words people see. */
-export const SOURCE_LABELS: Record<string, string> = { 'openfpga-library': 'openFPGA Library', 'tau-alpha': 'Tau Alpha' };
+export const SOURCE_LABELS: Record<string, string> = { 'openfpga-library': 'openFPGA Library', 'tau-alpha': 'Tau Alpha', 'gamebub-directory': 'Game Bub Directory' };
 export const sourceLabel = (id: string): string => SOURCE_LABELS[id] ?? id;
 /** The sources that have at least one core in the list. */
 /** The sources a core is listed by (every listing, else its own source). */

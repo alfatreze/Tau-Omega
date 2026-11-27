@@ -39,7 +39,17 @@ fn full_catalog(app: &tauri::AppHandle, force: bool) -> Result<CatalogResult, Ta
         Err(e) => result.notes.push(format!("Tau Alpha could not be listed: {}", e.message)),
     }
     let default = crate::read_prefs(app).map(|p| p.marketplace_default_source).unwrap_or_default();
-    result.catalog.cores = tau_core::catalog::merge_sources(cores, if default.is_empty() { tau_core::catalog::LIBRARY_SOURCE } else { &default });
+    let mut merged = tau_core::catalog::merge_sources(cores, if default.is_empty() { tau_core::catalog::LIBRARY_SOURCE } else { &default });
+    match marketplace::fetch_gamebub_catalog(&Http, &dir, now(), force) {
+        Ok(gb) => {
+            if matches!(gb.source, Source::Offline(_)) {
+                result.notes.push("Game Bub Directory: showing its saved list (offline).".into());
+            }
+            merged.extend(gb.catalog.cores);
+        }
+        Err(e) => result.notes.push(format!("Game Bub Directory could not be listed: {}", e.message)),
+    }
+    result.catalog.cores = merged;
     Ok(result)
 }
 
@@ -70,7 +80,10 @@ pub fn marketplace_art(app: tauri::AppHandle, core_id: String, kind: ArtKind) ->
         return Ok(bytes.map(|(b, mime)| format!("data:{mime};base64,{}", STANDARD.encode(b))));
     }
     let catalog = marketplace::fetch_catalog(&Http, &dir, now(), false)?.catalog;
-    let core = catalog.find(&core_id).ok_or_else(|| TauError { code: ErrorCode::NotFound, message: format!("{core_id} is not in the catalog.") })?;
+    let Some(core) = catalog.find(&core_id) else {
+        // Game Bub cores have no pre-rendered icons on cores.gamebub.net.
+        return Ok(None);
+    };
     Ok(marketplace::fetch_art(&Http, &dir, core, kind, now(), false)?.map(|png| format!("data:image/png;base64,{}", STANDARD.encode(png))))
 }
 
@@ -141,7 +154,12 @@ pub struct CoreUpdates {
 #[tauri::command(async)]
 pub fn marketplace_core_updates(app: tauri::AppHandle, card: String, force: bool) -> Result<CoreUpdates, TauError> {
     let cat = full_catalog(&app, force)?;
-    let inspected = tau_core::inspect_card(Path::new(&card))?;
+    let card_path = Path::new(&card);
+    if tau_core::device::detect_card(card_path).device == Some(tau_core::device::DeviceKind::GameBub) {
+        let rows = tau_core::gamebub::check_updates(card_path, &cat.catalog);
+        return Ok(CoreUpdates { rows, source: cat.source, fetched: cat.fetched });
+    }
+    let inspected = tau_core::inspect_card(card_path)?;
     let mut rows = core_update::check(&inspected.cores, &cat.catalog);
     // Cores added manually from a GitHub repository that the Library does not list: their repository's newest release (one request each, at most
     // MANUAL_LIMIT per check; a failure leaves that core "not in the Library"). The source record is Omega's own, never read from the card.
