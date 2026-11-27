@@ -9,7 +9,7 @@ preview_urls = false
 [vars]
 GITHUB_REPO = "alfatreze/Tau-Omega"
 # The address attachments are served from: this Worker's own address, with no trailing slash. Set it after the first deploy.
-PUBLIC_URL = "https://tau-omega-feedback.CHANGE-ME.workers.dev"
+PUBLIC_URL = "https://tau-omega-feedback.alfatreze.workers.dev"
 HOURLY = "5"
 DAILY = "20"
 GLOBAL_DAILY = "200"
@@ -22,6 +22,6 @@ bucket_name = "tau-omega-feedback-files"
 
 [[kv_namespaces]]
 binding = "LIMITS"
-id = "CREATE-WITH-wrangler-kv-namespace-create-LIMITS"
+id = "eb71ab31a83c4b0b84256082110455c4"
 
 # Secrets (never in this file): GITHUB_TOKEN (Issues: write on alfatreze/Tau-Omega only) and IP_SALT (any long random text).
