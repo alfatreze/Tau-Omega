@@ -32,4 +32,3 @@ This release adds **Game Bub** support alongside the Analogue Pocket, and lets y
 - Game Bub support is new. It was tested with practice folders and sample cores on a computer, not on a real Game Bub.
 - Artwork was tested on a computer and practice cards, not on a real Pocket.
 - The installers are not signed. On macOS, choose Open Anyway the first time. Windows may show a warning.
-- The in-app update from 0.6.1 to 0.6.2 has not been tried end to end yet.
