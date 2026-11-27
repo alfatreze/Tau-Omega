@@ -8,6 +8,7 @@
   import MultiInstall from './MultiInstall.svelte';
   import { modal } from './a11y';
   import { errorMessage } from './backend';
+  import { platformFallbackArt } from './platformArt';
   import { cardDetectDevice, gamebubDownloadCore, gamebubExecuteInstall, gamebubPlanInstall, getPrefs, marketplaceArt, marketplaceCatalog, marketplaceCoreUpdates, marketplaceGallery, marketplaceOpenRepo, marketplaceRepoDetails, setPrefs } from './tau-api';
   import { categoryCounts, filterCores, listedBy, size, sourceLabel, sourceNote, sourcesOf, statusLabel, statusMap, type Filters } from './marketplace';
   import { coreUpdateCount } from './marketStore';
@@ -154,10 +155,12 @@
   let repo: RepoDetails | null = null; let repoState: 'loading' | 'done' | 'failed' = 'loading'; let linkError = '';
   let repoFor = '';
   /** The pictures the author's README shows on GitHub (empty when there are none or GitHub cannot be reached) and the one open in the lightbox. */
-  let gallery: GalleryItem[] = []; let lightbox: number | null = null;
+  let gallery: GalleryItem[] = []; let galleryLoading = false; let lightbox: number | null = null;
   async function loadGallery(core: CatalogCore) {
-    gallery = []; lightbox = null;
-    try { const g = await marketplaceGallery(core.id); if (repoFor === core.id) gallery = g; } catch { /* no pictures is fine */ }
+    gallery = []; lightbox = null; galleryLoading = true;
+    try { const g = await marketplaceGallery(core.id); if (repoFor === core.id) gallery = g; }
+    catch { /* no pictures is fine */ }
+    finally { if (repoFor === core.id) galleryLoading = false; }
   }
   async function loadRepo(core: CatalogCore) {
     repo = null; repoState = 'loading'; repoFor = core.id;
@@ -165,7 +168,7 @@
     catch { if (repoFor === core.id) repoState = 'failed'; }
   }
   function open(core: CatalogCore) { selected = core; chosen = ''; optVersion = ''; optDiag = false; tab = 'about'; linkError = ''; review = null; installBusy = false; optChannel = core.options?.[0]?.channel ?? ''; wantArt('Banner', core.id); wantArt('Icon', core.id); void loadRepo(core); void loadGallery(core); }
-  function close() { selected = null; repoFor = ''; gallery = []; lightbox = null; }
+  function close() { selected = null; repoFor = ''; gallery = []; galleryLoading = false; lightbox = null; }
   const repoUrl = (c: CatalogCore) => `https://github.com/${c.repository.owner}/${c.repository.name}`;
   /** The address is opened by the app from the catalog entry (a plain click on the link; nothing typed or pasted is ever opened). */
   async function openRepo(e: Event) { e.preventDefault(); if (!selected) return; linkError = ''; try { await marketplaceOpenRepo(selected.id); } catch (err) { linkError = errorMessage(err); } }
@@ -268,7 +271,7 @@
         <li class="mk-card" use:visible={item.id}>
           <button class="mk-open" on:keydown={cardKey} aria-label={`${item.name}, ${item.category}, version ${item.version || 'unknown'}. Show details`} on:click={() => open(item)}>
             <span class="mk-art" aria-hidden="true">
-              {#if art[`Banner:${item.id}`]}<img src={art[`Banner:${item.id}`]} alt="" />{:else}<span class="mk-art-fallback">{item.name.slice(0, 2).toUpperCase()}</span>{/if}
+              <img src={art[`Banner:${item.id}`] || platformFallbackArt(item)} alt="" class:mk-art-gen={!art[`Banner:${item.id}`]} />
             </span>
             <span class="mk-body">
               <strong class="mk-title">{item.name}</strong>
@@ -292,16 +295,21 @@
   {/if}
 </section>
 
-{#if multi}<MultiInstall {card} cores={pickedCores} close={() => { multi = false; }} installed={() => { picked = new Set(); void loadStatuses(card); }} />{/if}
+{#if multi}<MultiInstall {card} device={activeDevice} cores={pickedCores} close={() => { multi = false; }} installed={() => { picked = new Set(); void loadStatuses(card); }} />{/if}
 {#if selected}
   <div class="mk-backdrop" role="presentation" on:click={close}></div>
   <div class="mk-sheet" role="dialog" aria-modal="true" aria-labelledby="mk-title" use:modal>
     <div class="mk-x-wrap"><button class="mk-x" data-autofocus on:click={close} aria-label="Close details"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" /></svg></button></div>
-    {#if art[`Banner:${selected.id}`]}<img class="mk-banner" src={art[`Banner:${selected.id}`]} alt={`${selected.name} platform artwork`} />{/if}
+    <img class="mk-banner" src={art[`Banner:${selected.id}`] || platformFallbackArt(selected)} alt={`${selected.name} platform artwork`} />
     {#if gallery.length}
       <ul class="mk-strip" aria-label={`Pictures of ${selected.name} from GitHub`}>
         {#each gallery as g, i}<li><button class="mk-thumb" aria-label={`View picture ${i + 1} of ${gallery.length}${g.alt ? `: ${g.alt}` : ''}`} on:click={() => (lightbox = i)}><img src={g.src} alt="" loading="lazy" /></button></li>{/each}
       </ul>
+    {:else if galleryLoading}
+      <div class="mk-loading-row" role="status" aria-busy="true">
+        <span class="mk-spin" aria-hidden="true"></span>
+        <span>Checking GitHub for screenshots…</span>
+      </div>
     {/if}
     <header class="mk-sheet-head">
       <div class="mk-head-main">
@@ -357,20 +365,32 @@
 
     <div id="mk-panel" role="tabpanel" aria-labelledby={`mk-tab-${tab}`}>
     {#if tab === 'about'}
-      {#if repoState === 'loading'}<p class="mk-small">Loading from GitHub…</p>
+      {#if repoState === 'loading'}
+        {#if selected.description}<p class="mk-desc">{selected.description}</p>{/if}
+        <div class="mk-loading-block" role="status" aria-busy="true">
+          <div class="mk-loading-row"><span class="mk-spin" aria-hidden="true"></span><span>Loading details from GitHub…</span></div>
+          {#if !selected.description}<span class="sk mk-sk-line"></span><span class="sk mk-sk-line short"></span>{/if}
+        </div>
       {:else if repo?.info?.description}<p class="mk-desc">{repo.info.description}</p>
+      {:else if selected.description}<p class="mk-desc">{selected.description}</p>
       {:else if repoState === 'failed' || !repo?.info}<p class="mk-small">The description could not be loaded from GitHub. Check your connection.</p>
       {:else}<p class="mk-small">The author has not written a description on GitHub.</p>{/if}
 
       <dl class="mk-facts">
         <div><dt>Newest version</dt><dd>{selected.version || 'none published'}{selected.release_date ? ` · ${selected.release_date}` : ''}</dd></div>
-        <div><dt>Downloads</dt><dd>{#if repoState === 'loading'}…{:else if repo?.downloads}{repo.downloads.complete ? '' : 'At least '}{count(repo.downloads.total)} in total{#if repo.downloads.newest_tag}{' · '}{count(repo.downloads.newest)} for {repo.downloads.newest_tag}{/if}{:else}not available{/if}</dd></div>
-        {#if repo?.info?.license}<div><dt>Licence</dt><dd>{repo.info.license}</dd></div>{/if}
+        <div><dt>Downloads</dt><dd>{#if repoState === 'loading'}<span class="sk mk-sk-inline" aria-label="Loading downloads"></span>{:else if repo?.downloads}{repo.downloads.complete ? '' : 'At least '}{count(repo.downloads.total)} in total{#if repo.downloads.newest_tag}{' · '}{count(repo.downloads.newest)} for {repo.downloads.newest_tag}{/if}{:else}not available{/if}</dd></div>
+        {#if repo?.info?.license || selected.license}<div><dt>Licence</dt><dd>{repo?.info?.license || selected.license}</dd></div>{/if}
         <div><dt>Source</dt><dd><a class="mk-link" href={repoUrl(selected)} on:click={openRepo}>{selected.repository.owner}/{selected.repository.name} on GitHub</a>{#if linkError}<span class="err"> {linkError}</span>{/if}</dd></div>
         {#if statusOf(selected) && chip(selected)}<div><dt>On your card</dt><dd>{statusOf(selected)?.installed_version} · {chip(selected)}</dd></div>{/if}
       </dl>
 
-      {#if repo?.downloads?.notes}<h3>What’s new in {repo.downloads.newest_tag}</h3><p class="mk-notes">{repo.downloads.notes}</p>{/if}
+      {#if repoState === 'loading'}
+        <div class="mk-loading-block" aria-hidden="true">
+          <span class="sk mk-sk-head"></span>
+          <span class="sk mk-sk-line"></span>
+          <span class="sk mk-sk-line short"></span>
+        </div>
+      {:else if repo?.downloads?.notes}<h3>What’s new in {repo.downloads.newest_tag}</h3><p class="mk-notes">{repo.downloads.notes}</p>{/if}
       {#if selected.sponsor.links.length}
         <p class="mk-small">Support the author: {#each selected.sponsor.links as l, i}<code>{l.replace('https://', '')}</code>{i < selected.sponsor.links.length - 1 ? ', ' : ''}{/each}</p>
       {/if}
@@ -396,6 +416,7 @@
         {#if selected.category}<div><dt>Category</dt><dd>{selected.category}</dd></div>{/if}
         {#if selected.manufacturer}<div><dt>Original maker</dt><dd>{selected.manufacturer}{selected.year ? ` · ${selected.year}` : ''}</dd></div>{/if}
         <div><dt>{listedBy(selected).length > 1 ? 'Distributed by' : 'Listed by'}</dt><dd class="mk-listed">{#if selected.listings?.length}{#each selected.listings as l}<span class="chip">{sourceLabel(l.source)}{l.version ? ` · ${l.version}` : ''}</span>{/each}{:else}<span class="chip">{sourceLabel(selected.source)}</span>{/if}</dd></div>
+        {#if repoState === 'loading'}<div><dt>GitHub</dt><dd><span class="mk-loading-row"><span class="mk-spin" aria-hidden="true"></span><span>Loading topics and activity…</span></span></dd></div>{/if}
         {#if repo?.info?.topics.length}<div><dt>Topics</dt><dd class="mk-listed">{#each repo.info.topics as t}<span class="chip">{t}</span>{/each}</dd></div>{/if}
         {#if repo?.info?.pushed}<div><dt>Repository updated</dt><dd>{repo.info.pushed}</dd></div>{/if}
       </dl>
@@ -444,7 +465,15 @@
   .mk-open:focus-visible{outline:2px solid #c1f0ad;outline-offset:-2px}
   .mk-art{display:block;width:100%;aspect-ratio:521/165;background:#000;overflow:hidden}
   .mk-art img{display:block;width:100%;height:100%;object-fit:cover}
-  .mk-art-fallback{display:grid;place-items:center;height:100%;color:#c1f0ad;font-weight:700;font-size:22px;letter-spacing:.06em}
+  .mk-art img.mk-art-gen{object-fit:cover}
+  .mk-loading-row{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:#95a5a4;margin:4px 0}
+  .mk-loading-block{display:grid;gap:7px;margin:8px 0 12px}
+  .mk-spin{width:13px;height:13px;border-radius:50%;border:2px solid #2c393a;border-top-color:#c1f0ad;animation:mk-spin .75s linear infinite;flex:none}
+  .mk-sk-head{display:block;height:13px;width:36%;border-radius:6px}
+  .mk-sk-line{display:block;height:11px;width:92%;border-radius:5px}
+  .mk-sk-line.short{width:64%}
+  .mk-sk-inline{display:inline-block;height:12px;width:120px;border-radius:5px;vertical-align:middle}
+  @keyframes mk-spin{to{transform:rotate(360deg)}}
   .mk-body{display:flex;flex-direction:column;gap:4px;padding:12px 14px 10px}
   .mk-title{font-size:15px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .mk-sub{font-size:12px;color:#95a5a4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -18,6 +18,7 @@
   import { coreUpdateCount } from './marketStore';
   import { coresGroups, coresSelection, coresTab, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
   import { plural } from './coresFormat';
+  import { platformFallbackArt } from './platformArt';
   import type { Core, CoreDetail, CoreFiles } from './types';
   export let card = '';
   /** The card-level core records (library facts) and what to do with them. */
@@ -160,7 +161,7 @@
       <nav class="crumbs" aria-label="Where you are"><button class="quiet" on:click={() => coresSelection.set({ platform: '', core: '' })}>Cores</button></nav>
       <p class="eyebrow">{node.platform.category ? node.platform.category.toUpperCase() : 'PLATFORM'}</p><h1 id="cores-title">{node.platform.name}</h1>
       <p class="lede">{[node.platform.manufacturer, node.platform.year || ''].filter(Boolean).join(' · ')}{node.platform.manufacturer || node.platform.year ? ' · ' : ''}{plural(node.cores.length, 'core')} on this card</p></div></header>
-    {#if banner}<img class="plat-banner" src={banner} alt="" />{/if}
+    <img class="plat-banner" src={banner || platformFallbackArt({ id: node.platform.id, name: node.platform.name, category: node.platform.category, manufacturer: node.platform.manufacturer })} alt="" />
     <ul class="core-list pv-list" aria-label={`Cores for ${node.platform.name}`}>
       {#each node.cores as c (c.id)}
         <li class:has-en={c.disabled}>

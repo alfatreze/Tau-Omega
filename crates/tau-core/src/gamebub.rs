@@ -267,6 +267,45 @@ fn parse_repo_slug(raw: &str) -> Repository {
     }
 }
 
+fn classify_system(id: &str, name: &str) -> (&'static str, &'static str, u32) {
+    let h = format!("{id} {name}").to_ascii_lowercase();
+    if h.contains("3do") {
+        ("Console", "The 3DO Company", 1993)
+    } else if h.contains("appleiigs") || h.contains("apple iigs") {
+        ("Computer", "Apple", 1986)
+    } else if h.contains("maclc") || h.contains("macintosh") {
+        ("Computer", "Apple", 1990)
+    } else if h.contains("minimig") || h.contains("amiga") {
+        ("Computer", "Commodore", 1985)
+    } else if h.contains("2600") {
+        ("Console", "Atari", 1977)
+    } else if h.contains("lynx") {
+        ("Handheld", "Atari", 1989)
+    } else if h.contains("mcr") || h.contains("midway") {
+        ("Arcade", "Bally Midway", 1981)
+    } else if h.contains("coleco") {
+        ("Console", "Coleco", 1982)
+    } else if h.contains("game gear") || h.ends_with(".gg") || h.contains(".gg ") {
+        ("Handheld", "Sega", 1990)
+    } else if h.contains("n64") || h.contains("mirlo64") || h.contains("nintendo 64") {
+        ("Console", "Nintendo", 1996)
+    } else if h.contains("snes") || h.contains("super nintendo") {
+        ("Console", "Nintendo", 1990)
+    } else if h.contains("psx") || h.contains("playstation") {
+        ("Console", "Sony", 1994)
+    } else if h.contains("pcengine") || h.contains("pc engine") {
+        ("Console", "NEC", 1987)
+    } else if h.contains("gb") || h.contains("handheld") {
+        ("Handheld", "Game Bub", 0)
+    } else if h.contains("arcade") {
+        ("Arcade", "Game Bub", 0)
+    } else if h.contains("computer") || h.contains("c64") || h.contains("msx") {
+        ("Computer", "Game Bub", 0)
+    } else {
+        ("Console", "Game Bub", 0)
+    }
+}
+
 /// Parses `https://cores.gamebub.net/cores.json` (`schema_version: 1`) into Omega's `Catalog` format.
 pub fn parse_catalog(bytes: &[u8]) -> Result<Catalog, TauError> {
     let v: Value =
@@ -282,25 +321,37 @@ pub fn parse_catalog(bytes: &[u8]) -> Result<Catalog, TauError> {
         if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") {
             continue;
         }
+        // Live cores.gamebub.net/cores.json nests release fields under `latest`; fall back to top-level for flat JSON.
+        let latest = item.get("latest").filter(|v| v.is_object()).unwrap_or(item);
+        let pick_str = |k: &str| {
+            let s = str_field(latest, k);
+            if s.is_empty() { str_field(item, k) } else { s }
+        };
+
         let name = str_field(item, "name");
         let author = str_field(item, "author");
         let description = str_field(item, "description");
-        let version = str_field(item, "version");
-        let release_date = str_field(item, "release_date");
+        let version = pick_str("version");
+        let release_date = pick_str("release_date");
         let license = str_field(item, "license");
-        let min_firmware = str_field(item, "min_firmware");
-        let download_url = str_field(item, "download_url");
-        let asset_sha256 = str_field(item, "asset_sha256").to_ascii_lowercase();
-        let asset_size = item.get("asset_size").and_then(Value::as_u64).unwrap_or(0);
-        let zip_layout = str_field(item, "zip_layout");
+        let min_firmware = pick_str("min_firmware");
+        let download_url = pick_str("download_url");
+        let asset_sha256 = pick_str("asset_sha256").to_ascii_lowercase();
+        let asset_size = latest
+            .get("asset_size")
+            .or_else(|| item.get("asset_size"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let zip_layout = pick_str("zip_layout");
         let repo_raw = item
             .get("repo")
             .and_then(Value::as_str)
             .or_else(|| item.get("repo_url").and_then(Value::as_str))
             .unwrap_or_default();
         let repository = parse_repo_slug(repo_raw);
-        let targets: Vec<String> = item
+        let targets: Vec<String> = latest
             .get("targets")
+            .or_else(|| item.get("targets"))
             .and_then(Value::as_array)
             .map(|a| {
                 a.iter()
@@ -320,17 +371,17 @@ pub fn parse_catalog(bytes: &[u8]) -> Result<Catalog, TauError> {
             Vec::new()
         };
 
+        let display_name = if name.is_empty() { id.clone() } else { name };
+        let (category, manufacturer, year) = classify_system(&id, &display_name);
+
         cores.push(CatalogCore {
             id,
             author,
-            name: if name.is_empty() {
-                str_field(item, "id")
-            } else {
-                name
-            },
+            name: display_name,
             repository,
-            category: "Game Bub".into(),
-            manufacturer: "Game Bub".into(),
+            category: category.into(),
+            manufacturer: manufacturer.into(),
+            year,
             version,
             release_date,
             download_url,

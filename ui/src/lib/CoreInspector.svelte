@@ -3,6 +3,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { readCoreIcon, readPlatformImage } from './tau-api';
   import { plural, size } from './coresFormat';
+  import { platformFallbackArt } from './platformArt';
   import RefreshLibrary from './RefreshLibrary.svelte';
   import type { Core, CoreDetail, CoreFiles } from './types';
   export let card: string; export let detail: CoreDetail; export let files: CoreFiles | null = null;
@@ -29,7 +30,7 @@
   $: bytes = files ? files.folders.reduce((n, f) => n + f.total_bytes, 0) : 0;
 </script>
 <aside class="ci" aria-labelledby="ci-title">
-  {#if banner}<img class="ci-banner" src={banner} alt={`${detail.platforms.find((p) => p.has_image)?.name ?? 'Platform'} artwork`} />{/if}
+  <img class="ci-banner" src={banner || platformFallbackArt({ id: detail.platforms[0]?.id ?? detail.id, name: detail.platforms[0]?.name ?? detail.shortname, category: detail.platforms[0]?.category, manufacturer: detail.platforms[0]?.manufacturer })} alt={`${detail.platforms[0]?.name ?? detail.shortname} artwork`} />
   <header>
     <span class="ci-icon" aria-hidden="true">{#if icon}<img src={icon} alt="" width="40" height="40" />{:else}{detail.shortname.slice(0, 2).toUpperCase()}{/if}</span>
     <div class="ci-head"><h2 id="ci-title">{detail.shortname || detail.id}</h2><p>{detail.author || detail.id}</p></div>

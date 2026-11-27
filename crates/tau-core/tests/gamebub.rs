@@ -150,16 +150,21 @@ fn gamebub_catalog_parses_cores_json_and_computes_update_verdicts() {
                 "name": "Nintendo 64 (MIRLO64)",
                 "author": "tortugaveloz, elipsitz",
                 "description": "N64 core",
-                "version": "0.3.0",
-                "release_date": "2026-11-23",
                 "license": "Apache-2.0",
                 "min_firmware": "1.1.0-beta.5",
                 "targets": ["gamebub_rev4"],
                 "repo": "elipsitz/n64-gamebub",
-                "download_url": "https://github.com/elipsitz/n64-gamebub/releases/download/v0.3.0/elipsitz.N64-v0.3.0.zip",
-                "asset_size": 12345,
-                "asset_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                "zip_layout": "<id>"
+                "latest": {
+                    "tag": "v0.3.0",
+                    "version": "0.3.0",
+                    "release_date": "2026-11-23",
+                    "download_url": "https://github.com/elipsitz/n64-gamebub/releases/download/v0.3.0/elipsitz.N64-v0.3.0.zip",
+                    "asset_size": 12345,
+                    "asset_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "zip_layout": "<id>",
+                    "min_firmware": "1.1.0-beta.5",
+                    "targets": ["gamebub_rev4"]
+                }
             }
         ]
     }))
@@ -170,6 +175,12 @@ fn gamebub_catalog_parses_cores_json_and_computes_update_verdicts() {
     let c = &cat.cores[0];
     assert_eq!(c.device, DeviceKind::GameBub);
     assert_eq!(c.source, gamebub::GAMEBUB_SOURCE);
+    assert_eq!(c.category, "Console");
+    assert_eq!(c.manufacturer, "Nintendo");
+    assert_eq!(c.year, 1996);
+    assert_eq!(c.version, "0.3.0");
+    assert_eq!(c.release_date, "2026-11-23");
+    assert!(!c.download_url.is_empty());
     assert_eq!(c.repository.owner, "elipsitz");
     assert_eq!(c.repository.name, "n64-gamebub");
     assert_eq!(c.targets, ["gamebub_rev4"]);
