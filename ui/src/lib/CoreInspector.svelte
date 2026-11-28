@@ -234,7 +234,7 @@
 </script>
 
 <aside class="ci" aria-labelledby="ci-title">
-  <div class="art-wrap">
+  <div class="art-wrap" class:is-pocket-art={!!banner}>
     <img
       class="ci-banner"
       src={banner ||
@@ -511,10 +511,16 @@
     background: #000;
     border-bottom: 1px solid var(--border);
   }
+  .art-wrap.is-pocket-art {
+    background: var(--pocket-art-bg);
+  }
   .ci-banner {
     display: block;
     width: 100%;
     height: auto;
+  }
+  .art-wrap.is-pocket-art .ci-banner {
+    filter: var(--pocket-art-filter);
   }
   .art-edit {
     position: absolute;
@@ -580,6 +586,7 @@
     width: 36px;
     height: 36px;
     image-rendering: pixelated;
+    filter: var(--pocket-art-filter);
   }
   .ci-desc {
     margin: 0;

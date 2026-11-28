@@ -218,6 +218,30 @@ function contrastRatio(rgb1, rgb2) {
   assert.match(await p.locator('#core-details').innerText(), /About this game/i);
   ok('Cores Grid has no double scrollbar and Game Details renders cleanly in Light mode');
 
+  // 9b. Verify Pocket banners invert cleanly in Light mode and stay uninverted in Dark mode
+  await p.locator('nav .nav-group', { hasText: 'Cores' }).click();
+  await p.waitForTimeout(300);
+  const lightBannerStyle = await p.locator('.ov-art.is-pocket-art').first().evaluate((el) => {
+    const img = el.querySelector('img');
+    return { bg: getComputedStyle(el).backgroundColor, filter: img ? getComputedStyle(img).filter : '' };
+  });
+  assert.equal(lightBannerStyle.bg, 'rgb(255, 255, 255)');
+  assert.match(lightBannerStyle.filter, /invert\(1\)/);
+
+  await p.locator('nav button', { hasText: /^Settings$/ }).click();
+  await p.getByRole('tab', { name: 'Appearance' }).click();
+  await appCard.getByRole('radio', { name: /^Dark\b/ }).check();
+  await p.waitForTimeout(150);
+  await p.locator('nav .nav-group', { hasText: 'Cores' }).click();
+  await p.waitForTimeout(300);
+  const darkBannerStyle = await p.locator('.ov-art.is-pocket-art').first().evaluate((el) => {
+    const img = el.querySelector('img');
+    return { bg: getComputedStyle(el).backgroundColor, filter: img ? getComputedStyle(img).filter : '' };
+  });
+  assert.equal(darkBannerStyle.bg, 'rgb(0, 0, 0)');
+  assert.equal(darkBannerStyle.filter, 'none');
+  ok('Pocket platform banners invert onto white in Light mode and stay uninverted on black in Dark mode');
+
   // 10. Switch back to System
   await p.locator('nav button', { hasText: /^Settings$/ }).click();
   await p.getByRole('tab', { name: 'Appearance' }).click();

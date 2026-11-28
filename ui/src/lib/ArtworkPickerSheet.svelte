@@ -331,7 +331,7 @@
               class:selected={selectedAlt?.pack_id === alt.pack_id}
               on:click={() => choosePackAlt(alt)}
             >
-              <span class="art-frame">
+              <span class="art-frame" class:is-pocket-art={device === 'analogue_pocket'}>
                 <img src={alt.data_url} alt={`${alt.pack_name} banner`} />
               </span>
               <span class="art-meta">
@@ -376,7 +376,7 @@
           </div>
         {:else if localPreviewUrl}
           <div class="art-preview-box">
-            <span class="art-frame large">
+            <span class="art-frame large" class:is-pocket-art={device === 'analogue_pocket'}>
               <img src={localPreviewUrl} alt="Local artwork preview" />
             </span>
             <p>
@@ -389,7 +389,7 @@
           </div>
         {:else if currentUrl}
           <div class="art-preview-box muted">
-            <span class="art-frame large">
+            <span class="art-frame large" class:is-pocket-art={device === 'analogue_pocket'}>
               <img src={currentUrl} alt="Current artwork" />
             </span>
             <p>Current artwork. Choose a PNG or JPEG above to replace it.</p>
@@ -420,7 +420,7 @@
               : 'No banner exists yet — this adds a new image file.'}
           </p>
         </div>
-        <span class="art-frame thumb">
+        <span class="art-frame thumb" class:is-pocket-art={device === 'analogue_pocket'}>
           <img src={plan.preview_data_url} alt="Planned banner preview" />
         </span>
       </div>
@@ -594,12 +594,18 @@
     border-radius: 8px;
     overflow: hidden;
   }
+  .art-frame.is-pocket-art {
+    background: var(--pocket-art-bg);
+  }
   .art-frame img {
     display: block;
     width: 100%;
     height: auto;
     aspect-ratio: 521 / 165;
     object-fit: contain;
+  }
+  .art-frame.is-pocket-art img {
+    filter: var(--pocket-art-filter);
   }
   .art-frame.large img {
     max-height: 180px;

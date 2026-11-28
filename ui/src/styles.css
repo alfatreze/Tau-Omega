@@ -88,6 +88,8 @@
   --shadow-dark: rgba(0, 0, 0, 0.5);
   --scroll-thumb-light: rgba(28, 100, 56, 0.45);
   --scroll-thumb-dark: rgba(193, 240, 173, 0.5);
+  --pocket-art-bg-light: #ffffff;
+  --pocket-art-bg-dark: #000000;
 
   /* Light defaults (fallback for engines without light-dark()) */
   --bg-app: var(--bg-app-light);
@@ -127,6 +129,8 @@
   --info-text: var(--info-text-light);
   --shadow: var(--shadow-light);
   --scroll-thumb: var(--scroll-thumb-light);
+  --pocket-art-bg: var(--pocket-art-bg-light);
+  --pocket-art-filter: invert(1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -168,6 +172,8 @@
     --info-text: var(--info-text-dark);
     --shadow: var(--shadow-dark);
     --scroll-thumb: var(--scroll-thumb-dark);
+    --pocket-art-bg: var(--pocket-art-bg-dark);
+    --pocket-art-filter: none;
   }
 }
 
@@ -210,6 +216,8 @@
   --info-text: var(--info-text-dark);
   --shadow: var(--shadow-dark);
   --scroll-thumb: var(--scroll-thumb-dark);
+  --pocket-art-bg: var(--pocket-art-bg-dark);
+  --pocket-art-filter: none;
 }
 
 :root:has(> head > meta[name="color-scheme"][content="light"]) {
@@ -251,6 +259,8 @@
   --info-text: var(--info-text-light);
   --shadow: var(--shadow-light);
   --scroll-thumb: var(--scroll-thumb-light);
+  --pocket-art-bg: var(--pocket-art-bg-light);
+  --pocket-art-filter: invert(1);
 }
 
 @supports (color: light-dark(white, black)) {
@@ -292,6 +302,7 @@
     --info-text: light-dark(var(--info-text-light), var(--info-text-dark));
     --shadow: light-dark(var(--shadow-light), var(--shadow-dark));
     --scroll-thumb: light-dark(var(--scroll-thumb-light), var(--scroll-thumb-dark));
+    --pocket-art-bg: light-dark(var(--pocket-art-bg-light), var(--pocket-art-bg-dark));
   }
 }
 

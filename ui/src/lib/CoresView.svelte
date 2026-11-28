@@ -424,7 +424,7 @@
         {#each m.platforms as n (n.platform.id)}
           {@const st = cardMeta(n)}
           <li use:observeBanner={n.platform.id}><button class="ov-card" class:has-disabled={st.disabled > 0} class:all-disabled={st.allDisabled} on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}${st.disabled ? `, ${st.disabled} disabled` : ''}. Open`}>
-            <span class="ov-art" aria-hidden="true">
+            <span class="ov-art" class:is-pocket-art={!!ovBanners[n.platform.id]} aria-hidden="true">
               <img src={ovBanners[n.platform.id] || platformFallbackArt({ id: n.platform.id, name: n.platform.name, category: grp.cat, manufacturer: n.platform.manufacturer })} alt="" />
               {#if st.disabled > 0}
                 <span class="ov-badge" class:ov-badge-all={st.allDisabled}>
@@ -447,7 +447,7 @@
       <p class="eyebrow">{node.platform.category ? node.platform.category.toUpperCase() : 'PLATFORM'}</p><h1 id="cores-title">{node.platform.name}</h1>
       <p class="lede">{[node.platform.manufacturer, node.platform.year || ''].filter(Boolean).join(' · ')}{node.platform.manufacturer || node.platform.year ? ' · ' : ''}{plural(node.cores.length, 'core')} on this card</p></div></header>
     <div class="plat-art-wrap">
-      <img class="plat-banner" src={banner || platformFallbackArt({ id: node.platform.id, name: node.platform.name, category: node.platform.category, manufacturer: node.platform.manufacturer })} alt="" />
+      <img class="plat-banner" class:is-pocket-art={!!banner} src={banner || platformFallbackArt({ id: node.platform.id, name: node.platform.name, category: node.platform.category, manufacturer: node.platform.manufacturer })} alt="" />
       <button type="button" class="plat-art-edit" on:click={() => (showPlatArtPicker = true)}>Change image</button>
     </div>
     {#if platExts.length}
@@ -550,7 +550,7 @@
                 {#each m.platforms as n (n.platform.id)}
                   {@const st = cardMeta(n)}
                   <li use:observeBanner={n.platform.id}><button class="ov-card" class:has-disabled={st.disabled > 0} class:all-disabled={st.allDisabled} on:click={() => pickPlatform(n.platform.id)} aria-label={`${n.platform.name}, ${plural(n.cores.length, 'core')}${st.disabled ? `, ${st.disabled} disabled` : ''}. Open`}>
-                    <span class="ov-art" aria-hidden="true">
+                    <span class="ov-art" class:is-pocket-art={!!ovBanners[n.platform.id]} aria-hidden="true">
                       <img src={ovBanners[n.platform.id] || platformFallbackArt({ id: n.platform.id, name: n.platform.name, category: g.name, manufacturer: n.platform.manufacturer })} alt="" />
                       {#if st.disabled > 0}
                         <span class="ov-badge" class:ov-badge-all={st.allDisabled}>
@@ -656,6 +656,7 @@
   .tab-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warn-text);margin-left:7px;vertical-align:middle}
   .plat-art-wrap{position:relative;width:min(521px,100%);margin:0 0 18px}
   .plat-banner{display:block;width:100%;border-radius:10px;background:#000}
+  .plat-banner.is-pocket-art{background:var(--pocket-art-bg);filter:var(--pocket-art-filter)}
   .plat-art-edit{position:absolute;right:10px;bottom:10px;padding:5px 11px;font-size:12px;background:color-mix(in srgb,var(--bg-surface) 92%,transparent);color:var(--text-strong);border:1px solid var(--border-strong);border-radius:8px;opacity:0;transition:opacity .15s ease}
   .plat-art-wrap:hover .plat-art-edit,.plat-art-wrap:focus-within .plat-art-edit{opacity:1}
   .plat-art-edit:hover{border-color:var(--accent);color:var(--accent)}
@@ -681,7 +682,9 @@
   .ov-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(236px,100%),1fr));gap:14px}
   .ov-card{width:100%;display:flex;flex-direction:column;padding:0;overflow:hidden;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:12px;color:inherit;text-align:left;transition:border-color .14s ease}.ov-card:hover{border-color:var(--border-strong)}.ov-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .ov-art{position:relative;display:block;width:100%;aspect-ratio:521/165;background:#000;overflow:hidden;border-bottom:1px solid var(--border-subtle)}
+  .ov-art.is-pocket-art{background:var(--pocket-art-bg)}
   .ov-art img{display:block;width:100%;height:100%;object-fit:cover;transition:opacity .15s ease,filter .15s ease}
+  .ov-art.is-pocket-art img{filter:var(--pocket-art-filter)}
   .ov-body{display:grid;gap:4px;padding:12px 14px 13px}
   .ov-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
   .ov-title-row strong{font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -690,7 +693,8 @@
   .ov-badge{position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700;line-height:1.2;background:color-mix(in srgb,var(--warn-bg) 94%,#000);color:var(--warn-text);border:1px solid var(--warn-border);box-shadow:0 2px 6px rgba(0,0,0,.35)}
   .ov-card.has-disabled{border-color:color-mix(in srgb,var(--warn-border) 75%,var(--border))}
   .ov-card.all-disabled{border-style:dashed;border-color:var(--warn-border);background:color-mix(in srgb,var(--bg-card) 88%,var(--warn-bg))}
-  .ov-card.all-disabled .ov-art img{opacity:.45;filter:grayscale(.8)}
+  .ov-card.all-disabled .ov-art.is-pocket-art img{opacity:.42;filter:var(--pocket-art-filter) grayscale(.8)}
+  .ov-card.all-disabled .ov-art:not(.is-pocket-art) img{opacity:.45;filter:grayscale(.8)}
   .ov-card.all-disabled .ov-title-row strong{color:var(--text-secondary)}
   .ov-dis-txt{color:var(--warn-text);font-weight:600}
   @media(max-width:1100px){.cores.has-core{overflow:visible}.cores-grid{grid-template-columns:minmax(0,1fr)}.cores-scroll,.cores-side{overflow:visible}}

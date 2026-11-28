@@ -176,7 +176,7 @@
   .ma-check{display:block;font-size:12.5px;color:var(--text);margin:10px 0}.ma-check small{color:var(--text-muted);font-size:11.5px}.ma-trust{border:1px solid var(--warn-border);background:var(--warn-bg);border-radius:10px;padding:10px 12px}
   .ma-actions{display:flex;justify-content:flex-end;gap:8px;margin:14px 0 4px}.ma-safe{font-size:11.5px;color:var(--text-muted);line-height:1.5;margin:8px 0}
   .ma-err{color:var(--danger-text);font-size:12.5px}.ma-row{display:grid;grid-template-columns:90px 1fr;gap:10px;align-items:center;font-size:12.5px;margin:8px 0}.ma-row select{font:inherit;color:var(--text);background:var(--bg-input);border:1px solid var(--border-strong);border-radius:8px;padding:8px 10px}
-  .ma-banner{display:block;width:100%;height:auto;max-height:190px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#000;margin:0 0 12px}
+  .ma-banner{display:block;width:100%;height:auto;max-height:190px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:var(--pocket-art-bg);filter:var(--pocket-art-filter);margin:0 0 12px}
   .ma-id{display:flex;gap:12px;align-items:center}.ma-id strong{font-size:16px}.ma-id small{display:block;color:var(--text-muted);font-size:12px;margin-top:2px}.ma-where{display:flex!important;gap:6px;align-items:center}
   .ma-icon{flex:none;width:48px;height:48px;display:grid;place-items:center;background:var(--bg-elevated);border-radius:11px;color:var(--accent);font-weight:700}.ma-icon img{image-rendering:pixelated}
   .ma-desc{font-size:13px;color:var(--text-secondary);line-height:1.55;margin:10px 0}

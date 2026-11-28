@@ -795,7 +795,7 @@
   }
   .pb-frame {
     position: relative;
-    background: #000;
+    background: var(--pocket-art-bg);
     border: 1px solid var(--bg-hover);
     border-radius: 7px;
     overflow: hidden;
@@ -806,6 +806,7 @@
     height: auto;
     aspect-ratio: 521 / 165;
     object-fit: contain;
+    filter: var(--pocket-art-filter);
   }
   .pb-badge-card {
     position: absolute;

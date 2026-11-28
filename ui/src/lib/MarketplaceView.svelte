@@ -297,7 +297,7 @@
       {#each shown as item (item.id)}
         <li class="mk-card" use:visible={item.id}>
           <button class="mk-open" on:keydown={cardKey} aria-label={`${item.name}, ${item.category}, version ${item.version || 'unknown'}. Show details`} on:click={() => open(item)}>
-            <span class="mk-art" aria-hidden="true">
+            <span class="mk-art" class:is-pocket-art={!!art[`Banner:${item.id}`] && $activeSystem !== 'game_bub'} aria-hidden="true">
               <img src={art[`Banner:${item.id}`] || platformFallbackArt(item)} alt="" class:mk-art-gen={!art[`Banner:${item.id}`]} />
             </span>
             <span class="mk-body">
@@ -327,7 +327,7 @@
   <div class="mk-backdrop" role="presentation" on:click={close}></div>
   <div class="mk-sheet" role="dialog" aria-modal="true" aria-labelledby="mk-title" use:modal>
     <div class="mk-x-wrap"><button class="mk-x" data-autofocus on:click={close} aria-label="Close details"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" /></svg></button></div>
-    <img class="mk-banner" src={art[`Banner:${selected.id}`] || platformFallbackArt(selected)} alt={`${selected.name} platform artwork`} />
+    <img class="mk-banner" class:is-pocket-art={!!art[`Banner:${selected.id}`] && $activeSystem !== 'game_bub'} src={art[`Banner:${selected.id}`] || platformFallbackArt(selected)} alt={`${selected.name} platform artwork`} />
     {#if gallery.length}
       <ul class="mk-strip" aria-label={`Pictures of ${selected.name} from GitHub`}>
         {#each gallery as g, i}<li><button class="mk-thumb" aria-label={`View picture ${i + 1} of ${gallery.length}${g.alt ? `: ${g.alt}` : ''}`} on:click={() => (lightbox = i)}><img src={g.src} alt="" loading="lazy" /></button></li>{/each}
@@ -533,7 +533,9 @@
   .mk-open{display:flex;flex-direction:column;flex:1;background:transparent;color:inherit;text-align:left;padding:0;border-radius:0}
   .mk-open:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
   .mk-art{display:block;width:100%;aspect-ratio:521/165;background:#000;overflow:hidden}
+  .mk-art.is-pocket-art{background:var(--pocket-art-bg)}
   .mk-art img{display:block;width:100%;height:100%;object-fit:cover}
+  .mk-art.is-pocket-art img{filter:var(--pocket-art-filter)}
   .mk-art img.mk-art-gen{object-fit:cover}
   .mk-loading-row{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);margin:4px 0}
   .mk-loading-block{display:grid;gap:7px;margin:8px 0 12px}
@@ -554,6 +556,7 @@
   .mk-ver{margin-left:auto;font-size:12px;color:var(--text-secondary);display:flex;flex-direction:column;align-items:flex-end;line-height:1.3}.mk-ver small{font-size:11px;color:var(--text-muted)}
   .mk-icon{display:block;width:28px;height:28px;border-radius:7px;image-rendering:pixelated}
   .mk-banner{display:block;width:100%;height:auto;border-radius:10px;margin:0 0 16px;background:#000}
+  .mk-banner.is-pocket-art{background:var(--pocket-art-bg);filter:var(--pocket-art-filter)}
   .mk-reqs{display:grid;gap:8px;margin:6px 0 4px}.mk-reqs>div{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:baseline}.mk-reqs dt{font-size:12px;color:var(--text-muted)}.mk-reqs dd{margin:0;font-size:12.5px;color:var(--text);overflow-wrap:anywhere;line-height:1.5}
   .mk-req-key{border:1px solid var(--warn-border);background:var(--warn-bg);border-radius:9px;padding:9px 11px}.mk-req-key dt{color:var(--warn-text);font-weight:700}
   .mk-history{margin:10px 0;font-size:12px;color:var(--text-secondary)}.mk-history summary{cursor:pointer}.mk-history ul{margin:8px 0;padding:0;list-style:none}.mk-history li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0}
