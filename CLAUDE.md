@@ -11,6 +11,7 @@ Read `ROADMAP.md` (the one ordered list), then the top "LATEST" block of `docs/S
 - Licence boundary (D-010): our code may flow into AGPL hosts (Pocket Sync), theirs is never copied back.
 
 ## Rules
+- **Git commit attribution:** Every git commit must be authored and committed solely as **Abel Santos `<alfatreze@gmail.com>`** (matching the local `git config`). Never commit under an AI agent identity, and never append `Co-Authored-By:` or AI attribution trailers to commit messages or PR descriptions.
 - **Push only when told "push".** Commit locally, then ask.
 - **Card writes:** two test cards, **`Pock`** (the owner's main Pocket card: it holds real cores and music, so snapshot it first) and **`CARDWRITE`** (a scratch card for memory-write and other occasional tests, and for trying several cards in tandem). Never any other volume. Only after a shown plan and a clear yes; dry run first, backups outside the card. Never modify a source music file. Full list: `SAFETY_RULES.md`.
 - **Ask before** a new dependency or any download.
