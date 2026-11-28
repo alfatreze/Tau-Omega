@@ -23,6 +23,7 @@
   import Icon from './Icon.svelte';
   import { categoryIcon } from './iconFor';
   import { coreUpdateCount } from './marketStore';
+  import { isMusicCoreAllowed, musicFeatures } from './musicFlagsStore';
   import { coresGroups, coresSelection, coresTab, coresTreeStore, findCore, inspectorOpen, refreshCores } from './coresStore';
   import { plural } from './coresFormat';
   import { platformFallbackArt } from './platformArt';
@@ -390,11 +391,12 @@
                 }}
               />
             {:else}
+              {@const matchedLib = cores.find((c) => c.id === detail?.id) ?? null}
               <CoreInspector
                 {card}
                 {detail}
                 {files}
-                lib={cores.find((c) => c.id === detail?.id) ?? null}
+                lib={matchedLib && isMusicCoreAllowed(matchedLib, $musicFeatures) ? matchedLib : null}
                 {openLibrary}
                 libraryChanged={reloadCard}
                 onCoreRemoved={() => {

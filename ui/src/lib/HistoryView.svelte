@@ -14,6 +14,7 @@
   export let refresh: () => void;
   export let openSettings: () => void;
   export let startSync: () => void;
+  export let canSync = true;
 
   const MB = 1e6, GB = 1e9;
   const size = (n: number) => (n >= GB ? `${(n / GB).toFixed(1)} GB` : n >= MB ? `${Math.round(n / MB)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
@@ -113,8 +114,10 @@
               <b>{st === 'cancelled' ? 'You stopped this sync.' : st === 'interrupted' ? 'This sync was interrupted (the app closed or the card was removed).' : 'What happened'}</b>
               {#if st === 'failed' && current.error}<p>{explainError({ code: current.error_code ?? 0, message: current.error })}</p>{/if}
               <p class="hist-safe">{reassure(current)}</p>
-              <p>To finish the job, open Library and press Start sync again; already-copied files are skipped.</p>
-              <button class="primary" on:click={startSync}>Go to Library</button>
+              {#if canSync}
+                <p>To finish the job, open Library and press Start sync again; already-copied files are skipped.</p>
+                <button class="primary" on:click={startSync}>Go to Library</button>
+              {/if}
             </div>
           {/if}
 
@@ -148,7 +151,7 @@
       {/if}
     </div>
   {:else if !loading}
-    <section class="empty"><div class="empty-art">◷</div><h2>No syncs yet</h2><p>When you sync the Pocket, a record of what changed and whether it finished will appear here.</p><button class="primary" on:click={startSync}>Go to Library</button></section>
+    <section class="empty"><div class="empty-art">◷</div><h2>No syncs yet</h2><p>When you sync the Pocket, a record of what changed and whether it finished will appear here.</p>{#if canSync}<button class="primary" on:click={startSync}>Go to Library</button>{/if}</section>
   {/if}
 </section>
 <style>

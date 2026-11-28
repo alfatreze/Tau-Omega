@@ -49,6 +49,7 @@
   import { coresSelection, coresTab, coresTreeStore, findCore, refreshCores } from './lib/coresStore';
   import { cardDevice, loadSystems, syncSystemForCard } from './lib/systemStore';
   import { autoCheckUpdates } from './lib/updatesStore';
+  import { isMusicCoreAllowed, musicFeatures, syncDetectedMusicCores } from './lib/musicFlagsStore';
   import { get } from 'svelte/store';
   let page: 'cards' | 'workbench' | 'compare' | 'settings' | 'playlists' | 'problems' | 'backup' | 'package' | 'meters' | 'appearance' | 'halcyon' | 'diagnostics' | 'marketplace' | 'cores' | 'builds' | 'results' | 'check' | 'builder' | 'feedback' | 'help' = 'cards'; let cores: Core[] = []; let path = ''; let problemsPath = ''; let problems: Problem[] | null = null; let problemsNotice = 'Choose a media root to inspect it for problems.'; let problemsLoading = false; let playlistPath = ''; let playlistResult: MediaScan | null = null; let playlistNotice = 'Choose a media root to inspect playlists.'; let playlistOutput = ''; let selectedPlaylist = ''; let settingsPath = ''; let settings: Setting[] = []; let settingsNotice = 'Choose a persisted settings file to inspect it.';
   let backupSourcePath = ''; let backupDestPath = ''; let backupPlanResult: BackupPlan | null = null; let backupNotice = ''; let backupCapacity: CapacityCheck | null = null;
@@ -250,6 +251,7 @@
       if (dev?.device === 'game_bub') {
         const gb = await gamebubInspectCard(path);
         cores = [];
+        syncDetectedMusicCores(cores);
         activeCore = null;
         cardMounted = true;
         notice = `Game Bub card opened (${gb.cores.length} core${gb.cores.length === 1 ? '' : 's'} found). This is a read-only inspection.`;
@@ -257,13 +259,14 @@
         return;
       }
       cores = await inspectCard(path);
+      syncDetectedMusicCores(cores);
       notice = `${cores.length} core${cores.length === 1 ? '' : 's'} found. This is a read-only inspection.`;
       cardMounted = true;
       // Keep the same core selected across a refresh of the same card;
       // otherwise the reactive default-pick below chooses a fresh one.
       activeCore = cores.find((core) => core.id === previousActiveId) ?? null;
       recordRecentCard(path).then(() => refreshKnownCards()).catch(() => { /* remembering a card is best-effort, not a reason to fail the open */ });
-    } catch (error) { notice = `Could not inspect this folder: ${errorMessage(error)}`; cores = []; activeCore = null; }
+    } catch (error) { notice = `Could not inspect this folder: ${errorMessage(error)}`; cores = []; syncDetectedMusicCores(cores); activeCore = null; }
   }
   const cardName = (cardPath: string) => cardPath.split('/').filter(Boolean).pop() ?? cardPath;
   let mountedCards: string[] = []; let recentCards: string[] = [];
@@ -296,7 +299,7 @@
   };
   const byTarget = (a: Core, b: Core) =>
     audioRank(a) - audioRank(b) || corePref(a) - corePref(b) || (a.shortname || a.id).localeCompare(b.shortname || b.id);
-  $: audioCoresAll = cores.filter((c) => audioRank(c) < 3).sort(byTarget);
+  $: audioCoresAll = cores.filter((c) => audioRank(c) < 3 && isMusicCoreAllowed(c, $musicFeatures)).sort(byTarget);
   $: audioCores = (() => {
     const seen = new Set<string>();
     const unique: Core[] = [];
@@ -309,7 +312,7 @@
     }
     return unique;
   })();
-  $: otherTargets = cores.filter((c) => audioRank(c) === 3).sort(byTarget);
+  $: otherTargets = $musicFeatures.music ? cores.filter((c) => audioRank(c) === 3).sort(byTarget) : [];
   const formatsOf = (c: Core) => (c.library_capable ? 'library' : c.playlist ? 'playlist' : c.audio_formats.join(' + ').toUpperCase());
 
   // Real per-core artwork (Cores/<id>/icon.bin, decoded server-side). `null`
@@ -342,9 +345,20 @@
   // known, but never overrides a choice the user or a card-refresh already
   // made (see `openFolder`'s own preserve-by-id logic).
   let activeCore: Core | null = null;
+  $: if (activeCore && !isMusicCoreAllowed(activeCore, $musicFeatures)) activeCore = audioCores[0] ?? null;
   $: if (!activeCore && audioCores.length) activeCore = audioCores[0];
   let cardTab: 'overview' | 'history' = 'overview';
   let settingsTab: 'general' | 'appearance' | 'sync' | 'artwork' | 'diagnostics' = 'general';
+  $: if (
+    (page === 'workbench' && !$musicFeatures.music) ||
+    (page === 'playlists' && !$musicFeatures.playlists) ||
+    (page === 'meters' && !$musicFeatures.meters) ||
+    (page === 'appearance' && !$musicFeatures.appearance) ||
+    (page === 'halcyon' && !$musicFeatures.halcyon)
+  ) {
+    page = 'cards';
+  }
+  $: if (settingsTab === 'sync' && !$musicFeatures.music) settingsTab = 'general';
   let showSwitcher = false;
   async function switchToKnownCard(card: string) { showSwitcher = false; await openKnownCard(card); }
 
@@ -392,11 +406,11 @@
     <button class:active={page === 'cards'} on:click={() => page = 'cards'}>Card</button>
     <NavTree card={path} active={page === 'cores'} show={() => (page = 'cores')} />
     <button class:active={page === 'marketplace'} on:click={() => page = 'marketplace'}>Marketplace{#if $coreUpdateCount > 0}<span class="nav-count" aria-label={`${$coreUpdateCount} core updates`}>{$coreUpdateCount}</span>{/if}</button>
-    <button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Music</button>
-    <button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button>
-    <button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>
-    <button class:active={page === 'appearance'} on:click={() => page = 'appearance'}>Appearance</button>
-    <button class:active={page === 'halcyon'} on:click={() => page = 'halcyon'}>Halcyon EQ</button>
+    {#if $musicFeatures.music}<button class:active={page === 'workbench'} on:click={() => page = 'workbench'}>Music</button>{/if}
+    {#if $musicFeatures.playlists}<button class:active={page === 'playlists'} on:click={() => page = 'playlists'}>Playlists</button>{/if}
+    {#if $musicFeatures.meters}<button class:active={page === 'meters'} on:click={() => page = 'meters'}>Meter Lab</button>{/if}
+    {#if $musicFeatures.appearance}<button class:active={page === 'appearance'} on:click={() => page = 'appearance'}>Appearance</button>{/if}
+    {#if $musicFeatures.halcyon}<button class:active={page === 'halcyon'} on:click={() => page = 'halcyon'}>Halcyon EQ</button>{/if}
     {#if $developerTools}
       <button class="nav-group" class:has-active={devItems.includes(page)} aria-expanded={devOpen || devItems.includes(page)} aria-controls="dev-tools" on:click={toggleDev}><span>Developer tools</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class:open={devOpen || devItems.includes(page)}><path d="m6 9 6 6 6-6"/></svg></button>
       {#if devOpen || devItems.includes(page)}
@@ -437,7 +451,7 @@
   <OmegaUpdate />
   {#if page === 'cards'}
     <CardsView {cardMounted} {ejectedSafely} {path} {knownCards} {notice} {cores} {mountedCards} {cardName} {chooseFolder} {openFolder} {openKnownCard} {openCoreLibrary} {openCore} {browseCores} {openUpdates} bind:tab={cardTab}>
-      <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} refresh={loadHistory} openSettings={() => { moreOpen = true; settingsTab = 'sync'; page = 'settings'; }} startSync={() => page = 'workbench'} />
+      <HistoryView entries={historyEntries} loading={historyLoading} notice={historyNotice} select={historySelect} canSync={$musicFeatures.music} refresh={loadHistory} openSettings={() => { moreOpen = true; settingsTab = $musicFeatures.music ? 'sync' : 'general'; page = 'settings'; }} startSync={() => { if ($musicFeatures.music) page = 'workbench'; }} />
     </CardsView>
   {:else if page === 'workbench'}
     <Workbench cores={cores.map((c) => ({ id: c.id, shortname: c.shortname, platform: c.platform, media_platform: c.media_platform, library_capable: c.library_capable }))} cardPath={path} cardLabel={path ? cardName(path) : 'No card open'} coreLabel={activeCore ? (activeCore.shortname || activeCore.id) : ''} targets={audioCores.map((c) => ({ id: c.id, label: c.shortname || c.id, note: formatsOf(c) }))} otherTargets={otherTargets.map((c) => ({ id: c.id, label: c.shortname || c.id, note: '' }))} targetId={activeCore?.id ?? ''} chooseTarget={(id) => { const c = cores.find((x) => x.id === id); if (c) activeCore = c; }} mediaRoot={mediaRoot} playlist={activeCore?.playlist ?? null} revision={cardRevision} refreshedAt={refreshedAt} refresh={forceRefresh} openSettings={() => { moreOpen = true; settingsTab = 'sync'; page = 'settings'; }} connected={cardMounted} ejectedSafely={!!ejectedSafely && ejectedSafely === path} openHistory={openHistory} />
@@ -480,7 +494,7 @@
   {:else if page === 'appearance'}
     <AppearanceView {mediaRoot} cardLabel={path ? cardName(path) : ''} />
   {:else if page === 'settings'}
-    <SettingsView bind:tab={settingsTab} bind:settingsPath {settings} {layoutView} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading}>
+    <SettingsView bind:tab={settingsTab} showMusicTab={$musicFeatures.music} bind:settingsPath {settings} {layoutView} {checkSummary} notice={settingsNotice} choose={() => chooseFolder('settings')} read={loadSettings} done={() => page = 'cards'} label={settingLabel} value={settingValue} bind:qrPath chooseQr={() => chooseFolder('qrScreenshot')} decodeQr={decodeQrScreenshot} {qrReport} {qrNotFound} {qrNotice} bind:screenshotCardPath chooseScreenshotCard={() => chooseFolder('screenshotCard')} {browseScreenshots} {screenshots} {screenshotsNotice} {selectScreenshot} {selectedScreenshotPath} {screenshotPreviewUrl} {screenshotPreviewLoading}>
       <div slot="general"><GeneralSettings card={path} /></div>
       <div slot="appearance"><ThemeSettings /></div>
       <div slot="sync"><LibrarySettings openHistory={() => openHistory()} /><SyncSettings card={path} {mediaRoot} /></div>

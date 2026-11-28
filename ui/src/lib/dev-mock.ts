@@ -293,7 +293,13 @@ const handlers: Record<string, (args: any) => unknown> = {
   get_recent_cards: () => [CARD],
   list_mounted_cards: () => (mounted ? [CARD] : []),
   get_manual_players: () => [],
-  inspect_card: () => cores,
+  inspect_card: () => {
+    const mode = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('card_cores') : null;
+    if (mode === 'tau') return cores.filter((c) => !c.id.toLowerCase().startsWith('harpmudd.'));
+    if (mode === 'harpmudd') return cores.filter((c) => !c.id.toLowerCase().startsWith('tau.'));
+    if (mode === 'none') return cores.filter((c) => !c.id.toLowerCase().startsWith('tau.') && !c.id.toLowerCase().startsWith('harpmudd.'));
+    return cores;
+  },
   read_persisted_settings: () => [],
   describe_persisted_layout: () => ({ layout: 'v2', migrated_words: [], values: [{ group: 'Audio', label: 'Volume', value: 73, text: '73 of 100' }, { group: 'Audio', label: 'ReplayGain', value: 1, text: 'track' }, { group: 'Appearance', label: 'Colour index', value: 7, text: '7' }, { group: 'Appearance', label: 'Mode', value: 0, text: 'Dark' }, { group: 'Meters', label: 'Selected meter', value: 6, text: '6' }] }),
   read_check_summary: () => null,

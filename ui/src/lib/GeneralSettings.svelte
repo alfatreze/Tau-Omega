@@ -11,6 +11,7 @@
   } from './tau-api';
   import type { MarkerStatus, Prefs, PrefsView } from './types';
   import { confirmRealCard, developerTools } from './devStore';
+  import { musicFeatures, musicFlagsConfig, setHarpMuddMode, setTauAlphaMode, type MusicCoreMode } from './musicFlagsStore';
   import { showToast } from './toastStore';
   import ToggleSwitch from './ToggleSwitch.svelte';
 
@@ -152,6 +153,63 @@
         >
           Reset notices
         </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="gs-card" aria-labelledby="gs-music-title">
+    <h2 id="gs-music-title">Music core support</h2>
+    <div class="ls-row gs-first">
+      <div>
+        <b>Tau Alpha</b>
+        <small>
+          Enables Music, Playlists, Meter Lab, Appearance, and Halcyon EQ.
+          {$musicFeatures.detectedTauAlpha ? 'Detected on this card.' : 'Not detected on this card.'}
+        </small>
+      </div>
+      <div>
+        <label class="ls-sel">
+          <span class="sr">Tau Alpha support</span>
+          <select
+            aria-label="Tau Alpha support"
+            value={$musicFlagsConfig.tauAlpha}
+            on:change={(e) => {
+              setTauAlphaMode(e.currentTarget.value as MusicCoreMode);
+              showToast('Saved.');
+            }}
+          >
+            <option value="auto">Auto (detect from card)</option>
+            <option value="on">Always on</option>
+            <option value="off">Always off</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="ls-row">
+      <div>
+        <b>HarpMudd (Mp3Player)</b>
+        <small>
+          Enables Music sync and playlist export for HarpMudd.Mp3Player.
+          {$musicFeatures.detectedHarpMudd ? 'Detected on this card.' : 'Not detected on this card.'}
+        </small>
+      </div>
+      <div>
+        <label class="ls-sel">
+          <span class="sr">HarpMudd support</span>
+          <select
+            aria-label="HarpMudd support"
+            value={$musicFlagsConfig.harpmudd}
+            on:change={(e) => {
+              setHarpMuddMode(e.currentTarget.value as MusicCoreMode);
+              showToast('Saved.');
+            }}
+          >
+            <option value="auto">Auto (detect from card)</option>
+            <option value="on">Always on</option>
+            <option value="off">Always off</option>
+          </select>
+        </label>
       </div>
     </div>
   </section>

@@ -4,6 +4,7 @@
 
   type SettingsTab = 'general' | 'appearance' | 'sync' | 'artwork' | 'diagnostics';
   export let tab: SettingsTab = 'general';
+  export let showMusicTab = true;
 
   export let settingsPath = '';
   export let settings: Setting[] = [];
@@ -42,21 +43,24 @@
     ['diagnostics', 'Diagnostics'],
   ];
 
+  $: visibleTabs = showMusicTab ? TABS : TABS.filter(([id]) => id !== 'sync');
+  $: if (!showMusicTab && tab === 'sync') tab = 'general';
+
   function tabKey(e: KeyboardEvent) {
-    const i = TABS.findIndex(([t]) => t === tab);
+    const i = visibleTabs.findIndex(([t]) => t === tab);
     const next =
       e.key === 'ArrowRight'
-        ? (i + 1) % TABS.length
+        ? (i + 1) % visibleTabs.length
         : e.key === 'ArrowLeft'
-          ? (i + TABS.length - 1) % TABS.length
+          ? (i + visibleTabs.length - 1) % visibleTabs.length
           : e.key === 'Home'
             ? 0
             : e.key === 'End'
-              ? TABS.length - 1
+              ? visibleTabs.length - 1
               : -1;
     if (next < 0) return;
     e.preventDefault();
-    tab = TABS[next][0];
+    tab = visibleTabs[next][0];
     requestAnimationFrame(() => document.getElementById(`settings-tab-${tab}`)?.focus());
   }
 
@@ -76,7 +80,7 @@
   </header>
 
   <div class="settings-tabs" role="tablist" aria-label="Settings categories" tabindex="-1" on:keydown={tabKey}>
-    {#each TABS as [id, text] (id)}
+    {#each visibleTabs as [id, text] (id)}
       <button
         id={`settings-tab-${id}`}
         type="button"

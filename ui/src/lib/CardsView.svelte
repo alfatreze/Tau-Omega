@@ -9,6 +9,7 @@
   import { developerTools, confirmRealCard, roleOf, refreshRole, markTestCard, cardLabel } from './devStore';
   import { errorMessage } from './backend';
   import FirmwarePanel from './FirmwarePanel.svelte';
+  import { isMusicCoreAllowed, musicFeatures } from './musicFlagsStore';
   import { cardDevice } from './systemStore';
   import type { Core } from './types';
   $: if ($developerTools && path) void refreshRole(path);
@@ -26,7 +27,7 @@
   export let tab: 'overview' | 'history' = 'overview';
   const TABS: ['overview' | 'history', string][] = [['overview', 'Overview'], ['history', 'History']];
   $: needing = $coresTreeStore.flatMap((n) => n.cores.filter((c) => c.missing > 0).map((c) => ({ ...c, platformName: n.platform.name })));
-  $: libraries = cores.filter((c) => c.library_capable);
+  $: libraries = cores.filter((c) => c.library_capable && isMusicCoreAllowed(c, $musicFeatures));
   $: libraryGroups = (() => {
     const byKey = new Map<string, Core[]>();
     for (const c of libraries) {
